@@ -1,6 +1,17 @@
 import type { Client, Guild } from "discord.js";
-import type { ModuleContext, ModuleDefinition, ModuleRegistry } from "@tier0/core";
+import type {
+  ModuleContext,
+  ModuleDefinition,
+  ModuleRegistry,
+  Shape,
+  ShapeValues,
+} from "@tier0/core";
 import { prisma } from "@tier0/db";
+
+// The router resolves a module by name at runtime, so the cache cannot be
+// generic over one module's shape. This is the widest settings type that
+// still satisfies what a command handler is declared to accept.
+type Settings = ShapeValues<Shape>;
 
 /**
  * Resolves and caches per-guild module state.
@@ -9,7 +20,7 @@ import { prisma } from "@tier0/db";
  * change, which is how a settings edit takes effect without a restart.
  */
 export class GuildState {
-  private readonly cache = new Map<string, Map<string, unknown>>();
+  private readonly cache = new Map<string, Map<string, Settings>>();
 
   constructor(
     private readonly client: Client,
@@ -40,7 +51,7 @@ export class GuildState {
    * Builds the context handed to commands and event handlers. Settings come
    * back parsed and defaulted, so a handler never sees a raw JSON string.
    */
-  async context(guild: Guild, moduleId: string): Promise<ModuleContext | null> {
+  async context(guild: Guild, moduleId: string): Promise<ModuleContext<Settings> | null> {
     const module = this.registry.get(moduleId);
     if (!module) return null;
 
@@ -52,7 +63,7 @@ export class GuildState {
       guild,
       settings,
       update: async (patch) => {
-        const merged = { ...(settings as object), ...patch };
+        const merged = { ...settings, ...patch };
         const parsed = module.settings.parse(merged);
         if (!parsed.ok) {
           const detail = parsed.errors.map((e) => `${e.path} ${e.message}`).join("; ");
@@ -67,9 +78,10 @@ export class GuildState {
     };
   }
 
-  private async settings(guildId: string, moduleId: string): Promise<unknown | null> {
+  private async settings(guildId: string, moduleId: string): Promise<Settings | null> {
     let guildCache = this.cache.get(guildId);
-    if (guildCache?.has(moduleId)) return guildCache.get(moduleId);
+    const cached = guildCache?.get(moduleId);
+    if (cached !== undefined) return cached;
 
     const row = await prisma.guildModule.findUnique({
       where: { guildId_moduleId: { guildId, moduleId } },
@@ -93,8 +105,9 @@ export class GuildState {
       guildCache = new Map();
       this.cache.set(guildId, guildCache);
     }
-    guildCache.set(moduleId, resolved.value);
-    return resolved.value;
+    const value = resolved.value as Settings;
+    guildCache.set(moduleId, value);
+    return value;
   }
 }
 
