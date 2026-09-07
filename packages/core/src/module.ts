@@ -4,6 +4,7 @@ import type {
   Guild,
   Message,
   GuildMember,
+  PartialGuildMember,
   SlashCommandBuilder,
   SlashCommandOptionsOnlyBuilder,
   SlashCommandSubcommandsOnlyBuilder,
@@ -39,7 +40,11 @@ export interface CommandDefinition<T = unknown> {
 export interface EventHandlers<T = unknown> {
   messageCreate(message: Message, ctx: ModuleContext<T>): Promise<void>;
   memberJoin(member: GuildMember, ctx: ModuleContext<T>): Promise<void>;
-  memberLeave(member: GuildMember, ctx: ModuleContext<T>): Promise<void>;
+  /**
+   * Discord does not guarantee a full member object on departure - if the
+   * member was not cached, fields such as `joinedAt` come back null.
+   */
+  memberLeave(member: GuildMember | PartialGuildMember, ctx: ModuleContext<T>): Promise<void>;
 }
 
 export interface ModuleDefinition<S extends Shape = Shape> {
