@@ -1,4 +1,4 @@
-export { s } from "./schema";
+export { s } from "./schema.js";
 export type {
   ChannelType,
   Field,
@@ -11,15 +11,15 @@ export type {
   ParseResult,
   Shape,
   ShapeValues,
-} from "./schema";
+} from "./schema.js";
 
-export { defineModule } from "./module";
+export { defineModule } from "./module.js";
 export type {
   CommandDefinition,
   EventHandlers,
   ModuleContext,
   ModuleDefinition,
-} from "./module";
+} from "./module.js";
 
-export { ModuleRegistry } from "./registry";
-export type { ModuleSummary } from "./registry";
+export { ModuleRegistry } from "./registry.js";
+export type { ModuleSummary } from "./registry.js";

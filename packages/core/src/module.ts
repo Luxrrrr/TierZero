@@ -7,7 +7,7 @@ import type {
   SlashCommandBuilder,
   SlashCommandSubcommandsOnlyBuilder,
 } from "discord.js";
-import type { ObjectField, Shape, ShapeValues } from "./schema";
+import type { ObjectField, Shape, ShapeValues } from "./schema.js";
 
 /**
  * Everything a command or handler is given at call time. Settings are already

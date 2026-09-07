@@ -2,9 +2,9 @@ import { createServer } from "node:http";
 import { timingSafeEqual } from "node:crypto";
 import { ChannelType, type Client } from "discord.js";
 import type { ModuleRegistry } from "@tier0/core";
-import type { GuildState } from "../runtime/guild-state";
-import type { CommandSync } from "../runtime/commands";
-import { config } from "../config";
+import type { GuildState } from "../runtime/guild-state.js";
+import type { CommandSync } from "../runtime/commands.js";
+import { config } from "../config.js";
 
 interface Deps {
   client: Client;

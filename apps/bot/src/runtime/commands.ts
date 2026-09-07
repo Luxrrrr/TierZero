@@ -1,7 +1,7 @@
 import { REST, Routes } from "discord.js";
 import type { ModuleRegistry } from "@tier0/core";
 import { prisma } from "@tier0/db";
-import type { GuildState } from "./guild-state";
+import type { GuildState } from "./guild-state.js";
 
 const RESYNC_DELAY_MS = 5_000;
 

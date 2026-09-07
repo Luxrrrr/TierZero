@@ -2,10 +2,10 @@ import { Client, GatewayIntentBits, REST, Events } from "discord.js";
 import { ModuleRegistry } from "@tier0/core";
 import { prisma } from "@tier0/db";
 import utility from "@tier0/module-utility";
-import { GuildState } from "./runtime/guild-state";
-import { CommandSync } from "./runtime/commands";
-import { startControlApi } from "./control/server";
-import { config } from "./config";
+import { GuildState } from "./runtime/guild-state.js";
+import { CommandSync } from "./runtime/commands.js";
+import { startControlApi } from "./control/server.js";
+import { config } from "./config.js";
 
 const registry = new ModuleRegistry();
 registry.register(utility);

@@ -1,5 +1,5 @@
-import type { ModuleDefinition } from "./module";
-import type { FieldDescriptor, FieldError } from "./schema";
+import type { ModuleDefinition } from "./module.js";
+import type { FieldDescriptor, FieldError } from "./schema.js";
 
 export interface ModuleSummary {
   id: string;
