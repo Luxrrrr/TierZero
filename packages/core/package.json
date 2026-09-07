@@ -1,0 +1,10 @@
+{
+  "name": "@tier0/core",
+  "version": "0.0.0",
+  "license": "AGPL-3.0-or-later",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": { "build": "tsc -b", "dev": "tsc -b --watch" },
+  "peerDependencies": { "discord.js": "^14.16.0" }
+}
