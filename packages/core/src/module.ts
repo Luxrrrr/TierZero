@@ -5,6 +5,7 @@ import type {
   Message,
   GuildMember,
   SlashCommandBuilder,
+  SlashCommandOptionsOnlyBuilder,
   SlashCommandSubcommandsOnlyBuilder,
 } from "discord.js";
 import type { ObjectField, Shape, ShapeValues } from "./schema.js";
@@ -22,7 +23,10 @@ export interface ModuleContext<T = unknown> {
   update(patch: Partial<T>): Promise<void>;
 }
 
-export type CommandBuilder = SlashCommandBuilder | SlashCommandSubcommandsOnlyBuilder;
+export type CommandBuilder =
+  | SlashCommandBuilder
+  | SlashCommandOptionsOnlyBuilder
+  | SlashCommandSubcommandsOnlyBuilder;
 
 export interface CommandDefinition<T = unknown> {
   /** Must be unique across all modules; used as the override key. */
