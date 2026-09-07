@@ -3,9 +3,11 @@
   "version": "0.0.0",
   "license": "AGPL-3.0-or-later",
   "type": "module",
-  "main": "./src/index.ts",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "scripts": {
-    "build": "prisma generate",
+    "build": "prisma generate && tsc -b",
+    "dev": "tsc -b --watch",
     "migrate": "prisma migrate deploy",
     "migrate:dev": "prisma migrate dev",
     "studio": "prisma studio"
