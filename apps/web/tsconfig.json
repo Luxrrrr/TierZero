@@ -6,7 +6,9 @@
     "jsx": "react-jsx",
     "lib": ["ES2023", "DOM", "DOM.Iterable"],
     "moduleResolution": "Bundler",
-    "module": "ESNext"
+    "module": "ESNext",
+    "plugins": [{ "name": "next" }]
   },
-  "include": ["components", "app"]
+  "include": ["components", "app", "lib", "types", "next-env.d.ts", ".next/types/**/*.ts"],
+  "exclude": ["node_modules"]
 }

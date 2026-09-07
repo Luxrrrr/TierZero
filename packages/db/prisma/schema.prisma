@@ -52,10 +52,54 @@ model Instance {
   schemaVersion Int     @default(1)
 }
 
-model Session {
-  id        String   @id
-  userId    String
-  expiresAt DateTime
+/// Auth.js's own tables, laid out the way @auth/prisma-adapter expects them.
+/// This supersedes the previous hand-rolled Session model: Auth.js owns the
+/// session lifecycle (creation, rotation, expiry sweeps) and the Account rows
+/// are also where each user's Discord OAuth tokens live, which the dashboard
+/// needs to call the Discord API on their behalf.
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
 
-  @@index([userId])
+  accounts Account[]
+  sessions Session[]
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
 }
