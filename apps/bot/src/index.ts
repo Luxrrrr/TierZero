@@ -1,9 +1,10 @@
-import { Client, GatewayIntentBits, REST, Events } from "discord.js";
+import { Client, GatewayIntentBits, MessageFlags, REST, Events } from "discord.js";
 import { ModuleRegistry } from "@tier0/core";
 import { prisma } from "@tier0/db";
 import utility from "@tier0/module-utility";
 import { GuildState } from "./runtime/guild-state.js";
 import { CommandSync } from "./runtime/commands.js";
+import { registerEventDispatch } from "./runtime/dispatch.js";
 import { startControlApi } from "./control/server.js";
 import { config } from "./config.js";
 
@@ -22,6 +23,8 @@ const client = new Client({
 const state = new GuildState(client, registry);
 const rest = new REST().setToken(config.token);
 const commands = new CommandSync(rest, config.applicationId, registry, state);
+
+registerEventDispatch({ client, state });
 
 client.once(Events.ClientReady, async (ready) => {
   console.log(`Connected as ${ready.user.tag}`);
@@ -56,7 +59,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
   if (!(await state.isEnabled(interaction.guild.id, moduleId))) {
     await interaction.reply({
       content: "That feature is switched off on this server.",
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
     return;
   }
@@ -72,9 +75,9 @@ client.on(Events.InteractionCreate, async (interaction) => {
     console.error(`/${interaction.commandName} failed:`, error);
     const message = "That command did not finish. The server log has the details.";
     if (interaction.replied || interaction.deferred) {
-      await interaction.followUp({ content: message, ephemeral: true });
+      await interaction.followUp({ content: message, flags: MessageFlags.Ephemeral });
     } else {
-      await interaction.reply({ content: message, ephemeral: true });
+      await interaction.reply({ content: message, flags: MessageFlags.Ephemeral });
     }
   }
 });

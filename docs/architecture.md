@@ -52,18 +52,37 @@ Splitting them is deliberate. A crash in the dashboard must not drop the gateway
 connection, and the separation lets an advanced operator run the dashboard on a
 public domain while the bot stays on a machine at home.
 
-The control API stays small:
+The control API is small, but it is not read-only: every write to a guild's
+module settings or command overrides goes through it rather than through the
+dashboard's own database access.
 
 ```
-GET   /health
-GET   /guilds                      guilds the bot is in
-GET   /modules                     registry descriptions and schemas
-GET   /guilds/:id/channels         live channel list for pickers
-GET   /guilds/:id/roles            live role list, with assignability
-POST  /guilds/:id/reload           re-read config, resync commands
+GET    /health
+GET    /guilds                          guilds the bot is in
+GET    /modules                         registry descriptions and schemas
+GET    /guilds/:id/channels             live channel list for pickers
+GET    /guilds/:id/roles                live role list, with assignability
+GET    /guilds/:id/modules              every module, this guild's enabled flag and resolved settings
+PATCH  /guilds/:id/modules/:moduleId    { enabled?, settings? }
+PATCH  /guilds/:id/commands/:name       { enabled?, allowRoles?, denyChannels? }
+POST   /guilds/:id/reload               re-read config, resync commands
 ```
 
-Every request carries a shared secret from the environment.
+Every request carries a shared secret from the environment, and the server
+binds to loopback by default (`CONTROL_HOST` widens that for the case where
+the dashboard runs on a separate machine).
+
+The bot owns module settings; the dashboard is a client of this API rather
+than a second writer to the database. The reason is atomicity: persisting a
+settings change and refreshing the running bot have to happen as one step, or
+the database and the live bot can end up disagreeing with nothing to notice
+it. A `PATCH` handler validates the new settings against the module's schema,
+upserts the row, invalidates the in-memory cache, schedules a command resync,
+and fires whichever of `onEnable` / `onDisable` / `onSettingsChange` applies,
+all before the response is sent. If the dashboard wrote to the database
+directly, at least one of those steps would have to happen out of band, which
+is exactly the gap where a saved setting stops matching what the bot is
+actually doing.
 
 ## The module contract
 
@@ -117,6 +136,15 @@ setting without a migration. A renamed setting leaves a stale key behind;
 `GuildModule.version` exists for a per-module migration hook that is not written
 yet.
 
+The database file is shared, but it is not shared *access*: the dashboard never
+writes a `GuildModule` or `CommandOverride` row itself. It reads live guild
+data and posts changes through the control API described above, and the bot is
+the only process that writes those tables. That keeps the validate-persist-
+reload sequence inside one process instead of splitting it across two, which
+is what makes the no-restart guarantee in constraint 2 actually hold under
+concurrent writers rather than just under the dashboard's own click-through
+testing.
+
 ## Command visibility
 
 ```
@@ -129,11 +157,15 @@ commands are cached by Discord for roughly an hour and are identical everywhere,
 which makes per-server visibility impossible. Resyncing is debounced by five
 seconds so an operator flipping several switches produces one registration call.
 
-Role and channel restrictions layer on top. Where Discord's own
+Role and channel restrictions are meant to layer on top. Where Discord's own
 `default_member_permissions` can express a rule it is used, because that hides
-the command in the client rather than rejecting it after the fact. Rules Discord
-cannot express, such as allowing a command only in specific channels, are
-enforced in the command router.
+the command in the client rather than rejecting it after the fact. Rules
+Discord cannot express, such as allowing a command only in specific channels,
+are stored on `CommandOverride.allowRoles` and `denyChannels` and settable
+through the control API, but the command router does not read them yet — every
+command an enabled module exposes still runs in every channel, for anyone who
+can see it. Enforcing those two columns in the interaction handler is
+outstanding work, not a design decision.
 
 ## Installation
 

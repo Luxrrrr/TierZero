@@ -1,4 +1,4 @@
-import { SlashCommandBuilder, EmbedBuilder } from "discord.js";
+import { SlashCommandBuilder, EmbedBuilder, MessageFlags } from "discord.js";
 import { defineModule, s } from "@tier0/core";
 
 /**
@@ -42,7 +42,7 @@ export default defineModule({
         const roundTrip = Date.now() - interaction.createdTimestamp;
         await interaction.reply({
           content: `Responding in ${roundTrip}ms, gateway at ${ctx.client.ws.ping}ms.`,
-          ephemeral: true,
+          flags: MessageFlags.Ephemeral,
         });
       },
     },
