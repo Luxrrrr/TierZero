@@ -25,6 +25,15 @@ export interface AuthzFail {
 
 export type AuthzResult = AuthzOk | AuthzFail;
 
+// Rendering one guild page runs this check several times over (the page, then
+// each picker's route), and Discord rate limits /users/@me/guilds harshly
+// enough that the uncached version 429s in ordinary use. The cost of the cache
+// is that a permission revoked on Discord keeps working here for up to a
+// minute, which is the right trade for a dashboard one operator uses.
+const AUTHZ_TTL_MS = 60_000;
+
+const authorizedCache = new Map<string, { guildIds: Set<string>; expiresAt: number }>();
+
 interface DiscordAccountTokens {
   accessToken: string;
   discordUserId: string;
@@ -64,6 +73,9 @@ async function getValidAccessToken(userId: string): Promise<DiscordAccountTokens
  * view.
  */
 export async function getAuthorizedGuildIds(userId: string): Promise<Set<string>> {
+  const cached = authorizedCache.get(userId);
+  if (cached && cached.expiresAt > Date.now()) return cached.guildIds;
+
   const tokens = await getValidAccessToken(userId);
   if (!tokens) return new Set();
 
@@ -79,7 +91,13 @@ export async function getAuthorizedGuildIds(userId: string): Promise<Set<string>
       authorized.add(guild.id);
     }
   }
+  authorizedCache.set(userId, { guildIds: authorized, expiresAt: Date.now() + AUTHZ_TTL_MS });
   return authorized;
+}
+
+/** Drops a user's cached grants so a permission change can be picked up early. */
+export function forgetAuthorizedGuilds(userId: string): void {
+  authorizedCache.delete(userId);
 }
 
 /**
