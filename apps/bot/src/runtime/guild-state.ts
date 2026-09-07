@@ -153,13 +153,20 @@ export class GuildState {
     const resolvedBefore = this.registry.resolveSettings(moduleId, storedBefore);
     const settingsBefore = resolvedBefore.ok ? (resolvedBefore.value as Settings) : undefined;
 
-    const storedAfter = patch.settings !== undefined ? patch.settings : storedBefore;
-    const resolvedAfter = this.registry.resolveSettings(moduleId, storedAfter);
-    if (!resolvedAfter.ok) {
-      return { ok: false, errors: resolvedAfter.errors };
+    // Only settings actually being patched are validated. Re-validating what is
+    // already stored would make a module whose schema has changed underneath it
+    // impossible to disable, which is exactly when an operator needs to.
+    let nextSettings: Settings | undefined;
+    if (patch.settings !== undefined) {
+      const resolved = this.registry.resolveSettings(moduleId, patch.settings);
+      if (!resolved.ok) {
+        return { ok: false, errors: resolved.errors };
+      }
+      nextSettings = resolved.value as Settings;
     }
 
     const isEnabled = patch.enabled ?? wasEnabled;
+    const settingsJson = nextSettings === undefined ? undefined : JSON.stringify(nextSettings);
 
     await prisma.guildModule.upsert({
       where: { guildId_moduleId: { guildId: guild.id, moduleId } },
@@ -167,11 +174,11 @@ export class GuildState {
         guildId: guild.id,
         moduleId,
         enabled: isEnabled,
-        settings: JSON.stringify(resolvedAfter.value),
+        settings: settingsJson ?? "{}",
       },
       update: {
         enabled: isEnabled,
-        settings: JSON.stringify(resolvedAfter.value),
+        ...(settingsJson === undefined ? {} : { settings: settingsJson }),
       },
     });
 
@@ -188,13 +195,16 @@ export class GuildState {
       await this.runHook(moduleId, "onDisable", () => module.onDisable!(ctx));
     }
 
-    const settingsChanged =
-      patch.settings !== undefined &&
-      JSON.stringify(settingsBefore) !== JSON.stringify(resolvedAfter.value);
-    if (settingsChanged && settingsBefore !== undefined && module.onSettingsChange) {
-      await this.runHook(moduleId, "onSettingsChange", () =>
-        module.onSettingsChange!(ctx, settingsBefore),
-      );
+    // Settings that failed validation leave no usable previous value, so the
+    // hook is handed the defaults the module was effectively running on. Not
+    // firing at all would strand any module that rebuilds external state here.
+    if (nextSettings !== undefined && module.onSettingsChange) {
+      const previous = settingsBefore ?? (this.defaults(moduleId) as Settings);
+      if (JSON.stringify(previous) !== JSON.stringify(nextSettings)) {
+        await this.runHook(moduleId, "onSettingsChange", () =>
+          module.onSettingsChange!(ctx, previous),
+        );
+      }
     }
 
     return { ok: true };
