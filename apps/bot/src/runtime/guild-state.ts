@@ -69,9 +69,10 @@ export class GuildState {
           const detail = parsed.errors.map((e) => `${e.path} ${e.message}`).join("; ");
           throw new Error(`Rejected settings for ${moduleId}: ${detail}`);
         }
-        await prisma.guildModule.update({
+        await prisma.guildModule.upsert({
           where: { guildId_moduleId: { guildId: guild.id, moduleId } },
-          data: { settings: JSON.stringify(parsed.value) },
+          create: { guildId: guild.id, moduleId, settings: JSON.stringify(parsed.value) },
+          update: { settings: JSON.stringify(parsed.value) },
         });
         this.invalidate(guild.id);
       },
