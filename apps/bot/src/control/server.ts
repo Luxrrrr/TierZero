@@ -96,8 +96,8 @@ export function startControlApi({ client, registry, state, commands }: Deps): vo
     return send(404, { error: "not found" });
   });
 
-  server.listen(config.controlPort, "0.0.0.0", () => {
-    console.log(`Control API listening on ${config.controlPort}`);
+  server.listen(config.controlPort, config.controlHost, () => {
+    console.log(`Control API listening on ${config.controlHost}:${config.controlPort}`);
   });
 }
 
