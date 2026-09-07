@@ -160,7 +160,10 @@ function duration(options: FieldMeta & { default?: string; max?: string } = {}):
   const toMs = (text: string): number | null => {
     const match = DURATION.exec(text.trim());
     if (!match) return null;
-    return Number(match[1]) * UNIT_MS[match[2]];
+    const [, amount, unit] = match;
+    const factor = unit === undefined ? undefined : UNIT_MS[unit];
+    if (amount === undefined || factor === undefined) return null;
+    return Number(amount) * factor;
   };
   const ceiling = max ? toMs(max) : null;
   return {
