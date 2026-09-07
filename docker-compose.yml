@@ -1,0 +1,22 @@
+services:
+  bot:
+    image: ghcr.io/OWNER/tier0-bot:latest
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - ./data:/data
+    networks: [internal]
+
+  web:
+    image: ghcr.io/OWNER/tier0-web:latest
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./data:/data
+    depends_on: [bot]
+    networks: [internal]
+
+networks:
+  internal:
