@@ -44,6 +44,34 @@ export class CommandSync {
     );
   }
 
+  /** Upserts a command override and schedules the resync it implies. */
+  async setOverride(
+    guildId: string,
+    command: string,
+    patch: { enabled?: boolean; allowRoles?: string[]; denyChannels?: string[] },
+  ): Promise<void> {
+    await prisma.commandOverride.upsert({
+      where: { guildId_command: { guildId, command } },
+      create: {
+        guildId,
+        command,
+        enabled: patch.enabled ?? true,
+        allowRoles: JSON.stringify(patch.allowRoles ?? []),
+        denyChannels: JSON.stringify(patch.denyChannels ?? []),
+      },
+      update: {
+        ...(patch.enabled !== undefined ? { enabled: patch.enabled } : {}),
+        ...(patch.allowRoles !== undefined
+          ? { allowRoles: JSON.stringify(patch.allowRoles) }
+          : {}),
+        ...(patch.denyChannels !== undefined
+          ? { denyChannels: JSON.stringify(patch.denyChannels) }
+          : {}),
+      },
+    });
+    this.schedule(guildId);
+  }
+
   /** visible = commands of enabled modules, minus anything switched off. */
   private async resolve(guildId: string): Promise<unknown[]> {
     const modules = await this.state.enabledModules(guildId);
