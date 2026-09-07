@@ -57,7 +57,7 @@ export function startControlApi({ client, registry, state, commands }: Deps): vo
 
     if (guildMatch) {
       const [, guildId, resource] = guildMatch;
-      const guild = client.guilds.cache.get(guildId);
+      const guild = guildId === undefined ? undefined : client.guilds.cache.get(guildId);
       if (!guild) return send(404, { error: "guild not found" });
 
       if (resource === "channels") {
@@ -87,8 +87,8 @@ export function startControlApi({ client, registry, state, commands }: Deps): vo
       }
 
       if (resource === "reload" && req.method === "POST") {
-        state.invalidate(guildId);
-        commands.schedule(guildId);
+        state.invalidate(guild.id);
+        commands.schedule(guild.id);
         return send(202, { scheduled: true });
       }
     }
