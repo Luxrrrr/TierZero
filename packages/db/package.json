@@ -1,0 +1,15 @@
+{
+  "name": "@tier0/db",
+  "version": "0.0.0",
+  "license": "AGPL-3.0-or-later",
+  "type": "module",
+  "main": "./src/index.ts",
+  "scripts": {
+    "build": "prisma generate",
+    "migrate": "prisma migrate deploy",
+    "migrate:dev": "prisma migrate dev",
+    "studio": "prisma studio"
+  },
+  "dependencies": { "@prisma/client": "^5.20.0" },
+  "devDependencies": { "prisma": "^5.20.0" }
+}

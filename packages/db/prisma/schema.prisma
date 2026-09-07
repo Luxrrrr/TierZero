@@ -1,0 +1,61 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Guild {
+  id       String   @id
+  name     String
+  joinedAt DateTime @default(now())
+
+  modules  GuildModule[]
+  overrides CommandOverride[]
+}
+
+/// Per-guild module state. Settings are stored as JSON and validated against
+/// the module's schema on read, so adding a setting needs no migration.
+model GuildModule {
+  guildId   String
+  moduleId  String
+  enabled   Boolean  @default(false)
+  settings  String   @default("{}")
+  version   Int      @default(1)
+  updatedAt DateTime @updatedAt
+
+  guild Guild @relation(fields: [guildId], references: [id], onDelete: Cascade)
+
+  @@id([guildId, moduleId])
+}
+
+/// Only written when an operator overrides the default, which is that every
+/// command of an enabled module is visible.
+model CommandOverride {
+  guildId      String
+  command      String
+  enabled      Boolean @default(true)
+  allowRoles   String  @default("[]")
+  denyChannels String  @default("[]")
+
+  guild Guild @relation(fields: [guildId], references: [id], onDelete: Cascade)
+
+  @@id([guildId, command])
+}
+
+model Instance {
+  id           Int      @id @default(1)
+  ownerId      String?
+  setupAt      DateTime?
+  schemaVersion Int     @default(1)
+}
+
+model Session {
+  id        String   @id
+  userId    String
+  expiresAt DateTime
+
+  @@index([userId])
+}
