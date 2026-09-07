@@ -57,7 +57,7 @@ export default defineModule({
         const { guild } = ctx;
         const embed = new EmbedBuilder()
           .setTitle(guild.name)
-          .setColor(ACCENTS[ctx.settings.accent])
+          .setColor(accentOf(ctx.settings.accent))
           .setThumbnail(guild.iconURL())
           .addFields(
             { name: "Members", value: String(guild.memberCount), inline: true },
@@ -87,7 +87,7 @@ export default defineModule({
 
         const embed = new EmbedBuilder()
           .setTitle(target.username)
-          .setColor(ACCENTS[ctx.settings.accent])
+          .setColor(accentOf(ctx.settings.accent))
           .setThumbnail(target.displayAvatarURL())
           .addFields({
             name: "Account created",
@@ -109,8 +109,16 @@ export default defineModule({
   ],
 });
 
+const BLURPLE = 0x5865f2;
+
 const ACCENTS: Record<string, number> = {
-  blurple: 0x5865f2,
+  blurple: BLURPLE,
   grey: 0x99aab5,
   green: 0x57f287,
 };
+
+// A guild can hold an accent from a choice list that has since changed, so
+// fall back rather than handing discord.js undefined.
+function accentOf(name: string): number {
+  return ACCENTS[name] ?? BLURPLE;
+}
