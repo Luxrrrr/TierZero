@@ -5,6 +5,7 @@ import type { FieldDescriptor } from "@tier0/core";
 import { SettingsForm } from "../../../components/SettingsForm";
 import type { GuildModuleState } from "../../../lib/control-api";
 import { CheckIcon } from "../../../components/Icons";
+import { CommandControls } from "../../../components/CommandControls";
 
 interface Props {
   guildId: string;
@@ -117,6 +118,8 @@ function ModuleCard({ guildId, module }: { guildId: string; module: GuildModuleS
           }}
           errors={errors}
         />
+
+        <CommandControls guildId={guildId} commands={module.commands} />
       </div>
 
       <div className="module-footer">

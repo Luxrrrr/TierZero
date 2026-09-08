@@ -1043,3 +1043,149 @@ code {
     align-items: stretch;
   }
 }
+
+/* Per-command controls -------------------------------------------------- */
+
+.commands {
+  margin-top: var(--space-8);
+  padding-top: var(--space-6);
+  border-top: 1px solid var(--border);
+}
+
+.commands-title {
+  margin: 0;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+
+.commands-help {
+  margin: var(--space-2) 0 var(--space-4);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  max-width: 60ch;
+}
+
+.command-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.command-row {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+  padding: var(--space-3) var(--space-4);
+}
+
+/* A hidden command stays legible rather than being greyed to unreadable. */
+.command-row[data-off="true"] .command-name,
+.command-row[data-off="true"] .command-description {
+  opacity: 0.55;
+}
+
+.command-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.command-identity {
+  min-width: 0;
+}
+
+.command-name {
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-size: var(--text-sm);
+  color: var(--text);
+}
+
+.command-description {
+  margin: 2px 0 0;
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+}
+
+.command-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex: none;
+}
+
+.command-badge {
+  font-size: var(--text-xs);
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-full);
+  border: 1px solid var(--border-strong);
+  color: var(--text-secondary);
+}
+
+.command-restrictions {
+  display: grid;
+  gap: var(--space-4);
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  margin-top: var(--space-4);
+  padding-top: var(--space-4);
+  border-top: 1px dashed var(--border);
+}
+
+.chips {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-2);
+  padding: 0;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 2px var(--space-2);
+  font-size: var(--text-xs);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-full);
+  background: var(--surface-3);
+}
+
+.chip button {
+  border: 0;
+  background: none;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  font-size: var(--text-sm);
+  line-height: 1;
+  padding: 0;
+}
+
+.chip button:hover {
+  color: var(--text);
+}
+
+.btn-quiet {
+  background: none;
+  border: 1px solid var(--border-strong);
+  color: var(--text-secondary);
+}
+
+.btn-quiet:hover {
+  color: var(--text);
+  border-color: var(--text-tertiary);
+}
+
+@media (max-width: 600px) {
+  .command-head {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}

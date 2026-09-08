@@ -133,7 +133,18 @@ export interface GuildModuleState {
   enabled: boolean;
   settings: Record<string, unknown>;
   schema: Record<string, unknown>;
-  commands: { name: string; description: string; enabled: boolean }[];
+  commands: GuildCommandState[];
+}
+
+export interface GuildCommandState {
+  name: string;
+  description: string;
+  /** False only when an operator has hidden this command on this server. */
+  enabled: boolean;
+  /** Empty means anyone may run it. */
+  allowRoles: string[];
+  /** Empty means it works in every channel. */
+  denyChannels: string[];
 }
 
 export async function getGuildModules(guildId: string): Promise<GuildModuleState[]> {

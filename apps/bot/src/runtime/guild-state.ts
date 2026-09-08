@@ -23,9 +23,18 @@ export interface Resync {
   schedule(guildId: string): void;
 }
 
-export interface GuildModuleState extends ModuleSummary {
+export interface CommandState {
+  name: string;
+  description: string;
+  enabled: boolean;
+  allowRoles: string[];
+  denyChannels: string[];
+}
+
+export interface GuildModuleState extends Omit<ModuleSummary, "commands"> {
   enabled: boolean;
   settings: unknown;
+  commands: CommandState[];
 }
 
 export type ApplyModuleUpdateResult = { ok: true } | { ok: false; errors: FieldError[] };
@@ -152,14 +161,29 @@ export class GuildState {
    * settings, for the dashboard's module list.
    */
   async describeForGuild(guildId: string): Promise<GuildModuleState[]> {
-    const rows = await prisma.guildModule.findMany({ where: { guildId } });
+    const [rows, overrides] = await Promise.all([
+      prisma.guildModule.findMany({ where: { guildId } }),
+      prisma.commandOverride.findMany({ where: { guildId } }),
+    ]);
     const byModule = new Map(rows.map((row) => [row.moduleId, row]));
+    const byCommand = new Map(overrides.map((row) => [row.command, row]));
 
     return Promise.all(
       this.registry.describe().map(async (summary) => {
         const row = byModule.get(summary.id);
         const settings = (await this.settings(guildId, summary.id)) ?? this.defaults(summary.id);
-        return { ...summary, enabled: row?.enabled ?? false, settings };
+        // A command with no override row is visible to everyone, everywhere,
+        // which is the default the dashboard has to show as such.
+        const commands = summary.commands.map((command) => {
+          const override = byCommand.get(command.name);
+          return {
+            ...command,
+            enabled: override?.enabled ?? true,
+            allowRoles: override ? parseIdList(override.allowRoles) : [],
+            denyChannels: override ? parseIdList(override.denyChannels) : [],
+          };
+        });
+        return { ...summary, enabled: row?.enabled ?? false, settings, commands };
       }),
     );
   }
