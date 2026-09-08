@@ -18,6 +18,8 @@ export type FieldKind =
   | "channel"
   | "role"
   | "choice"
+  | "emoji"
+  | "template"
   | "array"
   | "object";
 
@@ -247,6 +249,72 @@ function choice(options: FieldMeta & { options: Choice[]; default?: string }): F
   };
 }
 
+const CUSTOM_EMOJI = /^<a?:[A-Za-z0-9_]{2,32}:\d{17,20}>$/;
+
+/**
+ * Either a unicode emoji or Discord's custom form, `<:name:id>`. Stored as
+ * written so it can go straight into a reaction or a message.
+ */
+function emoji(options: FieldMeta & { default?: string } = {}): Field<string> {
+  const { default: def, ...meta } = options;
+  return {
+    kind: "emoji",
+    meta,
+    defaultValue: def,
+    parse(input, path = "") {
+      if (input === undefined || input === null || input === "") {
+        return missing(this, path);
+      }
+      if (typeof input !== "string") return fail(path, "must be an emoji");
+      const value = input.trim();
+      if (CUSTOM_EMOJI.test(value)) return { ok: true, value };
+      // Unicode emoji arrive as one to four code points; anything longer is
+      // text somebody typed into the wrong box.
+      if ([...value].length <= 4 && !/^[\w\s]+$/.test(value)) {
+        return { ok: true, value };
+      }
+      return fail(path, "must be an emoji, either unicode or :custom:");
+    },
+    describe: () => ({ kind: "emoji", ...meta, default: def }),
+  };
+}
+
+interface TemplateOptions extends FieldMeta {
+  max?: number;
+  default?: string;
+  /** Substitutions the module makes, so the dashboard can offer them. */
+  placeholders?: string[];
+}
+
+/**
+ * A message body with substitutions. Separate from a plain string because the
+ * dashboard needs to show which placeholders a module understands, and because
+ * Discord caps a message at 2000 characters.
+ */
+function template(options: TemplateOptions = {}): Field<string> {
+  const { max = 2000, default: def, placeholders = [], ...meta } = options;
+  return {
+    kind: "template",
+    meta,
+    defaultValue: def,
+    parse(input, path = "") {
+      if (input === undefined || input === null || input === "") {
+        return missing(this, path);
+      }
+      if (typeof input !== "string") return fail(path, "must be text");
+      if (input.length > max) return fail(path, `must be at most ${max} characters`);
+      const unknown = [...input.matchAll(/\{(\w+)\}/g)]
+        .map((match) => match[1])
+        .filter((name): name is string => name !== undefined && !placeholders.includes(name));
+      if (unknown.length > 0) {
+        return fail(path, `does not recognise {${unknown[0]}}`);
+      }
+      return { ok: true, value: input };
+    },
+    describe: () => ({ kind: "template", ...meta, default: def, max, placeholders }),
+  };
+}
+
 // -- composites ------------------------------------------------------------
 
 function array<T>(
@@ -334,6 +402,8 @@ export const s = {
   channel,
   role,
   choice,
+  emoji,
+  template,
   array,
   object,
 };

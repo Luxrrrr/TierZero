@@ -213,3 +213,52 @@ describe("optional", () => {
     assert.equal((parsed as Record<string, unknown>).note, "fallback");
   });
 });
+
+describe("emoji", () => {
+  test("accepts a unicode emoji", () => {
+    assert.equal(value(s.emoji().parse("🎉")), "🎉");
+    assert.equal(value(s.emoji().parse("✅")), "✅");
+  });
+
+  test("accepts Discord's custom form, animated or not", () => {
+    assert.equal(value(s.emoji().parse("<:party:123456789012345678>")), "<:party:123456789012345678>");
+    assert.equal(s.emoji().parse("<a:spin:123456789012345678>").ok, true);
+  });
+
+  test("rejects text typed into the wrong box", () => {
+    assert.equal(s.emoji().parse("party").ok, false);
+    assert.equal(s.emoji().parse("this is a sentence").ok, false);
+    assert.equal(s.emoji().parse("<:bad:notanid>").ok, false);
+  });
+
+  test("trims surrounding whitespace", () => {
+    assert.equal(value(s.emoji().parse(" 🎉 ")), "🎉");
+  });
+});
+
+describe("template", () => {
+  const field = s.template({ placeholders: ["user", "server"] });
+
+  test("accepts placeholders the module declares", () => {
+    assert.equal(value(field.parse("Welcome {user} to {server}")), "Welcome {user} to {server}");
+  });
+
+  test("names the first placeholder it does not recognise", () => {
+    const result = field.parse("Hello {nobody}");
+    assert.equal(result.ok, false);
+    assert.match(String(errors(result)[0]?.message), /\{nobody\}/);
+  });
+
+  test("accepts text with no placeholders at all", () => {
+    assert.equal(value(field.parse("Welcome!")), "Welcome!");
+  });
+
+  test("caps length at Discord's message limit by default", () => {
+    assert.equal(field.parse("x".repeat(2001)).ok, false);
+    assert.equal(field.parse("x".repeat(2000)).ok, true);
+  });
+
+  test("publishes its placeholders to the dashboard", () => {
+    assert.deepEqual(field.describe().placeholders, ["user", "server"]);
+  });
+});
