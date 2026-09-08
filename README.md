@@ -21,16 +21,18 @@ for the design and the planned build order.
 ## Running it
 
 ```
-curl -O https://raw.githubusercontent.com/OWNER/tier0/main/docker-compose.yml
-curl -o .env https://raw.githubusercontent.com/OWNER/tier0/main/.env.example
+git clone https://github.com/OWNER/tier0.git
+cd tier0
+cp .env.example .env
+mkdir -p data
 docker compose up -d
 ```
 
-Open http://localhost:8080. If the credentials in `.env` are still blank the
-setup wizard runs instead of the dashboard and fills them in for you.
+Fill in your Discord credentials in `.env` first. Open http://localhost:8080
+and sign in; the first account to do so owns the install.
 
 Full instructions, including how to create the Discord application, are in
-`docs/install.md`.
+[docs/install.md](docs/install.md).
 
 ## Running from source
 
