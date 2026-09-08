@@ -1,3 +1,6 @@
+import { AuthCard } from "./AuthCard";
+import { AlertIcon } from "./Icons";
+
 /**
  * Shown when the dashboard cannot reach the bot's control API. The bot owns
  * every setting, so there is nothing useful to render without it, and the
@@ -5,7 +8,7 @@
  */
 export function BotOffline() {
   return (
-    <main>
+    <AuthCard mark={<AlertIcon />} alert>
       <h1>The bot is not responding</h1>
       <p>
         The dashboard reaches the bot over its control API, and that connection
@@ -13,6 +16,6 @@ export function BotOffline() {
         somewhere other than the address the dashboard is configured with.
       </p>
       <p>Start the bot, then reload this page.</p>
-    </main>
+    </AuthCard>
   );
 }

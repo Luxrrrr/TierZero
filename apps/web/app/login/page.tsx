@@ -1,5 +1,12 @@
 import { redirect } from "next/navigation";
+import type { Metadata } from "next";
 import { auth, signIn } from "../../lib/auth";
+import { AuthCard } from "../../components/AuthCard";
+import { DiscordMark } from "../../components/Icons";
+
+export const metadata: Metadata = {
+  title: "Sign in",
+};
 
 export default async function LoginPage() {
   const session = await auth();
@@ -11,12 +18,15 @@ export default async function LoginPage() {
   }
 
   return (
-    <main>
+    <AuthCard mark="0">
       <h1>TierZero</h1>
       <p>Sign in with the Discord account you use to manage your server.</p>
       <form action={signInWithDiscord}>
-        <button type="submit">Sign in with Discord</button>
+        <button type="submit" className="btn btn-primary">
+          <DiscordMark />
+          Sign in with Discord
+        </button>
       </form>
-    </main>
+    </AuthCard>
   );
 }
