@@ -4,6 +4,8 @@
     { "path": "packages/core" },
     { "path": "packages/db" },
     { "path": "packages/modules/utility" },
+    { "path": "packages/modules/welcome" },
+    { "path": "packages/modules/roles" },
     { "path": "apps/bot" }
   ]
 }

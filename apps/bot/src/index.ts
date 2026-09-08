@@ -2,6 +2,8 @@ import { Client, GatewayIntentBits, MessageFlags, Partials, REST, Events } from 
 import { ModuleRegistry } from "@tier0/core";
 import { prisma } from "@tier0/db";
 import utility from "@tier0/module-utility";
+import welcome from "@tier0/module-welcome";
+import roles from "@tier0/module-roles";
 import { GuildState } from "./runtime/guild-state.js";
 import { CommandSync } from "./runtime/commands.js";
 import { registerEventDispatch } from "./runtime/dispatch.js";
@@ -12,6 +14,8 @@ import { config } from "./config.js";
 
 const registry = new ModuleRegistry();
 registry.register(utility);
+registry.register(welcome);
+registry.register(roles);
 
 const client = new Client({
   intents: [
