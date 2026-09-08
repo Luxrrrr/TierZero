@@ -4,6 +4,7 @@ import { useState } from "react";
 import type { FieldDescriptor } from "@tier0/core";
 import { SettingsForm } from "../../../components/SettingsForm";
 import type { GuildModuleState } from "../../../lib/control-api";
+import { CheckIcon } from "../../../components/Icons";
 
 interface Props {
   guildId: string;
@@ -13,27 +14,38 @@ interface Props {
 
 export function GuildDashboard({ guildId, guildName, modules }: Props) {
   return (
-    <main>
-      <h1>{guildName}</h1>
+    <>
+      <div className="shell-main-header">
+        <div>
+          <p className="shell-crumb">Configuring</p>
+          <h1>{guildName}</h1>
+        </div>
+      </div>
+
       {modules.length === 0 ? (
-        <p>No modules are registered yet.</p>
+        <div className="empty-state">
+          <p>No modules are registered yet.</p>
+        </div>
       ) : (
         modules.map((module) => <ModuleCard key={module.id} guildId={guildId} module={module} />)
       )}
-    </main>
+    </>
   );
 }
+
+type SaveState = "idle" | "saving" | "saved" | "error";
 
 function ModuleCard({ guildId, module }: { guildId: string; module: GuildModuleState }) {
   const [enabled, setEnabled] = useState(module.enabled);
   const [settings, setSettings] = useState<Record<string, unknown>>(module.settings);
+  const [saved, setSaved] = useState({ enabled: module.enabled, settings: module.settings });
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [saving, setSaving] = useState(false);
-  const [justSaved, setJustSaved] = useState(false);
+  const [state, setState] = useState<SaveState>("idle");
+
+  const dirty = enabled !== saved.enabled || JSON.stringify(settings) !== JSON.stringify(saved.settings);
 
   async function save() {
-    setSaving(true);
-    setJustSaved(false);
+    setState("saving");
     setErrors({});
     try {
       const res = await fetch(`/api/guilds/${guildId}/modules/${module.id}`, {
@@ -51,14 +63,15 @@ function ModuleCard({ guildId, module }: { guildId: string; module: GuildModuleS
         } else {
           setErrors({ "": body.error ?? "Saving failed. Try again." });
         }
+        setState("error");
         return;
       }
 
-      setJustSaved(true);
+      setSaved({ enabled, settings });
+      setState("saved");
     } catch {
       setErrors({ "": "Couldn't reach the dashboard server. Check your connection and try again." });
-    } finally {
-      setSaving(false);
+      setState("error");
     }
   }
 
@@ -66,29 +79,72 @@ function ModuleCard({ guildId, module }: { guildId: string; module: GuildModuleS
     <section className="module-card">
       <header>
         <div>
-          <h2>{module.name}</h2>
+          <h2>
+            {module.name}
+            <span className={enabled ? "badge is-on" : "badge is-off"}>
+              {enabled ? "Enabled" : "Disabled"}
+            </span>
+          </h2>
           <p>{module.summary}</p>
         </div>
-        <label>
-          <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
-          Enabled
+        <label className="switch">
+          <input
+            type="checkbox"
+            checked={enabled}
+            onChange={(e) => {
+              setEnabled(e.target.checked);
+              setState("idle");
+            }}
+          />
+          {enabled ? "On" : "Off"}
         </label>
       </header>
 
-      {errors[""] ? <p className="error-banner">{errors[""]}</p> : null}
+      <div className="module-body" data-disabled={enabled ? undefined : "true"}>
+        {errors[""] ? (
+          <p className="error-banner" role="alert">
+            {errors[""]}
+          </p>
+        ) : null}
 
-      <SettingsForm
-        schema={module.schema as unknown as FieldDescriptor}
-        value={settings}
-        guildId={guildId}
-        onChange={setSettings}
-        errors={errors}
-      />
+        <SettingsForm
+          schema={module.schema as unknown as FieldDescriptor}
+          value={settings}
+          guildId={guildId}
+          onChange={(next) => {
+            setSettings(next);
+            setState("idle");
+          }}
+          errors={errors}
+        />
+      </div>
 
-      <button type="button" disabled={saving} onClick={save}>
-        {saving ? "Saving…" : "Save"}
-      </button>
-      {justSaved ? <span> Saved.</span> : null}
+      <div className="module-footer">
+        <button type="button" className="btn btn-primary" disabled={state === "saving" || !dirty} onClick={save}>
+          {state === "saving" ? <span className="spinner" aria-hidden="true" /> : null}
+          {state === "saving" ? "Saving…" : "Save"}
+        </button>
+        <SaveStatus state={state} dirty={dirty} />
+      </div>
     </section>
   );
+}
+
+function SaveStatus({ state, dirty }: { state: SaveState; dirty: boolean }) {
+  if (state === "saving") return null;
+  if (state === "error") {
+    return <span className="module-status is-error">Not saved</span>;
+  }
+  if (dirty) {
+    return <span className="module-status">Unsaved changes</span>;
+  }
+  if (state === "saved") {
+    return (
+      <span className="module-status is-saved">
+        <CheckIcon />
+        Saved
+      </span>
+    );
+  }
+  return null;
 }

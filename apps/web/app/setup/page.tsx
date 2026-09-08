@@ -1,6 +1,13 @@
 import { redirect } from "next/navigation";
+import type { Metadata } from "next";
 import { auth, signIn } from "../../lib/auth";
 import { claimInstanceOwnership, isInstanceClaimed } from "../../lib/instance";
+import { AuthCard } from "../../components/AuthCard";
+import { DiscordMark } from "../../components/Icons";
+
+export const metadata: Metadata = {
+  title: "Set up",
+};
 
 // Whether the instance has been claimed is runtime state, so this page must
 // never be prerendered: a build has no database to read it from.
@@ -22,17 +29,20 @@ export default async function SetupPage() {
     }
 
     return (
-      <main>
+      <AuthCard mark="0">
         <h1>Set up TierZero</h1>
         <p>
           Nobody owns this installation yet. Sign in with the Discord account
-          you want to manage it with - the first account to sign in here
+          you want to manage it with — the first account to sign in here
           becomes the instance owner.
         </p>
         <form action={signInWithDiscord}>
-          <button type="submit">Sign in with Discord</button>
+          <button type="submit" className="btn btn-primary">
+            <DiscordMark />
+            Sign in with Discord
+          </button>
         </form>
-      </main>
+      </AuthCard>
     );
   }
 

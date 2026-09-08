@@ -17,7 +17,10 @@ export async function proxyControlApi<T>(work: () => Promise<T>): Promise<NextRe
     return NextResponse.json(await work());
   } catch (error) {
     if (error instanceof ControlApiError) {
-      return NextResponse.json({ error: error.message }, { status: error.status });
+      const body = error.fieldErrors?.length
+        ? { errors: error.fieldErrors }
+        : { error: error.message };
+      return NextResponse.json(body, { status: error.status });
     }
     const message = error instanceof Error ? error.message : "The bot's control API is unreachable.";
     return NextResponse.json({ error: message }, { status: 502 });

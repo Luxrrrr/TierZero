@@ -3,7 +3,10 @@ import type { ReactNode } from "react";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "TierZero",
+  title: {
+    default: "TierZero",
+    template: "%s · TierZero",
+  },
   description: "Dashboard for a self-hosted TierZero bot.",
 };
 

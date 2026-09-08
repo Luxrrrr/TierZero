@@ -2,10 +2,22 @@
 // from route handlers and server components, both of which run on the
 // server, so the secret never reaches anything shipped to the browser.
 
+export interface FieldValidationError {
+  path: string;
+  message: string;
+}
+
 export class ControlApiError extends Error {
   constructor(
     public readonly status: number,
     message: string,
+    /**
+     * The per-field validation errors from a 400, when the response body was
+     * shaped as one. Kept apart from `message` so a route handler can forward
+     * them to the dashboard instead of flattening them into a single string
+     * the settings form has no field to attach them to.
+     */
+    public readonly fieldErrors?: FieldValidationError[],
     options?: ErrorOptions,
   ) {
     super(message, options);
@@ -60,19 +72,37 @@ async function controlFetch(path: string, init: RequestInit = {}): Promise<Respo
     // fetch rejects rather than resolving when the bot is not listening, which
     // reaches a server component as an unhandled "fetch failed" unless it is
     // turned into something callers can recognise.
-    throw new ControlApiError(503, "The dashboard could not reach the bot.", { cause });
+    throw new ControlApiError(503, "The dashboard could not reach the bot.", undefined, { cause });
   }
 }
 
 async function readJson<T>(res: Response, context: string): Promise<T> {
   if (!res.ok) {
-    const body = await res.text().catch(() => "");
-    throw new ControlApiError(
-      res.status,
-      body || `The bot's control API rejected ${context} (${res.status}).`,
-    );
+    const text = await res.text().catch(() => "");
+    const fieldErrors = parseFieldErrors(text);
+    const message = fieldErrors
+      ? `The bot's control API rejected ${context} (${res.status}).`
+      : text || `The bot's control API rejected ${context} (${res.status}).`;
+    throw new ControlApiError(res.status, message, fieldErrors);
   }
   return (await res.json()) as T;
+}
+
+/** The bot reports validation failures as `{ errors: [{ path, message }] }`. */
+function parseFieldErrors(text: string): FieldValidationError[] | undefined {
+  try {
+    const body = JSON.parse(text) as { errors?: unknown };
+    if (!Array.isArray(body.errors)) return undefined;
+    return body.errors.filter((e): e is FieldValidationError => isFieldError(e));
+  } catch {
+    return undefined;
+  }
+}
+
+function isFieldError(value: unknown): value is FieldValidationError {
+  if (typeof value !== "object" || value === null) return false;
+  const candidate = value as Partial<FieldValidationError>;
+  return typeof candidate.path === "string" && typeof candidate.message === "string";
 }
 
 export async function listBotGuilds(): Promise<BotGuildSummary[]> {
