@@ -2,6 +2,10 @@ node_modules/
 dist/
 .worktrees/
 .next/
+
+# Rewritten with a different path by next dev and next build, and the
+# typecheck passes without it.
+apps/web/next-env.d.ts
 *.tsbuildinfo
 
 .env
