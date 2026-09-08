@@ -25,16 +25,16 @@ interface Role {
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
 export function ChannelPicker({ id, guildId, value, onChange }: PickerProps & { types?: string[] }) {
-  const { data, isLoading } = useSWR<Channel[]>(`/api/guilds/${guildId}/channels`, fetcher);
+  const { data } = useSWR<Channel[]>(`/api/guilds/${guildId}/channels`, fetcher);
 
   return (
     <select
       id={id}
       value={value ?? ""}
-      disabled={isLoading}
+      disabled={!data}
       onChange={(e) => onChange(e.target.value || undefined)}
     >
-      <option value="">{isLoading ? "Loading channels" : "Select a channel"}</option>
+      <option value="">{data ? "Select a channel" : "Loading channels"}</option>
       {data?.map((channel) => (
         <option key={channel.id} value={channel.id}>
           #{channel.name}
@@ -45,16 +45,16 @@ export function ChannelPicker({ id, guildId, value, onChange }: PickerProps & { 
 }
 
 export function RolePicker({ id, guildId, value, onChange }: PickerProps) {
-  const { data, isLoading } = useSWR<Role[]>(`/api/guilds/${guildId}/roles`, fetcher);
+  const { data } = useSWR<Role[]>(`/api/guilds/${guildId}/roles`, fetcher);
 
   return (
     <select
       id={id}
       value={value ?? ""}
-      disabled={isLoading}
+      disabled={!data}
       onChange={(e) => onChange(e.target.value || undefined)}
     >
-      <option value="">{isLoading ? "Loading roles" : "Select a role"}</option>
+      <option value="">{data ? "Select a role" : "Loading roles"}</option>
       {data?.map((role) => (
         // A role above the bot's own cannot be assigned by it, so offering it
         // here would only produce a confusing failure later.
