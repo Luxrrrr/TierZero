@@ -8,7 +8,6 @@ import type {
   ScheduledWork,
   Shape,
   ShapeValues,
-  TaskPayload,
 } from "@tier0/core";
 import { prisma } from "@tier0/db";
 import { matchesPayload, namespaceKind } from "./task-payload.js";

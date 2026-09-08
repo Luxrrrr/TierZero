@@ -72,7 +72,6 @@ export function AppShell({ user, signOutAction, children }: Props) {
         <div className="shell-user">
           <span className="shell-user-avatar" aria-hidden="true">
             {user.image ? (
-              // eslint-disable-next-line @next/next/no-img-element
               <img src={user.image} alt="" width={28} height={28} />
             ) : (
               initialsOf(user.name ?? "?")

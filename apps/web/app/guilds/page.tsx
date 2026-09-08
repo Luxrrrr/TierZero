@@ -51,7 +51,6 @@ export default async function GuildsPage() {
                 <Link href={`/guilds/${guild.id}`}>
                   <span className="guild-icon" aria-hidden="true">
                     {icon ? (
-                      // eslint-disable-next-line @next/next/no-img-element
                       <img src={icon} alt="" width={36} height={36} />
                     ) : (
                       initialsOf(guild.name)

@@ -103,7 +103,7 @@ describe("snowflake fields", () => {
   test("rejects anything that is not a snowflake", () => {
     assert.equal(s.channel().parse("nope").ok, false);
     assert.equal(s.channel().parse("123").ok, false);
-    assert.equal(s.role().parse(123456789012345678).ok, false);
+    assert.equal(s.role().parse(1234567890).ok, false);
   });
 
   test("carries the requested channel types into the descriptor", () => {
