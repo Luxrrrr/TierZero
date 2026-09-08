@@ -5,8 +5,8 @@
   "type": "module",
   "scripts": {
     "build": "tsc -b",
-    "dev": "tsx watch src/index.ts",
-    "start": "node dist/index.js"
+    "dev": "dotenv -e ../../.env -- tsx watch src/index.ts",
+    "start": "dotenv -e ../../.env -- node dist/index.js"
   },
   "dependencies": {
     "@tier0/core": "workspace:*",

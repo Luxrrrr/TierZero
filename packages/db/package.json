@@ -6,11 +6,11 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "scripts": {
-    "build": "prisma generate && tsc -b",
+    "build": "dotenv -e ../../.env -- prisma generate && tsc -b",
     "dev": "tsc -b --watch",
-    "migrate": "prisma migrate deploy",
-    "migrate:dev": "prisma migrate dev",
-    "studio": "prisma studio"
+    "migrate": "dotenv -e ../../.env -- prisma migrate deploy",
+    "migrate:dev": "dotenv -e ../../.env -- prisma migrate dev",
+    "studio": "dotenv -e ../../.env -- prisma studio"
   },
   "dependencies": { "@prisma/client": "^5.20.0" },
   "devDependencies": { "prisma": "^5.20.0" }
