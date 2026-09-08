@@ -65,6 +65,9 @@ particular roles and channels the same way.
   leaderboard
 - **Utility** - server and member information commands
 
+[docs/features.md](docs/features.md) covers what each one does and the
+behaviour that is worth knowing before you turn it on.
+
 ## Licence
 
 AGPL-3.0-or-later. You can run, modify and redistribute this freely. If you
