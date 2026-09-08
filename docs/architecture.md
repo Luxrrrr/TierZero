@@ -194,18 +194,23 @@ configuration surface stops moving.
 **Docker Compose** is the primary path and what the README leads with. Two
 files, one command, no token baked into anything.
 
-**The first-run wizard** is the real answer to constraint 4. On first boot with
-no credentials, the dashboard serves a wizard instead of the normal interface:
-walk through creating the Discord application with screenshots of the exact
-Developer Portal screens, accept and validate each credential against Discord's
-API as it is entered, compute the permission integer from the selected modules
-and generate the invite link, then connect and hand off.
+**First run** currently claims ownership of the install and nothing more. The
+first account to sign in is recorded as the owner, or `INSTANCE_OWNER_ID` fixes
+it up front for an operator who would rather not race anyone to it.
 
-The Developer Portal is where non-technical users actually fail, not the install
-command, and it is the part no written guide survives for long because Discord
-redesigns that interface periodically. Validating each credential when it is
-pasted turns a failure mode of "the container restarts forever and the logs
-mention an invalid token" into a red field with a sentence explaining the fix.
+The Developer Portal is where people without a development background actually
+fail, not the install command, and `docs/install.md` walks through it step by
+step for that reason. A guided wizard that validated each credential as it was
+pasted would be better still, turning "the container restarts forever and the
+logs mention an invalid token" into a field with a sentence explaining the fix.
+
+That wizard is not built, and the reason is worth recording. Credentials live
+in the environment rather than the database, so a wizard that collected them
+would have to write them to a file the dashboard then cannot reliably reload,
+and under Compose the environment belongs to the container rather than the
+application. Validating credentials the operator has already set is a
+different, smaller feature and does not have that problem; that is the shape
+this should take when it is built.
 
 **From source** is documented in CONTRIBUTING rather than the user-facing
 install guide, so the two audiences never read each other's instructions.
