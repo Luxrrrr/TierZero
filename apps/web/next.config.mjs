@@ -5,6 +5,9 @@ const nextConfig = {
   experimental: {
     authInterrupts: true,
   },
+  // next dev otherwise writes a pair of editor tooling files into this
+  // directory on every run. They are generated output, not project files.
+  agentRules: false,
 };
 
 export default nextConfig;
