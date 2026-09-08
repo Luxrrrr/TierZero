@@ -69,6 +69,9 @@ export class CommandSync {
           : {}),
       },
     });
+    // The router reads these rules on every invocation from a cache, so the
+    // write has to drop it here rather than leaving the caller to remember.
+    this.state.invalidate(guildId);
     this.schedule(guildId);
   }
 

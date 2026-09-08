@@ -6,6 +6,7 @@ import { GuildState } from "./runtime/guild-state.js";
 import { CommandSync } from "./runtime/commands.js";
 import { registerEventDispatch } from "./runtime/dispatch.js";
 import { Scheduler } from "./runtime/scheduler.js";
+import { checkCommandPolicy } from "./runtime/command-policy.js";
 import { startControlApi } from "./control/server.js";
 import { config } from "./config.js";
 
@@ -63,6 +64,28 @@ client.on(Events.InteractionCreate, async (interaction) => {
   if (!(await state.isEnabled(interaction.guild.id, moduleId))) {
     await interaction.reply({
       content: "That feature is switched off on this server.",
+      flags: MessageFlags.Ephemeral,
+    });
+    return;
+  }
+
+  const policy = await state.commandPolicy(interaction.guild.id, interaction.commandName);
+  // Discord sends the member's roles with the interaction. They arrive as a
+  // GuildMember when the guild is cached and as a plain id array when it is
+  // not, and both forms have to be read the same way here.
+  const member = interaction.member;
+  const roleIds: string[] = !member
+    ? []
+    : Array.isArray(member.roles)
+      ? member.roles
+      : [...member.roles.cache.keys()];
+  const verdict = checkCommandPolicy(policy, interaction.channelId, roleIds);
+  if (!verdict.allowed) {
+    await interaction.reply({
+      content:
+        verdict.reason === "channel"
+          ? "That command is turned off in this channel."
+          : "You do not have a role that is allowed to use that command.",
       flags: MessageFlags.Ephemeral,
     });
     return;

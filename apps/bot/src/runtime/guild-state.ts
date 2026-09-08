@@ -12,6 +12,7 @@ import type {
 } from "@tier0/core";
 import { prisma } from "@tier0/db";
 import { matchesPayload, namespaceKind } from "./task-payload.js";
+import { parseIdList, type CommandPolicy } from "./command-policy.js";
 
 // The router resolves a module by name at runtime, so the cache cannot be
 // generic over one module's shape. This is the widest settings type that
@@ -39,6 +40,7 @@ export type ApplyModuleUpdateResult = { ok: true } | { ok: false; errors: FieldE
 export class GuildState {
   private readonly cache = new Map<string, Map<string, Settings>>();
   private readonly enabledCache = new Map<string, ModuleDefinition[]>();
+  private readonly policyCache = new Map<string, Map<string, CommandPolicy>>();
 
   constructor(
     private readonly client: Client,
@@ -48,6 +50,7 @@ export class GuildState {
   invalidate(guildId: string): void {
     this.cache.delete(guildId);
     this.enabledCache.delete(guildId);
+    this.policyCache.delete(guildId);
   }
 
   async enabledModules(guildId: string): Promise<ModuleDefinition[]> {
@@ -63,6 +66,32 @@ export class GuildState {
 
     this.enabledCache.set(guildId, modules);
     return modules;
+  }
+
+  /**
+   * Role and channel rules for one command. Read on every invocation, so the
+   * result is cached alongside the rest of a guild's state and dropped by the
+   * same invalidation.
+   */
+  async commandPolicy(guildId: string, command: string): Promise<CommandPolicy> {
+    let guildPolicies = this.policyCache.get(guildId);
+    const cached = guildPolicies?.get(command);
+    if (cached) return cached;
+
+    const row = await prisma.commandOverride.findUnique({
+      where: { guildId_command: { guildId, command } },
+    });
+    const policy: CommandPolicy = {
+      allowRoles: row ? parseIdList(row.allowRoles) : [],
+      denyChannels: row ? parseIdList(row.denyChannels) : [],
+    };
+
+    if (!guildPolicies) {
+      guildPolicies = new Map();
+      this.policyCache.set(guildId, guildPolicies);
+    }
+    guildPolicies.set(command, policy);
+    return policy;
   }
 
   async isEnabled(guildId: string, moduleId: string): Promise<boolean> {
