@@ -2,6 +2,10 @@ import { redirect } from "next/navigation";
 import { auth, signIn } from "../../lib/auth";
 import { claimInstanceOwnership, isInstanceClaimed } from "../../lib/instance";
 
+// Whether the instance has been claimed is runtime state, so this page must
+// never be prerendered: a build has no database to read it from.
+export const dynamic = "force-dynamic";
+
 // The minimal half of the setup wizard: claiming instance ownership. The
 // guided walk-through for creating the Discord application itself (docs/
 // architecture.md's "first-run wizard") is a separate, larger piece of work
