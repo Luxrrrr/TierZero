@@ -5,6 +5,7 @@ import utility from "@tier0/module-utility";
 import { GuildState } from "./runtime/guild-state.js";
 import { CommandSync } from "./runtime/commands.js";
 import { registerEventDispatch } from "./runtime/dispatch.js";
+import { Scheduler } from "./runtime/scheduler.js";
 import { startControlApi } from "./control/server.js";
 import { config } from "./config.js";
 
@@ -24,6 +25,8 @@ const state = new GuildState(client, registry);
 const rest = new REST().setToken(config.token);
 const commands = new CommandSync(rest, config.applicationId, registry, state);
 
+const scheduler = new Scheduler(client, registry, state);
+
 registerEventDispatch({ client, state });
 
 client.once(Events.ClientReady, async (ready) => {
@@ -38,6 +41,7 @@ client.once(Events.ClientReady, async (ready) => {
     await commands.run(guild.id);
   }
 
+  scheduler.start();
   startControlApi({ client, registry, state, commands });
 });
 
@@ -83,6 +87,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
 });
 
 process.on("SIGTERM", async () => {
+  scheduler.stop();
   await client.destroy();
   await prisma.$disconnect();
   process.exit(0);

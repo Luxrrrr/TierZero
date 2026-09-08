@@ -19,6 +19,9 @@ export type {
   EventHandlers,
   ModuleContext,
   ModuleDefinition,
+  ScheduledWork,
+  TaskHandler,
+  TaskPayload,
 } from "./module.js";
 
 export { ModuleRegistry } from "./registry.js";

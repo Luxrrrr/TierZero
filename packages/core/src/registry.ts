@@ -1,4 +1,5 @@
 import type { ModuleDefinition } from "./module.js";
+import type { Shape } from "./schema.js";
 import type { FieldDescriptor, FieldError } from "./schema.js";
 
 export interface ModuleSummary {
@@ -18,7 +19,12 @@ export interface ModuleSummary {
 export class ModuleRegistry {
   private readonly modules = new Map<string, ModuleDefinition>();
 
-  register(definition: ModuleDefinition): void {
+  /**
+   * Accepts a module at its own settings shape and stores it erased. The
+   * registry looks modules up by string at runtime, so nothing downstream can
+   * know the shape anyway, and taking it here keeps the call site checked.
+   */
+  register<S extends Shape>(definition: ModuleDefinition<S>): void {
     if (this.modules.has(definition.id)) {
       throw new Error(`Duplicate module id: ${definition.id}`);
     }

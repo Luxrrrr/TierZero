@@ -5,10 +5,13 @@ import type {
   ModuleDefinition,
   ModuleRegistry,
   ModuleSummary,
+  ScheduledWork,
   Shape,
   ShapeValues,
+  TaskPayload,
 } from "@tier0/core";
 import { prisma } from "@tier0/db";
+import { matchesPayload, namespaceKind } from "./task-payload.js";
 
 // The router resolves a module by name at runtime, so the cache cannot be
 // generic over one module's shape. This is the widest settings type that
@@ -84,6 +87,7 @@ export class GuildState {
       client: this.client,
       guild,
       settings,
+      tasks: taskQueue(guild.id, moduleId),
       update: async (patch) => {
         const merged = { ...settings, ...patch };
         const parsed = module.settings.parse(merged);
@@ -262,4 +266,40 @@ function safeParse(text: string): unknown {
   } catch {
     return {};
   }
+}
+
+/**
+ * A module's view of the scheduled work table. Scheduling is only a row, so
+ * this needs nothing from the runner that later picks the row up.
+ *
+ * Kinds are stored namespaced by module, which is what lets two modules both
+ * schedule an "expire" without reading each other's work.
+ */
+function taskQueue(guildId: string, moduleId: string): ScheduledWork {
+  const namespaced = (kind: string) => namespaceKind(moduleId, kind);
+
+  return {
+    async schedule(kind, runAt, payload = {}) {
+      await prisma.scheduledTask.create({
+        data: {
+          guildId,
+          kind: namespaced(kind),
+          runAt,
+          payload: JSON.stringify(payload),
+        },
+      });
+    },
+
+    async cancel(kind, match) {
+      const rows = await prisma.scheduledTask.findMany({
+        where: { guildId, kind: namespaced(kind) },
+      });
+      const doomed = rows.filter((row) => matchesPayload(safeParse(row.payload), match));
+      if (doomed.length === 0) return 0;
+      await prisma.scheduledTask.deleteMany({
+        where: { id: { in: doomed.map((row) => row.id) } },
+      });
+      return doomed.length;
+    },
+  };
 }

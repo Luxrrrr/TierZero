@@ -22,7 +22,30 @@ export interface ModuleContext<T = unknown> {
   settings: T;
   /** Persists a partial settings change and triggers onSettingsChange. */
   update(patch: Partial<T>): Promise<void>;
+  /** Work to carry out later, such as lifting a temporary ban. */
+  tasks: ScheduledWork;
 }
+
+export type TaskPayload = Record<string, unknown>;
+
+export interface ScheduledWork {
+  /**
+   * Runs the module's handler for `kind` at `runAt`. The row outlives the
+   * process, so a restart between scheduling and running loses nothing.
+   */
+  schedule(kind: string, runAt: Date, payload?: TaskPayload): Promise<void>;
+  /**
+   * Drops pending work of this kind whose payload contains every entry in
+   * `match`. Returns how many were dropped. Used when an action is reversed
+   * early, such as an unban issued before the temporary ban expires.
+   */
+  cancel(kind: string, match?: TaskPayload): Promise<number>;
+}
+
+export type TaskHandler<T = unknown> = (
+  payload: TaskPayload,
+  ctx: ModuleContext<T>,
+) => Promise<void>;
 
 export type CommandBuilder =
   | SlashCommandBuilder
@@ -54,6 +77,12 @@ export interface ModuleDefinition<S extends Shape = Shape> {
   settings: ObjectField<S>;
   commands?: CommandDefinition<ShapeValues<S>>[];
   events?: Partial<EventHandlers<ShapeValues<S>>>;
+  /**
+   * Handlers for work this module schedules. The kind a handler is keyed by is
+   * namespaced to the module, so two modules may both use "expire" without
+   * colliding.
+   */
+  tasks?: Record<string, TaskHandler<ShapeValues<S>>>;
   /** Discord permissions the module cannot work without. Surfaced in setup. */
   requires?: string[];
   onEnable?(ctx: ModuleContext<ShapeValues<S>>): Promise<void>;
