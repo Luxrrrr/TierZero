@@ -49,6 +49,8 @@ in the dashboard, and it works for any schema, so no module ships UI code.
 | `s.channel({ types })` | snowflake | channel picker, filtered by type |
 | `s.role()` | snowflake | role picker, with unassignable roles greyed out |
 | `s.choice({ options })` | string | select |
+| `s.emoji()` | string | text input accepting a unicode or `<:name:id>` emoji |
+| `s.template({ placeholders })` | string | textarea with insertable placeholders and a character count |
 | `s.array(field, { min, max })` | array | repeating rows with add and remove |
 | `s.object({ ... })` | object | grouped fields |
 
