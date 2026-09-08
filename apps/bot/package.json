@@ -11,6 +11,8 @@
   "dependencies": {
     "@tier0/core": "workspace:*",
     "@tier0/db": "workspace:*",
+    "@tier0/module-automod": "workspace:*",
+    "@tier0/module-leveling": "workspace:*",
     "@tier0/module-roles": "workspace:*",
     "@tier0/module-utility": "workspace:*",
     "@tier0/module-welcome": "workspace:*",

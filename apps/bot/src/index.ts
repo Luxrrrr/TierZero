@@ -4,6 +4,8 @@ import { prisma } from "@tier0/db";
 import utility from "@tier0/module-utility";
 import welcome from "@tier0/module-welcome";
 import roles from "@tier0/module-roles";
+import automod from "@tier0/module-automod";
+import leveling from "@tier0/module-leveling";
 import { GuildState } from "./runtime/guild-state.js";
 import { CommandSync } from "./runtime/commands.js";
 import { registerEventDispatch } from "./runtime/dispatch.js";
@@ -16,6 +18,8 @@ const registry = new ModuleRegistry();
 registry.register(utility);
 registry.register(welcome);
 registry.register(roles);
+registry.register(automod);
+registry.register(leveling);
 
 const client = new Client({
   intents: [

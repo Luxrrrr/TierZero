@@ -6,6 +6,8 @@
     { "path": "packages/modules/utility" },
     { "path": "packages/modules/welcome" },
     { "path": "packages/modules/roles" },
+    { "path": "packages/modules/automod" },
+    { "path": "packages/modules/leveling" },
     { "path": "apps/bot" }
   ]
 }

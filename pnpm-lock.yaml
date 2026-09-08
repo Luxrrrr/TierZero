@@ -26,6 +26,12 @@ importers:
       '@tier0/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@tier0/module-automod':
+        specifier: workspace:*
+        version: link:../../packages/modules/automod
+      '@tier0/module-leveling':
+        specifier: workspace:*
+        version: link:../../packages/modules/leveling
       '@tier0/module-roles':
         specifier: workspace:*
         version: link:../../packages/modules/roles
@@ -92,6 +98,30 @@ importers:
       prisma:
         specifier: ^5.20.0
         version: 5.22.0
+
+  packages/modules/automod:
+    dependencies:
+      '@tier0/core':
+        specifier: workspace:*
+        version: link:../../core
+      '@tier0/db':
+        specifier: workspace:*
+        version: link:../../db
+      discord.js:
+        specifier: ^14.16.0
+        version: 14.27.0
+
+  packages/modules/leveling:
+    dependencies:
+      '@tier0/core':
+        specifier: workspace:*
+        version: link:../../core
+      '@tier0/db':
+        specifier: workspace:*
+        version: link:../../db
+      discord.js:
+        specifier: ^14.16.0
+        version: 14.27.0
 
   packages/modules/roles:
     dependencies:
