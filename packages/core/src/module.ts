@@ -2,9 +2,15 @@ import type {
   ChatInputCommandInteraction,
   Client,
   Guild,
-  Message,
+  GuildBan,
+  GuildChannel,
   GuildMember,
+  MessageComponentInteraction,
+  ModalSubmitInteraction,
+  Message,
   PartialGuildMember,
+  PartialMessage,
+  Role,
   SlashCommandBuilder,
   SlashCommandOptionsOnlyBuilder,
   SlashCommandSubcommandsOnlyBuilder,
@@ -62,13 +68,72 @@ export interface CommandDefinition<T = unknown> {
 
 export interface EventHandlers<T = unknown> {
   messageCreate(message: Message, ctx: ModuleContext<T>): Promise<void>;
+  /** Deleted messages are often uncached, so most fields may be null. */
+  messageDelete(message: Message | PartialMessage, ctx: ModuleContext<T>): Promise<void>;
+  messageUpdate(
+    before: Message | PartialMessage,
+    after: Message | PartialMessage,
+    ctx: ModuleContext<T>,
+  ): Promise<void>;
   memberJoin(member: GuildMember, ctx: ModuleContext<T>): Promise<void>;
   /**
    * Discord does not guarantee a full member object on departure - if the
    * member was not cached, fields such as `joinedAt` come back null.
    */
   memberLeave(member: GuildMember | PartialGuildMember, ctx: ModuleContext<T>): Promise<void>;
+  memberUpdate(
+    before: GuildMember | PartialGuildMember,
+    after: GuildMember,
+    ctx: ModuleContext<T>,
+  ): Promise<void>;
+  channelCreate(channel: GuildChannel, ctx: ModuleContext<T>): Promise<void>;
+  channelDelete(channel: GuildChannel, ctx: ModuleContext<T>): Promise<void>;
+  roleCreate(role: Role, ctx: ModuleContext<T>): Promise<void>;
+  roleDelete(role: Role, ctx: ModuleContext<T>): Promise<void>;
+  banAdd(ban: GuildBan, ctx: ModuleContext<T>): Promise<void>;
+  banRemove(ban: GuildBan, ctx: ModuleContext<T>): Promise<void>;
 }
+
+/**
+ * Buttons, select menus and modals are addressed by custom id. The router
+ * splits an id as `moduleId:action:rest`, the same namespacing scheduled work
+ * uses, so a module only ever sees interactions it created and two modules can
+ * both use an action called "confirm".
+ *
+ * Build ids with `customId()` rather than by hand.
+ */
+export function customId(moduleId: string, action: string, rest = ""): string {
+  return rest ? `${moduleId}:${action}:${rest}` : `${moduleId}:${action}`;
+}
+
+/** Reads back an id built by `customId`. Returns null for anything else. */
+export function parseCustomId(
+  raw: string,
+): { moduleId: string; action: string; rest: string } | null {
+  const first = raw.indexOf(":");
+  if (first <= 0) return null;
+  const second = raw.indexOf(":", first + 1);
+  const moduleId = raw.slice(0, first);
+  const action = second === -1 ? raw.slice(first + 1) : raw.slice(first + 1, second);
+  if (!action) return null;
+  return { moduleId, action, rest: second === -1 ? "" : raw.slice(second + 1) };
+}
+
+export interface ComponentEvent<T = unknown> {
+  /** Everything after `moduleId:action:`, empty when there was none. */
+  rest: string;
+  ctx: ModuleContext<T>;
+}
+
+export type ComponentHandler<T = unknown> = (
+  interaction: MessageComponentInteraction,
+  event: ComponentEvent<T>,
+) => Promise<void>;
+
+export type ModalHandler<T = unknown> = (
+  interaction: ModalSubmitInteraction,
+  event: ComponentEvent<T>,
+) => Promise<void>;
 
 export interface ModuleDefinition<S extends Shape = Shape> {
   id: string;
@@ -83,6 +148,10 @@ export interface ModuleDefinition<S extends Shape = Shape> {
    * colliding.
    */
   tasks?: Record<string, TaskHandler<ShapeValues<S>>>;
+  /** Button and select menu handlers, keyed by the action in their custom id. */
+  components?: Record<string, ComponentHandler<ShapeValues<S>>>;
+  /** Modal submission handlers, keyed by the action in their custom id. */
+  modals?: Record<string, ModalHandler<ShapeValues<S>>>;
   /** Discord permissions the module cannot work without. Surfaced in setup. */
   requires?: string[];
   onEnable?(ctx: ModuleContext<ShapeValues<S>>): Promise<void>;

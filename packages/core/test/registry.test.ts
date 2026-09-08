@@ -1,6 +1,6 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { ModuleRegistry, defineModule, s } from "../dist/index.js";
+import { ModuleRegistry, customId, defineModule, parseCustomId, s } from "../dist/index.js";
 
 const CHANNEL = "123456789012345678";
 
@@ -138,5 +138,35 @@ describe("resolveSettings", () => {
   test("keeps a stored value that still validates", () => {
     const resolved = registry.resolveSettings("utility", { channel: CHANNEL, limit: 9 });
     assert.deepEqual(resolved.ok && resolved.value, { channel: CHANNEL, limit: 9 });
+  });
+});
+
+describe("custom ids", () => {
+  test("round trips a module, action and payload", () => {
+    assert.deepEqual(parseCustomId(customId("tickets", "close", "42")), {
+      moduleId: "tickets",
+      action: "close",
+      rest: "42",
+    });
+  });
+
+  test("round trips without a payload", () => {
+    assert.deepEqual(parseCustomId(customId("roles", "toggle")), {
+      moduleId: "roles",
+      action: "toggle",
+      rest: "",
+    });
+  });
+
+  test("keeps colons that appear inside the payload", () => {
+    const parsed = parseCustomId(customId("roles", "toggle", "a:b:c"));
+    assert.equal(parsed?.rest, "a:b:c");
+  });
+
+  test("refuses an id that is not namespaced", () => {
+    assert.equal(parseCustomId("toggle"), null);
+    assert.equal(parseCustomId(":toggle"), null);
+    assert.equal(parseCustomId("roles:"), null);
+    assert.equal(parseCustomId(""), null);
   });
 });

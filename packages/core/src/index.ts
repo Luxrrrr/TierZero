@@ -13,12 +13,15 @@ export type {
   ShapeValues,
 } from "./schema.js";
 
-export { defineModule } from "./module.js";
+export { customId, defineModule, parseCustomId } from "./module.js";
 export type {
   CommandDefinition,
   EventHandlers,
   ModuleContext,
   ModuleDefinition,
+  ComponentEvent,
+  ComponentHandler,
+  ModalHandler,
   ScheduledWork,
   TaskHandler,
   TaskPayload,

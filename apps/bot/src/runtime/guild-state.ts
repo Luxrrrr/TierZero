@@ -94,6 +94,11 @@ export class GuildState {
     return policy;
   }
 
+  /** Looks a module up without going through the registry directly. */
+  moduleFor(moduleId: string): ModuleDefinition | undefined {
+    return this.registry.get(moduleId);
+  }
+
   async isEnabled(guildId: string, moduleId: string): Promise<boolean> {
     const row = await prisma.guildModule.findUnique({
       where: { guildId_moduleId: { guildId, moduleId } },

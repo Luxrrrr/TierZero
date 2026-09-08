@@ -1,4 +1,4 @@
-import { Client, GatewayIntentBits, MessageFlags, REST, Events } from "discord.js";
+import { Client, GatewayIntentBits, MessageFlags, Partials, REST, Events } from "discord.js";
 import { ModuleRegistry } from "@tier0/core";
 import { prisma } from "@tier0/db";
 import utility from "@tier0/module-utility";
@@ -18,8 +18,13 @@ const client = new Client({
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMembers,
     GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.GuildModeration,
     GatewayIntentBits.MessageContent,
   ],
+  // Without these, an event about something the bot never cached is dropped
+  // rather than delivered with the little Discord does send. Audit logging in
+  // particular is mostly interested in older messages, which are never cached.
+  partials: [Partials.Message, Partials.Channel, Partials.GuildMember, Partials.User],
 });
 
 const state = new GuildState(client, registry);
