@@ -7,9 +7,8 @@ import {
   SlashCommandBuilder,
   type Guild,
 } from "discord.js";
-import { customId, defineModule, s, type Infer } from "@tier0/core";
+import { customId, defineModule, isRoleAssignable, s, type Infer } from "@tier0/core";
 import { prisma } from "@tier0/db";
-import { isAssignable } from "./assignable.js";
 import { computeToggle } from "./toggle.js";
 import { parseMapping, serializeMapping, type MenuMapping } from "./mapping.js";
 
@@ -198,7 +197,7 @@ export default defineModule({
       const willGrant = !current.includes(roleId);
 
       const botHighest = ctx.guild.members.me?.roles.highest.position ?? 0;
-      if (willGrant && !isAssignable(role.position, botHighest)) {
+      if (willGrant && !isRoleAssignable(role.position, botHighest)) {
         await interaction.reply({
           content: `I can't give you **${role.name}** because that role sits above my own highest role. Ask an admin to move my role above it.`,
           flags: MessageFlags.Ephemeral,

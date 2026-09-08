@@ -1,6 +1,6 @@
 import { SlashCommandBuilder, EmbedBuilder, MessageFlags } from "discord.js";
 import type { GuildMember } from "discord.js";
-import { defineModule, s } from "@tier0/core";
+import { defineModule, isRoleAssignable, s } from "@tier0/core";
 import type { Infer, ModuleContext } from "@tier0/core";
 import { prisma } from "@tier0/db";
 import {
@@ -274,12 +274,20 @@ async function applyRoleRewards(
   const desired = new Set(resolveRewardRoles(level, settings.roleRewards, settings.stackRewards));
   const configuredRoleIds = new Set(settings.roleRewards.map((reward) => reward.role));
 
+  const botHighest = member.guild.members.me?.roles.highest.position ?? 0;
+
   for (const roleId of desired) {
     if (member.roles.cache.has(roleId)) continue;
+    const role = member.guild.roles.cache.get(roleId);
+    if (role && !isRoleAssignable(role.position, botHighest)) {
+      // The member keeps their level; the role catches up once an operator
+      // moves it below the bot's own, so this must not stop anything else.
+      console.warn(
+        `[leveling] reward role ${roleId} sits above the bot's own in guild ${member.guild.id}`,
+      );
+      continue;
+    }
     await member.roles.add(roleId).catch((error: unknown) => {
-      // Most often the role sits above the bot's own and Discord refuses the
-      // change. The member keeps their level; the role catches up once an
-      // operator moves it, so this must not stop anything else here.
       console.error(`[leveling] could not add role ${roleId} in guild ${member.guild.id}:`, error);
     });
   }

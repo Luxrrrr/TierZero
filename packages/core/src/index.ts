@@ -27,5 +27,7 @@ export type {
   TaskPayload,
 } from "./module.js";
 
+export { isRoleAssignable } from "./roles.js";
+
 export { ModuleRegistry } from "./registry.js";
 export type { ModuleSummary } from "./registry.js";

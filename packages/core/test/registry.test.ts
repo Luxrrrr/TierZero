@@ -1,6 +1,13 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { ModuleRegistry, customId, defineModule, parseCustomId, s } from "../dist/index.js";
+import {
+  ModuleRegistry,
+  customId,
+  defineModule,
+  isRoleAssignable,
+  parseCustomId,
+  s,
+} from "../dist/index.js";
 
 const CHANNEL = "123456789012345678";
 
@@ -168,5 +175,19 @@ describe("custom ids", () => {
     assert.equal(parseCustomId(":toggle"), null);
     assert.equal(parseCustomId("roles:"), null);
     assert.equal(parseCustomId(""), null);
+  });
+});
+
+describe("isRoleAssignable", () => {
+  test("allows a role below the bot's own", () => {
+    assert.equal(isRoleAssignable(3, 5), true);
+  });
+
+  test("refuses a role above the bot's own", () => {
+    assert.equal(isRoleAssignable(7, 5), false);
+  });
+
+  test("refuses an equal position, which Discord also refuses", () => {
+    assert.equal(isRoleAssignable(5, 5), false);
   });
 });

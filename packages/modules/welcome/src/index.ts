@@ -1,6 +1,5 @@
 import { EmbedBuilder, type GuildMember, type PartialGuildMember } from "discord.js";
-import { defineModule, s } from "@tier0/core";
-import { isAssignable } from "./assignable.js";
+import { defineModule, isRoleAssignable, s } from "@tier0/core";
 import { PLACEHOLDERS, renderTemplate, type PlaceholderValues } from "./template.js";
 
 function placeholdersFor(member: GuildMember | PartialGuildMember): PlaceholderValues {
@@ -104,7 +103,7 @@ export default defineModule({
       for (const roleId of join.roles) {
         const role = ctx.guild.roles.cache.get(roleId);
         if (!role) continue;
-        if (!isAssignable(role.position, botHighest)) {
+        if (!isRoleAssignable(role.position, botHighest)) {
           console.warn(
             `[welcome] cannot assign role ${role.name} in ${ctx.guild.name}: above the bot's own role`,
           );
