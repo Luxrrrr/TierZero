@@ -43,6 +43,7 @@ export default defineModule({
   id: "welcome",
   name: "Welcome messages",
   summary: "Greets new members, assigns roles, and says goodbye when they leave.",
+  category: "members",
 
   settings: s.object({
     join: s.object(

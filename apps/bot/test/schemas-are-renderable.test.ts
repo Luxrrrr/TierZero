@@ -82,6 +82,15 @@ describe("every registered module", () => {
       }
     });
 
+    test(`${module.id} belongs to a dashboard section`, () => {
+      assert.ok(
+        ["moderation", "members", "engagement", "support", "logging", "utility"].includes(
+          module.category,
+        ),
+        `${module.id} has category ${module.category}, which no dashboard section renders`,
+      );
+    });
+
     test(`${module.id} describes itself for the module list`, () => {
       assert.ok(module.name.length > 0);
       assert.ok(module.summary.length > 0, `${module.id} needs a summary for its dashboard card`);

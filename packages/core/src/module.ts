@@ -135,10 +135,26 @@ export type ModalHandler<T = unknown> = (
   event: ComponentEvent<T>,
 ) => Promise<void>;
 
+/**
+ * Which section of the dashboard a module is configured under. The list is
+ * closed on purpose: a module picking its own section name would leave the
+ * navigation growing a new entry every time somebody wrote a module, and the
+ * point of grouping is that related settings sit together.
+ */
+export type ModuleCategory =
+  | "moderation"
+  | "members"
+  | "engagement"
+  | "support"
+  | "logging"
+  | "utility";
+
 export interface ModuleDefinition<S extends Shape = Shape> {
   id: string;
   name: string;
   summary: string;
+  /** Defaults to "utility" for a module that does not say. */
+  category?: ModuleCategory;
   settings: ObjectField<S>;
   commands?: CommandDefinition<ShapeValues<S>>[];
   events?: Partial<EventHandlers<ShapeValues<S>>>;

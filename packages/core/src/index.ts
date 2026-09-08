@@ -17,6 +17,7 @@ export { customId, defineModule, parseCustomId } from "./module.js";
 export type {
   CommandDefinition,
   EventHandlers,
+  ModuleCategory,
   ModuleContext,
   ModuleDefinition,
   ComponentEvent,

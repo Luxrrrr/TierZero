@@ -123,6 +123,7 @@ export default defineModule({
   id: "roles",
   name: "Self-service roles",
   summary: "Button-driven role menus members can use to opt into roles.",
+  category: "members",
 
   settings: s.object({
     menus: s.array(menuField, { label: "Role menus" }),

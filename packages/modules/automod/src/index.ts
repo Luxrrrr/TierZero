@@ -20,6 +20,7 @@ export default defineModule({
   id: "automod",
   name: "Automod",
   summary: "Filters invites, links, spam and banned words, each rule independently switchable.",
+  category: "moderation",
   settings,
 
   events: {

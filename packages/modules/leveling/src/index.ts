@@ -115,6 +115,7 @@ export default defineModule({
   id: "leveling",
   name: "Leveling",
   summary: "Experience, levels and role rewards for active members.",
+  category: "engagement",
 
   settings: settingsSchema,
 

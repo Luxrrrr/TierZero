@@ -10,6 +10,7 @@ export default defineModule({
   id: "utility",
   name: "Utility",
   summary: "Server and member information commands.",
+  category: "utility",
 
   settings: s.object({
     accent: s.choice({

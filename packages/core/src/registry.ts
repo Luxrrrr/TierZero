@@ -1,4 +1,4 @@
-import type { ModuleDefinition } from "./module.js";
+import type { ModuleCategory, ModuleDefinition } from "./module.js";
 import type { Shape } from "./schema.js";
 import type { FieldDescriptor, FieldError } from "./schema.js";
 
@@ -6,6 +6,7 @@ export interface ModuleSummary {
   id: string;
   name: string;
   summary: string;
+  category: ModuleCategory;
   requires: string[];
   commands: { name: string; description: string }[];
   schema: FieldDescriptor;
@@ -60,6 +61,7 @@ export class ModuleRegistry {
       id: module.id,
       name: module.name,
       summary: module.summary,
+      category: module.category ?? "utility",
       requires: module.requires ?? [],
       commands: (module.commands ?? []).map((c) => ({
         name: c.name,

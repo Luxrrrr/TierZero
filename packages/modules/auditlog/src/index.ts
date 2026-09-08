@@ -76,6 +76,7 @@ export default defineModule({
   id: "auditlog",
   name: "Audit log",
   summary: "Writes a record of what changed on the server to a channel.",
+  category: "logging",
 
   settings: settingsSchema,
 

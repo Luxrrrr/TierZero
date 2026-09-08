@@ -17,6 +17,7 @@ export default defineModule({
   id: "moderation",
   name: "Moderation",
   summary: "Warnings, timeouts, kicks and bans with a searchable case history.",
+  category: "moderation",
 
   settings: moderationSettings,
 

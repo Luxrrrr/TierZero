@@ -256,6 +256,7 @@ export default defineModule({
   id: "tickets",
   name: "Tickets",
   summary: "A panel members use to open a private channel with the support team.",
+  category: "support",
   requires: ["ManageChannels"],
 
   settings: settingsSchema,
