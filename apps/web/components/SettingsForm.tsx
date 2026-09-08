@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type { FieldDescriptor } from "@tier0/core";
 import { ChannelPicker, RolePicker } from "./pickers";
 import { arrayItemPath, objectChildPath } from "../lib/schema-paths";
@@ -148,6 +148,35 @@ function Control({ id, path, field, value, guildId, errors, onChange }: ControlP
             </option>
           ))}
         </select>
+      );
+
+    case "emoji":
+      return (
+        <div className="emoji-field">
+          <input
+            id={id}
+            type="text"
+            className="emoji-input"
+            placeholder="🙂 or <:name:id>"
+            value={(value as string) ?? ""}
+            onChange={(e) => onChange(e.target.value)}
+          />
+          <p className="hint">
+            A unicode emoji, or Discord&apos;s custom form: <code>&lt;:name:id&gt;</code> or{" "}
+            <code>&lt;a:name:id&gt;</code> for an animated one.
+          </p>
+        </div>
+      );
+
+    case "template":
+      return (
+        <TemplateControl
+          id={id}
+          max={field.max as number | undefined}
+          placeholders={(field.placeholders as string[] | undefined) ?? []}
+          value={(value as string) ?? ""}
+          onChange={onChange}
+        />
       );
 
     case "channel":
@@ -298,6 +327,62 @@ function ArrayControl({ path, field, value, guildId, errors, max, onChange }: Ar
           </button>
         </div>
       )}
+    </div>
+  );
+}
+
+interface TemplateProps {
+  id: string;
+  max?: number;
+  placeholders: string[];
+  value: string;
+  onChange(next: string): void;
+}
+
+/** A message body with the placeholders its module accepts, insertable at the cursor. */
+function TemplateControl({ id, max = 2000, placeholders, value, onChange }: TemplateProps) {
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const remaining = max - value.length;
+
+  function insertPlaceholder(name: string) {
+    const token = `{${name}}`;
+    const textarea = textareaRef.current;
+    if (!textarea) {
+      onChange(value + token);
+      return;
+    }
+    const start = textarea.selectionStart ?? value.length;
+    const end = textarea.selectionEnd ?? value.length;
+    onChange(value.slice(0, start) + token + value.slice(end));
+    const cursor = start + token.length;
+    // The textarea's value updates on the next render, so the cursor can only
+    // be moved once that render has happened.
+    requestAnimationFrame(() => {
+      textarea.focus();
+      textarea.setSelectionRange(cursor, cursor);
+    });
+  }
+
+  return (
+    <div className="template-field">
+      <textarea
+        id={id}
+        ref={textareaRef}
+        rows={4}
+        maxLength={max}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+      />
+      <p className="char-count">{remaining} characters remaining</p>
+      {placeholders.length > 0 ? (
+        <div className="placeholders">
+          {placeholders.map((name) => (
+            <button key={name} type="button" onClick={() => insertPlaceholder(name)}>
+              {`{${name}}`}
+            </button>
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }
