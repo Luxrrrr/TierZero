@@ -9,9 +9,10 @@ immediately and does not require restarting anything or editing a file.
 
 ## Status
 
-Early development. The module runtime and the dashboard form renderer work; the
-feature modules described below are not written yet. See `docs/architecture.md`
-for the design and the planned build order.
+In development, and complete enough to run. Every feature below is built and
+configurable from the dashboard. It has not been through a tagged release yet,
+so expect the occasional rough edge and read `docs/architecture.md` before
+depending on internals.
 
 ## Requirements
 
@@ -42,12 +43,27 @@ pnpm db:migrate
 pnpm dev
 ```
 
-## Planned features
+## Features
 
-- Moderation and automod, with a case history and mod log
-- Reaction roles and welcome messages
-- Support tickets with transcripts, and server audit logging
-- Leveling with configurable rank cards and role rewards
+Each of these is a module. Turn any of them on or off per server, at any time,
+without restarting anything. Individual commands can be hidden or restricted to
+particular roles and channels the same way.
+
+- **Moderation** - warn, timeout, kick, ban and temporary ban, with a case
+  history, a mod log, and role hierarchy respected on every action
+- **Automod** - invite and link filters with allowlists, capital letters,
+  repeated text, mention limits, banned words and rate limiting, each with its
+  own action and exemptions
+- **Welcome messages** - greetings and farewells, with placeholders, optional
+  direct messages, and roles assigned on join
+- **Role menus** - self-service roles from buttons, optionally exclusive
+- **Tickets** - a panel members press to open a private channel with your
+  support team, with transcripts and auto-close
+- **Audit logging** - message edits and deletions, joins, departures, nickname
+  and role changes, channels, roles and bans, each switchable
+- **Leveling** - experience for activity, role rewards, multipliers and a
+  leaderboard
+- **Utility** - server and member information commands
 
 ## Licence
 
