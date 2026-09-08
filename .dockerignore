@@ -1,0 +1,13 @@
+node_modules
+**/node_modules
+.git
+.worktrees
+.next
+**/.next
+dist
+**/dist
+*.tsbuildinfo
+**/*.tsbuildinfo
+data
+.env
+.env.local

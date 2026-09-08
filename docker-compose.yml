@@ -1,16 +1,32 @@
 services:
   bot:
-    image: ghcr.io/OWNER/tier0-bot:latest
+    build:
+      context: .
+      dockerfile: apps/bot/Dockerfile
+    image: tier0-bot:latest
     restart: unless-stopped
     env_file: .env
+    environment:
+      # Absolute inside the container. The value in .env is relative to the
+      # Prisma schema, which is only correct when running from source.
+      DATABASE_URL: file:/data/tier0.db
+      # Reachable from the dashboard container over the compose network. The
+      # port is never published, so nothing outside that network can reach it.
+      CONTROL_HOST: 0.0.0.0
     volumes:
       - ./data:/data
     networks: [internal]
 
   web:
-    image: ghcr.io/OWNER/tier0-web:latest
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    image: tier0-web:latest
     restart: unless-stopped
     env_file: .env
+    environment:
+      DATABASE_URL: file:/data/tier0.db
+      CONTROL_API_URL: http://bot:8081
     ports:
       - "8080:8080"
     volumes:
