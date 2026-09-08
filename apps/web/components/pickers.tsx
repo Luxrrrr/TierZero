@@ -1,6 +1,7 @@
 "use client";
 
 import useSWR from "swr";
+import { matchesChannelTypes } from "../lib/channel-types";
 
 interface PickerProps {
   id: string;
@@ -24,8 +25,15 @@ interface Role {
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
-export function ChannelPicker({ id, guildId, value, onChange }: PickerProps & { types?: string[] }) {
+export function ChannelPicker({
+  id,
+  guildId,
+  types = [],
+  value,
+  onChange,
+}: PickerProps & { types?: string[] }) {
   const { data } = useSWR<Channel[]>(`/api/guilds/${guildId}/channels`, fetcher);
+  const options = data?.filter((channel) => matchesChannelTypes(channel.type, types));
 
   return (
     <select
@@ -35,7 +43,7 @@ export function ChannelPicker({ id, guildId, value, onChange }: PickerProps & { 
       onChange={(e) => onChange(e.target.value || undefined)}
     >
       <option value="">{data ? "Select a channel" : "Loading channels"}</option>
-      {data?.map((channel) => (
+      {options?.map((channel) => (
         <option key={channel.id} value={channel.id}>
           #{channel.name}
         </option>
