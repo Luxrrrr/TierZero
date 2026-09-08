@@ -15,7 +15,11 @@ export interface ManageableGuild {
 /** Discord sends permissions as a decimal string that can exceed 32 bits. */
 export function hasManageGuild(permissions: string): boolean {
   try {
-    return (BigInt(permissions) & BigInt(MANAGE_GUILD)) === BigInt(MANAGE_GUILD);
+    const bits = BigInt(permissions);
+    // A negative value would satisfy every bit test under two's complement, so
+    // nonsense here has to deny rather than grant.
+    if (bits < 0n) return false;
+    return (bits & BigInt(MANAGE_GUILD)) === BigInt(MANAGE_GUILD);
   } catch {
     return false;
   }
