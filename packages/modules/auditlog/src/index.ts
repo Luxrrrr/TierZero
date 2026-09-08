@@ -6,26 +6,34 @@ import { shouldIgnoreChannel, shouldLogMessageEdit, shouldLogMessageEvent, type 
 const FIELD_LIMIT = 1024;
 
 const settingsSchema = s.object({
-  channel: s.channel({ types: ["text"], label: "Log channel" }),
+  channel: s.channel({
+    types: ["text"],
+    optional: true,
+    label: "Log channel",
+    help: "Left unset, nothing is logged.",
+  }),
   includeBots: s.boolean({ label: "Log messages from bots", default: false }),
   ignoreChannels: s.array(s.channel({ types: ["text"] }), {
     label: "Channels to ignore",
     help: "Nothing that happens in these channels is logged.",
   }),
-  events: s.object({
-    messageDelete: s.boolean({ label: "Message deletions", default: true }),
-    messageEdit: s.boolean({ label: "Message edits", default: true }),
-    memberJoin: s.boolean({ label: "Joins", default: true }),
-    memberLeave: s.boolean({ label: "Departures", default: true }),
-    nicknameChange: s.boolean({ label: "Nickname changes", default: true }),
-    roleChange: s.boolean({ label: "Member role changes", default: true }),
-    channelCreate: s.boolean({ label: "Channel creation", default: true }),
-    channelDelete: s.boolean({ label: "Channel deletion", default: true }),
-    roleCreate: s.boolean({ label: "Role creation", default: false }),
-    roleDelete: s.boolean({ label: "Role deletion", default: false }),
-    banAdd: s.boolean({ label: "Bans", default: true }),
-    banRemove: s.boolean({ label: "Unbans", default: true }),
-  }),
+  events: s.object(
+    {
+      messageDelete: s.boolean({ label: "Message deletions", default: true }),
+      messageEdit: s.boolean({ label: "Message edits", default: true }),
+      memberJoin: s.boolean({ label: "Joins", default: true }),
+      memberLeave: s.boolean({ label: "Departures", default: true }),
+      nicknameChange: s.boolean({ label: "Nickname changes", default: true }),
+      roleChange: s.boolean({ label: "Member role changes", default: true }),
+      channelCreate: s.boolean({ label: "Channel creation", default: true }),
+      channelDelete: s.boolean({ label: "Channel deletion", default: true }),
+      roleCreate: s.boolean({ label: "Role creation", default: false }),
+      roleDelete: s.boolean({ label: "Role deletion", default: false }),
+      banAdd: s.boolean({ label: "Bans", default: true }),
+      banRemove: s.boolean({ label: "Unbans", default: true }),
+    },
+    { label: "What to record" },
+  ),
 });
 
 type AuditModuleSettings = Infer<typeof settingsSchema>;
@@ -45,6 +53,9 @@ function truncate(text: string, max = FIELD_LIMIT): string {
 }
 
 async function send(ctx: Ctx, embed: EmbedBuilder): Promise<void> {
+  // No channel configured means the module is on but has nothing to write to,
+  // which is a normal state rather than a misconfiguration.
+  if (!ctx.settings.channel) return;
   const channel = ctx.guild.channels.cache.get(ctx.settings.channel);
   if (!channel?.isTextBased()) return;
   await channel.send({ embeds: [embed] }).catch((error: unknown) => {

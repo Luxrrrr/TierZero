@@ -8,6 +8,9 @@
     { "path": "packages/modules/roles" },
     { "path": "packages/modules/automod" },
     { "path": "packages/modules/leveling" },
+    { "path": "packages/modules/moderation" },
+    { "path": "packages/modules/tickets" },
+    { "path": "packages/modules/auditlog" },
     { "path": "apps/bot" }
   ]
 }

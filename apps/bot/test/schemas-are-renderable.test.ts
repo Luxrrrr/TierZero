@@ -7,6 +7,9 @@ import welcome from "@tier0/module-welcome";
 import roles from "@tier0/module-roles";
 import automod from "@tier0/module-automod";
 import leveling from "@tier0/module-leveling";
+import moderation from "@tier0/module-moderation";
+import tickets from "@tier0/module-tickets";
+import auditlog from "@tier0/module-auditlog";
 
 /**
  * The dashboard renders any module's settings from its schema alone, which
@@ -30,7 +33,7 @@ const RENDERABLE = new Set([
 ]);
 
 const registry = new ModuleRegistry();
-for (const module of [utility, welcome, roles, automod, leveling]) {
+for (const module of [utility, welcome, roles, automod, leveling, moderation, tickets, auditlog]) {
   registry.register(module);
 }
 
@@ -50,7 +53,7 @@ describe("every registered module", () => {
   const modules = registry.describe();
 
   test("registers at least the modules under test", () => {
-    assert.equal(modules.length, 5);
+    assert.equal(modules.length, 8);
   });
 
   for (const module of modules) {

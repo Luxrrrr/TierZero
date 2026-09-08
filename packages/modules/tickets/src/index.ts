@@ -27,21 +27,30 @@ const CATEGORY_CHILD_LIMIT = 50;
 const MESSAGE_FETCH_CAP = 500;
 
 const settingsSchema = s.object({
-  panel: s.object({
-    channel: s.channel({ types: ["text"], label: "Panel channel", help: "Where the ticket panel is posted." }),
-    title: s.string({ label: "Panel title", default: "Need help?", max: 256 }),
-    body: s.template({
-      label: "Panel message",
-      default: "Press the button below to open a ticket and the support team will be with you.",
-      max: 2000,
-    }),
-    buttonLabel: s.string({ label: "Button label", default: "Open a ticket", max: 80 }),
-    buttonEmoji: s.emoji({ label: "Button emoji", optional: true }),
-  }),
+  panel: s.object(
+    {
+      channel: s.channel({
+        types: ["text"],
+        optional: true,
+        label: "Panel channel",
+        help: "Where the ticket panel is posted. Until this is set there is nowhere to publish it.",
+      }),
+      title: s.string({ label: "Panel title", default: "Need help?", max: 256 }),
+      body: s.template({
+        label: "Panel message",
+        default: "Press the button below to open a ticket and the support team will be with you.",
+        max: 2000,
+      }),
+      buttonLabel: s.string({ label: "Button label", default: "Open a ticket", max: 80 }),
+      buttonEmoji: s.emoji({ label: "Button emoji", optional: true }),
+    },
+    { label: "The panel members press" },
+  ),
   category: s.channel({
     types: ["category"],
+    optional: true,
     label: "Ticket category",
-    help: "New ticket channels are created under this category.",
+    help: "New ticket channels are created under this category. Tickets cannot be opened until it is set.",
   }),
   supportRoles: s.array(s.role(), {
     label: "Support roles",
@@ -55,23 +64,29 @@ const settingsSchema = s.object({
     min: 1,
     max: 10,
   }),
-  transcript: s.object({
-    enabled: s.boolean({ label: "Save a transcript when a ticket closes", default: true }),
-    channel: s.channel({
-      types: ["text"],
-      label: "Transcript channel",
-      help: "Where closed ticket transcripts are posted.",
-      optional: true,
-    }),
-  }),
-  autoClose: s.object({
-    enabled: s.boolean({ label: "Auto-close inactive tickets", default: false }),
-    after: s.duration({
-      label: "Close after this much inactivity",
-      default: "24h",
-      max: "7d",
-    }),
-  }),
+  transcript: s.object(
+    {
+      enabled: s.boolean({ label: "Save a transcript when a ticket closes", default: true }),
+      channel: s.channel({
+        types: ["text"],
+        label: "Transcript channel",
+        help: "Where closed ticket transcripts are posted.",
+        optional: true,
+      }),
+    },
+    { label: "Transcripts" },
+  ),
+  autoClose: s.object(
+    {
+      enabled: s.boolean({ label: "Auto-close inactive tickets", default: false }),
+      after: s.duration({
+        label: "Close after this much inactivity",
+        default: "24h",
+        max: "7d",
+      }),
+    },
+    { label: "Inactivity" },
+  ),
 });
 
 type TicketSettings = Infer<typeof settingsSchema>;
@@ -294,7 +309,9 @@ export default defineModule({
           const channel = ctx.guild.channels.cache.get(ctx.settings.panel.channel);
           if (!channel?.isTextBased()) {
             await interaction.reply({
-              content: "The configured panel channel no longer exists. Set one in the dashboard first.",
+              content:
+              "No panel channel is set, or the one configured has been deleted. " +
+              "Set one in the dashboard first.",
               flags: MessageFlags.Ephemeral,
             });
             return;
@@ -410,7 +427,9 @@ export default defineModule({
       const category = ctx.guild.channels.cache.get(ctx.settings.category);
       if (category?.type !== ChannelType.GuildCategory) {
         await interaction.reply({
-          content: "The ticket category no longer exists. Ask a server admin to set a new one.",
+          content:
+            "No ticket category is set, or the one configured has been deleted. " +
+            "Ask a server admin to set one in the dashboard.",
           flags: MessageFlags.Ephemeral,
         });
         return;

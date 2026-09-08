@@ -11,9 +11,12 @@
   "dependencies": {
     "@tier0/core": "workspace:*",
     "@tier0/db": "workspace:*",
+    "@tier0/module-auditlog": "workspace:*",
     "@tier0/module-automod": "workspace:*",
     "@tier0/module-leveling": "workspace:*",
+    "@tier0/module-moderation": "workspace:*",
     "@tier0/module-roles": "workspace:*",
+    "@tier0/module-tickets": "workspace:*",
     "@tier0/module-utility": "workspace:*",
     "@tier0/module-welcome": "workspace:*",
     "discord.js": "^14.16.0"
