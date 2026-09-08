@@ -64,10 +64,12 @@ function fail(path: string, message: string): ParseResult<never> {
 }
 
 function missing(field: Field<unknown>, path: string): ParseResult<never> {
-  if (field.meta.optional) return { ok: true, value: undefined as never };
+  // A declared default is checked first: a field carrying one is never really
+  // absent, so marking it optional as well should not discard it.
   if (field.defaultValue !== undefined) {
     return { ok: true, value: field.defaultValue as never };
   }
+  if (field.meta.optional) return { ok: true, value: undefined as never };
   return fail(path, "is required");
 }
 
