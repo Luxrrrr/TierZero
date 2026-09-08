@@ -5,9 +5,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "next dev",
+    "dev": "dotenv -e ../../.env -- next dev -p 8080",
     "build": "next build",
-    "start": "next start",
+    "start": "dotenv -e ../../.env -- next start -p 8080",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
