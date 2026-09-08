@@ -71,6 +71,79 @@ Commands are registered per guild. The set is recalculated whenever a module is
 toggled or an override changes, and registration is debounced so that an
 operator clicking through several switches produces one API call.
 
+## Events
+
+A module declares handlers for the events it cares about. Each is optional, and
+handlers are only called for guilds where the module is switched on.
+
+| Handler | Fires on |
+| --- | --- |
+| `messageCreate(message, ctx)` | a message in a guild, bots excluded |
+| `messageDelete(message, ctx)` | a deletion, often with a partial message |
+| `messageUpdate(before, after, ctx)` | an edit |
+| `memberJoin(member, ctx)` | someone joins |
+| `memberLeave(member, ctx)` | someone leaves or is removed |
+| `memberUpdate(before, after, ctx)` | nickname, roles or timeout changed |
+| `channelCreate(channel, ctx)` / `channelDelete` | a channel appears or goes |
+| `roleCreate(role, ctx)` / `roleDelete` | a role appears or goes |
+| `banAdd(ban, ctx)` / `banRemove(ban, ctx)` | a ban is placed or lifted |
+
+Partials are enabled, so anything about an object the bot never cached arrives
+with most fields null. Handle that rather than printing `undefined` at people.
+
+Every handler runs inside its own error boundary. A module that throws is
+logged with its id and the others still receive the event.
+
+## Buttons and modals
+
+Components are addressed by custom id, which is namespaced the same way task
+kinds are:
+
+```ts
+import { customId } from "@tier0/core";
+
+new ButtonBuilder()
+  .setCustomId(customId("tickets", "close", String(ticket.id)))
+  .setLabel("Close");
+```
+
+```ts
+components: {
+  async close(interaction, { rest, ctx }) {
+    // rest is "42", everything after the action
+  },
+},
+modals: {
+  async subject(interaction, { rest, ctx }) {},
+},
+```
+
+The router splits the id, finds the module that owns it and hands the
+interaction over, so two modules can both have a `confirm` button without
+colliding. Build ids with `customId` rather than by hand.
+
+## Deferred work
+
+Anything that has to happen later goes through `ctx.tasks`, not a timer:
+
+```ts
+await ctx.tasks.schedule("unban", new Date(Date.now() + duration), { userId });
+await ctx.tasks.cancel("unban", { userId });
+```
+
+```ts
+tasks: {
+  async unban(payload, ctx) {
+    await ctx.guild.bans.remove(String(payload.userId));
+  },
+},
+```
+
+Rows outlive the process, so a restart between scheduling and running loses
+nothing. `cancel` matches on a subset of the payload, so an action reversed by
+hand can drop its pending reversal without knowing what else was recorded
+alongside it.
+
 ## Lifecycle
 
 All three hooks are optional.
@@ -84,7 +157,38 @@ All three hooks are optional.
 
 ## Testing a module
 
-Settings parsing is pure, so schema tests need no Discord connection:
+`pnpm test` builds the workspace and runs the suite through Node's own test
+runner. Tests live in a `test` directory beside the module.
+
+Two constraints shape how a module should be laid out for testing. Tests import
+built output rather than source, and Node runs TypeScript by stripping types
+rather than compiling, so a file under test cannot use syntax that needs code
+generation.
+
+The practical consequence is worth following even if you never write a test:
+**keep the logic worth checking in a file that does not import discord.js.**
+Rule evaluation, curve arithmetic, template rendering and permission decisions
+are all pure functions of their inputs, and pulling them out of the handler
+makes them both testable and easier to read.
+
+```ts
+// src/levels.ts - no discord.js import
+export function levelForXp(xp: number): number { ... }
+```
+
+```ts
+// test/levels.test.ts
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { levelForXp } from "../dist/levels.js";
+
+test("is monotonic", () => {
+  assert.ok(levelForXp(500) >= levelForXp(499));
+});
+```
+
+Settings parsing is pure too, so a schema can be checked without a Discord
+connection at all:
 
 ```ts
 const result = module.settings.parse({ channel: "123456789012345678" });

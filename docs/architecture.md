@@ -157,15 +157,34 @@ commands are cached by Discord for roughly an hour and are identical everywhere,
 which makes per-server visibility impossible. Resyncing is debounced by five
 seconds so an operator flipping several switches produces one registration call.
 
-Role and channel restrictions are meant to layer on top. Where Discord's own
+Role and channel restrictions layer on top. Where Discord's own
 `default_member_permissions` can express a rule it is used, because that hides
 the command in the client rather than rejecting it after the fact. Rules
 Discord cannot express, such as allowing a command only in specific channels,
-are stored on `CommandOverride.allowRoles` and `denyChannels` and settable
-through the control API, but the command router does not read them yet — every
-command an enabled module exposes still runs in every channel, for anyone who
-can see it. Enforcing those two columns in the interaction handler is
-outstanding work, not a design decision.
+are stored on `CommandOverride.allowRoles` and `denyChannels` and enforced in
+the interaction router before a command runs.
+
+The rules are read on every invocation, so they are cached per guild alongside
+module settings and dropped by the same invalidation. The write path clears
+that cache itself rather than leaving each caller to remember, because a
+restriction that appears to save and then does nothing until the next restart
+is worse than one that cannot be set at all.
+
+## Deferred work
+
+Some actions have to happen later: lifting a temporary ban, closing a ticket
+nobody has replied to. Those are rows in `ScheduledTask`, not timers.
+
+A timer held in memory is lost on restart, and a lost unban means a member
+stays banned indefinitely with nothing left to say why. The runner reads due
+rows on a fixed tick, coarse because nothing here is time critical to the
+second and a quiet instance should not be waking constantly to find nothing to
+do. A row is deleted before its handler runs, so a handler that throws is not
+retried forever on every tick afterwards.
+
+Task kinds are namespaced by module, the same way component custom ids are, so
+two modules can both schedule something called `expire` without reading each
+other's work.
 
 ## Installation
 
