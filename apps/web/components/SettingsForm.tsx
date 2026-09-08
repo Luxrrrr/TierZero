@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import type { FieldDescriptor } from "@tier0/core";
 import { ChannelPicker, RolePicker } from "./pickers";
 import { arrayItemPath, objectChildPath } from "../lib/schema-paths";
+import { AlertIcon } from "./Icons";
 
 interface Props {
   schema: FieldDescriptor;
@@ -70,7 +71,12 @@ function FieldRow({ name, path, field, value, guildId, errors, onChange }: RowPr
         errors={errors}
         onChange={onChange}
       />
-      {error ? <p className="error">{error}</p> : null}
+      {error ? (
+        <p className="error" role="alert">
+          <AlertIcon />
+          {error}
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -277,33 +283,42 @@ function ArrayControl({ path, field, value, guildId, errors, max, onChange }: Ar
 
   return (
     <div className="array">
-      <ul>
-        {value.map((item, index) => {
-          const itemPath = arrayItemPath(path, index);
-          return (
-            <li key={index}>
-              <Control
-                id={htmlId(itemPath)}
-                path={itemPath}
-                field={field}
-                value={item}
-                guildId={guildId}
-                errors={errors}
-                onChange={(next) => onChange(value.map((v, i) => (i === index ? next : v)))}
-              />
-              <button
-                type="button"
-                onClick={() => onChange(value.filter((_, i) => i !== index))}
-              >
-                Remove
-              </button>
-            </li>
-          );
-        })}
-      </ul>
+      {value.length > 0 ? (
+        <ul className="array-rows">
+          {value.map((item, index) => {
+            const itemPath = arrayItemPath(path, index);
+            return (
+              <li key={index} className="array-row">
+                <span className="array-row-index" aria-hidden="true">
+                  {index + 1}
+                </span>
+                <div className="array-row-body">
+                  <Control
+                    id={htmlId(itemPath)}
+                    path={itemPath}
+                    field={field}
+                    value={item}
+                    guildId={guildId}
+                    errors={errors}
+                    onChange={(next) => onChange(value.map((v, i) => (i === index ? next : v)))}
+                  />
+                </div>
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-sm array-row-remove"
+                  onClick={() => onChange(value.filter((_, i) => i !== index))}
+                >
+                  Remove
+                  <span className="visually-hidden"> row {index + 1}</span>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      ) : null}
 
       {atCapacity ? (
-        <p className="help">Maximum of {max} reached.</p>
+        <p className="array-limit">Maximum of {max} reached.</p>
       ) : (
         <div className="array-add">
           <Control
@@ -317,6 +332,7 @@ function ArrayControl({ path, field, value, guildId, errors, max, onChange }: Ar
           />
           <button
             type="button"
+            className="btn btn-secondary btn-sm"
             disabled={draft === undefined || draft === ""}
             onClick={() => {
               onChange([...value, draft]);
@@ -373,9 +389,12 @@ function TemplateControl({ id, max = 2000, placeholders, value, onChange }: Temp
         value={value}
         onChange={(e) => onChange(e.target.value)}
       />
-      <p className="char-count">{remaining} characters remaining</p>
+      <p className={remaining < 0 ? "char-count is-low" : "char-count"}>
+        {remaining} characters remaining
+      </p>
       {placeholders.length > 0 ? (
         <div className="placeholders">
+          <span className="placeholders-label">Insert:</span>
           {placeholders.map((name) => (
             <button key={name} type="button" onClick={() => insertPlaceholder(name)}>
               {`{${name}}`}
