@@ -174,6 +174,20 @@ export function startControlApi({ client, registry, state, commands }: Deps): vo
     return send(404, { error: "not found" });
   });
 
+  // Without this, a port clash surfaces as an unhandled 'error' event and a
+  // stack trace that says nothing about the cause.
+  server.on("error", (error: NodeJS.ErrnoException) => {
+    if (error.code === "EADDRINUSE") {
+      console.error(
+        `Control API port ${config.controlPort} is already in use. Another copy ` +
+          `of the bot is probably still running. Stop it, or set CONTROL_PORT to a free port.`,
+      );
+    } else {
+      console.error("Control API failed to start:", error);
+    }
+    process.exit(1);
+  });
+
   server.listen(config.controlPort, config.controlHost, () => {
     console.log(`Control API listening on ${config.controlHost}:${config.controlPort}`);
   });
