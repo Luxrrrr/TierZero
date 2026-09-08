@@ -17,7 +17,7 @@ depending on internals.
 ## Requirements
 
 - Docker, or Node 20 and pnpm if you would rather run it from source
-- A Discord application, which the setup wizard walks you through creating
+- A Discord application, which [docs/install.md](docs/install.md) walks you through creating
 
 ## Running it
 
