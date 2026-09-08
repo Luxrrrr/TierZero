@@ -2,17 +2,24 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth, signOut } from "../../lib/auth";
 import { getAuthorizedGuildIds } from "../../lib/authz";
-import { listBotGuilds } from "../../lib/control-api";
+import { ControlApiError, listBotGuilds, type BotGuildSummary } from "../../lib/control-api";
+import { BotOffline } from "../../components/BotOffline";
 
 export default async function GuildsPage() {
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
 
-  const [authorized, botGuilds] = await Promise.all([
-    getAuthorizedGuildIds(session.user.id),
-    listBotGuilds(),
-  ]);
-  const guilds = botGuilds.filter((guild) => authorized.has(guild.id));
+  let guilds: BotGuildSummary[];
+  try {
+    const [authorized, botGuilds] = await Promise.all([
+      getAuthorizedGuildIds(session.user.id),
+      listBotGuilds(),
+    ]);
+    guilds = botGuilds.filter((guild) => authorized.has(guild.id));
+  } catch (error) {
+    if (error instanceof ControlApiError) return <BotOffline />;
+    throw error;
+  }
 
   async function signOutAction() {
     "use server";

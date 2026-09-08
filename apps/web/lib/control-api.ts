@@ -6,8 +6,9 @@ export class ControlApiError extends Error {
   constructor(
     public readonly status: number,
     message: string,
+    options?: ErrorOptions,
   ) {
-    super(message);
+    super(message, options);
     this.name = "ControlApiError";
   }
 }
@@ -46,14 +47,21 @@ async function controlFetch(path: string, init: RequestInit = {}): Promise<Respo
     throw new Error("INTERNAL_API_SECRET is not set. Copy .env.example to .env and fill it in.");
   }
 
-  return fetch(`${baseUrl()}${path}`, {
-    ...init,
-    headers: {
-      ...init.headers,
-      authorization: `Bearer ${secret}`,
-    },
-    cache: "no-store",
-  });
+  try {
+    return await fetch(`${baseUrl()}${path}`, {
+      ...init,
+      headers: {
+        ...init.headers,
+        authorization: `Bearer ${secret}`,
+      },
+      cache: "no-store",
+    });
+  } catch (cause) {
+    // fetch rejects rather than resolving when the bot is not listening, which
+    // reaches a server component as an unhandled "fetch failed" unless it is
+    // turned into something callers can recognise.
+    throw new ControlApiError(503, "The dashboard could not reach the bot.", { cause });
+  }
 }
 
 async function readJson<T>(res: Response, context: string): Promise<T> {
