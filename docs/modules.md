@@ -1,8 +1,18 @@
 # Writing a module
 
 A module is a directory under `packages/modules` that default-exports a call to
-`defineModule`. Registering it in `apps/bot/src/index.ts` is the only wiring
-step; its settings page appears in the dashboard on its own.
+`defineModule`. Its settings page appears in the dashboard on its own; you
+never write one.
+
+Wiring a new module up takes three lines, all of them mechanical:
+
+1. Add a project reference in the root `tsconfig.json` so `tsc -b` builds it.
+2. Add it to the `dependencies` of `apps/bot/package.json` so the import
+   resolves.
+3. Import it in `apps/bot/src/index.ts` and pass it to `registry.register`.
+
+Copy `packages/modules/utility` for the package manifest and tsconfig; it is
+deliberately small and exists to be the example.
 
 ## The shape of a module
 
