@@ -1,6 +1,7 @@
 import { prisma } from "@tier0/db";
 import { auth } from "./auth";
-import { fetchUserGuilds, hasManageGuild, refreshDiscordToken } from "./discord";
+import { fetchUserGuilds, refreshDiscordToken } from "./discord";
+import { authorizedGuildIds } from "./permissions";
 import { listBotGuilds } from "./control-api";
 
 /**
@@ -84,13 +85,10 @@ export async function getAuthorizedGuildIds(userId: string): Promise<Set<string>
     listBotGuilds(),
   ]);
 
-  const botGuildIds = new Set(botGuilds.map((g) => g.id));
-  const authorized = new Set<string>();
-  for (const guild of userGuilds) {
-    if (botGuildIds.has(guild.id) && hasManageGuild(guild.permissions)) {
-      authorized.add(guild.id);
-    }
-  }
+  const authorized = authorizedGuildIds(
+    userGuilds,
+    botGuilds.map((g) => g.id),
+  );
   authorizedCache.set(userId, { guildIds: authorized, expiresAt: Date.now() + AUTHZ_TTL_MS });
   return authorized;
 }

@@ -6,7 +6,6 @@
 const DISCORD_API = "https://discord.com/api/v10";
 
 /** The bit that matters for dashboard access. Owners have it implicitly. */
-export const MANAGE_GUILD = 0x20;
 
 export interface DiscordUserGuild {
   id: string;
@@ -34,13 +33,6 @@ export class DiscordApiError extends Error {
   }
 }
 
-export function hasManageGuild(permissions: string): boolean {
-  try {
-    return (BigInt(permissions) & BigInt(MANAGE_GUILD)) === BigInt(MANAGE_GUILD);
-  } catch {
-    return false;
-  }
-}
 
 /** The guilds the signed-in user belongs to, as Discord reports them. */
 export async function fetchUserGuilds(accessToken: string): Promise<DiscordUserGuild[]> {
