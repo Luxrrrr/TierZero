@@ -12,8 +12,13 @@ model Guild {
   name     String
   joinedAt DateTime @default(now())
 
-  modules  GuildModule[]
-  overrides CommandOverride[]
+  modules     GuildModule[]
+  overrides   CommandOverride[]
+  infractions Infraction[]
+  tasks       ScheduledTask[]
+  menus       ReactionRoleMenu[]
+  tickets     Ticket[]
+  levels      LevelMember[]
 }
 
 /// Per-guild module state. Settings are stored as JSON and validated against
@@ -46,10 +51,10 @@ model CommandOverride {
 }
 
 model Instance {
-  id           Int      @id @default(1)
-  ownerId      String?
-  setupAt      DateTime?
-  schemaVersion Int     @default(1)
+  id            Int       @id @default(1)
+  ownerId       String?
+  setupAt       DateTime?
+  schemaVersion Int       @default(1)
 }
 
 /// Auth.js's own tables, laid out the way @auth/prisma-adapter expects them.
@@ -102,4 +107,87 @@ model VerificationToken {
   expires    DateTime
 
   @@unique([identifier, token])
+}
+
+/// A moderation action taken against a member. Rows are kept after the action
+/// is reversed so a moderator can read a member's history, which is the point
+/// of recording them separately from Discord's own audit log.
+model Infraction {
+  id          Int       @id @default(autoincrement())
+  guildId     String
+  userId      String
+  moderatorId String
+  action      String
+  reason      String?
+  createdAt   DateTime  @default(now())
+  expiresAt   DateTime?
+  active      Boolean   @default(true)
+
+  guild Guild @relation(fields: [guildId], references: [id], onDelete: Cascade)
+
+  @@index([guildId, userId])
+  @@index([guildId, createdAt])
+}
+
+/// Work the bot has to carry out later: lifting a temporary ban, closing an
+/// idle ticket. Held in the database rather than a timer because a restart
+/// must not silently drop a pending unban.
+model ScheduledTask {
+  id      Int      @id @default(autoincrement())
+  guildId String
+  kind    String
+  runAt   DateTime
+  payload String   @default("{}")
+
+  guild Guild @relation(fields: [guildId], references: [id], onDelete: Cascade)
+
+  @@index([runAt])
+}
+
+/// A role menu the bot has posted. The message id is the only link between a
+/// reaction Discord reports and the roles that menu hands out, so it has to
+/// outlive the process that posted it.
+model ReactionRoleMenu {
+  id        Int    @id @default(autoincrement())
+  guildId   String
+  channelId String
+  messageId String @unique
+  mapping   String @default("[]")
+
+  guild Guild @relation(fields: [guildId], references: [id], onDelete: Cascade)
+
+  @@index([guildId])
+}
+
+/// One support ticket, keyed by the channel opened for it.
+model Ticket {
+  id        Int       @id @default(autoincrement())
+  guildId   String
+  channelId String    @unique
+  openerId  String
+  subject   String?
+  status    String    @default("open")
+  openedAt  DateTime  @default(now())
+  closedAt  DateTime?
+  closedBy  String?
+
+  guild Guild @relation(fields: [guildId], references: [id], onDelete: Cascade)
+
+  @@index([guildId, status])
+}
+
+/// Per-member experience. This is the only table written on a hot path, one
+/// upsert per message that earns experience, so it stays narrow and is keyed
+/// for exactly that write.
+model LevelMember {
+  guildId     String
+  userId      String
+  xp          Int      @default(0)
+  level       Int      @default(0)
+  lastAwardAt DateTime @default(now())
+
+  guild Guild @relation(fields: [guildId], references: [id], onDelete: Cascade)
+
+  @@id([guildId, userId])
+  @@index([guildId, xp])
 }
