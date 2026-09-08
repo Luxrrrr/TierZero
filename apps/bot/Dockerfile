@@ -14,7 +14,9 @@ RUN corepack enable
 WORKDIR /app
 ENV NODE_ENV=production
 
-COPY --from=build /app /app
+# Owned by the runtime user, because Next writes into .next at run time and
+# Prisma writes its journal beside the database.
+COPY --from=build --chown=node:node /app /app
 
 # The database lives on a mounted directory so a backup is a file copy. It has
 # to be writable by the same uid the process runs as, which is why the image
