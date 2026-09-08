@@ -46,7 +46,8 @@ export default defineModule({
   summary: "Greets new members, assigns roles, and says goodbye when they leave.",
 
   settings: s.object({
-    join: s.object({
+    join: s.object(
+      {
       channel: s.channel({
         types: ["text"],
         optional: true,
@@ -68,8 +69,11 @@ export default defineModule({
         label: "Direct message to the new member",
         help: "Sent in addition to the channel greeting, if the member allows DMs.",
       }),
-    }),
-    leave: s.object({
+      },
+      { label: "When someone joins" },
+    ),
+    leave: s.object(
+      {
       channel: s.channel({
         types: ["text"],
         optional: true,
@@ -87,7 +91,9 @@ export default defineModule({
         placeholders: [...PLACEHOLDERS],
         label: "Direct message to a departing member",
       }),
-    }),
+      },
+      { label: "When someone leaves" },
+    ),
   }),
 
   events: {
