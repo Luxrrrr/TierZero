@@ -19,6 +19,13 @@ export interface HierarchyCheck {
   targetIsOwner: boolean;
   /** The acting moderator is the server owner, who bypasses the role check below. */
   actorIsOwner: boolean;
+  /**
+   * Whether the action asks Discord to change something about the target.
+   * A warning only writes a record and sends a message, so the bot's own
+   * position is irrelevant to it and must not block recording one about a
+   * senior member.
+   */
+  requiresDiscordAction: boolean;
 }
 
 export type HierarchyResult = { allowed: true } | { allowed: false; reason: string };
@@ -35,9 +42,9 @@ export function checkHierarchy(check: HierarchyCheck): HierarchyResult {
     };
   }
 
-  // Runs unconditionally, including for the owner: Discord still enforces this
-  // against the bot's own roles no matter who asked for the action.
-  if (check.targetTopRole >= check.botTopRole) {
+  // Applies even when the owner asked, because Discord enforces it against the
+  // bot's roles regardless of who requested the action.
+  if (check.requiresDiscordAction && check.targetTopRole >= check.botTopRole) {
     return {
       allowed: false,
       reason: "My highest role is not above theirs, so Discord won't let me do that.",

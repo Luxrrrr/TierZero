@@ -9,6 +9,7 @@ function base() {
     botTopRole: 20,
     targetIsOwner: false,
     actorIsOwner: false,
+    requiresDiscordAction: true,
   };
 }
 
@@ -91,6 +92,38 @@ describe("checkHierarchy", () => {
 
   test("owner targeting owner is impossible in practice but still refused", () => {
     const result = checkHierarchy({ ...base(), targetIsOwner: true, actorIsOwner: true });
+    assert.equal(result.allowed, false);
+  });
+});
+
+describe("actions that do not ask Discord for anything", () => {
+  test("a warning is not blocked by the bot's own position", () => {
+    const result = checkHierarchy({
+      ...base(),
+      targetTopRole: 30,
+      actorTopRole: 40,
+      botTopRole: 20,
+      requiresDiscordAction: false,
+    });
+    assert.deepEqual(result, { allowed: true });
+  });
+
+  test("a warning still respects the moderator's own position", () => {
+    const result = checkHierarchy({
+      ...base(),
+      targetTopRole: 30,
+      actorTopRole: 10,
+      requiresDiscordAction: false,
+    });
+    assert.equal(result.allowed, false);
+  });
+
+  test("a warning still cannot target the owner", () => {
+    const result = checkHierarchy({
+      ...base(),
+      targetIsOwner: true,
+      requiresDiscordAction: false,
+    });
     assert.equal(result.allowed, false);
   });
 });

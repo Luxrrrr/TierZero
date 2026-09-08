@@ -6,6 +6,7 @@ export function guardAgainstMember(
   guild: Guild,
   actor: GuildMember,
   target: GuildMember,
+  requiresDiscordAction = true,
 ): HierarchyResult {
   return checkHierarchy({
     actorTopRole: actor.roles.highest.position,
@@ -13,5 +14,6 @@ export function guardAgainstMember(
     botTopRole: guild.members.me?.roles.highest.position ?? 0,
     targetIsOwner: target.id === guild.ownerId,
     actorIsOwner: actor.id === guild.ownerId,
+    requiresDiscordAction,
   });
 }

@@ -37,7 +37,7 @@ export const warnCommand: CommandDefinition<ModerationSettings> = {
     }
 
     const actor = await guild.members.fetch(interaction.user.id);
-    const verdict = guardAgainstMember(guild, actor, targetMember);
+    const verdict = guardAgainstMember(guild, actor, targetMember, false);
     if (!verdict.allowed) {
       await replyError(interaction, verdict.reason);
       return;
