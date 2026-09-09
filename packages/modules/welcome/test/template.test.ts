@@ -23,7 +23,7 @@ describe("renderTemplate", () => {
     assert.equal(renderTemplate("{user} {user}", values), "<@1> <@1>");
   });
 
-  test("leaves an unrecognized token as-is rather than dropping it", () => {
+  test("leaves an unrecognized token in place and never drops it", () => {
     const values = { user: "<@1>", username: "lux", server: "s", memberCount: "1" };
     assert.equal(renderTemplate("Hello {nobody}", values), "Hello {nobody}");
   });

@@ -70,7 +70,7 @@ describe("contentChanged", () => {
     assert.equal(contentChanged("old", "new"), true);
   });
 
-  test("is true when the prior content is unknown, rather than assumed unchanged", () => {
+  test("is true when the prior content is unknown, and not assumed unchanged", () => {
     assert.equal(contentChanged(null, "new"), true);
   });
 });

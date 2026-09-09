@@ -12,7 +12,7 @@ describe("parsePayload", () => {
     assert.deepEqual(parsePayload('{"userId":"1"}'), { userId: "1" });
   });
 
-  test("falls back to empty rather than throwing on damaged text", () => {
+  test("falls back to empty on damaged text without throwing", () => {
     assert.deepEqual(parsePayload("not json"), {});
     assert.deepEqual(parsePayload(""), {});
   });

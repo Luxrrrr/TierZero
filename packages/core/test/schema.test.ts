@@ -50,13 +50,13 @@ describe("integer", () => {
     assert.equal(s.integer({ max: 100 }).parse(101).ok, false);
   });
 
-  test("accepts zero rather than treating it as absent", () => {
+  test("accepts zero, which is a value and not an absence", () => {
     assert.equal(value(s.integer().parse(0)), 0);
   });
 });
 
 describe("boolean", () => {
-  test("accepts false rather than treating it as absent", () => {
+  test("accepts false, which is a value and not an absence", () => {
     assert.equal(value(s.boolean().parse(false)), false);
   });
 
@@ -170,7 +170,7 @@ describe("object", () => {
     assert.equal(first?.path, "channel");
   });
 
-  test("collects every failure rather than stopping at the first", () => {
+  test("collects every failure, not just the first", () => {
     const nested = s.object({ a: s.channel(), b: s.channel() });
     assert.equal(errors(nested.parse({})).length, 2);
   });

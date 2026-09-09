@@ -142,7 +142,7 @@ describe("renderProgressBar", () => {
     assert.equal(renderProgressBar(0, 0, 5), "█████");
   });
 
-  test("clamps out-of-range progress rather than overflowing", () => {
+  test("clamps out-of-range progress instead of overflowing", () => {
     assert.equal(renderProgressBar(500, 100, 5), "█████");
   });
 });
@@ -186,7 +186,7 @@ describe("applyMultiplier", () => {
     assert.equal(applyMultiplier(20, 0), 0);
   });
 
-  test("rounds rather than truncates", () => {
+  test("rounds, does not truncate", () => {
     assert.equal(applyMultiplier(10, 125), 13);
   });
 

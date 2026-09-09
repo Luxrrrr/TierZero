@@ -163,7 +163,7 @@ describe("invites", () => {
     assert.equal(verdict.triggered, false);
   });
 
-  test("an allowlist entry can be a full link rather than a bare code", () => {
+  test("an allowlist entry can be a full link as well as a bare code", () => {
     const settingsValue = withRule("invites", { allowlist: ["https://discord.gg/randomcode/"] });
     const verdict = evaluateMessage(
       input({ content: "discord.gg/randomcode", settings: settingsValue }),

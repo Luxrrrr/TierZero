@@ -102,7 +102,7 @@ describe("describe", () => {
     assert.equal(described?.schema.kind, "object");
   });
 
-  test("reports an empty requires list rather than omitting it", () => {
+  test("reports an empty requires list, never omits the key", () => {
     const registry = new ModuleRegistry();
     registry.register(
       defineModule({
@@ -126,7 +126,7 @@ describe("resolveSettings", () => {
     assert.deepEqual(resolved.ok && resolved.value, { limit: 5 });
   });
 
-  test("treats null storage as empty rather than failing", () => {
+  test("treats null storage as empty and still succeeds", () => {
     assert.equal(registry.resolveSettings("utility", null).ok, true);
   });
 

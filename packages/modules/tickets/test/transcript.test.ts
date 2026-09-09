@@ -51,7 +51,7 @@ describe("renderTranscript", () => {
     assert.match(text, /attachment: https:\/\/cdn\.example\/a\.png/);
   });
 
-  test("marks a message with unknown content rather than printing undefined", () => {
+  test("marks unknown content as such and never prints undefined", () => {
     const text = renderTranscript(META, [
       { authorTag: "alex#0001", authorId: "1", timestamp: META.openedAt, content: null, attachmentUrls: [] },
     ]);

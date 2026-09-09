@@ -17,7 +17,7 @@ describe("serializeMapping / parseMapping", () => {
     assert.deepEqual(parseMapping(serializeMapping(mapping)), mapping);
   });
 
-  test("degrades to an empty menu for invalid JSON rather than throwing", () => {
+  test("degrades to an empty menu on invalid JSON without throwing", () => {
     assert.deepEqual(parseMapping("not json"), { name: "", exclusive: false, options: [] });
   });
 

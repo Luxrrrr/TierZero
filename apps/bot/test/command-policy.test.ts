@@ -51,7 +51,7 @@ describe("parseIdList", () => {
     assert.deepEqual(parseIdList('["a","b"]'), ["a", "b"]);
   });
 
-  test("returns empty for damaged text rather than widening access", () => {
+  test("returns empty for damaged text, never a wider list", () => {
     assert.deepEqual(parseIdList("nonsense"), []);
     assert.deepEqual(parseIdList('{"a":1}'), []);
     assert.deepEqual(parseIdList(""), []);

@@ -145,6 +145,6 @@ describe("Scheduler", () => {
 
     await makeScheduler().tick();
 
-    assert.equal(await pending(), 0, "an unclaimed row is dropped rather than retried");
+    assert.equal(await pending(), 0, "an unclaimed row is dropped, not retried forever");
   });
 });
