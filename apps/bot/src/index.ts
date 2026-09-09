@@ -35,9 +35,9 @@ const client = new Client({
     GatewayIntentBits.GuildModeration,
     GatewayIntentBits.MessageContent,
   ],
-  // Without these, an event about something the bot never cached is dropped
-  // rather than delivered with the little Discord does send. Audit logging in
-  // particular is mostly interested in older messages, which are never cached.
+  // Without these, an event about something the bot never cached just gets
+  // dropped, even though Discord still sends a little data for it. Audit
+  // logging cares most about older messages, and those are never cached.
   partials: [Partials.Message, Partials.Channel, Partials.GuildMember, Partials.User],
 });
 

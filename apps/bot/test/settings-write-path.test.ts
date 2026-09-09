@@ -6,8 +6,8 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
 /**
- * Exercises the write path against a real database rather than a stub, because
- * the bugs worth catching here are in what actually reaches storage: whether a
+ * Exercises the write path against a real database instead of a stub. The
+ * bugs worth catching here are in what actually reaches storage: whether a
  * row is created when none existed, whether stored settings that no longer
  * validate still let a module be switched off, and whether the cache the
  * router reads is dropped when a write lands.

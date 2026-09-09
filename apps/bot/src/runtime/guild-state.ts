@@ -299,7 +299,8 @@ export class GuildState {
     if (!resolved.ok) {
       // Stored settings that no longer satisfy the schema mean the module was
       // updated without a settings migration. Log loudly and treat the module
-      // as unconfigured rather than crashing the gateway connection.
+      // as unconfigured. Crashing the gateway connection over it would be
+      // much worse.
       console.error(
         `[${moduleId}] settings in guild ${guildId} failed validation:`,
         resolved.errors,
@@ -329,8 +330,8 @@ function safeParse(text: string): unknown {
  * A module's view of the scheduled work table. Scheduling is only a row, so
  * this needs nothing from the runner that later picks the row up.
  *
- * Kinds are stored namespaced by module, which is what lets two modules both
- * schedule an "expire" without reading each other's work.
+ * Kinds are stored namespaced by module, so two modules can both schedule an
+ * "expire" without reading each other's work.
  */
 function taskQueue(guildId: string, moduleId: string): ScheduledWork {
   const namespaced = (kind: string) => namespaceKind(moduleId, kind);

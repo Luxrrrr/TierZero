@@ -4,8 +4,8 @@
  * command to everyone or locks an operator out of their own server.
  *
  * Discord's own default_member_permissions covers what it can express, and is
- * preferred because it hides a command in the client rather than rejecting it
- * after the fact. These are the rules it cannot express.
+ * preferred: it hides a command from the client, so nobody sees it and gets
+ * turned away after trying. These are the rules it cannot express.
  */
 
 export interface CommandPolicy {

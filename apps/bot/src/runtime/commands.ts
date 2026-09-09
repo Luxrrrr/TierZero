@@ -8,9 +8,9 @@ const RESYNC_DELAY_MS = 5_000;
 /**
  * Owns which slash commands exist in each guild.
  *
- * Commands are registered per guild rather than globally. Global commands are
- * cached by Discord for around an hour and are identical everywhere, which
- * makes the per-server visibility the dashboard promises impossible.
+ * Commands are registered per guild, never globally. A global command is
+ * cached by Discord for around an hour and looks identical everywhere, which
+ * would break the per-server visibility the dashboard promises.
  */
 export class CommandSync {
   private readonly pending = new Map<string, NodeJS.Timeout>();
@@ -69,8 +69,9 @@ export class CommandSync {
           : {}),
       },
     });
-    // The router reads these rules on every invocation from a cache, so the
-    // write has to drop it here rather than leaving the caller to remember.
+    // The router reads these rules from a cache on every invocation, so the
+    // write has to invalidate it here. Leaving that to the caller means it
+    // eventually gets forgotten.
     this.state.invalidate(guildId);
     this.schedule(guildId);
   }
