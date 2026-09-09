@@ -9,28 +9,26 @@ import { CommandControls } from "../../../components/CommandControls";
 
 interface Props {
   guildId: string;
-  guildName: string;
+  heading: string;
+  description: string;
   modules: GuildModuleState[];
 }
 
-export function GuildDashboard({ guildId, guildName, modules }: Props) {
+/** One dashboard section's worth of module cards, already filtered by category. */
+export function GuildDashboard({ guildId, heading, description, modules }: Props) {
   return (
-    <>
-      <div className="shell-main-header">
-        <div>
-          <p className="shell-crumb">Configuring</p>
-          <h1>{guildName}</h1>
-        </div>
-      </div>
+    <section className="section-panel">
+      <h2>{heading}</h2>
+      <p className="section-description">{description}</p>
 
       {modules.length === 0 ? (
         <div className="empty-state">
-          <p>No modules are registered yet.</p>
+          <p>No modules are registered for this section yet.</p>
         </div>
       ) : (
         modules.map((module) => <ModuleCard key={module.id} guildId={guildId} module={module} />)
       )}
-    </>
+    </section>
   );
 }
 

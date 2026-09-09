@@ -2,6 +2,8 @@
 // from route handlers and server components, both of which run on the
 // server, so the secret never reaches anything shipped to the browser.
 
+import type { ModuleCategory } from "@tier0/core";
+
 export interface FieldValidationError {
   path: string;
   message: string;
@@ -120,16 +122,12 @@ export async function getGuildRoles(guildId: string): Promise<BotRole[]> {
   return readJson<BotRole[]>(res, "the role list");
 }
 
-/**
- * Shape assumed for the module state endpoint another agent is adding
- * concurrently (GET /guilds/:id/modules). Not yet confirmed against the bot's
- * actual implementation — see the handoff notes for what to reconcile if it
- * differs.
- */
 export interface GuildModuleState {
   id: string;
   name: string;
   summary: string;
+  /** Which dashboard section this module's card is grouped under. */
+  category: ModuleCategory;
   enabled: boolean;
   settings: Record<string, unknown>;
   schema: Record<string, unknown>;

@@ -493,6 +493,73 @@ code {
   margin-top: 0.15em;
 }
 
+/* Section nav --------------------------------------------------------------- */
+/* A single-row strip of links rather than a sidebar, so it costs no width on
+   a phone: it just scrolls horizontally instead of wrapping or collapsing
+   behind a toggle. */
+
+.section-nav {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: var(--space-6);
+}
+
+.section-nav ul {
+  display: flex;
+  gap: var(--space-1);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  min-width: max-content;
+}
+
+.section-nav a {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  white-space: nowrap;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  transition:
+    color var(--transition-fast),
+    border-color var(--transition-fast);
+}
+
+.section-nav a:hover {
+  color: var(--text);
+  text-decoration: none;
+}
+
+.section-nav a.is-current {
+  color: var(--text);
+  border-bottom-color: var(--accent);
+}
+
+.section-nav-dot {
+  width: 0.4rem;
+  height: 0.4rem;
+  border-radius: var(--radius-full);
+  background: var(--accent);
+  flex: none;
+}
+
+/* Section panel -------------------------------------------------------------- */
+
+.section-panel h2 {
+  margin-bottom: var(--space-1);
+}
+
+.section-description {
+  font-size: var(--text-sm);
+  margin: 0 0 var(--space-6);
+  max-width: 60ch;
+}
+
 /* Guild list -------------------------------------------------------------- */
 
 .guild-list {
@@ -1028,6 +1095,10 @@ code {
 
   .module-card header {
     flex-direction: column;
+  }
+
+  .section-nav a {
+    padding: var(--space-2) var(--space-3);
   }
 
   .array-row {
