@@ -2,7 +2,7 @@
  * The authorization rule, kept apart from the Discord HTTP client so it has no
  * imports and no I/O of its own. Whether a signed-in user may configure a
  * given guild is the security boundary of the whole dashboard, so it is worth
- * being able to exercise directly rather than only through a live session.
+ * being able to exercise on its own and not only through a live session.
  */
 
 export const MANAGE_GUILD = 0x20;
@@ -17,7 +17,7 @@ export function hasManageGuild(permissions: string): boolean {
   try {
     const bits = BigInt(permissions);
     // A negative value would satisfy every bit test under two's complement, so
-    // nonsense here has to deny rather than grant.
+    // so nonsense here has to deny, never grant.
     if (bits < 0n) return false;
     return (bits & BigInt(MANAGE_GUILD)) === BigInt(MANAGE_GUILD);
   } catch {

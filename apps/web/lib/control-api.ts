@@ -16,7 +16,7 @@ export class ControlApiError extends Error {
     /**
      * The per-field validation errors from a 400, when the response body was
      * shaped as one. Kept apart from `message` so a route handler can forward
-     * them to the dashboard instead of flattening them into a single string
+     * them to the dashboard. Flattening them into a single string loses the
      * the settings form has no field to attach them to.
      */
     public readonly fieldErrors?: FieldValidationError[],
@@ -71,7 +71,7 @@ async function controlFetch(path: string, init: RequestInit = {}): Promise<Respo
       cache: "no-store",
     });
   } catch (cause) {
-    // fetch rejects rather than resolving when the bot is not listening, which
+    // fetch rejects outright when the bot is not listening, and that
     // reaches a server component as an unhandled "fetch failed" unless it is
     // turned into something callers can recognize.
     throw new ControlApiError(503, "The dashboard could not reach the bot.", undefined, { cause });

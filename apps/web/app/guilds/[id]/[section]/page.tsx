@@ -27,7 +27,7 @@ export async function generateMetadata({
  * One section of a guild's dashboard: the section nav, then that section's
  * heading and module cards. A section slug that isn't one of the six fixed
  * categories, or one that currently has no module registered under it,
- * sends the operator to a section that does rather than rendering a dead
+ * sends the operator to a section that does. A dead page here would look
  * end or a 404 — see fallbackSectionId.
  */
 export default async function GuildSectionPage({

@@ -24,7 +24,7 @@ describe("hasManageGuild", () => {
     assert.equal(hasManageGuild((1n << 40n).toString()), false);
   });
 
-  test("refuses rather than throwing on input that is not a number", () => {
+  test("refuses input that is not a number without throwing", () => {
     assert.equal(hasManageGuild("nonsense"), false);
     assert.equal(hasManageGuild(""), false);
     assert.equal(hasManageGuild("-1"), false);

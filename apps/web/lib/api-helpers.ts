@@ -9,7 +9,7 @@ export function authzFailureResponse(failure: AuthzFail): NextResponse {
 
 /**
  * Runs a control-API call and maps failures to a response with a status and
- * message a dashboard user can act on, instead of leaking a stack trace or a
+ * message a dashboard user can act on. Leaking a stack trace or a bare 500
  * bare 500 when the bot process is down.
  */
 export async function proxyControlApi<T>(work: () => Promise<T>): Promise<NextResponse> {

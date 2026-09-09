@@ -4,7 +4,7 @@ import { auth, signOut } from "../../lib/auth";
 import { AppShell } from "../../components/AppShell";
 
 // Every route under /guilds needs a signed-in user, so the check happens
-// once here rather than being repeated in each page.
+// once here, so each page below does not repeat it.
 export default async function GuildsLayout({ children }: { children: ReactNode }) {
   const session = await auth();
   if (!session?.user?.id) redirect("/login");

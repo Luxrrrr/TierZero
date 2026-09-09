@@ -1,6 +1,6 @@
 /**
  * discord.js's ChannelType values the channel picker filters on. Kept as a
- * plain map rather than a dependency on discord.js, which the dashboard has
+ * plain map. Pulling in discord.js for it would be a dependency the dashboard
  * no other reason to import.
  */
 const CHANNEL_TYPE_NUMBERS: Record<string, number> = {

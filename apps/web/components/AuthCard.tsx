@@ -11,7 +11,7 @@ interface Props {
  * The shared frame for every pre-dashboard page: login, setup, forbidden,
  * bot-offline. These are what a new operator sees before anything else
  * works, so they get the same considered layout as the dashboard itself
- * rather than bare text on the page background.
+ * so it does not read as bare text floating on the page background.
  */
 export function AuthCard({ children, mark, alert }: Props) {
   return (

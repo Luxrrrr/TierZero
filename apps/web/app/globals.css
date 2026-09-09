@@ -1,7 +1,7 @@
 /* Tokens ------------------------------------------------------------- */
 /* Dark is the default, because the audience lives in Discord. The light
    values below override every one of these under prefers-color-scheme, so
-   the two stay in lockstep rather than one being an afterthought. */
+   the two stay in step and neither becomes an afterthought. */
 
 :root {
   color-scheme: dark;
@@ -494,7 +494,7 @@ code {
 }
 
 /* Section nav --------------------------------------------------------------- */
-/* A single-row strip of links rather than a sidebar, so it costs no width on
+/* A single-row strip of links, not a sidebar, so it costs no width on
    a phone: it just scrolls horizontally instead of wrapping or collapsing
    behind a toggle. */
 
@@ -970,7 +970,7 @@ code {
 
 /* Object groups ------------------------------------------------------------ */
 /* A nested object renders its fields in a compact grid, on a slightly
-   recessed surface, so it reads as "part of the row above" rather than a
+   recessed surface, so it reads as part of the row above and not as a
    whole new section of the form. */
 
 .object-fields {
@@ -1155,7 +1155,7 @@ code {
   padding: var(--space-3) var(--space-4);
 }
 
-/* A hidden command stays legible rather than being greyed to unreadable. */
+/* A hidden command stays legible. Greying it out to unreadable helps nobody. */
 .command-row[data-off="true"] .command-name,
 .command-row[data-off="true"] .command-description {
   opacity: 0.55;

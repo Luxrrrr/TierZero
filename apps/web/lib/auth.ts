@@ -13,7 +13,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   session: { strategy: "database" },
   // Self-hosted behind whatever domain or port the operator chose, never a
   // fixed Vercel-style URL, so the request's own Host header is trusted
-  // rather than requiring another environment variable that has to match it.
+  // so there is no second environment variable to keep in step with it.
   trustHost: true,
   providers: [
     Discord({

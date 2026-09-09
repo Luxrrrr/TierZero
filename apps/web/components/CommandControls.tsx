@@ -16,7 +16,7 @@ const fetcher = (url: string) => fetch(url).then((r) => r.json());
  *
  * A command is visible to everyone in every channel until an operator says
  * otherwise, so an empty restriction list is shown as the permissive default
- * rather than as something waiting to be filled in. Each change is saved on
+ * and not as something waiting to be filled in. Each change is saved on
  * its own: there is no draft state to lose, and a failed save says which
  * command it was.
  */
@@ -34,7 +34,7 @@ export function CommandControls({
       <h3 className="commands-title">Commands</h3>
       <p className="commands-help">
         Hide a command from this server, or limit who can use it and where. Hidden commands are
-        removed from Discord entirely rather than refused after the fact.
+        removed from Discord entirely, not refused after somebody runs them.
       </p>
       <ul className="command-list">
         {commands.map((command) => (

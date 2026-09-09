@@ -7,7 +7,7 @@ import { listBotGuilds } from "./control-api";
 /**
  * The one place that decides whether a signed-in user may configure a given
  * guild. Every API route and every guild-scoped page calls into this file
- * rather than re-deriving the check, because the rule itself
+ * and none of them work it out again, because the rule itself
  * (MANAGE_GUILD, intersected with guilds the bot is actually in) only needs
  * to be right in one place.
  */
@@ -68,10 +68,9 @@ async function getValidAccessToken(userId: string): Promise<DiscordAccountTokens
 
 /**
  * Guild ids the signed-in user may configure: they hold MANAGE_GUILD there,
- * and the bot is actually a member. Returns an empty set rather than
- * throwing when the user's Discord session can't be refreshed, since that
- * just means "nothing is authorized right now" from the caller's point of
- * view.
+ * and the bot is actually a member. A Discord session that cannot be
+ * refreshed gives an empty set and no exception, because from the caller's
+ * side that just means nothing is authorized right now.
  */
 export async function getAuthorizedGuildIds(userId: string): Promise<Set<string>> {
   const cached = authorizedCache.get(userId);
