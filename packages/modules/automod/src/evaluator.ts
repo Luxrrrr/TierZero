@@ -162,8 +162,8 @@ function checkCapitals(input: EvaluationInput): RuleMatch | null {
   const rule = input.settings.capitals;
   if (!rule.enabled || isExempt(input, rule)) return null;
 
-  // Digits, punctuation and spaces do not count either way, so "OK!!!" is
-  // judged on its two letters rather than its five characters.
+  // Digits, punctuation and spaces do not count either way, so "OK!!!" gets
+  // judged on its two letters, not its five characters.
   const letters = input.content.replace(/[^a-zA-Z]/g, "");
   if (letters.length < rule.minLength) return null;
 
@@ -235,13 +235,13 @@ function checkMentions(input: EvaluationInput): RuleMatch | null {
 
 // -- banned words ------------------------------------------------------
 
-// Obfuscation handling is deliberately shallow: fold common leetspeak
+// Obfuscation handling is kept shallow by design: fold common leetspeak
 // substitutions and collapse a letter stretched three or more times
 // ("fuuuuck" -> "fuck"), then match with \b on both sides. \b is what keeps
 // "assassin" out of a filter for "ass" - it only fires at a transition
 // between a word character and a non-word one, and "ass" sits in the middle
-// of a run of letters there, not at an edge. Deliberately not attempting to
-// catch spaced-out or punctuated evasion ("a s s", "a-s-s"): closing that gap
+// of a run of letters there, not at an edge. This does not try to catch
+// spaced-out or punctuated evasion ("a s s", "a-s-s") either: closing that gap
 // means either stripping whitespace (which glues unrelated words together and
 // reintroduces the "assassin" problem from the other direction) or maintaining
 // a much heavier tokenizer, and a false positive that deletes a real message
@@ -318,7 +318,7 @@ const SEVERITY: Record<RuleAction, number> = { warn: 1, delete: 2, timeout: 3 };
 /**
  * Runs every rule against one message and returns the single action to take.
  * A message that trips several rules is acted on once, at the severity of
- * the worst rule it tripped, rather than once per rule.
+ * the worst rule it tripped. It never fires once per rule.
  */
 export function evaluateMessage(input: EvaluationInput): EvaluationVerdict {
   if (input.authorIsBot) return { triggered: false, matchedRules: [] };

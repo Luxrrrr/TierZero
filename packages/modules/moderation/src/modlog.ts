@@ -2,8 +2,8 @@
  * Formatting for the mod log post and the direct message sent to a member.
  * Kept free of discord.js so the exact wording is testable without building
  * an embed, and reads back straight from the database: fields are built from
- * mentions rather than cached usernames, so a case pulled up months later
- * never needs an extra API call to render.
+ * mentions, not cached usernames, so a case pulled up months later never
+ * needs an extra API call to render.
  */
 
 export type ModerationAction = "warn" | "timeout" | "timeout-clear" | "kick" | "ban" | "unban";

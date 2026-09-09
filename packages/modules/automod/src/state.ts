@@ -1,5 +1,5 @@
 /**
- * Per-member message history, held in memory rather than the database.
+ * Per-member message history. This is held in memory, not the database.
  *
  * The rate-limit and repeated-text rules only care about the last few
  * seconds or minutes of a member's activity, this runs on every message in

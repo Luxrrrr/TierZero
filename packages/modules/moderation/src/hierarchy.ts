@@ -3,9 +3,9 @@
  * Kept free of discord.js so this - the highest-risk decision in the module -
  * can be exercised without a guild, a member, or a gateway connection.
  *
- * Position comparisons use ">=" rather than ">", matching how Discord itself
+ * Position comparisons use ">=", not ">", matching how Discord itself
  * enforces role hierarchy: a role does not outrank one sitting at the same
- * position, so equal footing is refused rather than allowed.
+ * position, so equal footing gets refused, never allowed.
  */
 
 export interface HierarchyCheck {

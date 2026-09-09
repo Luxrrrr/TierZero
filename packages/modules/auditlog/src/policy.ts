@@ -47,7 +47,7 @@ export function categoryEnabled(settings: Pick<AuditSettings, "categories">, cat
 /**
  * Whether an edit is worth logging. A null side means the message arrived
  * partial and its prior content is unknown, so a real edit cannot be ruled
- * out and is logged rather than silently dropped. Two known, equal contents
+ * out. It gets logged instead of silently dropped. Two known, equal contents
  * mean nothing actually changed - Discord fires an update for an embed
  * loading in, for instance - and that case is suppressed.
  */

@@ -22,7 +22,7 @@ export interface OpenTicketRequest {
 
 /**
  * Everything that can stop a ticket from being opened, checked before any
- * channel is created so a member gets a clear reason rather than a failed
+ * channel is created. A member gets a clear reason instead of a failed
  * interaction.
  */
 export function evaluateOpenRequest(request: OpenTicketRequest): OpenTicketDecision {

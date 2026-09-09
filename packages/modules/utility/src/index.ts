@@ -119,7 +119,7 @@ const ACCENTS: Record<string, number> = {
 };
 
 // A guild can hold an accent from a choice list that has since changed, so
-// fall back rather than handing discord.js undefined.
+// this falls back instead of handing discord.js undefined.
 function accentOf(name: string): number {
   return ACCENTS[name] ?? BLURPLE;
 }
