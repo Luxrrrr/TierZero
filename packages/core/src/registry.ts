@@ -14,8 +14,8 @@ export interface ModuleSummary {
 
 /**
  * Holds every module the bot knows about. The dashboard reads from the same
- * registry over the control API, which is what keeps the two processes from
- * drifting apart on what a setting is called or what it accepts.
+ * registry over the control API, so the two processes can never drift apart
+ * on what a setting is called or what it accepts.
  */
 export class ModuleRegistry {
   private readonly modules = new Map<string, ModuleDefinition>();
