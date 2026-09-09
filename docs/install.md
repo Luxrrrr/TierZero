@@ -29,7 +29,7 @@ Everything the bot needs comes from one application you create once.
    somewhere. This is your `DISCORD_CLIENT_ID`.
 4. Open the **Bot** tab.
    - Press **Reset Token**, then copy the token. This is your `DISCORD_TOKEN`.
-     It is shown once. If you lose it, reset it again; nothing breaks.
+     It is shown once. Lose it and you can just reset it again. Nothing breaks.
    - Turn **Public Bot** off. You are hosting this for yourself, so nobody else
      needs to be able to invite it.
    - Under **Privileged Gateway Intents**, turn on **Server Members Intent**
@@ -46,8 +46,8 @@ Everything the bot needs comes from one application you create once.
      http://localhost:8080/api/auth/callback/discord
      ```
 
-     If you will reach the dashboard at a domain rather than on the machine
-     itself, use that instead, for example
+     If you will reach the dashboard at a domain instead of on the machine
+     itself, use that, for example
      `https://tierzero.example.com/api/auth/callback/discord`. It has to match
      exactly, including `http` or `https`.
 
@@ -174,5 +174,5 @@ has to be a member. Both, not either.
 
 **Commands do not appear in Discord.** A feature's commands only exist while
 that feature is on. Turn it on, save, and give it a few seconds. Registration
-is deliberately delayed slightly so that changing several things at once does
-not send a request for each.
+is held back a few seconds by design, so flipping several switches at once
+sends one request and not six.

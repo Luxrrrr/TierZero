@@ -1,7 +1,7 @@
 # Writing a module
 
 A module is a directory under `packages/modules` that default-exports a call to
-`defineModule`. Its settings page appears in the dashboard on its own; you
+`defineModule`. Its settings page appears in the dashboard on its own. You
 never write one.
 
 Wiring a new module up takes three lines, all of them mechanical:
@@ -11,8 +11,8 @@ Wiring a new module up takes three lines, all of them mechanical:
    resolves.
 3. Import it in `apps/bot/src/index.ts` and pass it to `registry.register`.
 
-Copy `packages/modules/utility` for the package manifest and tsconfig; it is
-deliberately small and exists to be the example.
+Copy `packages/modules/utility` for the package manifest and tsconfig. It is
+kept small and exists to be the example.
 
 ## The shape of a module
 
@@ -65,8 +65,8 @@ in the dashboard, and it works for any schema, so no module ships UI code.
 | `s.object({ ... })` | object | grouped fields |
 
 Every builder takes `label`, `help` and `optional`. A field with a `default` is
-filled in when it is absent from stored settings, which is what allows a module
-to add a setting without a database migration.
+used whenever stored settings do not carry that key, so a module can add a
+setting later without a database migration.
 
 Settings reach handlers already parsed. `ctx.settings` is typed from the schema,
 so a handler never validates anything itself and never sees the raw JSON.
@@ -74,8 +74,8 @@ so a handler never validates anything itself and never sees the raw JSON.
 ## Commands
 
 Each command declares its own name, which must be unique across all modules.
-The registry rejects a duplicate at startup rather than letting two modules
-fight over one command at runtime.
+The registry rejects a duplicate at startup, so two modules can never end up
+fighting over one command at runtime.
 
 Commands are registered per guild. The set is recalculated whenever a module is
 toggled or an override changes, and registration is debounced so that an
@@ -99,7 +99,7 @@ handlers are only called for guilds where the module is switched on.
 | `banAdd(ban, ctx)` / `banRemove(ban, ctx)` | a ban is placed or lifted |
 
 Partials are enabled, so anything about an object the bot never cached arrives
-with most fields null. Handle that rather than printing `undefined` at people.
+with most fields null. Handle that, or your log fills up with `undefined`.
 
 Every handler runs inside its own error boundary. A module that throws is
 logged with its id and the others still receive the event.
@@ -130,7 +130,7 @@ modals: {
 
 The router splits the id, finds the module that owns it and hands the
 interaction over, so two modules can both have a `confirm` button without
-colliding. Build ids with `customId` rather than by hand.
+colliding. Always build ids with `customId`. Do not assemble one by hand.
 
 ## Deferred work
 
@@ -160,20 +160,20 @@ All three hooks are optional.
 
 - `onEnable(ctx)` runs when an operator switches the module on for a server.
 - `onDisable(ctx)` runs when they switch it off. Remove anything the module
-  created; the module may be enabled again later.
+  created. Somebody may switch the module back on later.
 - `onSettingsChange(ctx, previous)` runs after settings are saved. Use it for
-  work that has to happen once rather than on every command, such as rebuilding
-  a posted role menu.
+  work that has to happen once and not on every command, such as rebuilding a
+  posted role menu.
 
 ## Testing a module
 
 `pnpm test` builds the workspace and runs the suite through Node's own test
 runner. Tests live in a `test` directory beside the module.
 
-Two constraints shape how a module should be laid out for testing. Tests import
-built output rather than source, and Node runs TypeScript by stripping types
-rather than compiling, so a file under test cannot use syntax that needs code
-generation.
+Two things shape how a module should be laid out for testing. Tests import
+built output, not source. And Node runs TypeScript by stripping the types out
+instead of compiling, so a file under test cannot use syntax that needs real
+code generation.
 
 The practical consequence is worth following even if you never write a test:
 **keep the logic worth checking in a file that does not import discord.js.**

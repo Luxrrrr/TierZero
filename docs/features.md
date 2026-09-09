@@ -1,130 +1,134 @@
 # Features
 
-Every feature is a module. Modules are switched on per server from the
-dashboard and take effect immediately, and each one does nothing at all until
-you turn it on. Where a setting is optional, leaving it unset means that part
-of the module stays quiet rather than erroring.
+Every feature is a module. You switch modules on per server from the dashboard
+and the change takes effect straight away. A module you have not switched on
+does nothing at all.
 
-This page covers the behaviour that is not obvious from the settings
-themselves. The dashboard explains each individual field as you configure it.
+Most settings are optional. Leave one blank and that part of the module stays
+quiet.
+
+This page covers the things you would not guess from the settings screen. The
+dashboard explains each individual field as you fill it in.
 
 ## Moderation
 
-Warnings, timeouts, kicks, bans and temporary bans, each recorded as a numbered
+Warnings, timeouts, kicks, bans and temporary bans. Each one gets a numbered
 case you can look up later.
 
 **Hierarchy is enforced on every action.** A moderator cannot action anyone
-whose highest role sits at or above their own, and the bot cannot action anyone
-above itself. The server owner cannot be actioned by anybody. This is checked
-before the request reaches Discord, so the refusal explains itself instead of
-arriving as a permissions error.
+whose highest role sits at or above their own, and the bot cannot action
+anyone above itself. Nobody can action the server owner. The check happens
+before the request reaches Discord, so you get a refusal that explains itself
+and not a bare permissions error.
 
-**Temporary bans schedule their own reversal.** The pending unban is a database
-row, not a timer, so restarting the bot does not strand someone. Unbanning by
-hand cancels the pending one.
+**A temporary ban schedules its own reversal.** The pending unban is a row in
+the database, so restarting the bot does not leave someone banned forever. If
+you unban by hand first, the pending one is dropped.
 
-Timeouts use Discord's own timeout, which it caps at 28 days; anything longer
-is refused with an explanation rather than silently shortened. Bulk deletion
-cannot touch messages older than 14 days, which is Discord's limit, and the
-command says so rather than partly succeeding.
+Timeouts use Discord's own timeout feature, and Discord caps that at 28 days.
+Ask for longer and the command tells you why it will not. Bulk deletion cannot
+touch anything older than 14 days, again Discord's limit, and the command says
+so up front so you are not left wondering which messages went.
 
-Cases stay after the action is reversed. An unban marks the ban inactive rather
-than deleting it, so history remains readable.
+Cases outlive the action. Unbanning marks the ban inactive and keeps the row,
+so the history still reads properly.
 
 ## Automod
 
-Seven rules, each switched on separately with its own action and its own
+Seven rules you can switch on separately, each with its own action and its own
 exemptions: invites, links, capital letters, repeated text, mention limits,
 banned words and rate limiting.
 
-Every rule is off by default. Turning the module on does nothing until you
-choose which rules you want.
+Every rule starts off. Switching the module on does nothing until you pick the
+rules you want.
 
-**On banned words**, matching is deliberately conservative. Text is lowercased,
-common letter-for-number substitutions are folded, and a letter stretched three
-or more times is collapsed, then matched on word boundaries. That means
-`assassin` does not trip a rule for a rude three-letter word contained inside
-it. It also means spaced-out evasion is not caught: closing that gap requires
-stripping whitespace, which glues unrelated words together and brings the false
-positives straight back. Catching fewer real cases is the better trade when the
-alternative is deleting innocent messages.
+**A word about banned words.** The matching is conservative on purpose. Text
+gets lowercased, common letter-for-number swaps are folded back, a letter
+stretched out three or more times is collapsed, and then it matches on word
+boundaries. So `assassin` will not trip a rule for the rude three letters
+inside it.
 
-Members with moderator permissions are exempt by default, and that default can
-be turned off. If several rules trip on one message, the most severe action is
-taken once.
+The cost is that spacing letters out gets past it. Catching that means
+stripping whitespace, and stripping whitespace glues unrelated words together
+and brings the false positives straight back. Missing a few real cases beats
+deleting innocent messages.
+
+Anyone with moderator permissions is exempt by default, and you can turn that
+off. When several rules trip on one message you get one action, the most
+severe of them.
 
 ## Welcome messages
 
-Greetings when someone joins, farewells when they leave, optional direct
-messages, and roles assigned on arrival.
+Greetings when someone joins, farewells when they leave, an optional direct
+message, and roles handed out on arrival.
 
-Messages support `{user}`, `{username}`, `{server}` and `{memberCount}`. A
-placeholder the module does not recognise is rejected when you save, so a typo
-surfaces immediately rather than appearing verbatim in a greeting weeks later.
+Messages support `{user}`, `{username}`, `{server}` and `{memberCount}`. If you
+use a placeholder the module does not know, saving fails and tells you which
+one, so a typo turns up immediately and not in a greeting three weeks later.
 
-A role positioned above the bot's own cannot be assigned. That is checked
-before the attempt, logged, and does not stop the rest of the join being
-handled.
+The bot cannot hand out a role positioned above its own. It checks first, logs
+it, and carries on with the rest of the join.
 
 ## Role menus
 
 Members pick their own roles from a menu you publish to a channel.
 
-Menus use **buttons rather than reactions**. Buttons keep working when a
-message falls out of the bot's cache, need no message content permission, and
-give the member a private confirmation instead of leaving a reaction sitting on
-the message. Publishing a menu again edits the existing message rather than
-posting a second one.
+**The menus use buttons, not reactions.** Buttons keep working after the
+message falls out of the bot's cache, they need no message content permission,
+and the member gets a private confirmation with no reaction left sitting on
+the message. Publish a menu a second time and it edits the message already
+there.
 
-A menu can be exclusive, so picking one option clears the others. That suits
+Mark a menu exclusive and picking one option clears the others. Useful for
 pronouns or colours, where only one answer makes sense.
 
 ## Tickets
 
-A panel with a button. A member presses it, gives a subject, and gets a private
-channel with your support team.
+A panel with a button on it. A member presses the button, gives a subject, and
+gets a private channel with your support team.
 
-The channel is created with the whole server denied visibility and explicit
-access granted to the opener, the support roles and the bot. Nobody else can
-see it regardless of what other roles they hold.
+The channel denies visibility to the whole server and then grants it back to
+the opener, your support roles and the bot. Nobody else sees it, whatever
+other roles they hold.
 
-Transcripts are optional and post to a channel you choose when the ticket
-closes. Auto-close is optional and resets whenever somebody speaks. A member at
-their open ticket limit is told so.
+Transcripts are optional and go to a channel you pick when the ticket closes.
+Auto-close is optional and its clock resets whenever somebody speaks. A member
+who has hit their limit gets told, in those words.
 
 ## Audit logging
 
 A record of what changed on the server, written to a channel you pick. Message
-edits and deletions, joins, departures, nickname and role changes, channel and
-role creation and deletion, bans and unbans, each switched separately.
+edits and deletions, joins and departures, nickname and role changes, channels
+and roles created and deleted, bans and unbans. Every category has its own
+switch.
 
-Deleted and edited messages are often not in the bot's cache, in which case
-Discord sends very little about them. Those entries say what is known rather
-than printing empty fields. Edits where the content did not actually change,
-which happens when a link preview loads, are not logged.
+Discord sends very little about a deleted or edited message the bot never
+cached. Those entries say what is known and leave out what is not, so you do
+not get a wall of empty fields. An edit that did not change the text, which is
+what you see when a link preview loads, is skipped.
 
-The log channel is never logged about itself, and bot messages are ignored
-unless you ask for them.
+The log channel is never logged about itself. Bot messages are skipped unless
+you ask for them.
 
 ## Leveling
 
-Experience for taking part, levels from that experience, and roles at
+Experience for taking part, levels earned from it, and roles at whatever
 thresholds you choose.
 
-Experience per message is a range rather than a fixed number, so it cannot be
-counted exactly and gamed. A cooldown between awards stops a burst of short
-messages from being worth more than a conversation.
+Each message is worth a random amount inside a range you set, so nobody can
+count their way to the next level. A cooldown between awards means a burst of
+one-word messages is not worth more than a conversation.
 
-Role rewards can stack, keeping every role earned so far, or replace, keeping
-only the highest. Multipliers can be attached to roles; where several apply,
-the highest is used rather than multiplying them together, so a combination
-nobody planned cannot produce a runaway rate.
+Role rewards either stack, keeping everything earned so far, or replace,
+keeping only the highest. You can attach a multiplier to a role. When a member
+has several, the biggest one applies on its own, so an unplanned combination
+of roles cannot spiral.
 
-Rank and the leaderboard are Discord embeds. There is deliberately no generated
-image: drawing one needs a native dependency that complicates every install for
-something that is decoration.
+Rank and the leaderboard are plain Discord embeds. There is no generated image
+card. Drawing one pulls in a native dependency that makes every install harder
+for what amounts to decoration.
 
 ## Utility
 
-Server and member information commands. Small on purpose; it exists mostly to
-exercise the module runtime end to end.
+Server and member information commands. It is small on purpose. It mostly
+exists to prove the module runtime works end to end.

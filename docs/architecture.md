@@ -26,12 +26,12 @@ and configuration lives in a JSON file the operator edits by hand.
 | Auth | Discord OAuth2 | The operator already has an account, and the token yields their guild list and permissions directly. |
 | Database | SQLite via Prisma | One file on disk. No second container, no connection tuning, backup is a file copy. |
 | Repository | pnpm workspaces | Two apps, three shared packages. No build orchestrator until build times justify one. |
-| Bot to dashboard | Internal HTTP | An authenticated control API on the private network, rather than adding Redis to an install meant to be one command. |
+| Bot to dashboard | Internal HTTP | An authenticated control API on the private network. Adding Redis to an install that is supposed to be one command buys nothing here. |
 
-Prisma declares its provider in the schema rather than the connection string, so
-supporting Postgres later means a second schema file or a generation step. That
-is a known cost, accepted in exchange for SQLite being genuinely
-zero-configuration on the install path that matters most.
+Prisma puts the provider in the schema, not the connection string. Supporting
+Postgres later therefore means a second schema file or a generation step. That
+is a real cost and we are paying it knowingly, because it buys SQLite being
+genuinely zero-configuration on the install path most people will take.
 
 ## Process topology
 
@@ -53,8 +53,8 @@ connection, and the separation lets an advanced operator run the dashboard on a
 public domain while the bot stays on a machine at home.
 
 The control API is small, but it is not read-only: every write to a guild's
-module settings or command overrides goes through it rather than through the
-dashboard's own database access.
+module settings or command overrides goes through it. The dashboard does not
+write those tables itself.
 
 ```
 GET    /health
@@ -72,8 +72,8 @@ Every request carries a shared secret from the environment, and the server
 binds to loopback by default (`CONTROL_HOST` widens that for the case where
 the dashboard runs on a separate machine).
 
-The bot owns module settings; the dashboard is a client of this API rather
-than a second writer to the database. The reason is atomicity: persisting a
+The bot owns module settings. The dashboard is a client of this API, not a
+second writer to the database. The reason is atomicity: persisting a
 settings change and refreshing the running bot have to happen as one step, or
 the database and the live bot can end up disagreeing with nothing to notice
 it. A `PATCH` handler validates the new settings against the module's schema,
@@ -112,15 +112,15 @@ export default defineModule({
 
 `s.role()` is simultaneously a validator, a TypeScript type, and an instruction
 to render a role picker populated from that guild's live role list. Adding a
-module means writing one folder; its settings page appears on its own.
+module means writing one folder. Its settings page appears on its own.
 
 The alternative, where each feature ships a bespoke settings page, works fine
 for the first three features and becomes the reason the project stalls at the
 twelfth. A schema-driven renderer makes the dashboard requirement cheaper per
-feature rather than more expensive.
+feature cheaper as the project grows, not dearer.
 
 Three lifecycle hooks, all optional: `onEnable`, `onDisable`, and
-`onSettingsChange`. Hot reload is not a nice-to-have; constraint 2 requires it.
+`onSettingsChange`. Hot reload is not a nice-to-have. Constraint 2 requires it.
 
 See `docs/modules.md` for the full reference.
 
@@ -131,19 +131,18 @@ dashboard user would ever plausibly want to change a value, it does not belong
 in a file.
 
 Settings are stored as JSON and validated against the module's current schema on
-read. Missing keys take their defaults, which is what allows a module to add a
-setting without a migration. A renamed setting leaves a stale key behind;
-`GuildModule.version` exists for a per-module migration hook that is not written
-yet.
+read. Missing keys fall back to their defaults, and that is what lets a module
+add a setting without a migration. Rename one and the old key is left sitting
+there. `GuildModule.version` exists so a per-module migration hook can clean
+that up, but nobody has written the hook yet.
 
 The database file is shared, but it is not shared *access*: the dashboard never
 writes a `GuildModule` or `CommandOverride` row itself. It reads live guild
 data and posts changes through the control API described above, and the bot is
 the only process that writes those tables. That keeps the validate-persist-
-reload sequence inside one process instead of splitting it across two, which
-is what makes the no-restart guarantee in constraint 2 actually hold under
-concurrent writers rather than just under the dashboard's own click-through
-testing.
+reload sequence inside one process. Split across two, the no-restart guarantee
+in constraint 2 holds while you click through the dashboard yourself and stops
+holding the moment anything else writes at the same time.
 
 ## Command visibility
 
@@ -159,16 +158,16 @@ seconds so an operator flipping several switches produces one registration call.
 
 Role and channel restrictions layer on top. Where Discord's own
 `default_member_permissions` can express a rule it is used, because that hides
-the command in the client rather than rejecting it after the fact. Rules
+the command in the client instead of refusing it after somebody runs it. Rules
 Discord cannot express, such as allowing a command only in specific channels,
 are stored on `CommandOverride.allowRoles` and `denyChannels` and enforced in
 the interaction router before a command runs.
 
 The rules are read on every invocation, so they are cached per guild alongside
 module settings and dropped by the same invalidation. The write path clears
-that cache itself rather than leaving each caller to remember, because a
-restriction that appears to save and then does nothing until the next restart
-is worse than one that cannot be set at all.
+that cache itself. Leaving each caller to remember would eventually produce a
+restriction that saves, reports success, and quietly does nothing until the
+next restart, which is worse than not being able to set one at all.
 
 ## Deferred work
 
@@ -205,15 +204,14 @@ pasted would be better still, turning "the container restarts forever and the
 logs mention an invalid token" into a field with a sentence explaining the fix.
 
 That wizard is not built, and the reason is worth recording. Credentials live
-in the environment rather than the database, so a wizard that collected them
-would have to write them to a file the dashboard then cannot reliably reload,
-and under Compose the environment belongs to the container rather than the
-application. Validating credentials the operator has already set is a
-different, smaller feature and does not have that problem; that is the shape
-this should take when it is built.
+in the environment, not the database. A wizard that collected them would have
+to write a file the dashboard cannot reliably reload, and under Compose the
+environment belongs to the container, not the application. Validating credentials the operator has already set is a
+different, smaller feature and does not have that problem. That is the shape
+this should take when somebody builds it.
 
-**From source** is documented in CONTRIBUTING rather than the user-facing
-install guide, so the two audiences never read each other's instructions.
+**From source** lives in CONTRIBUTING, away from the user-facing install
+guide, so neither audience trips over the other's instructions.
 
 ## Build order
 
@@ -232,7 +230,7 @@ actually uses this, and the right load to put on a new module contract.
 infraction model, the mod log, and the scheduler that phase 3 also needs.
 
 **Phase 3** — tickets and audit logging. Reuses phase 2's plumbing. Adds
-transcript generation, the first feature that writes files rather than rows.
+transcript generation, the first feature that writes files and not just rows.
 
 **Phase 4** — leveling and rank cards. Last on purpose despite being the most
 famous paywalled feature: rank card rendering pulls in native image dependencies
