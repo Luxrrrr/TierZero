@@ -1,7 +1,7 @@
 /**
  * The published form of a role menu, snapshotted into ReactionRoleMenu.mapping
- * at publish time. Buttons decode against this rather than live settings, so a
- * menu keeps working even if the dashboard config changes or the row briefly
+ * at publish time. Buttons decode against this, not live settings, so a menu
+ * keeps working even if the dashboard config changes or the row briefly
  * outlives a restart before settings are reloaded.
  */
 

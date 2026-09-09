@@ -10,10 +10,10 @@ const TICK_MS = 15_000;
  * Runs work that was scheduled for later: lifting a temporary ban, closing an
  * idle ticket.
  *
- * Due work is read from the database on a fixed tick rather than held in
- * timers, so anything scheduled before a restart still runs after one. The
- * tick is coarse because nothing here is time critical to the second, and a
- * quiet instance should not be waking up constantly to find nothing to do.
+ * Due work is read from the database on a fixed tick. Timers would be lost
+ * on restart, and anything scheduled before one still needs to run after it.
+ * The tick is coarse because nothing here is time critical to the second, and
+ * a quiet instance should not be waking up constantly to find nothing to do.
  */
 export class Scheduler {
   private timer: NodeJS.Timeout | undefined;
@@ -39,9 +39,9 @@ export class Scheduler {
   }
 
   /**
-   * Claims and runs everything that is due. Overlapping ticks are skipped
-   * rather than queued, because a slow batch would otherwise be started again
-   * underneath itself.
+   * Claims and runs everything that is due. Overlapping ticks are skipped,
+   * not queued. A slow batch would otherwise get started again underneath
+   * itself.
    */
   async tick(now = new Date()): Promise<void> {
     if (this.running) return;

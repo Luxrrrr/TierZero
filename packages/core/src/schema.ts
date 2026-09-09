@@ -5,7 +5,7 @@
  * validator and enough metadata for the dashboard to render a control for it,
  * so no module ever ships dashboard code.
  *
- * Deliberately not zod: the dashboard needs to serialize a schema to JSON and
+ * This is not zod. The dashboard needs to serialize a schema to JSON and
  * walk it, and reaching into another library's internals to do that breaks on
  * every minor release.
  */

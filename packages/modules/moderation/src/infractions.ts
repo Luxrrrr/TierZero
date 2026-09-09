@@ -56,7 +56,7 @@ export interface RecordInfractionInput {
 /**
  * Writes an infraction and hands back its case number.
  *
- * There is no counter row to allocate a number from up front, which is what
+ * There is no counter row to allocate a number from up front. That is what
  * makes this safe when two moderators act at the same moment: SQLite already
  * assigns each insert a unique, strictly increasing `id` as part of the
  * write itself, with no window in which two rows could be handed the same
@@ -113,9 +113,9 @@ export async function findByCaseNumber(
 
 /**
  * A member's history, newest first, each row carrying its guild-wide case
- * number. The guild's full id list is fetched once to build that numbering
- * rather than issuing one count query per row - cheap at the scale a
- * self-hosted instance runs at, and exact rather than approximate.
+ * number. The guild's full id list is fetched once to build that numbering,
+ * not one count query per row. That is cheap at the scale a self-hosted
+ * instance runs at, and it gives an exact number, not an approximate one.
  */
 export async function historyFor(
   guildId: string,

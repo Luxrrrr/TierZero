@@ -2,8 +2,8 @@ import { s, type Infer } from "@tier0/core";
 
 /**
  * Fields every rule shares: whether it runs, what it does when it trips, and
- * who it leaves alone. Pulled into a function rather than written out seven
- * times so the rules cannot quietly drift from each other.
+ * who it leaves alone. Pulled into a function instead of written out seven
+ * times, so the rules cannot quietly drift from each other.
  */
 function ruleFields(defaultAction: "delete" | "warn" | "timeout", defaultTimeout: string) {
   return {

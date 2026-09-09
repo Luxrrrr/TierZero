@@ -1,8 +1,8 @@
 /**
  * The level curve and every other piece of arithmetic the module needs. Kept
- * free of discord.js so it can be tested as plain functions, and because the
- * test runner strips types rather than compiling them, so nothing here uses a
- * constructor with parameter properties.
+ * free of discord.js so it can be tested as plain functions. The test runner
+ * strips types instead of compiling them, so nothing here uses a constructor
+ * with parameter properties.
  */
 
 export interface RoleReward {
@@ -25,9 +25,10 @@ const XP_STEP = 50;
  *
  * Chosen because the amount needed for the *next* level then grows linearly
  * (100, 200, 300, ...), which reads as a fair, gradually-steepening curve
- * without a table of hand-picked numbers, and it inverts with the quadratic
- * formula rather than a search. Defined at level 0 (total is 0) and strictly
- * increasing for every level after, so it is monotonic everywhere it is used.
+ * without a table of hand-picked numbers. It also inverts with the quadratic
+ * formula, so no search is needed. Defined at level 0 (total is 0) and
+ * strictly increasing for every level after, so it is monotonic everywhere
+ * it is used.
  */
 export function totalXpForLevel(level: number): number {
   if (level <= 0) return 0;
@@ -78,9 +79,9 @@ export function progressFor(xp: number): Progress {
 }
 
 /**
- * A text progress bar. Floors rather than rounds so a level only ever shows
- * as complete once `into` actually reaches `need` - rounding up would show a
- * full bar one message before the level actually changes.
+ * A text progress bar. This floors instead of rounding, so a level only ever
+ * shows as complete once `into` actually reaches `need` - rounding up would
+ * show a full bar one message before the level actually changes.
  */
 export function renderProgressBar(into: number, need: number, size = 10): string {
   const filled = need <= 0 ? size : Math.min(size, Math.max(0, Math.floor((into / need) * size)));
@@ -106,9 +107,9 @@ export function applyMultiplier(xp: number, percent: number): number {
 
 /**
  * The highest multiplier among a member's roles, or 100 (no change) when
- * none of their roles carry one. Highest rather than combined, so an
- * operator granting a second boosted role can never produce a surprising
- * stacked multiplier they did not configure.
+ * none of their roles carry one. This takes the highest, not the combined
+ * total, so an operator granting a second boosted role can never produce a
+ * surprising stacked multiplier they did not configure.
  */
 export function highestMultiplierPercent(
   memberRoleIds: readonly string[],

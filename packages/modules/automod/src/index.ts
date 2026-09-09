@@ -12,8 +12,8 @@ import { evaluateMessage, type EvaluationVerdict, type RuleAction } from "./eval
 import { AutomodState } from "./state.js";
 
 // One instance for the whole process, not per guild: it is its own map keyed
-// by guild id, and a module definition is only ever loaded once. See
-// state.ts for why this lives in memory instead of the database.
+// by guild id, and a module definition is only ever loaded once. See state.ts
+// for why this lives in memory and not the database.
 const state = new AutomodState();
 
 export default defineModule({
@@ -47,8 +47,8 @@ async function handleMessage(
   ctx: ModuleContext<AutomodSettings>,
 ): Promise<void> {
   // The gateway already keeps bot authors and DMs out of these events, but
-  // that guarantee lives outside this module, so it is checked again here
-  // rather than trusted.
+  // that guarantee lives outside this module. It gets checked again here
+  // instead of just trusted.
   if (!message.guild || !message.author || message.author.bot) return;
   if (message.content === null) return;
 

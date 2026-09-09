@@ -93,8 +93,8 @@ type Settings = Infer<typeof settingsSchema>;
 const LEADERBOARD_PAGE_SIZE = 10;
 
 /**
- * Timestamp of each member's last award, held in process memory rather than
- * the database. Every message in every guild consults this map first, and a
+ * Timestamp of each member's last award, held in process memory, not the
+ * database. Every message in every guild consults this map first, and a
  * member still inside their cooldown returns here without prisma ever being
  * asked - the only way to keep the hot path to "the minimum possible work"
  * is to never touch the database for the common case at all.
@@ -190,8 +190,8 @@ export default defineModule({
           return;
         }
 
-        // One batched fetch for every name on the page rather than one call
-        // per row.
+        // One batched fetch for every name on the page. Not one call per
+        // row.
         const members = await ctx.guild.members
           .fetch({ user: rows.map((row) => row.userId) })
           .catch(() => null);

@@ -100,7 +100,7 @@ export interface EventHandlers<T = unknown> {
  * uses, so a module only ever sees interactions it created and two modules can
  * both use an action called "confirm".
  *
- * Build ids with `customId()` rather than by hand.
+ * Build ids with `customId()` instead of writing the string by hand.
  */
 export function customId(moduleId: string, action: string, rest = ""): string {
   return rest ? `${moduleId}:${action}:${rest}` : `${moduleId}:${action}`;
@@ -137,9 +137,9 @@ export type ModalHandler<T = unknown> = (
 
 /**
  * Which section of the dashboard a module is configured under. The list is
- * closed on purpose: a module picking its own section name would leave the
- * navigation growing a new entry every time somebody wrote a module, and the
- * point of grouping is that related settings sit together.
+ * closed: a module picking its own section name would leave the navigation
+ * growing a new entry every time somebody wrote a module, and the point of
+ * grouping is that related settings sit together.
  */
 export type ModuleCategory =
   | "moderation"

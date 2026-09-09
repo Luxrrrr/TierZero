@@ -59,8 +59,9 @@ type PublishResult = { ok: true } | { ok: false; reason: string };
 
 /**
  * Posts a menu, or edits its existing message when one is already published.
- * The lookup goes through the stored mapping's name rather than a column,
- * since ReactionRoleMenu has no notion of a menu beyond the message it backs.
+ * The lookup goes through the stored mapping's name. There is no column for
+ * it, since ReactionRoleMenu has no notion of a menu beyond the message it
+ * backs.
  */
 async function publishMenu(guild: Guild, menu: MenuSettings): Promise<PublishResult> {
   const channel = guild.channels.cache.get(menu.channel);
@@ -99,7 +100,7 @@ async function publishMenu(guild: Guild, menu: MenuSettings): Promise<PublishRes
 
   if (existing) {
     // The message was moved to a different channel or deleted out from under
-    // us; drop the stale row rather than leaving two live copies behind.
+    // us. Drop the stale row here instead of leaving two live copies behind.
     const oldChannel = guild.channels.cache.get(existing.channelId);
     if (oldChannel?.isTextBased()) {
       await oldChannel.messages.delete(existing.messageId).catch(() => {});

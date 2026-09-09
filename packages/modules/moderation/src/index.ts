@@ -33,7 +33,7 @@ export default defineModule({
   ],
 
   tasks: {
-    // Lifts a temporary ban. Runs from the scheduled task table rather than a
+    // Lifts a temporary ban. This runs from the scheduled task table, not a
     // timer, so a ban issued just before a restart still gets lifted on time.
     async unban(payload, ctx) {
       const userId = payload.userId;

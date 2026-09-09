@@ -19,8 +19,9 @@ export function parsePayload(text: string): TaskPayload {
 }
 
 /**
- * A subset test rather than equality, so a caller can cancel every pending
- * unban for a member without knowing what else was recorded alongside it.
+ * Checks that the given fields match, not that the payloads are identical.
+ * That lets a caller cancel every pending unban for a member without knowing
+ * what else was recorded alongside it.
  */
 export function matchesPayload(payload: unknown, match: TaskPayload | undefined): boolean {
   if (!match) return true;

@@ -53,8 +53,8 @@ function truncate(text: string, max = FIELD_LIMIT): string {
 }
 
 async function send(ctx: Ctx, embed: EmbedBuilder): Promise<void> {
-  // No channel configured means the module is on but has nothing to write to,
-  // which is a normal state rather than a misconfiguration.
+  // No channel configured means the module is on but has nothing to write to.
+  // That is a normal state, not a misconfiguration.
   if (!ctx.settings.channel) return;
   const channel = ctx.guild.channels.cache.get(ctx.settings.channel);
   if (!channel?.isTextBased()) return;
