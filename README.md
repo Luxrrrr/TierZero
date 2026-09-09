@@ -22,8 +22,8 @@ depending on internals.
 ## Running it
 
 ```
-git clone https://github.com/OWNER/tier0.git
-cd tier0
+git clone https://github.com/Luxrrrr/TierZero.git
+cd TierZero
 cp .env.example .env
 mkdir -p data
 docker compose up -d
