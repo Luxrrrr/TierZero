@@ -245,7 +245,7 @@ interface ObjectProps {
   onChange(next: Record<string, unknown>): void;
 }
 
-/** A nested object renders as its own labelled child fields, at any depth. */
+/** A nested object renders as its own labeled child fields, at any depth. */
 function ObjectControl({ path, field, value, guildId, errors, onChange }: ObjectProps) {
   const fields = Object.entries(field.fields as Record<string, FieldDescriptor>);
 

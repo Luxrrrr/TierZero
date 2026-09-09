@@ -19,7 +19,7 @@ interface Channel {
 interface Role {
   id: string;
   name: string;
-  colour: string;
+  color: string;
   assignable: boolean;
 }
 
@@ -65,13 +65,13 @@ export function RolePicker({ id, guildId, value, onChange }: PickerProps) {
       <option value="">{data ? "Select a role" : "Loading roles"}</option>
       {data?.map((role) => (
         // A role above the bot's own cannot be assigned by it, so offering it
-        // here would only produce a confusing failure later. The colour is
+        // here would only produce a confusing failure later. The color is
         // set inline because an <option> can't hold any other markup.
         <option
           key={role.id}
           value={role.id}
           disabled={!role.assignable}
-          style={role.assignable ? { color: role.colour || undefined } : undefined}
+          style={role.assignable ? { color: role.color || undefined } : undefined}
         >
           {role.name}
           {role.assignable ? "" : " (above the bot's role)"}

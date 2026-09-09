@@ -32,7 +32,7 @@ describe("matchesChannelTypes", () => {
     assert.equal(matchesChannelTypes(TEXT, ["voice", "forum"]), false);
   });
 
-  test("ignores an unrecognised type name rather than matching everything", () => {
+  test("ignores an unrecognized type name rather than matching everything", () => {
     assert.equal(matchesChannelTypes(TEXT, ["nonsense"]), false);
   });
 });

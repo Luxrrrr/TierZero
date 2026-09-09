@@ -77,8 +77,8 @@ locked to particular roles and channels the same way.
 [docs/features.md](docs/features.md) goes through what each one actually does,
 including the bits you would not guess from the settings screen.
 
-## Licence
+## License
 
 AGPL-3.0-or-later. Run it, change it, pass it on. The one condition is that if
 you offer a modified version to other people over a network, you publish your
-changes under the same licence.
+changes under the same license.

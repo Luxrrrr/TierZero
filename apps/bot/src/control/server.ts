@@ -35,7 +35,7 @@ export function startControlApi({ client, registry, state, commands }: Deps): vo
       return send(200, { ok: client.isReady(), guilds: client.guilds.cache.size });
     }
 
-    if (!authorised(req.headers.authorization)) {
+    if (!authorized(req.headers.authorization)) {
       return send(401, { error: "unauthorised" });
     }
 
@@ -156,7 +156,7 @@ export function startControlApi({ client, registry, state, commands }: Deps): vo
             .map((role) => ({
               id: role.id,
               name: role.name,
-              colour: role.hexColor,
+              color: role.hexColor,
               // The dashboard greys these out: the bot cannot assign a role
               // positioned above its own.
               assignable: role.position < ceiling,
@@ -195,7 +195,7 @@ export function startControlApi({ client, registry, state, commands }: Deps): vo
 
 const TEXTUAL = new Set([ChannelType.GuildText, ChannelType.GuildAnnouncement]);
 
-function authorised(header: string | undefined): boolean {
+function authorized(header: string | undefined): boolean {
   if (!header?.startsWith("Bearer ")) return false;
   const provided = Buffer.from(header.slice(7));
   const expected = Buffer.from(config.controlSecret);

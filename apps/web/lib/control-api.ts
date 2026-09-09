@@ -43,7 +43,7 @@ export interface BotChannel {
 export interface BotRole {
   id: string;
   name: string;
-  colour: string;
+  color: string;
   assignable: boolean;
 }
 
@@ -73,7 +73,7 @@ async function controlFetch(path: string, init: RequestInit = {}): Promise<Respo
   } catch (cause) {
     // fetch rejects rather than resolving when the bot is not listening, which
     // reaches a server component as an unhandled "fetch failed" unless it is
-    // turned into something callers can recognise.
+    // turned into something callers can recognize.
     throw new ControlApiError(503, "The dashboard could not reach the bot.", undefined, { cause });
   }
 }

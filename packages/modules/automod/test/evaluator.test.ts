@@ -144,7 +144,7 @@ describe("invites", () => {
     assert.equal(verdict.rule, "invites");
   });
 
-  test("recognises discord.com/invite and discordapp.com/invite forms", () => {
+  test("recognizes discord.com/invite and discordapp.com/invite forms", () => {
     const a = evaluateMessage(
       input({ content: "https://discord.com/invite/abc123", settings: withRule("invites") }),
     );

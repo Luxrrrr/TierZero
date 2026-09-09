@@ -21,7 +21,7 @@ export const MAX_TIMEOUT_MS = 28 * DAY_MS;
 /** Discord refuses to bulk delete anything sent before this window. */
 export const BULK_DELETE_WINDOW_MS = 14 * DAY_MS;
 
-/** Parses "30s", "15m", "2h" or "7d" into milliseconds. Null if unrecognised. */
+/** Parses "30s", "15m", "2h" or "7d" into milliseconds. Null if unrecognized. */
 export function parseDuration(text: string): number | null {
   const match = PATTERN.exec(text.trim());
   if (!match) return null;

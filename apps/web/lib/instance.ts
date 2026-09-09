@@ -43,7 +43,7 @@ export async function isInstanceOwner(userId: string): Promise<boolean> {
  * ignored - the `upsert` guarantees the Instance row exists (idempotent, so
  * concurrent callers racing on it don't clobber each other), and the
  * `updateMany` below is a single atomic UPDATE guarded by `ownerId: null`.
- * SQLite serialises writes to the database file, so only one of the two
+ * SQLite serializes writes to the database file, so only one of the two
  * concurrent updateMany calls actually matches a null ownerId and changes a
  * row; the other affects zero rows and silently loses the race. Both
  * requests still proceed to /guilds - the loser just isn't recorded as

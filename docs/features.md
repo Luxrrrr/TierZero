@@ -80,7 +80,7 @@ the message. Publish a menu a second time and it edits the message already
 there.
 
 Mark a menu exclusive and picking one option clears the others. Useful for
-pronouns or colours, where only one answer makes sense.
+pronouns or colors, where only one answer makes sense.
 
 ## Tickets
 

@@ -14,7 +14,7 @@ export default defineModule({
 
   settings: s.object({
     accent: s.choice({
-      label: "Embed colour",
+      label: "Embed color",
       options: [
         { value: "blurple", label: "Blurple" },
         { value: "grey", label: "Grey" },

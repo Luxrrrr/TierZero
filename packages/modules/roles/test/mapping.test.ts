@@ -5,7 +5,7 @@ import { parseMapping, serializeMapping } from "../dist/mapping.js";
 describe("serializeMapping / parseMapping", () => {
   test("round trips a menu with emoji", () => {
     const mapping = {
-      name: "Colours",
+      name: "Colors",
       exclusive: true,
       options: [{ role: "1", label: "Red", emoji: "🔴" }],
     };

@@ -220,7 +220,7 @@ depends on.
 
 **Phase 0** — skeleton. Module registry, schema primitives, generic form
 renderer, OAuth and guild selection, control API, one trivial utility module.
-Exit criterion: toggling a setting in the dashboard changes bot behaviour with
+Exit criterion: toggling a setting in the dashboard changes bot behavior with
 no restart.
 
 **Phase 1** — reaction roles and welcome. The fastest route to a server that

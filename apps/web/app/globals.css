@@ -400,7 +400,7 @@ code {
 }
 
 /* Auth-style pages: login, setup, forbidden, offline. One narrow card
-   centred on the page, since there is nothing else to configure yet. */
+   centered on the page, since there is nothing else to configure yet. */
 
 .auth-main {
   min-height: 100vh;

@@ -31,7 +31,7 @@ const menuField = s.object({
   exclusive: s.boolean({
     default: false,
     label: "Picking one option clears the others",
-    help: "Turn this on for menus like pronouns or colour where only one choice makes sense.",
+    help: "Turn this on for menus like pronouns or color where only one choice makes sense.",
   }),
   options: s.array(optionField, { min: 1, max: 25, label: "Options" }),
 });

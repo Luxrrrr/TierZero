@@ -15,7 +15,7 @@ describe("actionLabel", () => {
     assert.equal(actionLabel("unban"), "Unbanned");
   });
 
-  test("falls back to the raw value for an unrecognised action", () => {
+  test("falls back to the raw value for an unrecognized action", () => {
     assert.equal(actionLabel("something-new"), "something-new");
   });
 });

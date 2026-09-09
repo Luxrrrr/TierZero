@@ -243,7 +243,7 @@ describe("template", () => {
     assert.equal(value(field.parse("Welcome {user} to {server}")), "Welcome {user} to {server}");
   });
 
-  test("names the first placeholder it does not recognise", () => {
+  test("names the first placeholder it does not recognize", () => {
     const result = field.parse("Hello {nobody}");
     assert.equal(result.ok, false);
     assert.match(String(errors(result)[0]?.message), /\{nobody\}/);

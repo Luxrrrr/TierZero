@@ -21,7 +21,7 @@ describe("parseDuration", () => {
     assert.equal(parseDuration("  5m  "), 300_000);
   });
 
-  test("rejects an unrecognised unit", () => {
+  test("rejects an unrecognized unit", () => {
     assert.equal(parseDuration("5w"), null);
   });
 
