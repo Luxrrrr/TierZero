@@ -130,8 +130,8 @@ model Infraction {
 }
 
 /// Work the bot has to carry out later: lifting a temporary ban, closing an
-/// idle ticket. Held in the database rather than a timer because a restart
-/// must not silently drop a pending unban.
+/// idle ticket. This lives in the database, not a timer. A restart would lose
+/// a timer, and a lost unban leaves someone banned with nothing to explain it.
 model ScheduledTask {
   id      Int      @id @default(autoincrement())
   guildId String
