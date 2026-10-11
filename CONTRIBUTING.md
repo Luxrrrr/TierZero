@@ -1,0 +1,66 @@
+# Contributing
+
+## Running it locally
+
+You need Node 20+ and pnpm.
+
+```
+pnpm install
+cp .env.example .env
+pnpm db:migrate
+pnpm dev
+```
+
+That starts the bot and the dashboard, which is at http://localhost:8080. Fill in `.env` first. You need your own Discord application for this (token, client ID, client secret) and a server you own to test in. [docs/install.md](docs/install.md) walks through creating one.
+
+## Where things are
+
+```
+apps/bot             gateway connection, module runtime, control API
+apps/web             dashboard and first-run sign-in
+packages/core        module contract and settings schema
+packages/db          Prisma schema and client
+packages/modules/*   feature modules
+```
+
+`packages/core/src/schema.ts` is the best place to start. A lot of the design comes out of it. To add a feature, see [docs/modules.md](docs/modules.md). If a module seems to need its own dashboard page, the schema is probably missing a field type.
+
+## Checks
+
+`pnpm typecheck`, `pnpm lint` and `pnpm test` should all pass before you open a pull request.
+
+Commit messages are a short imperative subject, with a body if the reason isn't obvious from the diff. `git log` has plenty of examples.
+
+## Tests
+
+`pnpm test` builds everything and runs the tests with Node's built-in runner, so there's nothing extra to install. Each package keeps its tests in a `test` folder, and they import the built output instead of the source.
+
+Node runs TypeScript by stripping the types, so a file under test can't use syntax that needs real compilation. Constructor parameter properties are the one that bites. It also helps to keep logic you want tested in a file that doesn't import discord.js.
+
+## Moderation records
+
+A few things in the moderation code will bite you if you don't know about them. [docs/architecture.md](docs/architecture.md) explains why they're this way.
+
+- Make cases with `createInfraction` from `@tier0/db`, not `prisma.infraction.create`. It assigns the case number, and a row inserted another way collides with the next case.
+- The slash commands and the dashboard share one code path for taking an action, `performAction` in `packages/modules/moderation/src/perform.ts`. A new action goes there so the two can't drift apart.
+- Removed entries stay in the table with `voidedAt` set. Anything that lists or counts a member's record has to skip them, unless it's showing removals on purpose.
+- What each role can do is decided in `packages/core/src/mod.ts`. Add to the grant table there and don't check a role name in a page or handler.
+- Changes made in the dashboard write a `ModAudit` row with `writeAudit`, in the same transaction as the change. Purging is the exception and writes nothing.
+
+## Sample moderation data
+
+A fresh install has an empty moderation dashboard. To fill one server with made-up history, run this against your dev database:
+
+```
+DATABASE_URL=file:/absolute/path/to/data/tier0.db node packages/db/scripts/seed-mod-demo.mjs <guildId>
+```
+
+In PowerShell, set the variable first with `$env:DATABASE_URL = "file:C:/path/to/data/tier0.db"`. The server has to be in the database already, which happens when the bot joins it.
+
+It adds about 60 cases over 45 days across 12 invented members and 4 invented moderators, plus notes, a few removed cases, audit entries and two staff members. Everything it writes starts with `[demo] ` or uses a fixed list of fake user IDs, so this takes it all out again without touching anything else:
+
+```
+DATABASE_URL=file:/absolute/path/to/data/tier0.db node packages/db/scripts/seed-mod-demo.mjs <guildId> --remove
+```
+
+You see the data as the install's owner. The fake staff can't be signed in as, and people show as "User" plus the last four digits of their ID, because Discord doesn't know them.
