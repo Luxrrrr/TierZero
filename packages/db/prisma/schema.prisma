@@ -19,6 +19,14 @@ model Guild {
   menus       ReactionRoleMenu[]
   tickets     Ticket[]
   levels      LevelMember[]
+  feeds       FeedCursor[]
+  notes       ModNote[]
+  audits      ModAudit[]
+  staff       StaffMember[]
+
+  /// The last case number handed out here. It only ever goes up, so a number
+  /// that was purged is never given to a different case.
+  caseCounter Int @default(0)
 }
 
 /// Per-guild module state. Settings are stored as JSON and validated against
@@ -122,9 +130,18 @@ model Infraction {
   createdAt   DateTime  @default(now())
   expiresAt   DateTime?
   active      Boolean   @default(true)
+  /// Stored rather than derived from row order, so removing a row for good
+  /// leaves a gap and never renumbers the cases after it.
+  caseNumber  Int       @default(0)
+  /// Set when staff remove an entry from a member's record. The row stays, so
+  /// the removal is visible in the mod dashboard; only the owner can purge it.
+  voidedAt    DateTime?
+  voidedBy    String?
+  voidReason  String?
 
   guild Guild @relation(fields: [guildId], references: [id], onDelete: Cascade)
 
+  @@unique([guildId, caseNumber])
   @@index([guildId, userId])
   @@index([guildId, createdAt])
 }
@@ -190,4 +207,77 @@ model LevelMember {
 
   @@id([guildId, userId])
   @@index([guildId, xp])
+}
+
+/// Where the feeds module has got to with one source. Without the remembered
+/// ids, every restart would post the whole feed again. The key is `rss:<url>`
+/// or `steam:<appid>:<channel>`: a game shown in two channels is tracked
+/// separately in each.
+model FeedCursor {
+  guildId   String
+  sourceKey String
+  seen      String    @default("[]")
+  checkedAt DateTime?
+  lastError String?
+
+  guild Guild @relation(fields: [guildId], references: [id], onDelete: Cascade)
+
+  @@id([guildId, sourceKey])
+}
+
+/// A staff note about a member. Deleting one only hides it; the owner can
+/// purge it for good, which removes its history along with it.
+model ModNote {
+  id        Int       @id @default(autoincrement())
+  guildId   String
+  userId    String
+  authorId  String
+  content   String
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+  deletedBy String?
+
+  guild Guild @relation(fields: [guildId], references: [id], onDelete: Cascade)
+
+  @@index([guildId, userId])
+}
+
+/// Everything staff do in the mod dashboard. `before` and `after` hold JSON
+/// snapshots so an edit or a removal can be read back in full.
+model ModAudit {
+  id           Int      @id @default(autoincrement())
+  guildId      String
+  at           DateTime @default(now())
+  actorId      String
+  actorName    String
+  actorRole    String
+  kind         String
+  targetUserId String?
+  infractionId Int?
+  noteId       Int?
+  summary      String
+  before       String?
+  after        String?
+
+  guild Guild @relation(fields: [guildId], references: [id], onDelete: Cascade)
+
+  @@index([guildId, at])
+  @@index([guildId, targetUserId])
+  @@index([infractionId])
+  @@index([noteId])
+}
+
+/// Who may open the mod dashboard for a server, and at what level. The
+/// instance owner is implied everywhere and never listed here.
+model StaffMember {
+  guildId String
+  userId  String
+  role    String
+  addedBy String
+  addedAt DateTime @default(now())
+
+  guild Guild @relation(fields: [guildId], references: [id], onDelete: Cascade)
+
+  @@id([guildId, userId])
 }
