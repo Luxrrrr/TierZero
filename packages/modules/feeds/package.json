@@ -1,0 +1,11 @@
+{
+  "name": "@tier0/module-feeds",
+  "version": "0.0.0",
+  "license": "AGPL-3.0-or-later",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": { "build": "tsc -b", "dev": "tsc -b --watch" },
+  "dependencies": { "@tier0/core": "workspace:*", "@tier0/db": "workspace:*", "fast-xml-parser": "5.11.1" },
+  "peerDependencies": { "discord.js": "^14.16.0" }
+}
