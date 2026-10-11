@@ -8,16 +8,33 @@ import { unbanCommand } from "./commands/unban.js";
 import { caseCommand } from "./commands/case.js";
 import { historyCommand } from "./commands/history.js";
 import { purgeCommand } from "./commands/purge.js";
-import { deactivateOpen, recordInfraction } from "./infractions.js";
+import { contextCommands, submitContextAction } from "./commands/context.js";
+import { deactivateOpen, latestOpenBan, recordInfraction } from "./infractions.js";
+import { banOutlivesTask } from "./action-rules.js";
 import { formatDirectMessage } from "./modlog.js";
 import { tryDirectMessage } from "./dm.js";
 import { postModLog } from "./reply.js";
+
+export { performAction, type PerformInput, type PerformOutcome } from "./perform.js";
+export {
+  ActionRefused,
+  actionContext,
+  commandForAction,
+  commandSwitchedOff,
+  disabledActions,
+  readRequestFields,
+  type ActionOrigin,
+} from "./action-rules.js";
+export { fetchMemberOrNull } from "./lookups.js";
+export type { InfractionRecord } from "./infractions.js";
+export type { ModerationSettings } from "./settings.js";
 
 export default defineModule({
   id: "moderation",
   name: "Moderation",
   summary: "Warnings, timeouts, kicks and bans with a searchable case history.",
   category: "moderation",
+  area: "moderation",
 
   settings: moderationSettings,
 
@@ -32,6 +49,10 @@ export default defineModule({
     purgeCommand,
   ],
 
+  contextCommands,
+
+  modals: { ctxact: submitContextAction },
+
   tasks: {
     // Lifts a temporary ban. This runs from the scheduled task table, not a
     // timer, so a ban issued just before a restart still gets lifted on time.
@@ -41,6 +62,7 @@ export default defineModule({
 
       const stillBanned = await ctx.guild.bans.fetch(userId).catch(() => null);
       if (!stillBanned) return;
+      if (banOutlivesTask(await latestOpenBan(ctx.guild.id, userId), new Date())) return;
 
       await ctx.guild.members.unban(userId, "Temporary ban expired").catch(() => undefined);
       await deactivateOpen(ctx.guild.id, userId, "ban");
