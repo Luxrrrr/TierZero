@@ -11,7 +11,7 @@ pnpm db:migrate
 pnpm dev
 ```
 
-That starts the bot and the dashboard, which is at http://localhost:8080. Fill in `.env` first. You need your own Discord application for this (token, client ID, client secret) and a server you own to test in. [docs/install.md](docs/install.md) walks through creating one.
+That starts the bot and the dashboard, which is at http://localhost:8080. Fill in `.env` first. You need your own Discord application for this (token, client ID, client secret) and a server you own to test in. [install.md](install.md) walks through creating one.
 
 ## Where things are
 
@@ -23,7 +23,7 @@ packages/db          Prisma schema and client
 packages/modules/*   feature modules
 ```
 
-`packages/core/src/schema.ts` is the best place to start. A lot of the design comes out of it. To add a feature, see [docs/modules.md](docs/modules.md). If a module seems to need its own dashboard page, the schema is probably missing a field type.
+`packages/core/src/schema.ts` is the best place to start. A lot of the design comes out of it. To add a feature, see [modules.md](modules.md). If a module seems to need its own dashboard page, the schema is probably missing a field type.
 
 ## Checks
 
@@ -39,7 +39,7 @@ Node runs TypeScript by stripping the types, so a file under test can't use synt
 
 ## Moderation records
 
-A few things in the moderation code will bite you if you don't know about them. [docs/architecture.md](docs/architecture.md) explains why they're this way.
+A few things in the moderation code will bite you if you don't know about them. [architecture.md](architecture.md) explains why they're this way.
 
 - Make cases with `createInfraction` from `@tier0/db`, not `prisma.infraction.create`. It assigns the case number, and a row inserted another way collides with the next case.
 - The slash commands and the dashboard share one code path for taking an action, `performAction` in `packages/modules/moderation/src/perform.ts`. A new action goes there so the two can't drift apart.
