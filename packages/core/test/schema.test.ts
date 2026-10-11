@@ -137,9 +137,9 @@ describe("array", () => {
   });
 
   test("reports the index of the offending entry", () => {
-    const result = s.array(s.channel()).parse([CHANNEL, "bad"], "hiddenIn");
+    const result = s.array(s.channel()).parse([CHANNEL, "bad"], "ignoreChannels");
     const [first] = errors(result);
-    assert.equal(first?.path, "hiddenIn[1]");
+    assert.equal(first?.path, "ignoreChannels[1]");
   });
 
   test("enforces min and max entries", () => {
@@ -197,6 +197,59 @@ describe("describe() for the dashboard", () => {
     const described = s.string({ label: "Name", help: "Shown in the embed" }).describe();
     assert.equal(described.label, "Name");
     assert.equal(described.help, "Shown in the embed");
+  });
+});
+
+describe("essential", () => {
+  test("reaches the dashboard from every kind of field", () => {
+    assert.equal(s.channel({ essential: true }).describe().essential, true);
+    assert.equal(s.role({ essential: true }).describe().essential, true);
+    assert.equal(s.string({ essential: true }).describe().essential, true);
+    assert.equal(s.duration({ essential: true }).describe().essential, true);
+    assert.equal(s.array(s.role(), { essential: true }).describe().essential, true);
+    assert.equal(s.object({}, { essential: true }).describe().essential, true);
+  });
+
+  test("is absent from a field that does not declare it", () => {
+    assert.equal("essential" in s.channel().describe(), false);
+  });
+
+  test("survives nesting, so a group's children keep their own flags", () => {
+    const described = s.object({
+      panel: s.object({ channel: s.channel({ essential: true }) }),
+    }).describe();
+    const fields = described.fields as Record<string, { fields: Record<string, { essential?: boolean }> }>;
+    assert.equal(fields.panel?.fields.channel?.essential, true);
+  });
+
+  test("does not make an optional field required", () => {
+    const field = s.object({ channel: s.channel({ optional: true, essential: true }) });
+    assert.equal(field.parse({}).ok, true);
+  });
+});
+
+describe("when", () => {
+  test("carries the sibling and the value it must equal", () => {
+    const described = s.duration({ when: { field: "action", equals: "timeout" } }).describe();
+    assert.deepEqual(described.when, { field: "action", equals: "timeout" });
+  });
+
+  test("may name a sibling without naming a value", () => {
+    const described = s.template({ when: { field: "channel" } }).describe();
+    assert.deepEqual(described.when, { field: "channel" });
+  });
+
+  test("is absent from a field that does not declare it", () => {
+    assert.equal("when" in s.template().describe(), false);
+  });
+
+  test("does not change what parses", () => {
+    const field = s.object({
+      enabled: s.boolean({ default: false }),
+      after: s.duration({ default: "24h", when: { field: "enabled", equals: true } }),
+    });
+    const parsed = value(field.parse({}));
+    assert.equal((parsed as Record<string, unknown>).after, 86_400_000);
   });
 });
 

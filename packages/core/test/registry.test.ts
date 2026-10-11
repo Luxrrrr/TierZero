@@ -22,6 +22,16 @@ function command(name: string) {
   };
 }
 
+function menu(name: string, kind: "user" | "message") {
+  return {
+    name,
+    description: `The ${name} entry.`,
+    kind,
+    build: () => ({ toJSON: () => ({ name }) }) as never,
+    async run() {},
+  };
+}
+
 function moduleWith(id: string, commands: string[] = []) {
   return defineModule({
     id,
@@ -81,6 +91,38 @@ describe("ownerOf", () => {
     assert.equal(registry.ownerOf("greet"), "welcome");
   });
 
+  test("finds the owner of a right-click entry too", () => {
+    const registry = new ModuleRegistry();
+    registry.register(
+      defineModule({
+        id: "menus",
+        name: "Menus",
+        summary: "Has a right-click entry.",
+        settings: s.object({}),
+        contextCommands: [menu("Warn member", "user")],
+      }),
+    );
+    assert.equal(registry.ownerOf("Warn member"), "menus");
+  });
+
+  test("rejects a right-click entry that reuses a command name", () => {
+    const registry = new ModuleRegistry();
+    registry.register(moduleWith("utility", ["ping"]));
+    assert.throws(
+      () =>
+        registry.register(
+          defineModule({
+            id: "menus",
+            name: "Menus",
+            summary: "Clashes.",
+            settings: s.object({}),
+            contextCommands: [menu("ping", "user")],
+          }),
+        ),
+      /claimed by both utility and menus/,
+    );
+  });
+
   test("returns undefined for a command no module owns", () => {
     const registry = new ModuleRegistry();
     registry.register(moduleWith("utility", ["ping"]));
@@ -97,9 +139,31 @@ describe("describe", () => {
     assert.equal(described?.id, "utility");
     assert.deepEqual(described?.requires, ["ManageRoles"]);
     assert.deepEqual(described?.commands, [
-      { name: "ping", description: "The ping command." },
+      { name: "ping", description: "The ping command.", kind: "slash" },
     ]);
     assert.equal(described?.schema.kind, "object");
+  });
+
+  test("lists right-click entries beside slash commands, marked by what they act on", () => {
+    const registry = new ModuleRegistry();
+    registry.register(
+      defineModule({
+        id: "menus",
+        name: "Menus",
+        summary: "Has right-click entries.",
+        settings: s.object({}),
+        commands: [command("ping")],
+        contextCommands: [menu("Warn member", "user"), menu("Warn author", "message")],
+      }),
+    );
+    assert.deepEqual(
+      registry.describe()[0]?.commands.map((c) => [c.name, c.kind]),
+      [
+        ["ping", "slash"],
+        ["Warn member", "user"],
+        ["Warn author", "message"],
+      ],
+    );
   });
 
   test("reports an empty requires list, never omits the key", () => {

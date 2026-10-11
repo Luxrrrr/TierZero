@@ -25,10 +25,36 @@ export type FieldKind =
 
 export type ChannelType = "text" | "voice" | "category" | "forum";
 
+/**
+ * A condition on a sibling field, meaning "this setting only matters when the
+ * other one says so". With `equals` left out the condition is met whenever the
+ * sibling holds anything at all.
+ */
+export interface FieldCondition {
+  field: string;
+  equals?: unknown;
+}
+
 export interface FieldMeta {
   label?: string;
   help?: string;
   optional?: boolean;
+  /**
+   * Marks a setting the module cannot work without. The dashboard uses it to
+   * tell a server owner that a feature is switched on but idle. Validation
+   * ignores it: an essential setting is still usually `optional`, because a
+   * module has to load unconfigured before anyone can configure it.
+   */
+  essential?: boolean;
+  /**
+   * Marks a setting the quick setup asks about. Essential fields are included
+   * whether or not they carry this, since nothing works until they are set;
+   * use it for the handful of others worth deciding before a feature is any
+   * use, and leave the rest to the full settings page.
+   */
+  guided?: boolean;
+  /** Dashboard-only. The field is still parsed and stored either way. */
+  when?: FieldCondition;
 }
 
 export type ParseResult<T> =

@@ -1,6 +1,8 @@
 import type {
   ChatInputCommandInteraction,
   Client,
+  ContextMenuCommandBuilder,
+  ContextMenuCommandInteraction,
   Guild,
   GuildBan,
   GuildChannel,
@@ -64,6 +66,21 @@ export interface CommandDefinition<T = unknown> {
   description: string;
   build(): CommandBuilder;
   run(interaction: ChatInputCommandInteraction, ctx: ModuleContext<T>): Promise<void>;
+}
+
+/**
+ * An entry in Discord's right-click menu, on a member or on a message. These
+ * share the command namespace and the Commands page with slash commands, so one
+ * can be switched off or limited to roles the same way.
+ */
+export interface ContextCommandDefinition<T = unknown> {
+  /** Must be unique across every command of every module; spaces and capitals are allowed. */
+  name: string;
+  description: string;
+  /** Whether it appears when right-clicking a member or a message. */
+  kind: "user" | "message";
+  build(): ContextMenuCommandBuilder;
+  run(interaction: ContextMenuCommandInteraction, ctx: ModuleContext<T>): Promise<void>;
 }
 
 export interface EventHandlers<T = unknown> {
@@ -136,6 +153,58 @@ export type ModalHandler<T = unknown> = (
 ) => Promise<void>;
 
 /**
+ * A short line shown beside one row of a list setting, such as whether a feed
+ * was read successfully the last time it was checked.
+ */
+export interface RowStatus {
+  tone: "ok" | "problem" | "idle";
+  text: string;
+}
+
+/** Where a row sits, handed to the hooks that act on rows. */
+export interface RowRef {
+  /** Dotted and indexed, as validation errors are: `patchNotes.destinations[0].games[1]`. */
+  path: string;
+  row: Record<string, unknown>;
+  /** The object that holds the list, so a row can be read in the context it sits in. */
+  parent: Record<string, unknown>;
+}
+
+export interface RowActionResult {
+  ok: boolean;
+  /** Shown to the person who pressed the button, so it should say what happened. */
+  message: string;
+}
+
+/**
+ * Something a person can do to one row of a list from the dashboard, without
+ * it being a setting: send a feed's latest posts now, say. The dashboard draws
+ * the button and the inputs from this description, so a module never ships UI.
+ */
+export interface RowAction<T = unknown> {
+  label: string;
+  /** Shown above the inputs, when there are any. */
+  help?: string;
+  /** What the action asks for before it runs. Left out, the button just runs. */
+  input?: ObjectField<Shape>;
+  run(args: {
+    ctx: ModuleContext<T>;
+    row: RowRef;
+    input: Record<string, unknown>;
+  }): Promise<RowActionResult>;
+}
+
+export interface RowHooks<T = unknown> {
+  /** One entry per row, in order. A null leaves that row without a status line. */
+  status?(args: {
+    ctx: ModuleContext<T>;
+    path: string;
+    rows: RowRef[];
+  }): Promise<(RowStatus | null)[]>;
+  actions?: Record<string, RowAction<T>>;
+}
+
+/**
  * Which section of the dashboard a module is configured under. The list is
  * closed: a module picking its own section name would leave the navigation
  * growing a new entry every time somebody wrote a module, and the point of
@@ -155,8 +224,17 @@ export interface ModuleDefinition<S extends Shape = Shape> {
   summary: string;
   /** Defaults to "utility" for a module that does not say. */
   category?: ModuleCategory;
+  /**
+   * A part of the dashboard that hosts this module's settings, for a feature
+   * that has a section of its own. The settings form is still drawn from the
+   * schema; only where it sits changes. Left out, the settings live on the
+   * module's own page.
+   */
+  area?: "moderation";
   settings: ObjectField<S>;
   commands?: CommandDefinition<ShapeValues<S>>[];
+  /** Entries for Discord's right-click menu on members and messages. */
+  contextCommands?: ContextCommandDefinition<ShapeValues<S>>[];
   events?: Partial<EventHandlers<ShapeValues<S>>>;
   /**
    * Handlers for work this module schedules. The kind a handler is keyed by is
@@ -168,6 +246,11 @@ export interface ModuleDefinition<S extends Shape = Shape> {
   components?: Record<string, ComponentHandler<ShapeValues<S>>>;
   /** Modal submission handlers, keyed by the action in their custom id. */
   modals?: Record<string, ModalHandler<ShapeValues<S>>>;
+  /**
+   * Status lines and actions for the rows of a list setting, keyed by the
+   * list's path in the schema without indices, such as `news.feeds`.
+   */
+  rows?: Record<string, RowHooks<ShapeValues<S>>>;
   /** Discord permissions the module cannot work without. Surfaced in setup. */
   requires?: string[];
   onEnable?(ctx: ModuleContext<ShapeValues<S>>): Promise<void>;

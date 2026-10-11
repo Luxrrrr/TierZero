@@ -7,9 +7,21 @@ export interface ModuleSummary {
   name: string;
   summary: string;
   category: ModuleCategory;
+  /** Where the dashboard hosts this module's settings, when not on its own page. */
+  area: "moderation" | null;
   requires: string[];
-  commands: { name: string; description: string }[];
+  commands: { name: string; description: string; kind: CommandKind }[];
   schema: FieldDescriptor;
+  /** Which list settings have a status line, and the actions on their rows. */
+  rows: Record<string, RowDescription>;
+}
+
+/** A slash command, or an entry in the right-click menu of a member or a message. */
+export type CommandKind = "slash" | "user" | "message";
+
+export interface RowDescription {
+  status: boolean;
+  actions: { id: string; label: string; help?: string; input?: FieldDescriptor }[];
 }
 
 /**
@@ -29,13 +41,15 @@ export class ModuleRegistry {
     if (this.modules.has(definition.id)) {
       throw new Error(`Duplicate module id: ${definition.id}`);
     }
-    for (const command of definition.commands ?? []) {
-      const owner = this.ownerOf(command.name);
+    const claimed = new Set<string>();
+    for (const command of [...(definition.commands ?? []), ...(definition.contextCommands ?? [])]) {
+      const owner = this.ownerOf(command.name) ?? (claimed.has(command.name) ? definition.id : undefined);
       if (owner) {
         throw new Error(
-          `Command /${command.name} is claimed by both ${owner} and ${definition.id}`,
+          `Command ${command.name} is claimed by both ${owner} and ${definition.id}`,
         );
       }
+      claimed.add(command.name);
     }
     this.modules.set(definition.id, definition as ModuleDefinition);
   }
@@ -50,7 +64,12 @@ export class ModuleRegistry {
 
   ownerOf(commandName: string): string | undefined {
     for (const module of this.modules.values()) {
-      if (module.commands?.some((c) => c.name === commandName)) return module.id;
+      if (
+        module.commands?.some((c) => c.name === commandName) ||
+        module.contextCommands?.some((c) => c.name === commandName)
+      ) {
+        return module.id;
+      }
     }
     return undefined;
   }
@@ -62,12 +81,35 @@ export class ModuleRegistry {
       name: module.name,
       summary: module.summary,
       category: module.category ?? "utility",
+      area: module.area ?? null,
       requires: module.requires ?? [],
-      commands: (module.commands ?? []).map((c) => ({
-        name: c.name,
-        description: c.description,
-      })),
+      commands: [
+        ...(module.commands ?? []).map((c) => ({
+          name: c.name,
+          description: c.description,
+          kind: "slash" as CommandKind,
+        })),
+        ...(module.contextCommands ?? []).map((c) => ({
+          name: c.name,
+          description: c.description,
+          kind: c.kind as CommandKind,
+        })),
+      ],
       schema: module.settings.describe(),
+      rows: Object.fromEntries(
+        Object.entries(module.rows ?? {}).map(([path, hooks]) => [
+          path,
+          {
+            status: hooks.status !== undefined,
+            actions: Object.entries(hooks.actions ?? {}).map(([id, action]) => ({
+              id,
+              label: action.label,
+              help: action.help,
+              input: action.input?.describe(),
+            })),
+          },
+        ]),
+      ),
     }));
   }
 
