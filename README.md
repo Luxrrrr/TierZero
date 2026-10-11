@@ -59,8 +59,19 @@ can switch one on or off per server whenever you like and it takes effect
 straight away. Nothing needs restarting. Individual commands can be hidden or
 locked to particular roles and channels the same way.
 
+The dashboard gives each server an overview of every feature and its state, a
+page per feature for its settings, one page listing every command on the
+server, and a moderation area for your staff.
+
 - **Moderation** — warn, timeout, kick, ban, temporary ban. Every action gets
   a numbered case, and role hierarchy is checked before anything is attempted.
+- **Moderation dashboard** — member records with staff notes, warn, timeout,
+  kick and ban from a member's profile, an action log you can export,
+  statistics including what automod did, and an audit trail of what staff
+  changed. Access is a list you control per server, separate from Manage
+  Server. Mistaken warns and timeouts can be taken off a record without losing
+  the history. Moderation and Automod settings sit in the same area. Staff can
+  also act from Discord's right-click menu on a member or a message.
 - **Automod** — invites, links, capitals, repeated text, mention limits,
   banned words, rate limiting. Seven rules, each with its own action and its
   own exemptions, all off by default.
@@ -72,6 +83,9 @@ locked to particular roles and channels the same way.
   changes, channels, roles, bans. Twelve categories, each with its own switch.
 - **Leveling** — experience for taking part, role rewards, a leaderboard. No
   generated image cards, on purpose.
+- **News and patch notes** — posts new items from RSS feeds and Steam patch
+  notes, as plain embeds with the game's logo. For sources you cannot follow
+  with Discord's own Follow button.
 - **Utility** — server and member info.
 
 [docs/features.md](docs/features.md) goes through what each one actually does,
