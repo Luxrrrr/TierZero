@@ -13,11 +13,10 @@ If you're already comfortable with a terminal, the [quick install](install.md) i
 5. Run one command to start it.
 6. Add the bot to your server and sign in.
 
-That's the whole thing. The Discord part in step 4 is the slowest, and the rest goes quickly. The last section is optional and covers letting your moderators use the dashboard from their own devices.
+The Discord part (step 4 below) is the slowest. The last section is optional and covers letting your moderators use the dashboard from their own devices.
 
 ## Contents
 
-- [Terms you might not know](#terms-you-might-not-know)
 - [Before you start](#before-you-start)
 - [Step 1: Install Docker](#step-1-install-docker)
 - [Step 2: Download TierZero](#step-2-download-tierzero)
@@ -32,18 +31,6 @@ That's the whole thing. The Discord part in step 4 is the slowest, and the rest 
 - [If something goes wrong](#if-something-goes-wrong)
 - [Optional: let moderators use the dashboard from anywhere](#optional-let-moderators-use-the-dashboard-from-anywhere)
 
-## Terms you might not know
-
-| Term | Meaning |
-| --- | --- |
-| Docker | Software that runs a program in its own sealed box, called a container, with everything it needs inside. TierZero ships as containers, so you install Docker instead of Node, a database and everything else by hand. |
-| `.env` file | A plain text file of settings that TierZero reads on startup. The name starts with a dot and has nothing before it, which can confuse Windows. |
-| Discord application | The record Discord keeps for your bot: its name, its token, and the sign-in settings the dashboard uses. You create one in the Developer Portal. |
-| Token and client secret | Two different passwords from your application. The token lets the bot log in to Discord. The client secret lets the dashboard sign people in. TierZero needs both. |
-| Privileged intents | Discord switches that let a bot see certain information, here who joins a server and what people post. They're off by default and you turn them on yourself. |
-| Redirect | The address Discord sends you back to after you sign in. It has to be on a list you set in the Developer Portal, and it has to match the address in your browser exactly. |
-| `localhost:8080` | An address that only works on the computer you're sitting at. `localhost` means this computer, and `8080` is the port, the numbered door the dashboard listens on. |
-
 ## Before you start
 
 You need three things.
@@ -55,6 +42,8 @@ You need three things.
 **A Discord server where you have the Manage Server permission.** This is a Discord permission and not something TierZero adds. If you created the server, you have it. If you didn't, ask the owner for a role that includes it (Server Settings, then Roles). Discord requires it to add a bot, and TierZero's dashboard only lists servers where you have it.
 
 ## Step 1: Install Docker
+
+Docker runs TierZero in a self-contained package, so you don't install its parts yourself.
 
 1. Go to [Docker's download page](https://docs.docker.com/get-docker/) and get **Docker Desktop** for your system.
 2. Run the installer. If it asks to enable WSL 2 or to restart, say yes.
@@ -96,7 +85,7 @@ The first line creates your settings file. The second creates the folder where T
 
 ## Step 4: Create the Discord application
 
-You'll copy three values from Discord. Open a notepad and paste each one in with its label as you go.
+A Discord application is the record Discord keeps for your bot. It holds the bot's name, its login token, and the settings the dashboard uses to sign people in. You'll copy three values from it. Open a notepad and paste each one in with its label as you go.
 
 1. Go to the [Discord Developer Portal](https://discord.com/developers/applications) and sign in.
 2. Click **New Application** in the top right. Name it what you want the bot to be called. That name is what members see. Accept the terms and click **Create**.
@@ -109,7 +98,7 @@ You'll copy three values from Discord. Open a notepad and paste each one in with
 2. Click **Reset Token** and confirm. Discord may ask for your password.
 3. Click **Copy** next to the token. Paste it into your notepad as `DISCORD_TOKEN`.
 
-Discord shows the token once. If you lose it, click **Reset Token** again for a new one.
+The token is what lets the bot log in to Discord. Discord shows it once. If you lose it, click **Reset Token** again for a new one.
 
 Also on the Bot page:
 
@@ -119,7 +108,7 @@ Also on the Bot page:
 **Value 3: the client secret.**
 
 1. In the left menu, click **OAuth2**.
-2. Find **Client Secret**. If it's hidden, click **Reset Secret**. Copy it and paste it into your notepad as `DISCORD_CLIENT_SECRET`.
+2. Find **Client Secret**. If it's hidden, click **Reset Secret**. Copy it and paste it into your notepad as `DISCORD_CLIENT_SECRET`. This one lets the dashboard sign people in, and it's separate from the token. You need both.
 
 On the same page, find **Redirects**, click **Add Redirect** and paste this exactly:
 
@@ -183,7 +172,7 @@ Choose your server and click **Authorize**. The bot appears in your member list.
 
 ## Step 8: Sign in
 
-1. Open your browser and go to <http://localhost:8080>.
+1. Open your browser and go to <http://localhost:8080>. That address means port 8080 on this computer, which is where the dashboard runs.
 2. Choose to sign in with Discord and approve.
 
 The first person to sign in becomes the owner of the install. The owner can use the moderation part of the dashboard on every server and decides who else can. Make sure that's you.
