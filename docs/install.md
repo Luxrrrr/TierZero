@@ -1,180 +1,205 @@
-# Installing TierZero
+# Quick install
 
-This guide covers a fresh install on a machine you control: a home server, a
-small VPS, or your own computer. It assumes you can copy a command into a
-terminal and edit a text file. It does not assume you write software.
+For a step-by-step version with every term explained, see the [beginner guide](install-beginner.md).
 
-The part people get stuck on is not the install. It is creating the Discord
-application, so that comes first and in detail.
+You need a computer to run it on, Docker, a Discord account, and a Discord server where you have the Manage Server permission. Without Docker, see [running from source](#running-from-source).
 
-## Before you start
+You can run it on your own PC, but the bot is only online while TierZero is running. If that PC is switched off, asleep or without internet, the bot is offline too. For a server people rely on, use something that stays on: an old PC or laptop, a Raspberry Pi, or the cheapest VPS tier. Any of those is enough.
 
-You need:
+Manage Server is one of Discord's own permissions. It's set on roles under Server Settings, Roles, and the server owner always has it. It isn't part of TierZero. Discord requires it to add a bot to a server, and the dashboard only lists servers where you have it, so it decides who can configure the bot.
 
-- A machine that stays on. A Raspberry Pi or the cheapest VPS tier is enough.
-- [Docker](https://docs.docker.com/get-docker/), or Node 20 and pnpm if you
-  would rather run it from source.
-- A Discord account, and the Manage Server permission on the server you want
-  the bot to run on.
+## In short
 
-## Step 1: Create the Discord application
+1. Create a Discord application and copy its token, client ID and client secret.
+2. Clone the repo, copy `.env.example` to `.env`, fill in those three plus two random secrets.
+3. `docker compose up -d`.
+4. Invite the bot with the OAuth link and sign in at `localhost:8080`.
 
-Everything the bot needs comes from one application you create once.
+Everything after that is optional: giving moderators access, putting the dashboard on a domain, updating and backups.
 
-1. Open the [Discord Developer Portal](https://discord.com/developers/applications)
-   and sign in.
-2. Press **New Application**, give it a name, and accept the terms. The name is
-   what members will see, so use the name you want the bot to have.
-3. On **General Information**, copy the **Application ID** and keep it
-   somewhere. This is your `DISCORD_CLIENT_ID`.
-4. Open the **Bot** tab.
-   - Press **Reset Token**, then copy the token. This is your `DISCORD_TOKEN`.
-     It is shown once. Lose it and you can just reset it again. Nothing breaks.
-   - Turn **Public Bot** off. You are hosting this for yourself, so nobody else
-     needs to be able to invite it.
-   - Under **Privileged Gateway Intents**, turn on **Server Members Intent**
-     and **Message Content Intent**. Without these the bot cannot see who joins
-     or read the messages that automatic moderation and leveling depend on, and
-     it will refuse to start.
-5. Open the **OAuth2** tab.
-   - Copy the **Client Secret**. Press **Reset Secret** first if it is hidden.
-     This is your `DISCORD_CLIENT_SECRET`.
-   - Under **Redirects**, add the address the dashboard will sign you in at,
-     then press **Save Changes**:
+## Contents
 
-     ```
-     http://localhost:8080/api/auth/callback/discord
-     ```
+- [1. Create the Discord application](#1-create-the-discord-application)
+- [2. Install](#2-install)
+- [3. Invite the bot and sign in](#3-invite-the-bot-and-sign-in)
+- [4. Configure it](#4-configure-it), including [moderator access](#moderator-access)
+- [Reaching the dashboard from other devices](#reaching-the-dashboard-from-other-devices): Cloudflare Tunnel, Tailscale, your own reverse proxy
+- [Updating](#updating) and [backups](#backups)
+- [Running from source](#running-from-source)
+- [Troubleshooting](#troubleshooting)
 
-     If you will reach the dashboard at a domain instead of on the machine
-     itself, use that, for example
-     `https://tierzero.example.com/api/auth/callback/discord`. It has to match
-     exactly, including `http` or `https`.
+## 1. Create the Discord application
 
-Your token is a password for the bot. Anyone who has it can do anything the bot
-can do. Do not put it in a screenshot, a support channel, or a public
-repository.
+You'll copy three values from here into `.env`, so do this first.
 
-## Step 2: Install
+1. Open the [Developer Portal](https://discord.com/developers/applications), click **New Application** and give it the name you want the bot to have.
+2. On **General Information**, copy the **Application ID**. This is `DISCORD_CLIENT_ID`.
+3. On the **Bot** tab:
+   - Click **Reset Token** and copy it. This is `DISCORD_TOKEN`. Discord shows it once. If you lose it, reset it again.
+   - Turn **Public Bot** off.
+   - Under **Privileged Gateway Intents**, turn on **Server Members Intent** and **Message Content Intent**. The bot won't start without them.
+4. On the **OAuth2** tab, copy the **Client Secret** (click **Reset Secret** if it's hidden). This is `DISCORD_CLIENT_SECRET`. Under **Redirects**, add the address below and save:
+
+   ```
+   http://localhost:8080/api/auth/callback/discord
+   ```
+
+   If you'll open the dashboard at a domain, add that instead, for example `https://tierzero.example.com/api/auth/callback/discord`. It has to match what's in your browser's address bar exactly, down to `http` versus `https`.
+
+Don't share the token or the client secret. The token controls the bot. The secret lets someone else pass themselves off as your dashboard's sign-in.
+
+## 2. Install
 
 ```
 git clone https://github.com/Luxrrrr/TierZero.git
 cd TierZero
 cp .env.example .env
+mkdir -p data
 ```
 
-Open `.env` and fill in the three values from step 1. Then generate the two
-secrets the dashboard signs its sessions with:
+Open `.env` and fill in the three Discord values. `AUTH_SECRET` and `INTERNAL_API_SECRET` need a random string each, and they have to be different from each other. The dashboard uses the first to secure its login cookies and the second to authenticate to the bot. Generate each with OpenSSL:
 
 ```
 openssl rand -hex 32
 ```
 
-Run it twice, once for `AUTH_SECRET` and once for `INTERNAL_API_SECRET`. On
-Windows without `openssl`, any long random string of letters and numbers will
-do, as long as the two are different.
-
-Leave the rest of the file alone. The defaults are correct for a Docker
-install.
+Each run prints 64 random hex characters. macOS and most Linux distributions already have `openssl`. On Debian or Ubuntu without it, run `sudo apt install openssl`. On Windows, it comes with Git for Windows (use Git Bash). If you'd rather not install anything, this PowerShell line does the same job. Run it twice:
 
 ```
-mkdir -p data
+$b = New-Object byte[] 32; [System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($b); -join ($b | ForEach-Object { $_.ToString('x2') })
+```
+
+Leave the other values alone. The defaults are correct for Docker.
+
+```
 docker compose up -d
 ```
 
-The first start builds the images, which takes a few minutes. After that it is
-seconds.
+The first run builds both images and takes a few minutes.
 
-## Step 3: Invite the bot and sign in
+## 3. Invite the bot and sign in
 
-Open the address below in a browser, replacing `YOUR_APPLICATION_ID` with the
-Application ID from step 1:
+Open this link, replacing `YOUR_APPLICATION_ID` with the Application ID:
 
 ```
 https://discord.com/oauth2/authorize?client_id=YOUR_APPLICATION_ID&permissions=1391837965526&scope=bot%20applications.commands
 ```
 
-Choose your server and confirm. The permissions requested cover every feature:
-managing roles and channels, kicking, banning and timing out members, managing
-and reading messages, and viewing the audit log. You can review them on the
-invite screen, and none of them are used until you turn the matching feature
-on. If you only want some features, you can grant less and re-run this link
-later to grant more.
+Choose your server and confirm. The link requests every permission any feature uses: managing roles and channels, kick, ban, timeout, managing and reading messages, and viewing the audit log. A permission isn't used until you switch on the feature that needs it. If you only want some features, grant fewer permissions now and open the link again later.
 
-Now open <http://localhost:8080> and sign in with Discord. The first account to
-sign in becomes the owner of this install. Your server appears in the list if
-you have Manage Server on it and the bot is a member.
+Then open <http://localhost:8080> and sign in with Discord. The first account to sign in becomes the owner of the install. The owner can use the moderation area on every server and decides which other people can (see [Moderator access](#moderator-access)). Your server is listed if you have Manage Server on it and the bot is a member.
 
-Pick your server. The overview lists every feature with a switch beside it, so
-turning one on is a single click and happens immediately. A feature that needs
-a channel or a role before it can do anything says "Needs setup" until you give
-it one.
+## 4. Configure it
 
-The sidebar holds the same features, grouped, each with a dot showing whether
-it is on. Open one to change its settings. The settings for Moderation and
-Automod are the exception: they sit on the Settings tab inside Moderation, next
-to the records and statistics, and the sidebar takes you there. A bar appears along the bottom of
-the page while you have unsaved edits; Save changes writes them, and the
-dashboard only says they are saved once the running bot has picked them up.
+Select your server. The overview lists every feature with a switch, and switching one on takes effect immediately. A feature that's missing a channel or role shows **Needs setup**.
 
-The Commands page lists every command on the server. Turn one off to remove it
-from Discord here, or restrict it to particular roles and keep it out of
-particular channels.
+- **Quick setup** in the sidebar asks only for the settings a feature can't work without.
+- Each feature has a settings page. Unsaved changes collect in a bar at the bottom of the page. The dashboard reports them as saved once the running bot has applied them.
+- **Commands** lists every command on the server. Each can be switched off, or limited to certain roles and channels.
 
-Nothing needs restarting, and a feature's commands only appear in Discord once
-that feature is on.
+### Moderator access
 
-Your moderators do not need Manage Server, and giving it to them would also let
-them change settings. Moderation has its own access list instead. Open
-Moderation in the sidebar, go to the Access tab, and add each person as a
-Moderator or an Admin. You, as the owner of the install, can use Moderation in
-every server without being listed. [docs/features.md](features.md#moderation-dashboard)
-explains what each level can do.
+For a moderator to use the dashboard, two things have to be true: they can reach it, and you've added them to the access list.
 
-## Running it from source instead
+**Reaching it.** The dashboard only opens at `localhost:8080` on the machine running TierZero, so a moderator on their own device can't see it yet. You have to make it reachable, either on a public domain with a Cloudflare Tunnel or on a private network with Tailscale. Both are covered in [Reaching the dashboard from other devices](#reaching-the-dashboard-from-other-devices). If you're the only person using the dashboard, you don't need either.
 
-If you would rather not use Docker:
+**The access list.** Moderation has its own list of who's allowed in. Open **Moderation**, go to the **Access** tab and add each person as Moderator or Admin. The owner is the only person who can use it without being added. [Features](features.md#moderation-dashboard) lists what each level can do.
+
+The list is separate from Discord's Manage Server permission on purpose. Giving a moderator Manage Server would also let them change TierZero's settings in the dashboard.
+
+## Reaching the dashboard from other devices
+
+The dashboard only opens on the machine running it, at `localhost:8080`. For moderators on their own devices, or for you on your phone, it has to be reachable some other way. Pick one:
+
+| | Cloudflare Tunnel | Tailscale | Your own reverse proxy |
+| --- | --- | --- | --- |
+| Who can reach it | Anyone with the address, then they sign in with Discord | Only you and the people you share the machine with, from any network, and only the port you allow | Anyone with the address, then they sign in |
+| You need | A domain on Cloudflare | A free Tailscale account, installed on every device | A domain, a certificate and a proxy you manage |
+| Ports to open on your router | None | None | 80 and 443 |
+
+If you don't follow this section, the [beginner guide](install-beginner.md#optional-let-moderators-use-the-dashboard-from-anywhere) walks through it step by step.
+
+### Cloudflare Tunnel (recommended)
+
+A Cloudflare Tunnel is the easiest way to put it on a public domain. A small program called `cloudflared` runs next to TierZero and makes an outbound connection to Cloudflare. Cloudflare then serves your dashboard on your domain over HTTPS. You don't open any ports on your router, you don't manage a certificate, and your home IP isn't exposed. It's free, but you need a domain whose DNS is on Cloudflare.
+
+1. Create a tunnel in the Cloudflare dashboard (Zero Trust, Networks, Tunnels) and run the connector command it gives you on the machine running TierZero. Cloudflare's [tunnel guide](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/) has the current steps, since their menus move around.
+2. Add a public hostname, such as `tierzero.example.com`, with the service set to `http://localhost:8080`. If `cloudflared` itself runs in Docker, `localhost` there means the container, so point it at the host instead (`http://host.docker.internal:8080` on Docker Desktop).
+3. In the Discord Developer Portal, add `https://tierzero.example.com/api/auth/callback/discord` under Redirects, using your own hostname. Keep the `localhost` one.
+
+That's all. `cloudflared` passes the original host through, so the header issue below doesn't apply. The dashboard works out its own address from each request, so there's no setting to change in `.env`.
+
+### Tailscale
+
+Tailscale links your devices into a private network, called a tailnet, over the internet. The devices don't need to be on the same local network. A phone on mobile data with Tailscale connected can reach your home machine the same way a laptop on your Wi-Fi can. Nothing outside the tailnet can reach it. It's a good fit when the people who need the dashboard are few and you can install an app on their devices, since there's no domain to buy and nothing public to expose.
+
+You share the machine running TierZero with each moderator. Tailscale's sharing gives the person access to that one machine and nothing else in your tailnet. They can't see your other devices, and the shared machine can't start connections to theirs. What sharing doesn't do on its own is limit which ports on that machine they can reach. Tailscale's default policy allows everything, and your policy applies to the people you share with, so by default they could reach every port on the machine: Remote Desktop, file sharing, anything listening. Step 4 closes that, so do it before you share.
+
+1. Install [Tailscale](https://tailscale.com/download) on the machine running TierZero and sign in. Note two things about it: its full name, which looks like `my-pc.tailnet-name.ts.net` and is on the Machines page of the admin console, and its Tailscale IP, which starts with `100.` and shows in the same place or with `tailscale ip -4`.
+2. In the Discord Developer Portal, add `http://my-pc.tailnet-name.ts.net:8080/api/auth/callback/discord` under Redirects, using your machine's full name. Keep the `localhost` one.
+3. Check you can open `http://my-pc.tailnet-name.ts.net:8080` on a device of your own with Tailscale connected, and sign in.
+4. Limit what shared people can reach. In the admin console, open the [Access controls](https://console.tailscale.com/admin/acls) page and edit the policy file. Two rules matter: your own devices keep full access, and anyone you share with can reach TCP port 8080 on the TierZero machine and nothing else. Use your machine's Tailscale IP and your own Tailscale account email:
+
+   ```
+   {
+     "grants": [
+       // Your own devices keep full access.
+       { "src": ["autogroup:member"], "dst": ["*"], "ip": ["*"] },
+
+       // People you share the TierZero machine with can reach port 8080 on it only.
+       { "src": ["autogroup:shared"], "dst": ["100.101.102.103"], "ip": ["tcp:8080"] }
+     ],
+
+     "tests": [
+       // Tailscale refuses to save the policy if this stops being true,
+       // so a mistake can't cut you off from your own machine.
+       { "src": "you@example.com", "proto": "tcp", "accept": ["100.101.102.103:3389"] }
+     ]
+   }
+   ```
+
+   The first rule replaces the default allow-everything rule. If your policy file has more than the default, such as tagged devices, subnet routers or SSH rules, keep those sections and rules, and make sure no rule still has `"src": ["*"]` pointing at the TierZero machine. A source of `*` applies to people you've shared with too, and would undo the limit. Port 3389 in the test is Remote Desktop. Use any port you rely on.
+5. Share the machine with each moderator. On the Machines page, open the menu on the TierZero machine, choose **Share**, then **Share by email**, and enter their email. Use email invites, not the shareable link, so you know exactly who has access. They accept with their own Tailscale account, and they don't need to use the invited email.
+6. The moderator installs Tailscale, signs in and accepts the share. They open `http://my-pc.tailnet-name.ts.net:8080` and sign in with Discord. A shared machine can only be reached by its full name, so the short name won't work for them. Then add them on the **Access** tab.
+
+To remove someone's access, open **Share** on the machine and choose **Revoke invite** from the menu on their invite. They lose access right away, and they'd need a new invite and acceptance to get it back.
+
+Dedicated hardware avoids the question altogether. If TierZero runs on its own machine, like a Raspberry Pi or a small server, then the only thing a moderator can ever reach is that machine.
+
+For your own devices, the short name (`http://my-pc:8080`) also reaches the dashboard through MagicDNS. Discord rejects a redirect address without a dot in the host, so signing in from it fails with "Not a well formed URL". Open the full name whenever you sign in.
+
+### Your own reverse proxy
+
+Nginx, Caddy or Traefik work too. Point the proxy at port 8080, give it a certificate, and add the redirect in the Developer Portal as above.
+
+One thing to check. When you save something in the moderation area (a note, a removal, a staff change), the dashboard makes sure the request came from its own page and not from some other website tricking your browser into sending it. It does that by comparing the site address the browser reports in the `Origin` header with the `Host` header, or the first `X-Forwarded-Host`, that the request arrived with. If your proxy replaces `Host` with an internal name and doesn't set `X-Forwarded-Host`, the two never match and every save fails with "This request did not come from the dashboard". Nginx replaces `Host` by default, so add this to the location block:
 
 ```
-pnpm install
-pnpm db:migrate
-pnpm --filter @tier0/bot dev     # in one terminal
-pnpm --filter @tier0/web dev     # in another
+proxy_set_header Host $host;
 ```
 
-Leave `CONTROL_HOST` unset so the bot only listens on the local machine, and
-set `CONTROL_API_URL=http://127.0.0.1:8081`.
+Caddy and Cloudflare Tunnel pass it through by default. Reading pages isn't affected, only saves.
 
-## Keeping it running
+### Things that apply either way
 
-**Updating.** Pull the new version and rebuild:
+Only the dashboard should be reachable from outside. The bot's control API listens on the private network between the two containers, and Docker Compose doesn't publish its port. Keep it that way. Anyone holding `INTERNAL_API_SECRET` can use the API, and only the dashboard should have it.
+
+Every address you sign in from needs its own entry under Redirects in the Developer Portal, so add one for each way you reach the dashboard.
+
+To decide which servers you can manage, the dashboard asks Discord for your server list and reuses the answer for a minute. If Discord is erroring or rate limiting, it reuses the last good answer for up to 15 minutes. If Discord rejects the request itself, it doesn't. Moderation access comes from your own list and doesn't use this lookup.
+
+## Updating
 
 ```
 git pull
 docker compose up -d --build
 ```
 
-Database changes are applied automatically when the dashboard starts. If you
-run from source, run `pnpm db:migrate` after pulling.
+Database migrations run when the dashboard starts. They only go forward, so copy `data/tier0.db` before updating. To go back to an older version, restore the copy.
 
-**Upgrading to the moderation dashboard.** This version adds the Moderation area
-and changes how moderation cases are stored. It brings two database changes. The
-first adds three tables, for staff notes, the audit trail and the list of staff,
-and rebuilds the table that holds cases so each one carries its own stored case
-number, plus the details of a removal. The second gives each server a counter
-for case numbers, starting at the highest number already in use. Every existing
-case keeps the number it had, and the next case follows it. Nothing needs doing by
-hand, but copy `data/tier0.db` somewhere safe before you update (see Backups
-below), because database changes only go forward and returning to the old
-version means restoring that copy.
-The dashboard applies the change as it starts, so give it a few seconds to come
-up before relying on the moderation commands.
+## Backups
 
-Until you add them, nobody except you, as the owner of the install, can open
-Moderation.
-
-**Backups.** Everything is in `data/tier0.db`. Copy that file somewhere safe.
-Stop the containers first if you want to be certain of a clean copy:
+All data is in `data/tier0.db`. Stop the containers first for a consistent copy:
 
 ```
 docker compose stop
@@ -182,85 +207,31 @@ cp data/tier0.db ~/tier0-backup.db
 docker compose start
 ```
 
-**Logs.** `docker compose logs -f bot` and `docker compose logs -f web`.
+Logs are in `docker compose logs -f bot` and `docker compose logs -f web`.
 
-## Putting it on a domain
+## Running from source
 
-The dashboard is the only part that should ever be reachable from the internet.
-The bot's control API listens on the private network between the two
-containers and its port is never published.
+```
+pnpm install
+pnpm db:migrate
+pnpm --filter @tier0/bot dev     # one terminal
+pnpm --filter @tier0/web dev     # another
+```
 
-Point a reverse proxy at port 8080, give it a certificate, then update two
-things: `DASHBOARD_URL` in `.env`, and the redirect address in the Discord
-Developer Portal, which must match the new one exactly.
+Leave `CONTROL_HOST` unset so the bot only listens on localhost, and set `CONTROL_API_URL=http://127.0.0.1:8081`.
 
-**Signing in from another device.** The dashboard tells Discord to send you back
-to whatever address you opened it at, so that address must be one Discord will
-accept and one you have added to the Redirects list in the Developer Portal
-(with `/api/auth/callback/discord` on the end). Discord answers "redirect_uri:
-Not a well formed URL" for a bare machine name such as `http://my-pc:8080`; it
-wants a name with a dot in it. On Tailscale that means the full name, for
-example `http://my-pc.tailnet-name.ts.net:8080`, which `tailscale status` shows
-as the machine's DNS name. Add each address you sign in from as its own
-redirect, and keep the `localhost` one for signing in on the machine itself.
+## Troubleshooting
 
-**Pass the host through.** When someone saves a note, removes an action or
-changes the staff list, the dashboard only accepts the request if the address
-the browser says it came from matches the address the request was sent to. It
-compares against the `Host` header, or the first value of `X-Forwarded-Host`.
-A proxy that rewrites `Host` to its own internal name and sends no
-`X-Forwarded-Host` makes every one of those saves fail with "This request did
-not come from the dashboard". nginx replaces `Host` by default, so with nginx
-add `proxy_set_header Host $host;` to the location that points at the dashboard.
-Reading pages is not affected, only changes.
-
-**Keep the control API private.** The bot's control API, port 8081, trusts
-whoever holds `INTERNAL_API_SECRET`, and the dashboard is the only thing meant
-to hold it. Do not publish that port or point the proxy at it. Under Compose the
-bot listens on all interfaces because that is how the dashboard container
-reaches it, which is safe only while the port stays unpublished. Running from
-source, leave `CONTROL_HOST` unset and the bot listens on the local machine
-only.
-
-**Sign-in lookups can be briefly out of date.** To decide which servers someone
-can manage, the dashboard asks Discord for their server list and reuses the
-answer for a minute. If Discord is having problems, an answer up to 15 minutes
-old is used so people are not locked out in the middle of a Discord outage. It
-is used only when Discord could not be reached or was overloaded. If Discord
-refuses the request, the old answer is not used. Access to Moderation is
-decided by your own staff list and does not depend on this lookup.
-
-## When something is wrong
-
-**The bot will not start and the log mentions disallowed intents.** Server
-Members Intent or Message Content Intent is switched off in the Developer
-Portal. Turn both on and restart.
-
-**The dashboard says the bot is not responding.** The bot container is not
-running or cannot be reached. Check `docker compose ps` and
-`docker compose logs bot`.
-
-**Signing in fails after choosing Discord.** The redirect address in the
-Developer Portal does not match the one the dashboard is served at. They have
-to be identical, including `http` against `https` and any trailing path.
-
-**Your server is not in the list.** You need Manage Server on it, and the bot
-has to be a member. Both, not either.
-
-**Saving a note or removing an action fails with "This request did not come from
-the dashboard".** The dashboard is behind a reverse proxy that does not pass the
-original host through. See "Putting it on a domain" above.
-
-**Someone on your team signs in and sees no servers.** They are not on the
-Moderation access list for that server and do not have Manage Server. Add them
-on the Access tab under Moderation, as the owner of the install.
-
-**Moderation says it has no statistics, or the Audit tab is missing.** After an
-update the bot may still be running the old version. Restart it with
-`docker compose up -d --build` and reload the page. The Audit tab is there only
-for admins and the owner, which is intended.
-
-**Commands do not appear in Discord.** A feature's commands only exist while
-that feature is on. Turn it on and give it a few seconds. Registration is held
-back a few seconds by design, so flipping several switches at once sends one
-request and not six.
+| Problem | Cause | Fix |
+| --- | --- | --- |
+| Bot won't start, log mentions disallowed intents | Server Members Intent or Message Content Intent is off | Turn both on in the Developer Portal, then restart |
+| Dashboard says the bot isn't responding | The bot container is stopped or unreachable | `docker compose ps`, then `docker compose logs bot` |
+| Sign-in fails after choosing Discord | The redirect in the Developer Portal doesn't match the address in your browser | Make them identical, including `http` versus `https` |
+| "Not a well formed URL" from Discord | The dashboard address has no dot in its host | Use the full name (the `.ts.net` one on Tailscale) and add it as a redirect |
+| A moderator can't open the dashboard at all | It only opens on the machine running TierZero by default | See [Reaching the dashboard from other devices](#reaching-the-dashboard-from-other-devices) |
+| Your server isn't listed | You lack Manage Server there, or the bot isn't a member | You need both |
+| "This request did not come from the dashboard" when saving | The reverse proxy isn't passing the host through | See [Reaching the dashboard from other devices](#reaching-the-dashboard-from-other-devices) |
+| Channel or role lists won't load | Discord rate limited the server list lookup | Wait 30 seconds and reload |
+| A teammate signs in and sees no servers | They aren't on the Moderation list and lack Manage Server | Add them on the Access tab |
+| No moderation statistics, or no Audit tab | The bot is running an old version, or you aren't an admin | Run `docker compose up -d --build`. Only admins and the owner see Audit |
+| Commands don't show up in Discord | A feature's commands only exist while it's switched on | Switch the feature on and wait a few seconds |
