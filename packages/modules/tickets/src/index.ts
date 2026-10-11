@@ -32,6 +32,7 @@ const settingsSchema = s.object({
       channel: s.channel({
         types: ["text"],
         optional: true,
+        essential: true,
         label: "Panel channel",
         help: "Where the ticket panel is posted. Until this is set there is nowhere to publish it.",
       }),
@@ -49,10 +50,12 @@ const settingsSchema = s.object({
   category: s.channel({
     types: ["category"],
     optional: true,
+    essential: true,
     label: "Ticket category",
     help: "New ticket channels are created under this category. Tickets cannot be opened until it is set.",
   }),
   supportRoles: s.array(s.role(), {
+    guided: true,
     label: "Support roles",
     help: "Roles that can see every ticket and manage them.",
     min: 1,
@@ -66,12 +69,18 @@ const settingsSchema = s.object({
   }),
   transcript: s.object(
     {
-      enabled: s.boolean({ label: "Save a transcript when a ticket closes", default: true }),
+      enabled: s.boolean({
+        label: "Save a transcript when a ticket closes",
+        default: true,
+        guided: true,
+      }),
       channel: s.channel({
         types: ["text"],
         label: "Transcript channel",
         help: "Where closed ticket transcripts are posted.",
         optional: true,
+        guided: true,
+        when: { field: "enabled", equals: true },
       }),
     },
     { label: "Transcripts" },
@@ -83,6 +92,7 @@ const settingsSchema = s.object({
         label: "Close after this much inactivity",
         default: "24h",
         max: "7d",
+        when: { field: "enabled", equals: true },
       }),
     },
     { label: "Inactivity" },

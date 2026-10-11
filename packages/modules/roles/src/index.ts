@@ -18,7 +18,6 @@ const optionField = s.object({
   emoji: s.emoji({ optional: true, label: "Emoji" }),
   label: s.string({ label: "Label", max: 80 }),
   role: s.role({ label: "Role to grant" }),
-  description: s.string({ optional: true, max: 100, label: "Description" }),
 });
 
 type OptionSettings = Infer<typeof optionField>;

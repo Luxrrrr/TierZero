@@ -37,11 +37,13 @@ const settingsSchema = s.object({
         label: "Announce level-ups in",
         types: ["text"],
         optional: true,
+        guided: true,
       }),
       message: s.template({
         label: "Level-up message",
         placeholders: ["user", "level"],
         default: "{user} reached level {level}!",
+        when: { field: "channel" },
       }),
     },
     {

@@ -51,13 +51,16 @@ export default defineModule({
       channel: s.channel({
         types: ["text"],
         optional: true,
+        guided: true,
         label: "Channel to greet in",
         help: "Left unset, no greeting is posted.",
       }),
       message: s.template({
         optional: true,
+        guided: true,
         placeholders: [...PLACEHOLDERS],
         label: "Greeting message",
+        help: "Posted in the channel above. Both need to be set for anything to be sent.",
       }),
       embed: s.boolean({ default: false, label: "Send the greeting as an embed" }),
       roles: s.array(s.role(), {
@@ -84,6 +87,7 @@ export default defineModule({
         optional: true,
         placeholders: [...PLACEHOLDERS],
         label: "Farewell message",
+        help: "Posted in the channel above. Both need to be set for anything to be sent.",
       }),
       embed: s.boolean({ default: false, label: "Send the farewell as an embed" }),
       dm: s.template({

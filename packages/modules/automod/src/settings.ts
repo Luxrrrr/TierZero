@@ -7,7 +7,7 @@ import { s, type Infer } from "@tier0/core";
  */
 function ruleFields(defaultAction: "delete" | "warn" | "timeout", defaultTimeout: string) {
   return {
-    enabled: s.boolean({ label: "On", default: false }),
+    enabled: s.boolean({ label: "On", default: false, guided: true }),
     action: s.choice({
       label: "What to do when it trips",
       options: [
@@ -19,9 +19,9 @@ function ruleFields(defaultAction: "delete" | "warn" | "timeout", defaultTimeout
     }),
     timeoutDuration: s.duration({
       label: "Timeout length",
-      help: "Only used when the action above is set to time out.",
       default: defaultTimeout,
       max: "28d",
+      when: { field: "action", equals: "timeout" },
     }),
     exemptRoles: s.array(s.role(), { label: "Roles exempt from this rule" }),
     exemptChannels: s.array(s.channel({ types: ["text"] }), {
@@ -32,6 +32,7 @@ function ruleFields(defaultAction: "delete" | "warn" | "timeout", defaultTimeout
 
 export const settings = s.object({
   exemptRoles: s.array(s.role(), {
+    guided: true,
     label: "Roles automod never acts on",
     help: "Members with any of these roles are ignored by every rule below.",
   }),
@@ -45,6 +46,7 @@ export const settings = s.object({
   logChannel: s.channel({
     types: ["text"],
     optional: true,
+    guided: true,
     label: "Post automod actions in",
   }),
 

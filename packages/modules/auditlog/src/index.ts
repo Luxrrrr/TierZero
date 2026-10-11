@@ -9,6 +9,7 @@ const settingsSchema = s.object({
   channel: s.channel({
     types: ["text"],
     optional: true,
+    essential: true,
     label: "Log channel",
     help: "Left unset, nothing is logged.",
   }),

@@ -26,9 +26,6 @@ export default defineModule({
       label: "Show join dates on /userinfo",
       default: true,
     }),
-    hiddenIn: s.array(s.channel({ types: ["text"] }), {
-      label: "Channels where these commands are ignored",
-    }),
   }),
 
   commands: [
