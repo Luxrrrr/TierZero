@@ -1,10 +1,13 @@
-import { createServer, type IncomingMessage } from "node:http";
+import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { timingSafeEqual } from "node:crypto";
-import { ChannelType, type Client } from "discord.js";
+import { ChannelType, type Client, type NonThreadGuildBasedChannel } from "discord.js";
 import type { ModuleRegistry } from "@tier0/core";
 import type { GuildState } from "../runtime/guild-state.js";
 import type { CommandSync } from "../runtime/commands.js";
 import { config } from "../config.js";
+import { rowStatuses, runRowAction } from "./rows.js";
+import { handleMod } from "./mod/index.js";
+import { rawHeaders, type Reply } from "./mod/types.js";
 
 interface Deps {
   client: Client;
@@ -23,10 +26,15 @@ interface Deps {
  * different machine.
  */
 export function startControlApi({ client, registry, state, commands }: Deps): void {
-  const server = createServer(async (req, res) => {
+  const handle = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
     const send = (status: number, body: unknown) => {
       res.writeHead(status, { "content-type": "application/json" });
       res.end(JSON.stringify(body));
+    };
+    const sendReply = (reply: Reply) => {
+      if (!reply.raw) return send(reply.status, reply.body);
+      res.writeHead(reply.status, rawHeaders(reply.raw));
+      res.end(reply.raw.text);
     };
 
     const url = new URL(req.url ?? "/", "http://control");
@@ -45,7 +53,9 @@ export function startControlApi({ client, registry, state, commands }: Deps): vo
         client.guilds.cache.map((guild) => ({
           id: guild.id,
           name: guild.name,
-          icon: guild.iconURL(),
+          // The hash rather than iconURL(), because the dashboard builds its
+          // own URL and asks the CDN for the size that surface needs.
+          icon: guild.icon,
           memberCount: guild.memberCount,
         })),
       );
@@ -53,6 +63,62 @@ export function startControlApi({ client, registry, state, commands }: Deps): vo
 
     if (url.pathname === "/modules") {
       return send(200, registry.describe());
+    }
+
+    const modMatch = /^\/guilds\/(\d+)\/mod\/(.+)$/.exec(url.pathname);
+    if (modMatch) {
+      const [, guildId, rest] = modMatch;
+      const guild = guildId === undefined ? undefined : client.guilds.cache.get(guildId);
+      if (!guild || rest === undefined) return send(404, { error: "guild not found" });
+
+      let parsed: unknown = undefined;
+      if (req.method !== "GET") {
+        const body = await readJsonBody(req);
+        if (!body.ok) return send(400, { error: body.error });
+        parsed = body.value;
+      }
+      const segments = decodeSegments(rest);
+      if (!segments) return send(400, { error: "the path is not valid" });
+      const reply = await handleMod({
+        client,
+        guild,
+        state,
+        method: req.method ?? "GET",
+        segments,
+        query: url.searchParams,
+        body: parsed,
+      });
+      return reply ? sendReply(reply) : send(404, { error: "not found" });
+    }
+
+    const rowsMatch =/^\/guilds\/(\d+)\/modules\/([^/]+)\/rows\/([^/]+)\/(status|actions\/([^/]+))$/.exec(
+      url.pathname,
+    );
+    if (rowsMatch) {
+      const [, guildId, moduleId, encodedPath, what, actionId] = rowsMatch;
+      const guild = guildId === undefined ? undefined : client.guilds.cache.get(guildId);
+      if (!guild || moduleId === undefined || encodedPath === undefined) {
+        return send(404, { error: "guild not found" });
+      }
+      let path: string;
+      try {
+        path = decodeURIComponent(encodedPath);
+      } catch {
+        return send(400, { error: "the path is not valid" });
+      }
+
+      if (what === "status" && req.method === "GET") {
+        const reply = await rowStatuses(registry, state, guild, moduleId, path);
+        return send(reply.status, reply.body);
+      }
+      if (actionId !== undefined && req.method === "POST") {
+        const body = await readJsonBody(req);
+        if (!body.ok) return send(400, { error: body.error });
+        if (!isPlainObject(body.value)) return send(400, { error: "body must be a JSON object" });
+        const reply = await runRowAction(registry, state, guild, moduleId, path, actionId, body.value.input);
+        return send(reply.status, reply.body);
+      }
+      return send(404, { error: "not found" });
     }
 
     const moduleMatch = /^\/guilds\/(\d+)\/modules\/([^/]+)$/.exec(url.pathname);
@@ -100,7 +166,14 @@ export function startControlApi({ client, registry, state, commands }: Deps): vo
 
     const commandMatch = /^\/guilds\/(\d+)\/commands\/([^/]+)$/.exec(url.pathname);
     if (commandMatch) {
-      const [, guildId, commandName] = commandMatch;
+      const [, guildId, rawName] = commandMatch;
+      // Right-click entries have spaces in their names, which arrive percent-encoded.
+      let commandName: string | undefined;
+      try {
+        commandName = rawName === undefined ? undefined : decodeURIComponent(rawName);
+      } catch {
+        return send(400, { error: "that command name is not valid" });
+      }
       const guild = guildId === undefined ? undefined : client.guilds.cache.get(guildId);
       if (!guild || commandName === undefined) return send(404, { error: "guild not found" });
       if (!registry.ownerOf(commandName)) return send(404, { error: "unknown command" });
@@ -142,8 +215,16 @@ export function startControlApi({ client, registry, state, commands }: Deps): vo
         return send(
           200,
           guild.channels.cache
-            .filter((c) => TEXTUAL.has(c.type) || c.type === ChannelType.GuildVoice)
-            .map((c) => ({ id: c.id, name: c.name, type: c.type })),
+            .filter((c): c is NonThreadGuildBasedChannel => PICKABLE.has(c.type))
+            .map((c) => ({
+              id: c.id,
+              name: c.name,
+              type: c.type,
+              // The dashboard groups the picker by category and orders it the
+              // way Discord does, which needs both of these.
+              parentId: c.parentId,
+              position: c.position,
+            })),
         );
       }
 
@@ -172,6 +253,21 @@ export function startControlApi({ client, registry, state, commands }: Deps): vo
     }
 
     return send(404, { error: "not found" });
+  };
+
+  // Nothing thrown while handling a request may reach the process: an uncaught
+  // error here would take the gateway connection down with it. The caller gets
+  // a plain 500 and the detail stays in the log.
+  const server = createServer((req, res) => {
+    handle(req, res).catch((error: unknown) => {
+      console.error(`Control API request failed (${req.method} ${req.url?.split("?")[0]}):`, error);
+      if (res.headersSent) {
+        res.destroy();
+        return;
+      }
+      res.writeHead(500, { "content-type": "application/json" });
+      res.end(JSON.stringify({ error: "The bot could not complete that request. The bot log has the details." }));
+    });
   });
 
   // Without this, a port clash surfaces as an unhandled 'error' event and a
@@ -193,7 +289,17 @@ export function startControlApi({ client, registry, state, commands }: Deps): vo
   });
 }
 
-const TEXTUAL = new Set([ChannelType.GuildText, ChannelType.GuildAnnouncement]);
+/**
+ * Categories are here as well as the rest: a ticket category is a setting in
+ * its own right, and the picker needs them to head its groups either way.
+ */
+const PICKABLE = new Set<ChannelType>([
+  ChannelType.GuildText,
+  ChannelType.GuildAnnouncement,
+  ChannelType.GuildVoice,
+  ChannelType.GuildForum,
+  ChannelType.GuildCategory,
+]);
 
 function authorized(header: string | undefined): boolean {
   if (!header?.startsWith("Bearer ")) return false;
@@ -220,6 +326,15 @@ function readJsonBody(req: IncomingMessage): Promise<BodyResult> {
       }
     });
   });
+}
+
+/** Splits a path tail and decodes each piece; null when any piece has a malformed percent sequence. */
+function decodeSegments(rest: string): string[] | null {
+  try {
+    return rest.split("/").map(decodeURIComponent);
+  } catch {
+    return null;
+  }
 }
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {

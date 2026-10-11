@@ -1,0 +1,79 @@
+import type { Guild } from "discord.js";
+import { resolveList, resolveRow, schemaPathOf, type ModuleRegistry } from "@tier0/core";
+import type { RowStatus } from "@tier0/core";
+import type { GuildState } from "../runtime/guild-state.js";
+
+export interface Reply {
+  status: number;
+  body: unknown;
+}
+
+const NOT_FOUND: Reply = { status: 404, body: { error: "not found" } };
+
+/** Status lines for every row of one list setting. */
+export async function rowStatuses(
+  registry: ModuleRegistry,
+  state: GuildState,
+  guild: Guild,
+  moduleId: string,
+  listPath: string,
+): Promise<Reply> {
+  const hook = registry.get(moduleId)?.rows?.[schemaPathOf(listPath) ?? ""]?.status;
+  if (!hook) return NOT_FOUND;
+
+  const ctx = await state.context(guild, moduleId);
+  if (!ctx) return NOT_FOUND;
+  const rows = resolveList(ctx.settings, listPath);
+  if (!rows) return NOT_FOUND;
+
+  let statuses: (RowStatus | null)[];
+  try {
+    statuses = await hook({ ctx, path: listPath, rows });
+  } catch (error) {
+    console.error(`[${moduleId}] row status for ${listPath} failed:`, error);
+    return { status: 500, body: { error: "could not read the status" } };
+  }
+  return { status: 200, body: { statuses } };
+}
+
+/** Runs one action against one row, using the settings as last saved. */
+export async function runRowAction(
+  registry: ModuleRegistry,
+  state: GuildState,
+  guild: Guild,
+  moduleId: string,
+  rowPath: string,
+  actionId: string,
+  rawInput: unknown,
+): Promise<Reply> {
+  const action = registry.get(moduleId)?.rows?.[schemaPathOf(rowPath) ?? ""]?.actions?.[actionId];
+  if (!action) return NOT_FOUND;
+
+  if (!(await state.isEnabled(guild.id, moduleId))) {
+    return { status: 200, body: { ok: false, message: "Turn this feature on first." } };
+  }
+
+  const ctx = await state.context(guild, moduleId);
+  if (!ctx) return NOT_FOUND;
+  const row = resolveRow(ctx.settings, rowPath);
+  if (!row) {
+    return {
+      status: 200,
+      body: { ok: false, message: "That entry is not in the saved settings. Save your changes, then try again." },
+    };
+  }
+
+  let input: Record<string, unknown> = {};
+  if (action.input) {
+    const parsed = action.input.parse(rawInput ?? {});
+    if (!parsed.ok) return { status: 422, body: { errors: parsed.errors } };
+    input = parsed.value as Record<string, unknown>;
+  }
+
+  try {
+    return { status: 200, body: await action.run({ ctx, row, input }) };
+  } catch (error) {
+    console.error(`[${moduleId}] action ${actionId} on ${rowPath} failed:`, error);
+    return { status: 200, body: { ok: false, message: "Something went wrong. Check the bot's log." } };
+  }
+}
