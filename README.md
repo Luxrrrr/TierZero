@@ -10,7 +10,7 @@ Your server's data stays on the machine you run it on.
 
 ## Status
 
-Everything listed below works and is running on a real server. There's no tagged release yet, so settings and the database can still change between commits. If you're going to build on the internals, read [docs/architecture.md](docs/architecture.md) first.
+[v0.1.0](https://github.com/Luxrrrr/TierZero/releases) is the first release, and it's a beta. Everything listed below works, but settings and the database can still change between releases. If you're going to build on the internals, read [docs/architecture.md](docs/architecture.md) first.
 
 ## Requirements
 
