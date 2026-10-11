@@ -29,19 +29,22 @@ export default async function SetupPage() {
     }
 
     return (
-      <AuthCard mark="0">
-        <h1>Set up TierZero</h1>
-        <p>
+      <AuthCard mark="0" brand={false}>
+        <h1 className="auth-title">Set up TierZero</h1>
+        <p className="auth-text">
           Nobody owns this installation yet. Sign in with the Discord account
-          you want to manage it with — the first account to sign in here
-          becomes the instance owner.
+          you want to manage it with. The first account to sign in here becomes
+          the owner.
         </p>
-        <form action={signInWithDiscord}>
-          <button type="submit" className="btn btn-primary">
-            <DiscordMark />
-            Sign in with Discord
-          </button>
-        </form>
+        <div className="auth-actions">
+          <form action={signInWithDiscord}>
+            <button type="submit" className="btn btn-discord btn-block">
+              <DiscordMark />
+              Continue with Discord
+            </button>
+          </form>
+        </div>
+        <p className="auth-foot">This screen is shown once, on a fresh install.</p>
       </AuthCard>
     );
   }

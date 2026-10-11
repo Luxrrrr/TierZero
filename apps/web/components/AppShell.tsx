@@ -1,93 +1,140 @@
 "use client";
 
-import Link from "next/link";
-import { useRouter, usePathname } from "next/navigation";
-import useSWR from "swr";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import { initialsOf } from "../lib/discord-cdn";
-import { SignOutIcon } from "./Icons";
-
-interface Guild {
-  id: string;
-  name: string;
-  icon: string | null;
-}
+import { usePathname } from "next/navigation";
+import { MobileTopbar } from "./MobileTopbar";
+import { RailTooltip } from "./RailTooltip";
+import { ToastProvider } from "./Toaster";
 
 interface Props {
-  user: { name: string | null | undefined; image: string | null | undefined };
-  signOutAction(): Promise<void>;
+  /** The sidebar's contents, rendered on the server and passed through. */
+  sidebar: ReactNode;
+  /** Shown in the narrow-screen top bar, where the sidebar is hidden. */
+  title: string;
   children: ReactNode;
 }
 
-const fetcher = (url: string) => fetch(url).then((r) => (r.ok ? r.json() : []));
+const DRAWER_BREAKPOINT = "(max-width: 900px)";
+
+const FOCUSABLE =
+  'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 /**
- * The frame around every signed-in page: the wordmark, a switcher to jump
- * between servers without going back to the list, and the signed-in
- * account. The switcher fetches the same /api/guilds route the server list
- * uses, so it degrades the same way (empty when the bot is offline) rather
- * than needing its own error handling.
+ * The frame around every signed-in page. Below the breakpoint the sidebar
+ * becomes a drawer, which is the only reason this is a client component: the
+ * navigation itself is server-rendered and arrives as a prop.
  */
-export function AppShell({ user, signOutAction, children }: Props) {
-  const router = useRouter();
+export function AppShell({ sidebar, title, children }: Props) {
+  const [drawer, setDrawer] = useState(false);
+  const [open, setOpen] = useState(false);
   const pathname = usePathname();
-  const { data: guilds } = useSWR<Guild[]>("/api/guilds", fetcher);
+  const sidebarRef = useRef<HTMLElement>(null);
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
 
-  const currentId = /^\/guilds\/([^/]+)/.exec(pathname ?? "")?.[1];
+  const close = useCallback(() => {
+    setOpen(false);
+    menuButtonRef.current?.focus();
+  }, []);
+
+  useEffect(() => {
+    const query = window.matchMedia(DRAWER_BREAKPOINT);
+    const update = () => {
+      setDrawer(query.matches);
+      if (!query.matches) setOpen(false);
+    };
+    update();
+    query.addEventListener("change", update);
+    return () => query.removeEventListener("change", update);
+  }, []);
+
+  // Off-canvas is a transform, so without this the hidden sidebar keeps its
+  // place in the tab order and a keyboard user falls into invisible links.
+  useEffect(() => {
+    sidebarRef.current?.toggleAttribute("inert", drawer && !open);
+  }, [drawer, open]);
+
+  // Navigating is the drawer's whole purpose, so a completed navigation
+  // closes it. The ref keeps the very first render from counting as one.
+  const lastPath = useRef(pathname);
+  useEffect(() => {
+    if (lastPath.current === pathname) return;
+    lastPath.current = pathname;
+    if (open) close();
+  }, [pathname, open, close]);
+
+  useEffect(() => {
+    if (!open) return;
+
+    const node = sidebarRef.current;
+    node?.querySelector<HTMLElement>(FOCUSABLE)?.focus();
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        close();
+        return;
+      }
+      if (event.key !== "Tab" || !node) return;
+
+      const focusable = Array.from(node.querySelectorAll<HTMLElement>(FOCUSABLE));
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (!first || !last) return;
+
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      } else if (!node.contains(document.activeElement)) {
+        event.preventDefault();
+        first.focus();
+      }
+    }
+
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [open, close]);
 
   return (
-    <div className="shell">
-      <header className="shell-header">
-        <Link href="/guilds" className="shell-brand">
-          <span className="mark">0</span>
-          TierZero
-        </Link>
+    <ToastProvider>
+      <a className="skip-link" href="#main-content">
+        Skip to content
+      </a>
+      <div className="app">
+        <aside id="app-sidebar" className="sidebar" data-open={open ? "true" : undefined} ref={sidebarRef}>
+          {sidebar}
+        </aside>
 
-        {guilds && guilds.length > 0 ? (
-          <div className="shell-switcher">
-            <label htmlFor="guild-switcher" className="visually-hidden">
-              Switch server
-            </label>
-            <select
-              id="guild-switcher"
-              value={currentId ?? ""}
-              onChange={(e) => {
-                if (e.target.value) router.push(`/guilds/${e.target.value}`);
-              }}
-            >
-              <option value="" disabled>
-                Switch server…
-              </option>
-              {guilds.map((guild) => (
-                <option key={guild.id} value={guild.id}>
-                  {guild.name}
-                </option>
-              ))}
-            </select>
-          </div>
-        ) : (
-          <div className="shell-spacer" />
-        )}
+        <div
+          className="sidebar-scrim"
+          data-open={open ? "true" : undefined}
+          onClick={close}
+          aria-hidden="true"
+        />
 
-        <div className="shell-user">
-          <span className="shell-user-avatar" aria-hidden="true">
-            {user.image ? (
-              <img src={user.image} alt="" width={28} height={28} />
-            ) : (
-              initialsOf(user.name ?? "?")
-            )}
-          </span>
-          <span className="shell-user-name">{user.name ?? "Signed in"}</span>
-          <form action={signOutAction}>
-            <button type="submit" className="btn btn-ghost btn-sm">
-              <SignOutIcon />
-              Sign out
-            </button>
-          </form>
+        <div className="app-main">
+          <MobileTopbar
+            title={title}
+            open={open}
+            onOpen={() => setOpen(true)}
+            buttonRef={menuButtonRef}
+          />
+          <main className="app-content" id="main-content" tabIndex={-1}>
+            {children}
+          </main>
         </div>
-      </header>
-
-      <div className="shell-main">{children}</div>
-    </div>
+      </div>
+      <RailTooltip />
+    </ToastProvider>
   );
 }

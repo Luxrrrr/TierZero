@@ -1,22 +1,14 @@
 import type { ReactNode } from "react";
 import { redirect } from "next/navigation";
-import { auth, signOut } from "../../lib/auth";
-import { AppShell } from "../../components/AppShell";
+import { auth } from "../../lib/auth";
 
 // Every route under /guilds needs a signed-in user, so the check happens
-// once here, so each page below does not repeat it.
+// once here and no page below repeats it. The shell itself is rendered
+// further down: the per-guild subtree needs the guild's modules to build
+// its navigation, and a layout cannot see the segment below it.
 export default async function GuildsLayout({ children }: { children: ReactNode }) {
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
 
-  async function signOutAction() {
-    "use server";
-    await signOut({ redirectTo: "/login" });
-  }
-
-  return (
-    <AppShell user={{ name: session.user.name, image: session.user.image }} signOutAction={signOutAction}>
-      {children}
-    </AppShell>
-  );
+  return <>{children}</>;
 }

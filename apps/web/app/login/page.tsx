@@ -18,15 +18,21 @@ export default async function LoginPage() {
   }
 
   return (
-    <AuthCard mark="0">
-      <h1>TierZero</h1>
-      <p>Sign in with the Discord account you use to manage your server.</p>
-      <form action={signInWithDiscord}>
-        <button type="submit" className="btn btn-primary">
-          <DiscordMark />
-          Sign in with Discord
-        </button>
-      </form>
+    <AuthCard mark="0" brand={false}>
+      <h1 className="auth-title">Sign in to TierZero</h1>
+      <p className="auth-text">
+        Use your Discord account. TierZero shows the servers you manage and the
+        ones where you have been given moderation access.
+      </p>
+      <div className="auth-actions">
+        <form action={signInWithDiscord}>
+          <button type="submit" className="btn btn-discord btn-block">
+            <DiscordMark />
+            Continue with Discord
+          </button>
+        </form>
+      </div>
+      <p className="auth-foot">Self-hosted. Your data stays on your server.</p>
     </AuthCard>
   );
 }
