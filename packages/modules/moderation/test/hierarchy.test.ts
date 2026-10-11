@@ -1,6 +1,6 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { checkHierarchy } from "../dist/hierarchy.js";
+import { checkHierarchy, checkStanding, NOT_IN_SERVER } from "../dist/hierarchy.js";
 
 function base() {
   return {
@@ -125,5 +125,69 @@ describe("actions that do not ask Discord for anything", () => {
       requiresDiscordAction: false,
     });
     assert.equal(result.allowed, false);
+  });
+});
+
+describe("checkStanding for a dashboard actor", () => {
+  function standing() {
+    return {
+      actor: { topRole: 10, isServerOwner: false } as { topRole: number; isServerOwner: boolean } | null,
+      actorIsInstanceOwner: false,
+      target: { topRole: 5, isServerOwner: false },
+      botTopRole: 20,
+      requiresDiscordAction: true,
+    };
+  }
+
+  test("weighs a staff member in the server by their real roles", () => {
+    assert.deepEqual(checkStanding(standing()), { allowed: true });
+    const result = checkStanding({ ...standing(), actor: { topRole: 5, isServerOwner: false } });
+    assert.equal(result.allowed, false);
+    assert.equal(result.allowed === false ? result.rule : "", "actor-rank");
+  });
+
+  test("weighs the instance owner by their real roles when they are in the server", () => {
+    const result = checkStanding({
+      ...standing(),
+      actorIsInstanceOwner: true,
+      actor: { topRole: 3, isServerOwner: false },
+    });
+    assert.equal(result.allowed, false);
+  });
+
+  test("refuses staff who are not in the server", () => {
+    const result = checkStanding({ ...standing(), actor: null });
+    assert.deepEqual(result, { allowed: false, reason: NOT_IN_SERVER, rule: "actor-rank" });
+  });
+
+  test("trusts the instance owner who is not in the server past the actor comparison", () => {
+    const result = checkStanding({
+      ...standing(),
+      actor: null,
+      actorIsInstanceOwner: true,
+      target: { topRole: 15, isServerOwner: false },
+    });
+    assert.deepEqual(result, { allowed: true });
+  });
+
+  test("still holds the instance owner to the bot's own position", () => {
+    const result = checkStanding({
+      ...standing(),
+      actor: null,
+      actorIsInstanceOwner: true,
+      target: { topRole: 25, isServerOwner: false },
+    });
+    assert.equal(result.allowed === false ? result.rule : "", "bot-rank");
+  });
+
+  test("never lets the instance owner act on the server owner", () => {
+    const result = checkStanding({
+      ...standing(),
+      actor: null,
+      actorIsInstanceOwner: true,
+      target: { topRole: 0, isServerOwner: true },
+      requiresDiscordAction: false,
+    });
+    assert.equal(result.allowed === false ? result.rule : "", "server-owner");
   });
 });

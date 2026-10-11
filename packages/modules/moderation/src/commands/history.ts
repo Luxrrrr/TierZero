@@ -4,6 +4,21 @@ import type { ModerationSettings } from "../settings.js";
 import { historyFor } from "../infractions.js";
 import { actionLabel } from "../modlog.js";
 
+/** The embed /history and the right-click menu both show, or null when the member has no record. */
+export async function historyEmbed(guildId: string, userId: string, username: string): Promise<EmbedBuilder | null> {
+  const records = await historyFor(guildId, userId);
+  if (records.length === 0) return null;
+
+  const lines = records.map((record) => {
+    const seconds = Math.floor(record.createdAt.getTime() / 1000);
+    const status = record.active ? "" : " (reversed)";
+    const reason = record.reason ?? "No reason given";
+    return `**#${record.caseNumber}** ${actionLabel(record.action)}${status} - ${reason} - <t:${seconds}:d>`;
+  });
+
+  return new EmbedBuilder().setTitle(`Moderation history for ${username}`).setDescription(lines.join("\n"));
+}
+
 export const historyCommand: CommandDefinition<ModerationSettings> = {
   name: "history",
   description: "List a member's moderation history.",
@@ -17,26 +32,15 @@ export const historyCommand: CommandDefinition<ModerationSettings> = {
       ),
   async run(interaction, ctx) {
     const target = interaction.options.getUser("member", true);
-    const records = await historyFor(ctx.guild.id, target.id);
+    const embed = await historyEmbed(ctx.guild.id, target.id, target.username);
 
-    if (records.length === 0) {
+    if (!embed) {
       await interaction.reply({
         content: `${target.username} has no recorded history.`,
         flags: MessageFlags.Ephemeral,
       });
       return;
     }
-
-    const lines = records.map((record) => {
-      const seconds = Math.floor(record.createdAt.getTime() / 1000);
-      const status = record.active ? "" : " (reversed)";
-      const reason = record.reason ?? "No reason given";
-      return `**#${record.caseNumber}** ${actionLabel(record.action)}${status} - ${reason} - <t:${seconds}:d>`;
-    });
-
-    const embed = new EmbedBuilder()
-      .setTitle(`Moderation history for ${target.username}`)
-      .setDescription(lines.join("\n"));
 
     await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
   },

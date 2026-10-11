@@ -28,17 +28,23 @@ export interface HierarchyCheck {
   requiresDiscordAction: boolean;
 }
 
-export type HierarchyResult = { allowed: true } | { allowed: false; reason: string };
+/** Which rule refused, so a caller can word the refusal for where it is shown. */
+export type HierarchyRule = "server-owner" | "actor-rank" | "bot-rank";
+
+export type HierarchyResult =
+  | { allowed: true }
+  | { allowed: false; reason: string; rule: HierarchyRule };
 
 export function checkHierarchy(check: HierarchyCheck): HierarchyResult {
   if (check.targetIsOwner) {
-    return { allowed: false, reason: "The server owner cannot be actioned." };
+    return { allowed: false, reason: "The server owner cannot be actioned.", rule: "server-owner" };
   }
 
   if (!check.actorIsOwner && check.targetTopRole >= check.actorTopRole) {
     return {
       allowed: false,
       reason: "You cannot action someone with a role equal to or higher than your own.",
+      rule: "actor-rank",
     };
   }
 
@@ -48,8 +54,47 @@ export function checkHierarchy(check: HierarchyCheck): HierarchyResult {
     return {
       allowed: false,
       reason: "My highest role is not above theirs, so Discord won't let me do that.",
+      rule: "bot-rank",
     };
   }
 
   return { allowed: true };
+}
+
+export interface StandingCheck {
+  /** The acting staff member's place in the server, or null when they are not a member of it. */
+  actor: { topRole: number; isServerOwner: boolean } | null;
+  /**
+   * The person running this TierZero install. They may act on a server they
+   * have not joined, so they are trusted past the actor-versus-target
+   * comparison, but never past the bot's own position or the server owner.
+   */
+  actorIsInstanceOwner: boolean;
+  target: { topRole: number; isServerOwner: boolean };
+  botTopRole: number;
+  requiresDiscordAction: boolean;
+}
+
+export const NOT_IN_SERVER =
+  "You need to be a member of this server to take moderation actions here, because the bot compares your roles with theirs.";
+
+/**
+ * The hierarchy rule for an action taken from the dashboard, where the person
+ * acting may not be in the server at all. A member is weighed by their real
+ * roles; the instance owner who is not a member is treated as the server
+ * owner would be; anyone else who is not a member cannot be weighed and is
+ * refused.
+ */
+export function checkStanding(check: StandingCheck): HierarchyResult {
+  if (!check.actor && !check.actorIsInstanceOwner) {
+    return { allowed: false, reason: NOT_IN_SERVER, rule: "actor-rank" };
+  }
+  return checkHierarchy({
+    actorTopRole: check.actor?.topRole ?? 0,
+    targetTopRole: check.target.topRole,
+    botTopRole: check.botTopRole,
+    targetIsOwner: check.target.isServerOwner,
+    actorIsOwner: check.actor ? check.actor.isServerOwner : true,
+    requiresDiscordAction: check.requiresDiscordAction,
+  });
 }

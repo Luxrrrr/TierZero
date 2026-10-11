@@ -6,7 +6,7 @@ import {
   type PartialMessage,
 } from "discord.js";
 import { defineModule, type ModuleContext } from "@tier0/core";
-import { prisma } from "@tier0/db";
+import { createInfraction } from "@tier0/db";
 import { settings, type AutomodSettings } from "./settings.js";
 import { evaluateMessage, type EvaluationVerdict, type RuleAction } from "./evaluator.js";
 import { AutomodState } from "./state.js";
@@ -21,6 +21,7 @@ export default defineModule({
   name: "Automod",
   summary: "Filters invites, links, spam and banned words, each rule independently switchable.",
   category: "moderation",
+  area: "moderation",
   settings,
 
   events: {
@@ -120,16 +121,14 @@ async function recordInfraction(
   timeoutMs: number | undefined,
 ): Promise<void> {
   try {
-    await prisma.infraction.create({
-      data: {
-        guildId: ctx.guild.id,
-        userId: member.id,
-        moderatorId: ctx.client.user?.id ?? "0",
-        action: `automod-${action}`,
-        reason: reason ? `${rule}: ${reason}` : rule,
-        expiresAt: action === "timeout" && timeoutMs ? new Date(Date.now() + timeoutMs) : null,
-        active: action === "timeout",
-      },
+    await createInfraction({
+      guildId: ctx.guild.id,
+      userId: member.id,
+      moderatorId: ctx.client.user?.id ?? "0",
+      action: `automod-${action}`,
+      reason: reason ? `${rule}: ${reason}` : rule,
+      expiresAt: action === "timeout" && timeoutMs ? new Date(Date.now() + timeoutMs) : null,
+      active: action === "timeout",
     });
   } catch (error) {
     console.error("[automod] failed to record infraction:", error);
