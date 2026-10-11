@@ -36,3 +36,21 @@ describe("matchesChannelTypes", () => {
     assert.equal(matchesChannelTypes(TEXT, ["nonsense"]), false);
   });
 });
+
+describe("announcement channels", () => {
+  const ANNOUNCEMENT = 5;
+
+  test("counts as a text channel, since anything postable in one posts in the other", () => {
+    assert.equal(matchesChannelTypes(ANNOUNCEMENT, ["text"]), true);
+  });
+
+  test("can still be asked for by name", () => {
+    assert.equal(matchesChannelTypes(ANNOUNCEMENT, ["announcement"]), true);
+    assert.equal(matchesChannelTypes(TEXT, ["announcement"]), false);
+  });
+
+  test("is not offered where a voice or category channel is wanted", () => {
+    assert.equal(matchesChannelTypes(ANNOUNCEMENT, ["voice"]), false);
+    assert.equal(matchesChannelTypes(ANNOUNCEMENT, ["category"]), false);
+  });
+});

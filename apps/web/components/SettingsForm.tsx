@@ -1,197 +1,444 @@
 "use client";
 
-import { useRef, useState } from "react";
-import type { FieldDescriptor } from "@tier0/core";
-import { ChannelPicker, RolePicker } from "./pickers";
+import type { ReactNode } from "react";
+import type { FieldCondition, FieldDescriptor, RowDescription } from "@tier0/core";
+import { describeDuration } from "../lib/duration";
+import { isBlank } from "../lib/module-status";
+import { humanize } from "../lib/row-summary";
 import { arrayItemPath, objectChildPath } from "../lib/schema-paths";
-import { AlertIcon } from "./Icons";
+// Imported one file at a time rather than through the barrel, which re-exports
+// this module in turn.
+import { ChannelPicker, MultiChannelPicker } from "./form/ChannelPicker";
+import { DurationInput } from "./form/DurationInput";
+import { Field, type FieldChrome } from "./form/Field";
+import { ObjectArray, type RowsContext } from "./form/ObjectArray";
+import { MultiRolePicker, RolePicker } from "./form/RolePicker";
+import { Switch } from "./form/Switch";
+import { TagInput } from "./form/TagInput";
+import { TemplateEditor } from "./form/TemplateEditor";
 
 interface Props {
   schema: FieldDescriptor;
   value: Record<string, unknown>;
   guildId: string;
   onChange(next: Record<string, unknown>): void;
+  /** Keyed by the dotted, indexed path the bot reports a failure against. */
   errors?: Record<string, string>;
+  /** Set while a save is in flight, so nothing can be edited underneath it. */
+  disabled?: boolean;
+  /** Substituted into message previews. */
+  serverName?: string;
+  /**
+   * Heading for the card holding every field that is not a group of its own.
+   * The quick setup shows a handful of fields out of a much larger schema,
+   * where "General" reads as though something has been left out.
+   */
+  generalLabel?: string;
+  /** The module being edited, for the row status lines and actions the bot offers. */
+  moduleId?: string;
+  /** Which of its lists have a status line or actions, keyed by schema path. */
+  rows?: Record<string, RowDescription>;
+  /** Why row actions cannot run right now; null when they can. */
+  actionsLocked?: string | null;
+  /** The draft has edits the bot has not been given, so its view of the rows is stale. */
+  dirty?: boolean;
+  /** Bumped by the page each time a save lands, so lists ask the bot again. */
+  savedRevision?: number;
 }
+
+interface RenderContext {
+  guildId: string;
+  errors: Record<string, string>;
+  disabled: boolean;
+  serverName: string | undefined;
+  rows: RowsContext | undefined;
+}
+
+type Fields = Record<string, FieldDescriptor>;
 
 /**
  * Renders a module's settings page from its schema.
  *
  * This is the only place in the dashboard that knows what a settings control
- * looks like. A new module gets its form from here without adding a line of UI
- * code, which is the whole reason the schema carries display metadata.
+ * looks like. A new module gets its form from here without a line of UI code of
+ * its own, which is the whole reason the schema carries display metadata.
  */
-export function SettingsForm({ schema, value, guildId, onChange, errors = {} }: Props) {
-  const fields = Object.entries(schema.fields as Record<string, FieldDescriptor>);
+export function SettingsForm({
+  schema,
+  value,
+  guildId,
+  onChange,
+  errors = {},
+  disabled = false,
+  serverName,
+  generalLabel = "General",
+  moduleId,
+  rows,
+  actionsLocked = null,
+  dirty = false,
+  savedRevision = 0,
+}: Props) {
+  const fields = (schema.fields ?? {}) as Fields;
+  const entries = Object.entries(fields);
+  const ctx: RenderContext = {
+    guildId,
+    errors,
+    disabled,
+    serverName,
+    rows:
+      moduleId !== undefined && rows !== undefined
+        ? { moduleId, descriptions: rows, locked: actionsLocked, dirty, revision: savedRevision }
+        : undefined,
+  };
+
+  const loose = entries.filter(([, field]) => field.kind !== "object");
+  const firstLooseKey = loose[0]?.[0];
+
+  const cards: ReactNode[] = [];
+  for (const [key, field] of entries) {
+    if (field.kind !== "object") {
+      // Everything that is not a group of its own shares one card, drawn where
+      // the first of them appears.
+      if (key !== firstLooseKey) continue;
+      cards.push(
+        <section className="card settings-group" id="group-general" key="group-general">
+          <div className="card-header">
+            <div className="card-header-text">
+              <h2 className="card-title" id="group-general-title">
+                {generalLabel}
+              </h2>
+            </div>
+          </div>
+          <div className="settings-group-body">
+            {loose.map(([looseKey, looseField]) =>
+              renderChild(looseKey, looseField, fields, value, "", ctx, onChange),
+            )}
+          </div>
+        </section>,
+      );
+      continue;
+    }
+
+    cards.push(
+      <Group
+        key={key}
+        groupKey={key}
+        field={field}
+        value={asRecord(value[key])}
+        ctx={ctx}
+        onChange={(next) => onChange({ ...value, [key]: next })}
+      />,
+    );
+  }
+
+  return <div className="settings-groups">{cards}</div>;
+}
+
+interface GroupProps {
+  groupKey: string;
+  field: FieldDescriptor;
+  value: Record<string, unknown>;
+  ctx: RenderContext;
+  onChange(next: Record<string, unknown>): void;
+}
+
+/**
+ * A top-level object is a card. When its first field is a boolean called
+ * `enabled`, that switch belongs in the header rather than the body: it governs
+ * everything below it, and reading it as one more setting in the list makes the
+ * group look off when it is on.
+ */
+function Group({ groupKey, field, value, ctx, onChange }: GroupProps) {
+  const fields = (field.fields ?? {}) as Fields;
+  const entries = Object.entries(fields);
+  const [first] = entries;
+  const switchField =
+    first !== undefined && first[0] === "enabled" && first[1].kind === "boolean"
+      ? first[1]
+      : undefined;
+  const body = switchField ? entries.slice(1) : entries;
+
+  const enabled = switchField
+    ? typeof value.enabled === "boolean"
+      ? value.enabled
+      : switchField.default === true
+    : true;
+  const titleId = `group-${groupKey}-title`;
 
   return (
-    <div className="settings-form">
-      {fields.map(([key, field]) => (
-        <FieldRow
-          key={key}
-          name={key}
-          path={key}
-          field={field}
-          value={value[key]}
-          guildId={guildId}
-          errors={errors}
-          onChange={(next) => onChange({ ...value, [key]: next })}
-        />
-      ))}
-    </div>
+    <section className="card settings-group" id={`group-${groupKey}`}>
+      <div className="card-header">
+        <div className="card-header-text">
+          <h2 className="card-title" id={titleId}>
+            {field.label ?? humanize(groupKey)}
+          </h2>
+          {field.help ? <p className="card-help">{field.help}</p> : null}
+        </div>
+        {switchField ? (
+          <div className="card-header-actions">
+            <span className="switch-labelled">
+              <span className="switch-text">{enabled ? "On" : "Off"}</span>
+              <Switch
+                checked={enabled}
+                disabled={ctx.disabled}
+                aria-labelledby={titleId}
+                onChange={(next) => onChange({ ...value, enabled: next })}
+              />
+            </span>
+          </div>
+        ) : null}
+      </div>
+      <div className="settings-group-body" data-off={enabled ? undefined : "true"}>
+        {body.map(([key, child]) =>
+          renderChild(key, child, fields, value, groupKey, ctx, onChange),
+        )}
+      </div>
+    </section>
   );
 }
 
-interface RowProps {
+/** One field of an object: either a nested group, or a labelled control. */
+function renderChild(
+  key: string,
+  field: FieldDescriptor,
+  siblings: Fields,
+  values: Record<string, unknown>,
+  parentPath: string,
+  ctx: RenderContext,
+  onChange: (next: Record<string, unknown>) => void,
+): ReactNode {
+  const path = objectChildPath(parentPath, key);
+  const condition = field.when as FieldCondition | undefined;
+  const met = conditionMet(condition, values);
+  const dependency = met ? undefined : dependencySentence(condition, siblings);
+  const setValue = (next: unknown) => onChange({ ...values, [key]: next });
+
+  if (field.kind === "object") {
+    const childFields = (field.fields ?? {}) as Fields;
+    const childValues = asRecord(values[key]);
+    return (
+      <div className="subgroup" key={key}>
+        <h3 className="subgroup-title">{field.label ?? humanize(key)}</h3>
+        {field.help ? <p className="field-help">{field.help}</p> : null}
+        {dependency ? <p className="field-dependency">{dependency}</p> : null}
+        <div className="form-grid">
+          {Object.entries(childFields).map(([childKey, childField]) =>
+            renderChild(
+              childKey,
+              childField,
+              childFields,
+              childValues,
+              path,
+              met ? ctx : { ...ctx, disabled: true },
+              (next) => setValue(next),
+            ),
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <ControlField
+      key={key}
+      name={key}
+      path={path}
+      field={field}
+      value={values[key]}
+      dependency={dependency}
+      unavailable={!met}
+      ctx={ctx}
+      onChange={setValue}
+    />
+  );
+}
+
+interface ControlFieldProps {
   name: string;
   path: string;
   field: FieldDescriptor;
   value: unknown;
-  guildId: string;
-  errors: Record<string, string>;
+  dependency: string | undefined;
+  unavailable: boolean;
+  ctx: RenderContext;
   onChange(next: unknown): void;
 }
 
-/** A field's own label, help and error, wrapped around whatever control renders it. */
-function FieldRow({ name, path, field, value, guildId, errors, onChange }: RowProps) {
-  const label = field.label ?? humanise(name);
+function ControlField({
+  name,
+  path,
+  field,
+  value,
+  dependency,
+  unavailable,
+  ctx,
+  onChange,
+}: ControlFieldProps) {
   const id = htmlId(path);
-  const error = errors[path];
+  const label = field.label ?? humanize(name);
+  const disabled = ctx.disabled || unavailable;
+  const error = ctx.errors[path];
+  const optional = field.optional === true && field.essential !== true;
+
+  const shared = {
+    id,
+    label,
+    help: field.help as string | undefined,
+    dependency,
+    error,
+    optional,
+    disabled,
+  };
+
+  if (field.kind === "boolean") {
+    return (
+      <Field {...shared} layout="row">
+        {(chrome) => (
+          <Switch
+            id={chrome.id}
+            checked={value === true}
+            disabled={chrome.disabled}
+            aria-labelledby={chrome.labelId}
+            aria-describedby={chrome.describedBy}
+            onChange={onChange}
+          />
+        )}
+      </Field>
+    );
+  }
 
   return (
-    <div className="field" data-invalid={error ? "true" : undefined}>
-      <label htmlFor={id}>{label}</label>
-      {field.help ? <p className="help">{field.help}</p> : null}
-      <Control
-        id={id}
-        path={path}
-        field={field}
-        value={value}
-        guildId={guildId}
-        errors={errors}
-        onChange={onChange}
-      />
-      {error ? (
-        <p className="error" role="alert">
-          <AlertIcon />
-          {error}
-        </p>
-      ) : null}
-    </div>
+    <Field
+      {...shared}
+      hint={hintFor(field, value)}
+      span={wantsWholeRow(field)}
+      labelFor={!isComposite(field)}
+    >
+      {(chrome) => control(chrome, { name, path, field, value, ctx, onChange })}
+    </Field>
   );
 }
 
 interface ControlProps {
-  id: string;
+  name: string;
   path: string;
   field: FieldDescriptor;
   value: unknown;
-  guildId: string;
-  errors: Record<string, string>;
+  ctx: RenderContext;
   onChange(next: unknown): void;
 }
 
-function Control({ id, path, field, value, guildId, errors, onChange }: ControlProps) {
+function control(chrome: FieldChrome, props: ControlProps): ReactNode {
+  const { field, value, ctx, onChange } = props;
+  const common = {
+    id: chrome.id,
+    disabled: chrome.disabled,
+    "aria-describedby": chrome.describedBy,
+  };
+
   switch (field.kind) {
     case "string":
       return field.multiline ? (
         <textarea
-          id={id}
+          {...common}
+          className="textarea"
           rows={4}
-          value={(value as string) ?? ""}
           maxLength={field.max as number | undefined}
-          onChange={(e) => onChange(e.target.value)}
+          value={(value as string) ?? ""}
+          onChange={(event) => onChange(event.target.value || undefined)}
         />
       ) : (
         <input
-          id={id}
+          {...common}
+          className="input"
           type="text"
-          value={(value as string) ?? ""}
           maxLength={field.max as number | undefined}
-          onChange={(e) => onChange(e.target.value)}
+          value={(value as string) ?? ""}
+          onChange={(event) => onChange(event.target.value || undefined)}
         />
       );
 
     case "integer":
       return (
         <input
-          id={id}
+          {...common}
+          className="input input-narrow"
           type="number"
-          value={(value as number) ?? ""}
+          inputMode="numeric"
           min={field.min as number | undefined}
           max={field.max as number | undefined}
-          onChange={(e) => onChange(e.target.value === "" ? undefined : Number(e.target.value))}
-        />
-      );
-
-    case "boolean":
-      return (
-        <input
-          id={id}
-          type="checkbox"
-          checked={Boolean(value)}
-          onChange={(e) => onChange(e.target.checked)}
+          value={typeof value === "number" ? String(value) : ""}
+          onChange={(event) =>
+            onChange(event.target.value === "" ? undefined : Number(event.target.value))
+          }
         />
       );
 
     case "duration":
       return (
-        <input
-          id={id}
-          type="text"
-          placeholder="30s, 15m, 2h, 7d"
-          value={(value as string) ?? ""}
-          onChange={(e) => onChange(e.target.value)}
+        <DurationInput
+          {...common}
+          label={field.label ?? humanize(props.name)}
+          value={value}
+          max={field.max as string | undefined}
+          onChange={onChange}
         />
       );
 
-    case "choice":
+    case "choice": {
+      const options = (field.options ?? []) as { value: string; label: string }[];
+      const current = typeof value === "string" ? value : "";
       return (
-        <select id={id} value={(value as string) ?? ""} onChange={(e) => onChange(e.target.value)}>
-          {(field.options as { value: string; label: string }[]).map((option) => (
+        <select
+          {...common}
+          className="select"
+          value={current}
+          onChange={(event) => onChange(event.target.value || undefined)}
+        >
+          {options.some((option) => option.value === current) ? null : (
+            <option value="">Choose an option</option>
+          )}
+          {options.map((option) => (
             <option key={option.value} value={option.value}>
               {option.label}
             </option>
           ))}
         </select>
       );
+    }
 
     case "emoji":
       return (
-        <div className="emoji-field">
-          <input
-            id={id}
-            type="text"
-            className="emoji-input"
-            placeholder="🙂 or <:name:id>"
-            value={(value as string) ?? ""}
-            onChange={(e) => onChange(e.target.value)}
-          />
-          <p className="hint">
-            A unicode emoji, or Discord&apos;s custom form: <code>&lt;:name:id&gt;</code> or{" "}
-            <code>&lt;a:name:id&gt;</code> for an animated one.
-          </p>
-        </div>
+        <input
+          {...common}
+          className="input emoji-input"
+          type="text"
+          placeholder="🙂"
+          value={(value as string) ?? ""}
+          onChange={(event) => onChange(event.target.value || undefined)}
+        />
       );
 
     case "template":
       return (
-        <TemplateControl
-          id={id}
+        <TemplateEditor
+          {...common}
+          value={(value as string) ?? ""}
           max={field.max as number | undefined}
           placeholders={(field.placeholders as string[] | undefined) ?? []}
-          value={(value as string) ?? ""}
-          onChange={onChange}
+          serverName={ctx.serverName}
+          onChange={(next) => onChange(next || undefined)}
         />
       );
 
     case "channel":
       return (
         <ChannelPicker
-          id={id}
-          guildId={guildId}
-          types={field.types as string[]}
-          value={value as string | undefined}
+          {...common}
+          guildId={ctx.guildId}
+          types={(field.types as string[] | undefined) ?? ["text"]}
+          value={typeof value === "string" ? value : undefined}
+          clearable={field.optional === true}
           onChange={onChange}
         />
       );
@@ -199,216 +446,335 @@ function Control({ id, path, field, value, guildId, errors, onChange }: ControlP
     case "role":
       return (
         <RolePicker
-          id={id}
-          guildId={guildId}
-          value={value as string | undefined}
+          {...common}
+          guildId={ctx.guildId}
+          value={typeof value === "string" ? value : undefined}
+          clearable={field.optional === true}
           onChange={onChange}
         />
       );
 
     case "array":
-      return (
-        <ArrayControl
-          path={path}
-          field={field.of as FieldDescriptor}
-          value={(value as unknown[]) ?? []}
-          guildId={guildId}
-          errors={errors}
-          max={field.max as number | undefined}
-          onChange={onChange}
-        />
-      );
-
-    case "object":
-      return (
-        <ObjectControl
-          path={path}
-          field={field}
-          value={(value as Record<string, unknown>) ?? {}}
-          guildId={guildId}
-          errors={errors}
-          onChange={onChange}
-        />
-      );
+      return arrayControl(chrome, props);
 
     default:
-      return <p className="unsupported">No control for {field.kind} yet.</p>;
+      return <p className="unsupported">This setting needs a newer dashboard to edit.</p>;
   }
 }
 
-interface ObjectProps {
-  path: string;
-  field: FieldDescriptor;
-  value: Record<string, unknown>;
-  guildId: string;
-  errors: Record<string, string>;
-  onChange(next: Record<string, unknown>): void;
-}
+function arrayControl(chrome: FieldChrome, props: ControlProps): ReactNode {
+  const { field, value, ctx, onChange, path, name } = props;
+  const item = (field.of ?? { kind: "string" }) as FieldDescriptor;
+  const items = Array.isArray(value) ? value : [];
+  const max = field.max as number | undefined;
+  const min = field.min as number | undefined;
 
-/** A nested object renders as its own labeled child fields, at any depth. */
-function ObjectControl({ path, field, value, guildId, errors, onChange }: ObjectProps) {
-  const fields = Object.entries(field.fields as Record<string, FieldDescriptor>);
+  if (item.kind === "channel") {
+    return (
+      <MultiChannelPicker
+        id={chrome.id}
+        guildId={ctx.guildId}
+        types={(item.types as string[] | undefined) ?? ["text"]}
+        values={items.filter(isString)}
+        max={max}
+        disabled={chrome.disabled}
+        aria-labelledby={chrome.labelId}
+        aria-describedby={chrome.describedBy}
+        onChange={onChange}
+      />
+    );
+  }
+
+  if (item.kind === "role") {
+    return (
+      <MultiRolePicker
+        id={chrome.id}
+        guildId={ctx.guildId}
+        values={items.filter(isString)}
+        max={max}
+        disabled={chrome.disabled}
+        aria-labelledby={chrome.labelId}
+        aria-describedby={chrome.describedBy}
+        onChange={onChange}
+      />
+    );
+  }
+
+  if (item.kind === "string" || item.kind === "emoji") {
+    return (
+      <TagInput
+        id={chrome.id}
+        values={items.filter(isString)}
+        max={max}
+        disabled={chrome.disabled}
+        aria-describedby={chrome.describedBy}
+        onChange={onChange}
+      />
+    );
+  }
+
+  if (item.kind === "object") {
+    const itemFields = (item.fields ?? {}) as Fields;
+    const singular = singularize(field.label ?? humanize(name));
+    return (
+      <ObjectArray
+        guildId={ctx.guildId}
+        path={path}
+        items={items}
+        itemFields={itemFields}
+        itemLabel={singular}
+        min={min}
+        max={max}
+        disabled={chrome.disabled}
+        aria-labelledby={chrome.labelId}
+        rows={ctx.rows}
+        newItem={() => defaultsFor(itemFields)}
+        invalidAt={(index) => hasErrorUnder(ctx.errors, arrayItemPath(path, index))}
+        onChange={onChange}
+        renderRow={(entry, index) => {
+          const entryPath = arrayItemPath(path, index);
+          const entryValues = asRecord(entry);
+          return Object.entries(itemFields).map(([childKey, childField]) =>
+            renderChild(
+              childKey,
+              childField,
+              itemFields,
+              entryValues,
+              entryPath,
+              ctx,
+              (next) => onChange(items.map((old, i) => (i === index ? next : old))),
+            ),
+          );
+        }}
+        actionInputs={{
+          initial: (input) => defaultsFor((input.fields ?? {}) as Fields),
+          render: ({ input, rowPath, actionId, value, onChange: setInput, errors, disabled }) =>
+            actionInputFields(input, `${rowPath}.${actionId}`, value, setInput, errors, {
+              ...ctx,
+              disabled,
+              rows: undefined,
+            }),
+        }}
+      />
+    );
+  }
 
   return (
-    <fieldset className="object-fields">
-      {fields.map(([key, childField]) => (
-        <FieldRow
-          key={key}
-          name={key}
-          path={objectChildPath(path, key)}
-          field={childField}
-          value={value[key]}
-          guildId={guildId}
-          errors={errors}
-          onChange={(next) => onChange({ ...value, [key]: next })}
-        />
-      ))}
-    </fieldset>
+    <PrimitiveList
+      chrome={chrome}
+      item={item}
+      items={items}
+      max={max}
+      ctx={ctx}
+      path={path}
+      onChange={onChange}
+    />
   );
 }
 
-interface ArrayProps {
+interface PrimitiveListProps {
+  chrome: FieldChrome;
+  item: FieldDescriptor;
+  items: unknown[];
+  max: number | undefined;
+  ctx: RenderContext;
   path: string;
-  field: FieldDescriptor;
-  value: unknown[];
-  guildId: string;
-  errors: Record<string, string>;
-  max?: number;
   onChange(next: unknown[]): void;
 }
 
-function ArrayControl({ path, field, value, guildId, errors, max, onChange }: ArrayProps) {
-  const [draft, setDraft] = useState<unknown>(undefined);
-  const atCapacity = max !== undefined && value.length >= max;
+/** The fallback for a list of something with no picker of its own. */
+function PrimitiveList({ chrome, item, items, max, ctx, path, onChange }: PrimitiveListProps) {
+  const atCapacity = max !== undefined && items.length >= max;
 
   return (
-    <div className="array">
-      {value.length > 0 ? (
-        <ul className="array-rows">
-          {value.map((item, index) => {
-            const itemPath = arrayItemPath(path, index);
-            return (
-              <li key={index} className="array-row">
-                <span className="array-row-index" aria-hidden="true">
-                  {index + 1}
-                </span>
-                <div className="array-row-body">
-                  <Control
-                    id={htmlId(itemPath)}
-                    path={itemPath}
-                    field={field}
-                    value={item}
-                    guildId={guildId}
-                    errors={errors}
-                    onChange={(next) => onChange(value.map((v, i) => (i === index ? next : v)))}
-                  />
-                </div>
-                <button
-                  type="button"
-                  className="btn btn-ghost btn-sm array-row-remove"
-                  onClick={() => onChange(value.filter((_, i) => i !== index))}
-                >
-                  Remove
-                  <span className="visually-hidden"> row {index + 1}</span>
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-      ) : null}
+    <div className="list" role="group" aria-labelledby={chrome.labelId}>
+      {items.map((entry, index) => {
+        const entryPath = arrayItemPath(path, index);
+        return (
+          <div className="list-item" key={index}>
+            <div className="list-item-head">
+              <span className="list-item-index" aria-hidden="true">
+                {index + 1}
+              </span>
+              <span className="list-item-summary is-placeholder">Entry {index + 1}</span>
+              <button
+                type="button"
+                className="btn btn-danger btn-sm"
+                disabled={chrome.disabled}
+                onClick={() => onChange(items.filter((_, i) => i !== index))}
+              >
+                Remove
+                <span className="visually-hidden"> entry {index + 1}</span>
+              </button>
+            </div>
+            <div className="list-item-body">
+              {control(
+                { ...chrome, id: htmlId(entryPath) },
+                {
+                  name: String(index + 1),
+                  path: entryPath,
+                  field: item,
+                  value: entry,
+                  ctx,
+                  onChange: (next) => onChange(items.map((old, i) => (i === index ? next : old))),
+                },
+              )}
+            </div>
+          </div>
+        );
+      })}
+      <button
+        type="button"
+        className="list-add"
+        disabled={chrome.disabled || atCapacity}
+        onClick={() => onChange([...items, item.default])}
+      >
+        {atCapacity ? `Maximum of ${max}` : "Add another"}
+      </button>
+    </div>
+  );
+}
 
-      {atCapacity ? (
-        <p className="array-limit">Maximum of {max} reached.</p>
-      ) : (
-        <div className="array-add">
-          <Control
-            id={htmlId(`${path}[new]`)}
-            path={`${path}[new]`}
-            field={field}
-            value={draft}
-            guildId={guildId}
-            errors={{}}
-            onChange={setDraft}
-          />
-          <button
-            type="button"
-            className="btn btn-secondary btn-sm"
-            disabled={draft === undefined || draft === ""}
-            onClick={() => {
-              onChange([...value, draft]);
-              setDraft(undefined);
-            }}
-          >
-            Add
-          </button>
-        </div>
+function hintFor(field: FieldDescriptor, value: unknown): ReactNode {
+  if (field.kind === "integer") {
+    const min = field.min as number | undefined;
+    const max = field.max as number | undefined;
+    if (min !== undefined && max !== undefined) return `${min} – ${max}`;
+    return undefined;
+  }
+
+  if (field.kind === "duration") {
+    const max = field.max as string | undefined;
+    return max ? `Up to ${describeDuration(max)}` : undefined;
+  }
+
+  if (field.kind === "emoji") {
+    return (
+      <>
+        A unicode emoji, or Discord&apos;s custom form: <code>&lt;:name:id&gt;</code>, or{" "}
+        <code>&lt;a:name:id&gt;</code> for an animated one.
+      </>
+    );
+  }
+
+  if (field.kind === "string") {
+    const max = field.max as number | undefined;
+    const length = typeof value === "string" ? value.length : 0;
+    // Only worth the room once the limit is close enough to matter.
+    if (max !== undefined && length >= max * 0.8) return `${length} / ${max}`;
+    return undefined;
+  }
+
+  return undefined;
+}
+
+/**
+ * A list of rows, rather than one control a label can point at. Chips and tags
+ * do not count: those put their id on the button or input someone types into.
+ */
+function isComposite(field: FieldDescriptor): boolean {
+  if (field.kind !== "array") return false;
+  const item = (field.of ?? {}) as FieldDescriptor;
+  return item.kind !== "channel" && item.kind !== "role" && item.kind !== "string"
+    && item.kind !== "emoji";
+}
+
+function wantsWholeRow(field: FieldDescriptor): boolean {
+  if (field.kind === "template") return true;
+  if (field.kind === "array") return true;
+  return field.kind === "string" && field.multiline === true;
+}
+
+function conditionMet(
+  condition: FieldCondition | undefined,
+  values: Record<string, unknown>,
+): boolean {
+  if (!condition) return true;
+  const actual = values[condition.field];
+  if (condition.equals === undefined) return !isBlank(actual);
+  return actual === condition.equals;
+}
+
+/** Explains a disabled control in terms of the setting it waits on. */
+function dependencySentence(
+  condition: FieldCondition | undefined,
+  siblings: Fields,
+): string | undefined {
+  if (!condition) return undefined;
+  const sibling = siblings[condition.field];
+  const label = sibling?.label ?? humanize(condition.field);
+
+  if (condition.equals === undefined) return `Only used when ${label} is set.`;
+  if (sibling?.kind === "boolean") {
+    return `Only used when ${label} is ${condition.equals === true ? "on" : "off"}.`;
+  }
+  if (sibling?.kind === "choice") {
+    const options = (sibling.options ?? []) as { value: string; label: string }[];
+    const chosen = options.find((option) => option.value === condition.equals);
+    return `Only used when ${label} is set to ${chosen?.label ?? String(condition.equals)}.`;
+  }
+  return `Only used when ${label} is ${String(condition.equals)}.`;
+}
+
+/** A new list entry starts with whatever the schema says the defaults are. */
+function defaultsFor(fields: Fields): Record<string, unknown> {
+  const item: Record<string, unknown> = {};
+  for (const [key, field] of Object.entries(fields)) {
+    if (field.kind === "array") item[key] = [];
+    else if (field.kind === "object") item[key] = defaultsFor((field.fields ?? {}) as Fields);
+    else if (field.default !== undefined) item[key] = field.default;
+  }
+  return item;
+}
+
+/**
+ * An action's inputs are drawn by the same code as any other field. Their
+ * errors come back keyed by field name, so they are moved under this panel's
+ * own path to keep their ids apart from the settings behind it.
+ */
+function actionInputFields(
+  input: FieldDescriptor,
+  parentPath: string,
+  value: Record<string, unknown>,
+  onChange: (next: Record<string, unknown>) => void,
+  errors: Record<string, string>,
+  ctx: RenderContext,
+): ReactNode {
+  const fields = (input.fields ?? {}) as Fields;
+  const scoped: Record<string, string> = {};
+  for (const [key, message] of Object.entries(errors)) {
+    scoped[objectChildPath(parentPath, key)] = message;
+  }
+  const panelCtx = { ...ctx, errors: scoped };
+  return (
+    <div className="form-grid">
+      {Object.entries(fields).map(([key, field]) =>
+        renderChild(key, field, fields, value, parentPath, panelCtx, (next) => onChange(next)),
       )}
     </div>
   );
 }
 
-interface TemplateProps {
-  id: string;
-  max?: number;
-  placeholders: string[];
-  value: string;
-  onChange(next: string): void;
+function hasErrorUnder(errors: Record<string, string>, prefix: string): boolean {
+  return Object.keys(errors).some((key) => key === prefix || key.startsWith(`${prefix}.`));
 }
 
-/** A message body with the placeholders its module accepts, insertable at the cursor. */
-function TemplateControl({ id, max = 2000, placeholders, value, onChange }: TemplateProps) {
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const remaining = max - value.length;
-
-  function insertPlaceholder(name: string) {
-    const token = `{${name}}`;
-    const textarea = textareaRef.current;
-    if (!textarea) {
-      onChange(value + token);
-      return;
-    }
-    const start = textarea.selectionStart ?? value.length;
-    const end = textarea.selectionEnd ?? value.length;
-    onChange(value.slice(0, start) + token + value.slice(end));
-    const cursor = start + token.length;
-    // The textarea's value updates on the next render, so the cursor can only
-    // be moved once that render has happened.
-    requestAnimationFrame(() => {
-      textarea.focus();
-      textarea.setSelectionRange(cursor, cursor);
-    });
-  }
-
-  return (
-    <div className="template-field">
-      <textarea
-        id={id}
-        ref={textareaRef}
-        rows={4}
-        maxLength={max}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-      />
-      <p className={remaining < 0 ? "char-count is-low" : "char-count"}>
-        {remaining} characters remaining
-      </p>
-      {placeholders.length > 0 ? (
-        <div className="placeholders">
-          <span className="placeholders-label">Insert:</span>
-          {placeholders.map((name) => (
-            <button key={name} type="button" onClick={() => insertPlaceholder(name)}>
-              {`{${name}}`}
-            </button>
-          ))}
-        </div>
-      ) : null}
-    </div>
-  );
+function isString(value: unknown): value is string {
+  return typeof value === "string";
 }
 
-function humanise(key: string): string {
-  const spaced = key.replace(/([a-z])([A-Z])/g, "$1 $2");
-  return spaced.charAt(0).toUpperCase() + spaced.slice(1).toLowerCase();
+function asRecord(value: unknown): Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+/** "Role menus" becomes "Role menu", so the add button reads as one of them. */
+function singularize(label: string): string {
+  if (label.endsWith("ies")) return `${label.slice(0, -3)}y`;
+  if (label.endsWith("ses") || label.endsWith("xes")) return label.slice(0, -2);
+  if (label.endsWith("s") && !label.endsWith("ss")) return label.slice(0, -1);
+  return label;
 }
 
 /** A path like `rewards[2].role` turned into a value safe as an HTML id. */
