@@ -2,97 +2,75 @@
 
 A Discord bot you host yourself, with a web dashboard to configure it.
 
-The features other bots charge a subscription for are all here. Moderation,
-automod, tickets, logging, leveling, the lot. There is no premium tier and
-there is never going to be one.
+It covers moderation, automod, tickets, logging and leveling, which most bots charge a subscription for. Everything here is free. There are no paid features.
 
-You run it on your own machine, so your server's data stays on your own
-machine.
+Your server's data stays on the machine you run it on.
 
 ## Status
 
-Works. Not released.
-
-Everything listed below is built and configurable from the dashboard, and it
-has been running against a real server. There is no tagged version yet, so
-things may still move around. If you are going to build against the internals,
-read `docs/architecture.md` first.
+Everything listed below works and is running on a real server. There's no tagged release yet, so settings and the database can still change between commits. If you're going to build on the internals, read [docs/architecture.md](docs/architecture.md) first.
 
 ## Requirements
 
-A machine that stays on and Docker. A Raspberry Pi is plenty.
+- A computer to run it on. Your own PC works, but the bot is offline whenever that PC is off or asleep, so an old PC, a Raspberry Pi or a cheap rented server that stays on is better for a server you actually use.
+- Docker, or Node 20 and pnpm if you want to run it from source.
+- A Discord application of your own. Both install guides cover creating it.
+- The Manage Server permission on the Discord server the bot is joining. It's one of Discord's own permissions, set on roles under Server Settings, and the server owner has it. Discord requires it to add a bot, and the dashboard only lists servers where you have it.
 
-If you would rather run it from source you need Node 20 and pnpm instead.
+## Install
 
-You also need your own Discord application. That part trips people up more
-than the install does, so [docs/install.md](docs/install.md) walks through it
-screen by screen.
+| Guide | Use it if |
+| --- | --- |
+| [Quick install](docs/install.md) | You're comfortable in a terminal. Covers the Discord setup, running behind a domain, updating, backups and troubleshooting. |
+| [Beginner guide](docs/install-beginner.md) | You've never done this. Every step is spelled out and every term is explained. |
 
-## Running it
+The short version, with Docker:
 
 ```
 git clone https://github.com/Luxrrrr/TierZero.git
 cd TierZero
 cp .env.example .env
 mkdir -p data
+```
+
+Fill in `.env` with your Discord application's values, then:
+
+```
 docker compose up -d
 ```
 
-Fill in your Discord credentials in `.env` before you start it. Then open
-http://localhost:8080 and sign in. Whoever signs in first owns the install.
-
-The [install guide](docs/install.md) has the whole thing in detail, including
-the two privileged intents the bot will not start without.
-
-## Running from source
-
-```
-pnpm install
-pnpm db:migrate
-pnpm dev
-```
+Open http://localhost:8080 and sign in with Discord. The first account to sign in becomes the owner of the install, who can use the moderation area on every server and decides who else can.
 
 ## Features
 
-Every feature is a module, and every module is off until you turn it on. You
-can switch one on or off per server whenever you like and it takes effect
-straight away. Nothing needs restarting. Individual commands can be hidden or
-locked to particular roles and channels the same way.
+Every feature is a module and every module starts off. You switch them on and off per server from the dashboard, and the change applies immediately, with no restart. Single commands can also be hidden, or limited to certain roles and channels.
 
-The dashboard gives each server an overview of every feature and its state, a
-page per feature for its settings, one page listing every command on the
-server, and a moderation area for your staff.
+| Feature | What it does |
+| --- | --- |
+| Moderation | Warn, timeout, kick, ban and temporary bans. Each action gets a numbered case, and role hierarchy is checked first. |
+| Moderation dashboard | Member records with staff notes, actions from a member's profile, an exportable action log, statistics and an audit trail of staff changes. You control who has access, separately from Discord's Manage Server permission. Warns and timeouts can be removed from a record while the history stays. Staff can also act from Discord's right-click menu on a member or a message. |
+| Automod | Invites, links, capitals, repeated text, mention limits, banned words and rate limiting. Seven rules, each with its own action and exemptions. All off by default. |
+| Tickets | A button opens a private channel between a member and your staff. Optional transcripts and auto-close. |
+| Welcome messages | Greetings, farewells and roles on join. |
+| Role menus | Members pick their own roles from buttons. |
+| Audit logging | Edits, deletions, joins, departures, nickname and role changes, channels, roles and bans. Twelve categories, each with its own switch. |
+| Leveling | XP for activity, role rewards and a leaderboard. No image rank cards, on purpose. |
+| News and patch notes | Posts new items from RSS feeds and Steam patch notes as embeds with the game's logo. For sources Discord's Follow button can't handle. |
+| Utility | Server and member info. |
 
-- **Moderation** — warn, timeout, kick, ban, temporary ban. Every action gets
-  a numbered case, and role hierarchy is checked before anything is attempted.
-- **Moderation dashboard** — member records with staff notes, warn, timeout,
-  kick and ban from a member's profile, an action log you can export,
-  statistics including what automod did, and an audit trail of what staff
-  changed. Access is a list you control per server, separate from Manage
-  Server. Mistaken warns and timeouts can be taken off a record without losing
-  the history. Moderation and Automod settings sit in the same area. Staff can
-  also act from Discord's right-click menu on a member or a message.
-- **Automod** — invites, links, capitals, repeated text, mention limits,
-  banned words, rate limiting. Seven rules, each with its own action and its
-  own exemptions, all off by default.
-- **Tickets** — a button members press to open a private channel with your
-  staff. Transcripts and auto-close if you want them.
-- **Welcome messages** — greetings, farewells, roles on join.
-- **Role menus** — members pick their own roles from buttons.
-- **Audit logging** — edits, deletions, joins, departures, nickname and role
-  changes, channels, roles, bans. Twelve categories, each with its own switch.
-- **Leveling** — experience for taking part, role rewards, a leaderboard. No
-  generated image cards, on purpose.
-- **News and patch notes** — posts new items from RSS feeds and Steam patch
-  notes, as plain embeds with the game's logo. For sources you cannot follow
-  with Discord's own Follow button.
-- **Utility** — server and member info.
+More detail on each is in [docs/features.md](docs/features.md).
 
-[docs/features.md](docs/features.md) goes through what each one actually does,
-including the bits you would not guess from the settings screen.
+## Docs
+
+| Doc | Contents |
+| --- | --- |
+| [Quick install](docs/install.md) | Install, domains, updating, backups, troubleshooting |
+| [Beginner guide](docs/install-beginner.md) | The same install, step by step |
+| [Features](docs/features.md) | How each feature behaves |
+| [Architecture](docs/architecture.md) | How the pieces fit together, and why |
+| [Writing a module](docs/modules.md) | The module contract and settings schema |
+| [Contributing](docs/contributing.md) | Dev setup, tests, and rules for the moderation records |
 
 ## License
 
-AGPL-3.0-or-later. Run it, change it, pass it on. The one condition is that if
-you offer a modified version to other people over a network, you publish your
-changes under the same license.
+AGPL-3.0-or-later. If you run a modified version as a service for other people, you have to publish your changes under the same license.
