@@ -1,0 +1,1445 @@
+/* PRIMITIVES READY */
+
+/* Mod dashboard ----------------------------------------------------------
+   Shared pieces for every page under /guilds/[id]/mod. Each page may add its
+   own rules in a sibling file; these stay out of globals.css so work on
+   separate pages never edits the same file. Class names here are relied on
+   by every mod page, so rename nothing without searching for its users. */
+
+/* Tokens ------------------------------------------------------------------ */
+/* Each action has a strong colour for text and icons and a soft one for
+   fills. They map onto the global semantic tokens, except notes, which have
+   no global equivalent and get a violet that sits apart from every status
+   colour so a note is never mistaken for a sanction. */
+
+:root {
+  --mod-note: #b8a1ff;
+  --mod-note-soft: rgba(184, 161, 255, 0.13);
+
+  --mod-warn: var(--attention);
+  --mod-warn-soft: var(--attention-soft);
+  --mod-timeout: var(--info);
+  --mod-timeout-soft: var(--info-soft);
+  --mod-kick: var(--accent-text);
+  --mod-kick-soft: var(--accent-soft);
+  --mod-ban: var(--danger);
+  --mod-ban-soft: var(--danger-soft);
+  --mod-cleared: var(--on);
+  --mod-cleared-soft: var(--on-soft);
+  --mod-staff: var(--text-secondary);
+  --mod-staff-soft: var(--surface-3);
+
+  /* Status colours used as text. In dark they are the global tokens; light
+     needs darker shades to reach 4.5:1 on the soft fills. */
+  --mod-ok-text: var(--on);
+  --mod-warn-text: var(--attention);
+  --mod-danger-text: var(--danger);
+  --mod-info-text: var(--info);
+
+  /* The edge of a text field or select: at least 3:1 against the page, which
+     the hairline --border-strong is not. */
+  --mod-control-border: #7c828e;
+
+  /* Saturation and lightness for generated avatar colours; the hue comes
+     from the user id. */
+  --mod-av-bg-s: 32%;
+  --mod-av-bg-l: 26%;
+  --mod-av-fg-s: 75%;
+  --mod-av-fg-l: 82%;
+
+  --mod-width: 78rem;
+  --mod-row-height: 2.75rem;
+  --mod-motion: 150ms;
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --mod-note: #5f34c8;
+    --mod-note-soft: rgba(95, 52, 200, 0.1);
+    --mod-ok-text: #166534;
+    --mod-warn-text: #9a3412;
+    --mod-danger-text: #991b1b;
+    --mod-info-text: #1d4ed8;
+    --mod-warn: var(--mod-warn-text);
+    --mod-timeout: var(--mod-info-text);
+    --mod-kick: #6f5205;
+    --mod-ban: var(--mod-danger-text);
+    --mod-cleared: var(--mod-ok-text);
+    --mod-control-border: #7f7d76;
+    --mod-av-bg-s: 55%;
+    --mod-av-bg-l: 89%;
+    --mod-av-fg-s: 45%;
+    --mod-av-fg-l: 30%;
+  }
+}
+
+:root[data-theme="light"] {
+  --mod-note: #5f34c8;
+  --mod-note-soft: rgba(95, 52, 200, 0.1);
+  --mod-ok-text: #166534;
+  --mod-warn-text: #9a3412;
+  --mod-danger-text: #991b1b;
+  --mod-info-text: #1d4ed8;
+  --mod-warn: var(--mod-warn-text);
+  --mod-timeout: var(--mod-info-text);
+  --mod-kick: #6f5205;
+  --mod-ban: var(--mod-danger-text);
+  --mod-cleared: var(--mod-ok-text);
+  --mod-control-border: #7f7d76;
+  --mod-av-bg-s: 55%;
+  --mod-av-bg-l: 89%;
+  --mod-av-fg-s: 45%;
+  --mod-av-fg-l: 30%;
+}
+
+/* Layout ------------------------------------------------------------------ */
+
+/* Mod pages are tables and timelines; the settings column width would wrap
+   every row, so the shell's content area widens when it holds one. */
+.app-content:has(.mod-root) {
+  max-width: var(--mod-width);
+}
+
+.mod-root {
+  width: 100%;
+  min-width: 0;
+}
+
+.mod-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+  min-width: 0;
+}
+
+.mod-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.mod-section-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.mod-section-text {
+  min-width: 0;
+}
+
+.mod-section-title {
+  font-size: var(--text-lg);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.mod-section-desc {
+  margin-top: var(--space-1);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  max-width: 65ch;
+}
+
+.mod-section-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+/* Header ------------------------------------------------------------------ */
+
+.mod-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-6);
+  margin-bottom: var(--space-6);
+}
+
+.mod-header .page-eyebrow {
+  margin-bottom: var(--space-1);
+}
+
+.mod-header-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex: none;
+}
+
+/* Cards ------------------------------------------------------------------- */
+
+.mod-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  min-width: 0;
+}
+
+.mod-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  min-height: 3.25rem;
+  padding: var(--space-3) var(--space-5);
+  border-bottom: 1px solid var(--border);
+}
+
+.mod-card-title {
+  font-size: var(--text-md);
+  font-weight: 600;
+}
+
+.mod-card-desc {
+  margin-top: 2px;
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+}
+
+.mod-card-body {
+  padding: var(--space-5);
+}
+
+.mod-card-body--flush {
+  padding: 0;
+}
+
+.mod-card-foot {
+  padding: var(--space-3) var(--space-5);
+  border-top: 1px solid var(--border);
+  color: var(--text-tertiary);
+  font-size: var(--text-sm);
+}
+
+/* Toolbar, search, chips, selects ------------------------------------------ */
+
+.mod-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.mod-toolbar-spacer {
+  flex: 1 1 auto;
+}
+
+.mod-toolbar-group {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+.mod-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 1 1 16rem;
+  min-width: 12rem;
+  max-width: 26rem;
+}
+
+.mod-search > svg {
+  position: absolute;
+  left: var(--space-3);
+  color: var(--text-tertiary);
+  pointer-events: none;
+}
+
+.mod-search input {
+  width: 100%;
+  height: var(--control-height);
+  padding: 0 var(--space-3) 0 2.25rem;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--mod-control-border);
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: var(--text-base);
+  transition:
+    border-color var(--mod-motion) var(--ease-out),
+    box-shadow var(--mod-motion) var(--ease-out);
+}
+
+.mod-search input::placeholder {
+  color: var(--text-tertiary);
+}
+
+.mod-search input:hover {
+  border-color: var(--text-secondary);
+}
+
+.mod-search input:focus-visible {
+  outline: none;
+  border-color: var(--focus);
+  box-shadow: 0 0 0 1px var(--focus);
+}
+
+.mod-search .mod-kbd {
+  position: absolute;
+  right: var(--space-2);
+  pointer-events: none;
+}
+
+.mod-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: 2rem;
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-full);
+  border: 1px solid var(--border-strong);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background-color var(--mod-motion) var(--ease-out),
+    border-color var(--mod-motion) var(--ease-out),
+    color var(--mod-motion) var(--ease-out);
+}
+
+a.mod-chip:hover {
+  text-decoration: none;
+}
+
+.mod-chip:hover {
+  color: var(--text);
+  background: var(--surface-hover);
+  border-color: var(--text-tertiary);
+}
+
+.mod-chip[aria-pressed="true"],
+.mod-chip[aria-current="true"],
+.mod-chip[aria-current="page"] {
+  background: var(--accent-soft);
+  border-color: var(--focus);
+  color: var(--mod-kick);
+  font-weight: 600;
+}
+
+/* A drawn tick, so the selected chip is told apart by shape and not only by
+   colour. */
+.mod-chip[aria-pressed="true"]::before,
+.mod-chip[aria-current="true"]::before,
+.mod-chip[aria-current="page"]::before {
+  content: "";
+  flex: none;
+  width: 0.5rem;
+  height: 0.28rem;
+  margin: -0.15rem 0 0 -0.1rem;
+  border-left: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(-45deg);
+}
+
+.mod-chip svg {
+  flex: none;
+}
+
+.mod-chip-count {
+  font-variant-numeric: tabular-nums;
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+}
+
+.mod-chip[aria-pressed="true"] .mod-chip-count,
+.mod-chip[aria-current="true"] .mod-chip-count {
+  color: inherit;
+}
+
+.mod-select {
+  appearance: none;
+  -webkit-appearance: none;
+  height: 2rem;
+  padding: 0 2rem 0 var(--space-3);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--mod-control-border);
+  background-color: var(--surface-2);
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--text-tertiary) 50%),
+    linear-gradient(135deg, var(--text-tertiary) 50%, transparent 50%);
+  background-position:
+    calc(100% - 0.95rem) 50%,
+    calc(100% - 0.65rem) 50%;
+  background-size:
+    0.3rem 0.3rem,
+    0.3rem 0.3rem;
+  background-repeat: no-repeat;
+  color: var(--text);
+  font-size: var(--text-sm);
+  cursor: pointer;
+  transition: border-color var(--mod-motion) var(--ease-out);
+}
+
+.mod-select:hover {
+  border-color: var(--text-secondary);
+}
+
+.mod-select:focus-visible {
+  outline: none;
+  border-color: var(--focus);
+  box-shadow: 0 0 0 1px var(--focus);
+}
+
+.mod-select option {
+  color: var(--text);
+  background: var(--surface);
+}
+
+.mod-kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.25rem;
+  height: 1.25rem;
+  padding: 0 0.3rem;
+  border-radius: var(--radius-xs);
+  border: 1px solid var(--border-strong);
+  border-bottom-width: 2px;
+  background: var(--surface-2);
+  color: var(--text-tertiary);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: 1;
+}
+
+/* Tables ------------------------------------------------------------------ */
+/* The wrapper is a size container, so a table switches to stacked cards
+   based on the room it actually has, not the window: the sidebar and any
+   side panel already take a share of the window. */
+
+.mod-table-wrap {
+  container-type: inline-size;
+  min-width: 0;
+  overflow-x: auto;
+}
+
+.mod-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.mod-table th {
+  height: 2.25rem;
+  padding: 0 var(--space-4);
+  text-align: left;
+  font-size: var(--text-2xs);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+  background: var(--surface);
+}
+
+.mod-table td {
+  height: var(--mod-row-height);
+  padding: var(--space-2) var(--space-4);
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+
+.mod-table th.mod-num,
+.mod-table td.mod-num {
+  text-align: right;
+}
+
+.mod-table td.mod-muted {
+  color: var(--text-tertiary);
+}
+
+.mod-table time,
+.mod-table .mod-badge,
+.mod-table .mod-pill {
+  white-space: nowrap;
+}
+
+.mod-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.mod-table tbody tr {
+  transition: background-color var(--mod-motion) var(--ease-out);
+}
+
+.mod-table tbody tr:hover {
+  background: var(--surface-hover);
+}
+
+.mod-table tbody tr[data-voided="true"] td {
+  color: var(--text-tertiary);
+}
+
+.mod-table--interactive tbody tr {
+  cursor: pointer;
+}
+
+.mod-table--interactive tbody tr:focus-within {
+  background: var(--surface-hover);
+}
+
+/* A row link covers the whole row for pointer users; the visible focus
+   stays on the link itself. */
+.mod-table--interactive td:first-child {
+  position: relative;
+}
+
+.mod-row-link {
+  color: inherit;
+}
+
+.mod-row-link:hover {
+  text-decoration: none;
+}
+
+.mod-table--sticky th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+@container (max-width: 640px) {
+  .mod-table,
+  .mod-table tbody,
+  .mod-table tr,
+  .mod-table td {
+    display: block;
+    width: 100%;
+  }
+
+  /* Block, not the default table display: overflow and clip do not apply
+     to table boxes, and the hidden header would still widen the page. */
+  .mod-table thead {
+    display: block;
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+  }
+
+  .mod-table tbody {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    padding: var(--space-2);
+  }
+
+  .mod-table tbody tr {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--surface);
+    padding: var(--space-2) 0;
+  }
+
+  .mod-table td,
+  .mod-table tbody tr:last-child td {
+    height: auto;
+    border-bottom: 0;
+    padding: var(--space-1) var(--space-4);
+  }
+
+  .mod-table td[data-label] {
+    display: grid;
+    grid-template-columns: minmax(6rem, 35%) minmax(0, 1fr);
+    gap: var(--space-3);
+    align-items: center;
+  }
+
+  /* The empty alternative text keeps the caption out of the cell's
+     accessible name; the column header already provides it. */
+  .mod-table td[data-label]::before {
+    content: attr(data-label);
+    content: attr(data-label) / "";
+    font-size: var(--text-2xs);
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-tertiary);
+  }
+
+  .mod-table td[data-label=""] {
+    display: block;
+  }
+
+  .mod-table td[data-label=""]::before {
+    content: none;
+  }
+
+  .mod-table th.mod-num,
+  .mod-table td.mod-num {
+    text-align: left;
+  }
+}
+
+/* KPIs and sparklines ------------------------------------------------------ */
+
+.mod-kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+  gap: var(--space-3);
+}
+
+.mod-kpi {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-4) var(--space-5);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  min-width: 0;
+}
+
+.mod-kpi-label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  font-weight: 500;
+}
+
+.mod-kpi-value {
+  font-size: var(--text-2xl);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+.mod-kpi-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  min-height: 1.5rem;
+}
+
+.mod-kpi-delta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+}
+
+.mod-kpi-delta[data-good="true"] {
+  color: var(--mod-ok-text);
+}
+
+.mod-kpi-delta[data-good="false"] {
+  color: var(--mod-danger-text);
+}
+
+.mod-kpi-delta[data-trend="flat"] {
+  color: var(--text-tertiary);
+}
+
+.mod-kpi-delta svg {
+  width: 12px;
+  height: 12px;
+}
+
+.mod-kpi-delta-note {
+  font-weight: 400;
+  color: var(--text-tertiary);
+}
+
+.mod-spark {
+  display: inline-block;
+  width: 5.5rem;
+  height: 1.5rem;
+  color: var(--text-tertiary);
+  flex: none;
+}
+
+.mod-spark svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.mod-spark path,
+.mod-spark polyline {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.mod-spark .mod-spark-area {
+  fill: currentColor;
+  stroke: none;
+  opacity: 0.12;
+}
+
+.mod-spark[data-action="warn"] { color: var(--mod-warn); }
+.mod-spark[data-action="timeout"] { color: var(--mod-timeout); }
+.mod-spark[data-action="kick"] { color: var(--mod-kick); }
+.mod-spark[data-action="ban"] { color: var(--mod-ban); }
+.mod-spark[data-action="note"] { color: var(--mod-note); }
+
+/* Pills, dots, badges ------------------------------------------------------ */
+
+.mod-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  height: 1.375rem;
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-full);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  white-space: nowrap;
+  background: var(--surface-3);
+  color: var(--text-secondary);
+}
+
+.mod-pill::before {
+  content: "";
+  width: 0.375rem;
+  height: 0.375rem;
+  border-radius: var(--radius-full);
+  background: currentColor;
+  flex: none;
+}
+
+.mod-pill[data-tone="active"] {
+  background: var(--info-soft);
+  color: var(--mod-info-text);
+}
+
+.mod-pill[data-tone="expired"] {
+  background: transparent;
+  color: var(--text-tertiary);
+  box-shadow: inset 0 0 0 1px var(--border-strong);
+}
+
+/* Removed reads as hollow so it stays distinct from expired without colour. */
+.mod-pill[data-tone="removed"] {
+  background: transparent;
+  color: var(--text-tertiary);
+  box-shadow: inset 0 0 0 1px var(--border-strong);
+  text-decoration: line-through;
+}
+
+.mod-pill[data-tone="removed"]::before {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px currentColor;
+}
+
+.mod-pill[data-tone="ok"] {
+  background: var(--on-soft);
+  color: var(--mod-ok-text);
+}
+
+.mod-pill[data-tone="warn"] {
+  background: var(--attention-soft);
+  color: var(--mod-warn-text);
+}
+
+.mod-pill[data-tone="danger"] {
+  background: var(--danger-soft);
+  color: var(--mod-danger-text);
+}
+
+.mod-dot {
+  display: inline-block;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: var(--radius-full);
+  background: var(--text-tertiary);
+  flex: none;
+}
+
+.mod-dot[data-action="warn"] { background: var(--mod-warn); }
+.mod-dot[data-action="timeout"] { background: var(--mod-timeout); }
+.mod-dot[data-action="kick"] { background: var(--mod-kick); }
+.mod-dot[data-action="ban"] { background: var(--mod-ban); }
+.mod-dot[data-action="unban"],
+.mod-dot[data-action="timeout-clear"] { background: var(--mod-cleared); }
+.mod-dot[data-action="note"] { background: var(--mod-note); }
+.mod-dot[data-action="staff"] { background: var(--mod-staff); }
+
+.mod-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  height: 1.375rem;
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-full);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  line-height: 1;
+  background: var(--surface-3);
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.mod-badge svg {
+  width: 12px;
+  height: 12px;
+  flex: none;
+}
+
+.mod-badge[data-action="warn"] {
+  background: var(--mod-warn-soft);
+  color: var(--mod-warn);
+}
+
+.mod-badge[data-action="timeout"] {
+  background: var(--mod-timeout-soft);
+  color: var(--mod-timeout);
+}
+
+.mod-badge[data-action="kick"] {
+  background: var(--mod-kick-soft);
+  color: var(--mod-kick);
+}
+
+.mod-badge[data-action="ban"] {
+  background: var(--mod-ban-soft);
+  color: var(--mod-ban);
+}
+
+.mod-badge[data-action="unban"],
+.mod-badge[data-action="timeout-clear"] {
+  background: var(--mod-cleared-soft);
+  color: var(--mod-cleared);
+}
+
+.mod-badge[data-action="note"] {
+  background: var(--mod-note-soft);
+  color: var(--mod-note);
+}
+
+/* Line-through rather than dimming: faded text would fall below 4.5:1, and
+   the Removed pill beside it says the same thing in words. */
+.mod-badge[data-voided="true"] {
+  text-decoration: line-through;
+}
+
+.mod-badge[data-role="owner"] {
+  background: var(--accent-soft);
+  color: var(--mod-kick);
+}
+
+.mod-badge[data-role="admin"] {
+  background: var(--info-soft);
+  color: var(--mod-info-text);
+}
+
+/* Round action icons for timelines and feeds. */
+.mod-actionicon {
+  display: inline-grid;
+  place-items: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: var(--radius-full);
+  background: var(--mod-staff-soft);
+  color: var(--mod-staff);
+  flex: none;
+}
+
+.mod-actionicon svg {
+  width: 14px;
+  height: 14px;
+}
+
+.mod-actionicon--lg {
+  width: 2.25rem;
+  height: 2.25rem;
+}
+
+.mod-actionicon--lg svg {
+  width: 16px;
+  height: 16px;
+}
+
+.mod-actionicon[data-action="warn"] {
+  background: var(--mod-warn-soft);
+  color: var(--mod-warn);
+}
+
+.mod-actionicon[data-action="timeout"] {
+  background: var(--mod-timeout-soft);
+  color: var(--mod-timeout);
+}
+
+.mod-actionicon[data-action="kick"] {
+  background: var(--mod-kick-soft);
+  color: var(--mod-kick);
+}
+
+.mod-actionicon[data-action="ban"],
+.mod-actionicon[data-action="purge"] {
+  background: var(--mod-ban-soft);
+  color: var(--mod-ban);
+}
+
+.mod-actionicon[data-action="unban"],
+.mod-actionicon[data-action="timeout-clear"] {
+  background: var(--mod-cleared-soft);
+  color: var(--mod-cleared);
+}
+
+.mod-actionicon[data-action="note"] {
+  background: var(--mod-note-soft);
+  color: var(--mod-note);
+}
+
+/* Avatars and user chips --------------------------------------------------- */
+
+.mod-avatar {
+  --mod-avatar-size: 1.75rem;
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: var(--mod-avatar-size);
+  height: var(--mod-avatar-size);
+  border-radius: var(--radius-full);
+  background: hsl(var(--mod-hue, 220) var(--mod-av-bg-s) var(--mod-av-bg-l));
+  color: hsl(var(--mod-hue, 220) var(--mod-av-fg-s) var(--mod-av-fg-l));
+  font-size: calc(var(--mod-avatar-size) * 0.38);
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: 0.01em;
+  overflow: hidden;
+  user-select: none;
+}
+
+.mod-avatar--sm {
+  --mod-avatar-size: 1.375rem;
+}
+
+.mod-avatar--lg {
+  --mod-avatar-size: 2.5rem;
+}
+
+.mod-avatar--xl {
+  --mod-avatar-size: 4rem;
+}
+
+.mod-avatar img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.mod-user {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  max-width: 100%;
+  color: var(--text);
+  vertical-align: middle;
+}
+
+a.mod-user {
+  border-radius: var(--radius-sm);
+}
+
+a.mod-user:hover {
+  text-decoration: none;
+  color: var(--accent-text);
+}
+
+.mod-user[data-muted="true"] {
+  color: var(--text-secondary);
+}
+
+.mod-user-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.25;
+}
+
+.mod-user-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+}
+
+.mod-user-sub {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+}
+
+.mod-user-left {
+  font-size: var(--text-2xs);
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  flex: none;
+}
+
+.mod-id {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+}
+
+/* Empty, error and inline states ------------------------------------------- */
+
+.mod-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-12) var(--space-6);
+  text-align: center;
+  color: var(--text-tertiary);
+  font-size: var(--text-base);
+}
+
+.mod-empty-icon {
+  display: grid;
+  place-items: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  margin-bottom: var(--space-2);
+  border-radius: var(--radius-full);
+  background: var(--surface-3);
+  color: var(--text-secondary);
+}
+
+.mod-empty[data-tone="danger"] .mod-empty-icon {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.mod-empty[data-tone="attention"] .mod-empty-icon {
+  background: var(--attention-soft);
+  color: var(--attention);
+}
+
+.mod-empty-icon svg {
+  width: 20px;
+  height: 20px;
+}
+
+.mod-empty-title {
+  color: var(--text);
+  font-size: var(--text-md);
+  font-weight: 600;
+}
+
+.mod-empty-text {
+  max-width: 42ch;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  text-wrap: pretty;
+}
+
+.mod-empty-action {
+  display: flex;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
+.mod-empty--compact {
+  padding: var(--space-6) var(--space-4);
+}
+
+/* Pager ------------------------------------------------------------------- */
+
+.mod-pager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin-top: var(--space-4);
+}
+
+.mod-pager-count {
+  color: var(--text-tertiary);
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.mod-pager-count strong {
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+.mod-pager-buttons {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.mod-pager .btn[aria-disabled="true"] {
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+/* Tabs -------------------------------------------------------------------- */
+
+.mod-tabs {
+  display: flex;
+  gap: var(--space-1);
+  margin: 0 0 var(--space-8);
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+  scrollbar-width: none;
+  scroll-snap-type: x proximity;
+}
+
+.mod-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.mod-tabs a {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: 2.75rem;
+  padding: 0 var(--space-3);
+  color: var(--text-secondary);
+  font-size: var(--text-base);
+  font-weight: 500;
+  white-space: nowrap;
+  scroll-snap-align: start;
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+  transition: color var(--mod-motion) var(--ease-out);
+}
+
+.mod-tabs a::after {
+  content: "";
+  position: absolute;
+  left: var(--space-3);
+  right: var(--space-3);
+  bottom: -1px;
+  height: 2px;
+  border-radius: 2px 2px 0 0;
+  background: transparent;
+  transition: background-color var(--mod-motion) var(--ease-out);
+}
+
+.mod-tabs a:hover {
+  text-decoration: none;
+  color: var(--text);
+}
+
+.mod-tabs a:hover::after {
+  background: var(--border-strong);
+}
+
+.mod-tabs a[aria-current="page"] {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.mod-tabs a[aria-current="page"]::after {
+  height: 3px;
+  background: var(--focus);
+}
+
+.mod-tabs a svg {
+  color: var(--text-tertiary);
+  flex: none;
+}
+
+.mod-tabs a[aria-current="page"] svg {
+  color: var(--mod-kick);
+}
+
+.mod-tabs a:focus-visible {
+  outline-offset: -2px;
+}
+
+.mod-tab-count {
+  min-width: 1.25rem;
+  padding: 0 0.35rem;
+  border-radius: var(--radius-full);
+  background: var(--surface-3);
+  color: var(--text-secondary);
+  font-size: var(--text-2xs);
+  font-weight: 600;
+  line-height: 1.125rem;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Member search palette ---------------------------------------------------- */
+
+.mod-palette-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 17rem;
+  height: var(--control-height);
+  padding: 0 var(--space-2) 0 var(--space-3);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--mod-control-border);
+  background: var(--surface-2);
+  color: var(--text-tertiary);
+  font-size: var(--text-base);
+  cursor: pointer;
+  transition: border-color var(--mod-motion) var(--ease-out);
+}
+
+.mod-palette-trigger:hover {
+  border-color: var(--text-secondary);
+  color: var(--text-secondary);
+}
+
+.mod-palette-trigger-label {
+  flex: 1 1 auto;
+  text-align: left;
+}
+
+.mod-palette-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 12vh var(--space-4) var(--space-4);
+  background: var(--scrim);
+  animation: mod-fade var(--mod-motion) var(--ease-out);
+}
+
+.mod-palette {
+  width: 100%;
+  max-width: 34rem;
+  max-height: 70vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+  animation: mod-pop var(--mod-motion) var(--ease-out);
+}
+
+.mod-palette-input {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 0 var(--space-4);
+  border-bottom: 1px solid var(--border);
+  color: var(--text-tertiary);
+}
+
+.mod-palette-input input {
+  flex: 1 1 auto;
+  height: 3.25rem;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font-size: var(--text-md);
+}
+
+.mod-palette-input input:focus,
+.mod-palette-input input:focus-visible {
+  outline: none;
+}
+
+.mod-palette-input input::placeholder {
+  color: var(--text-tertiary);
+}
+
+.mod-palette-body {
+  overflow-y: auto;
+  padding: var(--space-2);
+}
+
+.mod-palette-group {
+  padding: var(--space-2) var(--space-3) var(--space-1);
+  font-size: var(--text-2xs);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+
+.mod-palette-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.mod-palette-option {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: var(--mod-row-height);
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-md);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.mod-palette-option[aria-selected="true"] {
+  background: var(--accent-soft);
+}
+
+.mod-palette-option[aria-selected="true"] .mod-palette-go {
+  opacity: 1;
+}
+
+.mod-palette-option-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1 1 auto;
+  line-height: 1.3;
+}
+
+.mod-palette-option-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+}
+
+.mod-palette-option-sub {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+}
+
+.mod-palette-go {
+  color: var(--text-tertiary);
+  opacity: 0;
+  flex: none;
+}
+
+.mod-palette-status {
+  padding: var(--space-6) var(--space-4);
+  text-align: center;
+  font-size: var(--text-sm);
+  color: var(--text-tertiary);
+}
+
+.mod-palette-foot {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-2) var(--space-4);
+  border-top: 1px solid var(--border);
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+}
+
+.mod-palette-foot span {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+@keyframes mod-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes mod-pop {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.99);
+  }
+}
+
+/* Loading skeleton helpers ------------------------------------------------- */
+
+.mod-skel-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  height: var(--mod-row-height);
+  padding: 0 var(--space-5);
+  border-bottom: 1px solid var(--border);
+  overflow: hidden;
+}
+
+.mod-skel-row:last-child {
+  border-bottom: 0;
+}
+
+.mod-skel-row .skeleton {
+  height: 0.75rem;
+}
+
+.mod-skel-row .skeleton.mod-skel-circle {
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: var(--radius-full);
+  flex: none;
+}
+
+/* Narrow screens ---------------------------------------------------------- */
+
+@media (max-width: 760px) {
+  .mod-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--space-4);
+  }
+
+  .mod-palette-trigger {
+    width: 100%;
+  }
+
+  .mod-palette-trigger .mod-kbd {
+    display: none;
+  }
+
+  .mod-tabs {
+    margin-bottom: var(--space-6);
+    margin-inline: calc(var(--space-4) * -1);
+    padding-inline: var(--space-2);
+  }
+
+  .mod-search {
+    max-width: none;
+    flex-basis: 100%;
+  }
+
+  .mod-palette-backdrop {
+    padding-top: var(--space-4);
+  }
+
+  .mod-palette-foot {
+    display: none;
+  }
+
+  .mod-card-head,
+  .mod-card-body {
+    padding-inline: var(--space-4);
+  }
+}
