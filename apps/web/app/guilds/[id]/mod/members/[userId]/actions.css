@@ -1,0 +1,625 @@
+/* Taking action ------------------------------------------------------------
+   The "Take action" menu in the profile header and the dialog each action
+   opens. Builds on the dialog, field and counter styles in profile.css. */
+
+:root {
+  /* A filled confirm for kicks and bans. Dark text on the light red in the dark
+     theme and white on a deeper red in the light theme, both above 4.5:1. */
+  --ta-danger-fill: #f87171;
+  --ta-danger-fill-hover: #fa8a8a;
+  --ta-on-danger: #1f0606;
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --ta-danger-fill: #b91c1c;
+    --ta-danger-fill-hover: #a01818;
+    --ta-on-danger: #ffffff;
+  }
+}
+
+:root[data-theme="light"] {
+  --ta-danger-fill: #b91c1c;
+  --ta-danger-fill-hover: #a01818;
+  --ta-on-danger: #ffffff;
+}
+
+/* Trigger and menu ----------------------------------------------------------- */
+
+.ta {
+  position: relative;
+  padding-top: var(--space-3);
+}
+
+.ta-trigger {
+  width: 100%;
+  justify-content: flex-start;
+}
+
+.ta-trigger > span {
+  flex: 1 1 auto;
+  text-align: left;
+}
+
+.ta-trigger .ta-chevron {
+  transition: transform var(--mod-motion) var(--ease-out);
+}
+
+.ta-trigger[aria-expanded="true"] .ta-chevron {
+  transform: rotate(180deg);
+}
+
+.ta-trigger:focus-visible,
+.ta-item:focus-visible {
+  outline: 2px solid var(--focus, var(--accent));
+  outline-offset: 2px;
+}
+
+.ta-menu {
+  top: calc(100% + 0.375rem);
+  right: 0;
+  left: auto;
+  width: 19rem;
+  min-width: 0;
+  max-width: calc(100vw - 2 * var(--space-4));
+  max-height: none;
+}
+
+.ta-item {
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-2);
+  min-height: 3rem;
+}
+
+.ta-item-icon {
+  margin-top: 1px;
+}
+
+.ta-item-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.ta-item-label {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--text);
+}
+
+.ta-item-desc {
+  font-size: var(--text-xs);
+  line-height: 1.4;
+  color: var(--text-secondary);
+}
+
+.ta-item[aria-disabled="true"] {
+  cursor: not-allowed;
+}
+
+.ta-item[aria-disabled="true"] .ta-item-label {
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.ta-item[aria-disabled="true"] .ta-item-desc {
+  color: var(--text-tertiary);
+  font-style: italic;
+}
+
+.ta-item[aria-disabled="true"] .ta-item-icon {
+  background: transparent;
+  color: var(--text-tertiary);
+  box-shadow: inset 0 0 0 1.5px var(--border-strong);
+}
+
+/* Dialog layout ------------------------------------------------------------- */
+
+.pf-dialog[data-layout="form"] {
+  width: min(32rem, 100%);
+  /* The buttons stay pinned to the bottom while a long form scrolls, so the
+     edge padding moves onto them, and a field that takes focus is scrolled
+     clear of them rather than left underneath (WCAG 2.4.11). */
+  padding-bottom: 0;
+  scroll-padding-bottom: 6rem;
+}
+
+.pf-dialog[data-layout="form"] .pf-dialog-head {
+  margin-bottom: var(--space-4);
+}
+
+.pf-dialog[data-layout="form"] .pf-dialog-icon {
+  background: var(--surface-3);
+}
+
+.pf-dialog[data-layout="form"] .pf-dialog-actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  margin: var(--space-5) calc(var(--space-6) * -1) 0;
+  padding: var(--space-4) var(--space-6) var(--space-6);
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+}
+
+.pf-dialog[data-layout="form"] .btn-danger:not([aria-disabled="true"]) {
+  background: var(--ta-danger-fill);
+  border-color: var(--ta-danger-fill);
+  color: var(--ta-on-danger);
+  font-weight: 600;
+}
+
+.pf-dialog[data-layout="form"] .btn-danger:not([aria-disabled="true"]):hover {
+  background: var(--ta-danger-fill-hover);
+  border-color: var(--ta-danger-fill-hover);
+}
+
+.pf-dialog[data-layout="form"] .btn:focus-visible {
+  outline: 2px solid var(--focus, var(--accent));
+  outline-offset: 2px;
+}
+
+/* Form fields edge at 3:1 against the dialog, which the hairline border is not. */
+.pf-dialog[data-layout="form"] .input,
+.pf-dialog[data-layout="form"] .select,
+.pf-dialog[data-layout="form"] .textarea {
+  border-color: var(--mod-control-border);
+}
+
+.pf-dialog[data-layout="form"] .input[aria-invalid="true"],
+.pf-dialog[data-layout="form"] .textarea[aria-invalid="true"] {
+  border-color: var(--danger);
+}
+
+.pf-dialog[data-layout="form"] .input:focus-visible,
+.pf-dialog[data-layout="form"] .select:focus-visible,
+.pf-dialog[data-layout="form"] .textarea:focus-visible {
+  border-color: var(--focus);
+  box-shadow: 0 0 0 3px var(--accent-ring);
+}
+
+.ta-content {
+  display: contents;
+}
+
+/* Loading and the feature-off notice ------------------------------------------ */
+
+.ta-loading {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.ta-loading-text {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+
+.ta-skel {
+  height: 2rem;
+  width: 100%;
+}
+
+.ta-skel--tall {
+  height: 5rem;
+}
+
+.ta-skel--short {
+  width: 60%;
+}
+
+.ta-off {
+  display: flex;
+  gap: var(--space-4);
+  padding: var(--space-4);
+  border-radius: var(--radius-lg);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+}
+
+.ta-off-icon {
+  display: grid;
+  place-items: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  flex: none;
+  border-radius: var(--radius-full);
+  background: var(--info-soft);
+  color: var(--mod-info-text);
+}
+
+.ta-off-icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+.ta-off-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+  font-size: var(--text-base);
+  line-height: 1.55;
+  color: var(--text-secondary);
+}
+
+.ta-off-title {
+  font-weight: 600;
+  color: var(--text);
+}
+
+/* Fields ------------------------------------------------------------------------ */
+
+.ta-intro {
+  font-size: var(--text-base);
+  line-height: 1.55;
+  color: var(--text-secondary);
+}
+
+.ta-intro time {
+  color: var(--text);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.ta-fieldset {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.ta-fieldset > legend {
+  float: left;
+  width: 100%;
+  margin-bottom: var(--space-2);
+  padding: 0;
+}
+
+.ta-fieldset > legend + * {
+  clear: both;
+}
+
+.ta-label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.ta-tag {
+  display: inline-flex;
+  align-items: center;
+  height: 1.25rem;
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-full);
+  background: var(--surface-3);
+  color: var(--text-secondary);
+  font-size: var(--text-2xs);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.ta-tag[data-required="true"] {
+  background: var(--attention-soft);
+  color: var(--mod-warn-text);
+}
+
+.ta-select {
+  max-width: 16rem;
+}
+
+/* Length presets: radios drawn as chips. The input stays in the page, only
+   hidden visually, so arrow keys and screen readers treat them as one group. */
+
+.ta-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.ta-chip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: 2.25rem;
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-full);
+  border: 1px solid var(--mod-control-border);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background-color var(--mod-motion) var(--ease-out),
+    border-color var(--mod-motion) var(--ease-out),
+    color var(--mod-motion) var(--ease-out);
+}
+
+.ta-chip:hover {
+  color: var(--text);
+  background: var(--surface-hover);
+}
+
+.ta-chip[data-checked="true"] {
+  background: var(--accent-soft);
+  border-color: var(--focus);
+  color: var(--mod-kick);
+  font-weight: 600;
+}
+
+/* A drawn tick, so the chosen length is told apart by shape as well as colour. */
+.ta-chip[data-checked="true"]::before {
+  content: "";
+  flex: none;
+  width: 0.5rem;
+  height: 0.28rem;
+  margin: -0.15rem 0 0 -0.1rem;
+  border-left: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(-45deg);
+}
+
+.ta-chip-input,
+.ta-choice-input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.ta-chip:has(.ta-chip-input:focus-visible),
+.ta-choice:has(.ta-choice-input:focus-visible) {
+  outline: 2px solid var(--focus, var(--accent));
+  outline-offset: 2px;
+}
+
+.ta-custom {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.ta-amount {
+  width: 6rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.ta-unit {
+  width: 8.5rem;
+}
+
+.ta-until {
+  font-size: var(--text-sm);
+  line-height: 1.45;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.ta-until strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
+/* Permanent or for a set time: two cards, one choice. */
+
+.ta-choices {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+
+.ta-choice {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--mod-control-border);
+  cursor: pointer;
+  transition:
+    background-color var(--mod-motion) var(--ease-out),
+    border-color var(--mod-motion) var(--ease-out);
+}
+
+.ta-choice:hover {
+  background: var(--surface-hover);
+}
+
+.ta-choice[data-checked="true"] {
+  border-color: var(--focus);
+  background: var(--accent-soft);
+}
+
+.ta-choice-mark {
+  position: relative;
+  width: 1rem;
+  height: 1rem;
+  flex: none;
+  margin-top: 2px;
+  border-radius: var(--radius-full);
+  border: 1.5px solid var(--mod-control-border);
+}
+
+.ta-choice[data-checked="true"] .ta-choice-mark {
+  border-color: var(--mod-kick);
+}
+
+.ta-choice[data-checked="true"] .ta-choice-mark::after {
+  content: "";
+  position: absolute;
+  inset: 3px;
+  border-radius: var(--radius-full);
+  background: var(--mod-kick);
+}
+
+.ta-choice-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.ta-choice-title {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--text);
+}
+
+.ta-choice-detail {
+  font-size: var(--text-xs);
+  line-height: 1.4;
+  color: var(--text-secondary);
+}
+
+/* What happens ---------------------------------------------------------------- */
+
+.ta-summary {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+  border-left: 3px solid var(--border-strong);
+}
+
+.ta-summary[data-tone="danger"] {
+  background: var(--danger-soft);
+  border-left-color: var(--danger);
+}
+
+.ta-summary-title {
+  font-size: var(--text-2xs);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.ta-summary[data-tone="danger"] .ta-summary-title {
+  color: var(--mod-danger-text);
+}
+
+.ta-summary-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0;
+  padding-left: var(--space-4);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+  color: var(--text);
+}
+
+.ta-summary-list li::marker {
+  color: var(--text-tertiary);
+}
+
+/* Narrow screens ------------------------------------------------------------------ */
+
+@media (max-width: 1100px) {
+  .pf-standing:has(.ta) {
+    grid-template-columns: auto minmax(0, 1fr) auto auto;
+    grid-template-areas:
+      "kicker kicker kicker take"
+      "pill detail trend take";
+    column-gap: var(--space-4);
+  }
+
+  .ta {
+    grid-area: take;
+    padding-top: 0;
+    align-self: center;
+  }
+
+  .ta-trigger {
+    width: auto;
+  }
+}
+
+@media (max-width: 640px) {
+  .pf-standing:has(.ta) {
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-areas:
+      "kicker kicker"
+      "pill detail"
+      "trend trend"
+      "take take";
+  }
+
+  .ta {
+    padding-top: var(--space-2);
+  }
+
+  .ta-trigger {
+    width: 100%;
+  }
+
+  .ta-menu {
+    left: 0;
+    right: 0;
+    width: auto;
+    max-width: none;
+  }
+
+  /* The dialog becomes a sheet along the bottom edge, where a thumb reaches
+     the buttons, and the fields scroll above them. */
+  .pf-scrim[data-layout="form"] {
+    align-items: end;
+    padding: 0;
+  }
+
+  .pf-dialog[data-layout="form"] {
+    width: 100%;
+    max-height: calc(100dvh - var(--space-8));
+    border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+    border-bottom: 0;
+    padding: var(--space-5) var(--space-4) 0;
+    animation: ta-sheet var(--duration-base) var(--ease-out);
+  }
+
+  .pf-dialog[data-layout="form"] .pf-dialog-actions {
+    margin-inline: calc(var(--space-4) * -1);
+    padding: var(--space-3) var(--space-4) calc(var(--space-4) + env(safe-area-inset-bottom, 0px));
+  }
+
+  .ta-choices {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .ta-select {
+    max-width: none;
+  }
+}
+
+@keyframes ta-sheet {
+  from {
+    transform: translateY(1.5rem);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ta-trigger .ta-chevron,
+  .ta-chip,
+  .ta-choice {
+    transition: none;
+  }
+
+  .pf-dialog[data-layout="form"] {
+    animation: none;
+  }
+}
