@@ -23,7 +23,7 @@ packages/db          Prisma schema and client
 packages/modules/*   feature modules
 ```
 
-`packages/core/src/schema.ts` is the best place to start. A lot of the design comes out of it. To add a feature, see [modules.md](modules.md). If a module seems to need its own dashboard page, the schema is probably missing a field type.
+Start with `packages/core/src/schema.ts`. To add a feature, see [modules.md](modules.md). If a module seems to need its own dashboard page, the schema is probably missing a field type.
 
 ## Checks
 
@@ -33,13 +33,13 @@ Commit messages are a short imperative subject, with a body if the reason isn't 
 
 ## Tests
 
-`pnpm test` builds everything and runs the tests with Node's built-in runner, so there's nothing extra to install. Each package keeps its tests in a `test` folder, and they import the built output instead of the source.
+`pnpm test` builds everything and runs Node's built-in runner. Each package has a `test` folder, and tests import the built output, not the source.
 
-Node runs TypeScript by stripping the types, so a file under test can't use syntax that needs real compilation. Constructor parameter properties are the one that bites. It also helps to keep logic you want tested in a file that doesn't import discord.js.
+Node strips types without compiling, so a file under test can't use syntax that needs real compilation. Constructor parameter properties are the usual offender. Keep testable logic in files that don't import discord.js.
 
 ## Moderation records
 
-A few things in the moderation code will bite you if you don't know about them. [architecture.md](architecture.md) explains why they're this way.
+Things that break if you miss them. The reasons are in [architecture.md](architecture.md).
 
 - Make cases with `createInfraction` from `@tier0/db`, not `prisma.infraction.create`. It assigns the case number, and a row inserted another way collides with the next case.
 - The slash commands and the dashboard share one code path for taking an action, `performAction` in `packages/modules/moderation/src/perform.ts`. A new action goes there so the two can't drift apart.
@@ -49,7 +49,7 @@ A few things in the moderation code will bite you if you don't know about them. 
 
 ## Sample moderation data
 
-A fresh install has an empty moderation dashboard. To fill one server with made-up history, run this against your dev database:
+To fill a server's moderation dashboard with made-up history, run this against your dev database:
 
 ```
 DATABASE_URL=file:/absolute/path/to/data/tier0.db node packages/db/scripts/seed-mod-demo.mjs <guildId>
@@ -57,10 +57,10 @@ DATABASE_URL=file:/absolute/path/to/data/tier0.db node packages/db/scripts/seed-
 
 In PowerShell, set the variable first with `$env:DATABASE_URL = "file:C:/path/to/data/tier0.db"`. The server has to be in the database already, which happens when the bot joins it.
 
-It adds about 60 cases over 45 days across 12 invented members and 4 invented moderators, plus notes, a few removed cases, audit entries and two staff members. Everything it writes starts with `[demo] ` or uses a fixed list of fake user IDs, so this takes it all out again without touching anything else:
+It adds about 60 cases over 45 days across 12 fake members and 4 fake moderators, plus notes, removed cases, audit entries and two staff members. Everything it writes starts with `[demo] ` or uses fake user IDs, so this removes it all and nothing else:
 
 ```
 DATABASE_URL=file:/absolute/path/to/data/tier0.db node packages/db/scripts/seed-mod-demo.mjs <guildId> --remove
 ```
 
-You see the data as the install's owner. The fake staff can't be signed in as, and people show as "User" plus the last four digits of their ID, because Discord doesn't know them.
+You see the data as the install's owner. The fake staff can't be signed in as, and people show as "User" plus the last four digits of their ID, since Discord doesn't know them.
