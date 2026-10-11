@@ -12,6 +12,7 @@
     "@tier0/core": "workspace:*",
     "@tier0/db": "workspace:*",
     "@tier0/module-auditlog": "workspace:*",
+    "@tier0/module-feeds": "workspace:*",
     "@tier0/module-automod": "workspace:*",
     "@tier0/module-leveling": "workspace:*",
     "@tier0/module-moderation": "workspace:*",

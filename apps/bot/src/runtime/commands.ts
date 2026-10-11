@@ -85,7 +85,7 @@ export class CommandSync {
     const disabled = new Set(overrides.map((o) => o.command));
 
     return modules
-      .flatMap((module) => module.commands ?? [])
+      .flatMap((module) => [...(module.commands ?? []), ...(module.contextCommands ?? [])])
       .filter((command) => !disabled.has(command.name))
       .map((command) => command.build().toJSON());
   }

@@ -9,6 +9,7 @@ import leveling from "@tier0/module-leveling";
 import moderation from "@tier0/module-moderation";
 import tickets from "@tier0/module-tickets";
 import auditlog from "@tier0/module-auditlog";
+import feeds from "@tier0/module-feeds";
 import { GuildState } from "./runtime/guild-state.js";
 import { CommandSync } from "./runtime/commands.js";
 import { registerEventDispatch } from "./runtime/dispatch.js";
@@ -26,6 +27,7 @@ registry.register(leveling);
 registry.register(moderation);
 registry.register(tickets);
 registry.register(auditlog);
+registry.register(feeds);
 
 const client = new Client({
   intents: [
@@ -75,7 +77,7 @@ client.on(Events.GuildCreate, async (guild) => {
 });
 
 client.on(Events.InteractionCreate, async (interaction) => {
-  if (!interaction.isChatInputCommand() || !interaction.guild) return;
+  if (!(interaction.isChatInputCommand() || interaction.isContextMenuCommand()) || !interaction.guild) return;
 
   const moduleId = registry.ownerOf(interaction.commandName);
   if (!moduleId) return;
@@ -111,14 +113,21 @@ client.on(Events.InteractionCreate, async (interaction) => {
   }
 
   const module = registry.get(moduleId);
-  const command = module?.commands?.find((c) => c.name === interaction.commandName);
   const ctx = await state.context(interaction.guild, moduleId);
-  if (!command || !ctx) return;
+  if (!module || !ctx) return;
 
   try {
-    await command.run(interaction, ctx);
+    if (interaction.isContextMenuCommand()) {
+      const entry = module.contextCommands?.find((c) => c.name === interaction.commandName);
+      if (!entry) return;
+      await entry.run(interaction, ctx);
+    } else if (interaction.isChatInputCommand()) {
+      const command = module.commands?.find((c) => c.name === interaction.commandName);
+      if (!command) return;
+      await command.run(interaction, ctx);
+    }
   } catch (error) {
-    console.error(`/${interaction.commandName} failed:`, error);
+    console.error(`${interaction.commandName} failed:`, error);
     const message = "That command did not finish. The server log has the details.";
     if (interaction.replied || interaction.deferred) {
       await interaction.followUp({ content: message, flags: MessageFlags.Ephemeral });
@@ -126,6 +135,20 @@ client.on(Events.InteractionCreate, async (interaction) => {
       await interaction.reply({ content: message, flags: MessageFlags.Ephemeral });
     }
   }
+});
+
+// A rejected promise nobody awaited is a bug in one task, not a reason to drop
+// the gateway connection for every server, so it is logged and the bot carries on.
+process.on("unhandledRejection", (reason) => {
+  console.error("Unhandled promise rejection:", reason);
+});
+
+// An uncaught exception leaves the process in a state nobody has checked, so
+// it is logged and the bot exits for the container's restart policy to bring
+// it back clean.
+process.on("uncaughtException", (error) => {
+  console.error("Uncaught exception:", error);
+  process.exit(1);
 });
 
 process.on("SIGTERM", async () => {

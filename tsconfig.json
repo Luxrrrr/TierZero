@@ -11,6 +11,7 @@
     { "path": "packages/modules/moderation" },
     { "path": "packages/modules/tickets" },
     { "path": "packages/modules/auditlog" },
+    { "path": "packages/modules/feeds" },
     { "path": "apps/bot" }
   ]
 }
