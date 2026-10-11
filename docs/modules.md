@@ -1,14 +1,10 @@
 # Writing a module
 
-A module is a folder under `packages/modules` that default-exports `defineModule(...)`. Its settings page shows up in the dashboard on its own.
-
-To add one:
+New modules go in `packages/modules/<id>`. Copy `utility` for the `package.json` and `tsconfig.json`, then:
 
 1. Add a project reference to the root `tsconfig.json`.
 2. Add it to `dependencies` in `apps/bot/package.json`.
 3. Import it in `apps/bot/src/index.ts` and pass it to `registry.register`.
-
-Copy `packages/modules/utility` for the `package.json` and `tsconfig.json`.
 
 ```ts
 import { defineModule, s } from "@tier0/core";
@@ -37,7 +33,7 @@ export default defineModule({
 });
 ```
 
-`ctx.settings` is typed from the schema and already parsed, so handlers never validate anything.
+The settings page is generated from `settings`, and `ctx.settings` is typed from it and already parsed.
 
 ## Settings
 
