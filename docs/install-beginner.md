@@ -17,7 +17,7 @@ That's the whole thing. The Discord part in step 4 is the slowest, and the rest 
 
 ## Contents
 
-- [Words you'll see](#words-youll-see)
+- [Terms you might not know](#terms-you-might-not-know)
 - [Before you start](#before-you-start)
 - [Step 1: Install Docker](#step-1-install-docker)
 - [Step 2: Download TierZero](#step-2-download-tierzero)
@@ -32,17 +32,17 @@ That's the whole thing. The Discord part in step 4 is the slowest, and the rest 
 - [If something goes wrong](#if-something-goes-wrong)
 - [Optional: let moderators use the dashboard from anywhere](#optional-let-moderators-use-the-dashboard-from-anywhere)
 
-## Words you'll see
+## Terms you might not know
 
-| Word | Meaning |
+| Term | Meaning |
 | --- | --- |
-| Bot | A program that acts like a member of your server. It posts messages, gives out roles, bans people and so on. |
-| Dashboard | The website you use to control the bot. It runs on your computer and you open it in a browser. |
-| Docker | A program that runs other programs in isolated containers, so you don't install their parts by hand. |
-| Terminal | A window you type commands into. On Windows it's PowerShell. |
-| Token | A long password that lets a program act as your bot. Keep it private. |
-| Manage Server | A permission Discord gives to roles on a server. It lets someone change that server's settings and add bots to it. |
-| `.env` file | A text file with TierZero's settings. The name starts with a dot. |
+| Docker | Software that runs a program in its own sealed box, called a container, with everything it needs inside. TierZero ships as containers, so you install Docker instead of Node, a database and everything else by hand. |
+| `.env` file | A plain text file of settings that TierZero reads on startup. The name starts with a dot and has nothing before it, which can confuse Windows. |
+| Discord application | The record Discord keeps for your bot: its name, its token, and the sign-in settings the dashboard uses. You create one in the Developer Portal. |
+| Token and client secret | Two different passwords from your application. The token lets the bot log in to Discord. The client secret lets the dashboard sign people in. TierZero needs both. |
+| Privileged intents | Discord switches that let a bot see certain information, here who joins a server and what people post. They're off by default and you turn them on yourself. |
+| Redirect | The address Discord sends you back to after you sign in. It has to be on a list you set in the Developer Portal, and it has to match the address in your browser exactly. |
+| `localhost:8080` | An address that only works on the computer you're sitting at. `localhost` means this computer, and `8080` is the port, the numbered door the dashboard listens on. |
 
 ## Before you start
 
