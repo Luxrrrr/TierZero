@@ -2,7 +2,7 @@
 
 ## Premise
 
-Every decision here answers to five constraints, in order of precedence:
+Every decision here answers to four constraints, in order of precedence:
 
 1. A server owner with no development background configures everything from the
    dashboard. Editing code is a path for advanced users, never a requirement.
@@ -10,7 +10,6 @@ Every decision here answers to five constraints, in order of precedence:
    at any time, without a restart.
 3. The project runs at zero cost. No paid infrastructure in the default install.
 4. Setup instructions target a competent adult, not a developer.
-5. The repository reads as the work of a professional developer throughout.
 
 Constraints 1 and 2 are the ones with architectural teeth. They rule out the
 shape most hobby bots take, where features are wired directly into a monolith
