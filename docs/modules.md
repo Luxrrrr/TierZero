@@ -54,15 +54,15 @@ in the dashboard, and it works for any schema, so no module ships UI code.
 | --- | --- | --- |
 | `s.string({ multiline, min, max })` | string | text input or textarea |
 | `s.integer({ min, max })` | number | number input |
-| `s.boolean()` | boolean | checkbox |
-| `s.duration({ max })` | milliseconds | text input accepting `30s`, `15m`, `2h`, `7d` |
-| `s.channel({ types })` | snowflake | channel picker, filtered by type |
+| `s.boolean()` | boolean | switch |
+| `s.duration({ max })` | milliseconds | number input with a unit next to it |
+| `s.channel({ types })` | snowflake | channel picker, filtered by type and grouped by category |
 | `s.role()` | snowflake | role picker, with unassignable roles greyed out |
 | `s.choice({ options })` | string | select |
 | `s.emoji()` | string | text input accepting a unicode or `<:name:id>` emoji |
-| `s.template({ placeholders })` | string | textarea with insertable placeholders and a character count |
-| `s.array(field, { min, max })` | array | repeating rows with add and remove |
-| `s.object({ ... })` | object | grouped fields |
+| `s.template({ placeholders })` | string | textarea with insertable placeholders and a preview |
+| `s.array(field, { min, max })` | array | chips, tags or a list of removable rows, by item kind |
+| `s.object({ ... })` | object | a card of its own at the top level, a subgroup below it |
 
 Every builder takes `label`, `help` and `optional`. A field with a `default` is
 used whenever stored settings do not carry that key, so a module can add a
@@ -70,6 +70,162 @@ setting later without a database migration.
 
 Settings reach handlers already parsed. `ctx.settings` is typed from the schema,
 so a handler never validates anything itself and never sees the raw JSON.
+
+### Metadata the dashboard reads
+
+Three further keys change nothing about parsing. Two of them exist so the
+dashboard can be honest about a half-configured server; the third decides what
+the quick setup asks about.
+
+`essential: true` marks a setting the module cannot do anything without. Such a
+field is nearly always `optional` as well, because the module has to load before
+anyone can configure it; the pair says "this will parse, but the feature is
+idle until it is filled in". The dashboard shows the module as needing setup
+and names the fields that are still empty.
+
+```ts
+channel: s.channel({
+  types: ["text"],
+  optional: true,
+  essential: true,
+  label: "Log channel",
+}),
+```
+
+`when: { field, equals }` points at a **sibling** in the same object and means
+"this only applies when that one says so". Leave `equals` out and the condition
+is met whenever the sibling holds anything. The dashboard disables the field
+while the condition is unmet and explains why, built from the sibling's label,
+so the `help` text should not repeat it. Naming a sibling that does not exist
+fails the test suite rather than silently disabling the field forever.
+
+```ts
+action: s.choice({
+  label: "What to do when it trips",
+  options: [
+    { value: "delete", label: "Delete the message" },
+    { value: "timeout", label: "Delete the message and time the member out" },
+  ],
+  default: "delete",
+}),
+timeoutDuration: s.duration({
+  label: "Timeout length",
+  default: "10m",
+  when: { field: "action", equals: "timeout" },
+}),
+```
+
+`guided: true` marks a setting the quick setup asks about. The wizard walks a
+reduced copy of the schema: the fields tagged here, plus every `essential` one,
+which it asks whether or not it is tagged, and renders it through the same form
+renderer as the full page. Tag the handful of settings someone has to decide
+before the feature is any use, and leave the rest; the point of the short path
+is that it is short. A module that tags nothing offers no quick setup, which is
+a reasonable answer for one whose settings are all repeating rows.
+
+```ts
+modLogChannel: s.channel({
+  types: ["text"],
+  optional: true,
+  guided: true,
+  label: "Mod log channel",
+}),
+```
+
+Two things follow from the wizard editing the module's whole settings object and
+sending it back intact. Settings it does not draw keep the values they already
+have, so tagging a field is not a decision about what the module stores. And a
+tagged field whose `when` names a sibling pulls that sibling in as well, so the
+wizard never shows a control greyed out with the switch that would enable it
+left behind on the full page.
+
+The bundles the quick setup offers (which modules it walks, and in what order)
+live in `apps/web/lib/guided.ts`. That is the one place the dashboard names
+modules directly, and a module missing from an install is dropped from a bundle
+rather than breaking it.
+
+### Groups that switch off
+
+A top-level `s.object` becomes a card of its own. When the first field in that
+object is a boolean named `enabled`, the dashboard lifts it out of the body and
+draws it as a switch in the card header, dimming the rest of the group while it
+is off. Nothing enforces the name, so a group that wants its first boolean to
+stay in the body simply calls it something else.
+
+```ts
+transcript: s.object(
+  {
+    enabled: s.boolean({ label: "Save a transcript when a ticket closes", default: true }),
+    channel: s.channel({ types: ["text"], optional: true, when: { field: "enabled", equals: true } }),
+  },
+  { label: "Transcripts" },
+),
+```
+
+### Hosting settings inside an area
+
+Every module gets a settings page of its own at `/guilds/:id/:moduleId`. A module
+that belongs to a larger part of the dashboard can say so with `area`:
+
+```ts
+export default defineModule({
+  id: "automod",
+  category: "moderation",
+  area: "moderation",
+  // ...
+});
+```
+
+The only area today is `moderation`. The settings are still drawn from the
+schema by the same form, with the same validation and save bar; `area` changes
+where that form sits. Moderation and automod are hosted under the Moderation
+tabs, at `/guilds/:id/mod/settings` and `/guilds/:id/mod/settings/automod`, and
+the old module pages redirect there. A module with an area is not listed again
+under its category in the sidebar. Hosted settings need Manage Server, which a
+staff role does not grant, so the Settings tab is shown to managers only.
+
+Links to a module's settings go through `moduleHref` in
+`apps/web/lib/module-href.ts`, which returns the hosted address when the module
+declares an area. Do not build `/guilds/${id}/${module.id}` by hand.
+
+## Status and actions on list rows
+
+A setting that is a list of objects (feeds, role menus, reward tiers) is drawn
+as one row per entry. A module can attach two things to those rows without any
+dashboard code: a status line beside each one, and buttons that do something to
+one. Both are declared under `rows`, keyed by the list's path in the schema
+without indices.
+
+```ts
+rows: {
+  "news.feeds": {
+    async status({ ctx, rows }) {
+      return rows.map((ref) => ({ tone: "ok", text: "Working" }));
+    },
+    actions: {
+      send: {
+        label: "Send latest posts",
+        input: s.object({ count: s.integer({ label: "How many", min: 1, max: 10, default: 3 }) }),
+        async run({ ctx, row, input }) {
+          return { ok: true, message: "Sent 3 posts." };
+        },
+      },
+    },
+  },
+},
+```
+
+`tone` is `ok`, `problem` or `idle`, and the text is what the row shows. An
+action's `input` is an ordinary settings object, so the dashboard asks for it
+with the same controls and the bot validates it the same way. The message that
+`run` returns is shown to whoever pressed the button, so it should say what
+happened, in words.
+
+Both hooks work on the settings as last saved, never on a draft, which is why
+the dashboard disables the buttons while there are unsaved changes. A row
+reaches the hook as a `RowRef`: its indexed path (`patchNotes.destinations[0].games[1]`),
+the row itself, and the object that holds the list, so a game can be read in the
+context of the channel it sits under.
 
 ## Commands
 
@@ -80,6 +236,37 @@ fighting over one command at runtime.
 Commands are registered per guild. The set is recalculated whenever a module is
 toggled or an override changes, and registration is debounced so that an
 operator clicking through several switches produces one API call.
+
+### Right-click entries
+
+A module can also add entries to Discord's right-click menu on members and on
+messages with `contextCommands`. They share the command namespace, the Commands
+page and the per-server switches with slash commands, so a name has to be unique
+across both. Discord allows spaces and capitals in these names and at most five
+of each kind per server.
+
+```ts
+contextCommands: [
+  {
+    name: "Warn member",
+    description: "Warn a member from the right-click menu.",
+    kind: "user", // or "message"
+    build: () =>
+      new ContextMenuCommandBuilder()
+        .setName("Warn member")
+        .setType(ApplicationCommandType.User)
+        .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers)
+        .setContexts(InteractionContextType.Guild),
+    async run(interaction, ctx) {
+      // interaction.targetUser, or interaction.targetMessage for a message entry
+    },
+  },
+],
+```
+
+`setDefaultMemberPermissions` only decides who is shown the entry. It is not an
+authorisation check, so `run` has to make its own, and anything that needs input
+should open a modal and check again when it is submitted.
 
 ## Events
 
