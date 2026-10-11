@@ -1,23 +1,18 @@
 # Writing a module
 
-A module is a directory under `packages/modules` that default-exports a call to
-`defineModule`. Its settings page appears in the dashboard on its own. You
-never write one.
+A module is a folder under `packages/modules` that default-exports a call to `defineModule`. Its settings page shows up in the dashboard by itself, so you don't write one.
 
-Wiring a new module up takes three lines, all of them mechanical:
+To wire a new module in:
 
 1. Add a project reference in the root `tsconfig.json` so `tsc -b` builds it.
-2. Add it to the `dependencies` of `apps/bot/package.json` so the import
-   resolves.
+2. Add it to `dependencies` in `apps/bot/package.json`.
 3. Import it in `apps/bot/src/index.ts` and pass it to `registry.register`.
 
-Copy `packages/modules/utility` for the package manifest and tsconfig. It is
-kept small and exists to be the example.
+Copy `packages/modules/utility` for the `package.json` and `tsconfig.json`. It's small on purpose and exists to be the example.
 
-## The shape of a module
+## A module
 
 ```ts
-import { SlashCommandBuilder } from "discord.js";
 import { defineModule, s } from "@tier0/core";
 
 export default defineModule({
@@ -46,42 +41,31 @@ export default defineModule({
 
 ## Settings
 
-The builders in `s` each produce a validator and the metadata the dashboard
-needs to draw a control. That pairing is the point: there is one form renderer
-in the dashboard, and it works for any schema, so no module ships UI code.
+Each builder in `s` gives you a validator and the metadata the dashboard needs to draw a control. One form renderer handles any schema, which is why modules don't ship UI.
 
 | Builder | Stored as | Dashboard control |
 | --- | --- | --- |
 | `s.string({ multiline, min, max })` | string | text input or textarea |
 | `s.integer({ min, max })` | number | number input |
 | `s.boolean()` | boolean | switch |
-| `s.duration({ max })` | milliseconds | number input with a unit next to it |
+| `s.duration({ max })` | milliseconds | number input with a unit |
 | `s.channel({ types })` | snowflake | channel picker, filtered by type and grouped by category |
-| `s.role()` | snowflake | role picker, with unassignable roles greyed out |
+| `s.role()` | snowflake | role picker, with roles the bot can't assign greyed out |
 | `s.choice({ options })` | string | select |
-| `s.emoji()` | string | text input accepting a unicode or `<:name:id>` emoji |
+| `s.emoji()` | string | text input that takes a unicode or `<:name:id>` emoji |
 | `s.template({ placeholders })` | string | textarea with insertable placeholders and a preview |
-| `s.array(field, { min, max })` | array | chips, tags or a list of removable rows, by item kind |
-| `s.object({ ... })` | object | a card of its own at the top level, a subgroup below it |
+| `s.array(field, { min, max })` | array | chips, tags or removable rows, depending on the item |
+| `s.object({ ... })` | object | a card at the top level, a subgroup below that |
 
-Every builder takes `label`, `help` and `optional`. A field with a `default` is
-used whenever stored settings do not carry that key, so a module can add a
-setting later without a database migration.
+Every builder takes `label`, `help` and `optional`. A field with a `default` uses it whenever the stored settings don't have that key, so you can add a setting without a migration.
 
-Settings reach handlers already parsed. `ctx.settings` is typed from the schema,
-so a handler never validates anything itself and never sees the raw JSON.
+Handlers get settings already parsed. `ctx.settings` is typed from the schema, and a handler never validates anything or sees raw JSON.
 
 ### Metadata the dashboard reads
 
-Three further keys change nothing about parsing. Two of them exist so the
-dashboard can be honest about a half-configured server; the third decides what
-the quick setup asks about.
+Three more keys don't affect parsing.
 
-`essential: true` marks a setting the module cannot do anything without. Such a
-field is nearly always `optional` as well, because the module has to load before
-anyone can configure it; the pair says "this will parse, but the feature is
-idle until it is filled in". The dashboard shows the module as needing setup
-and names the fields that are still empty.
+**`essential: true`** marks a setting the module can't do anything without. It's nearly always `optional` as well, because the module has to load before anyone can configure it. The dashboard shows the module as needing setup and lists the empty fields.
 
 ```ts
 channel: s.channel({
@@ -92,12 +76,7 @@ channel: s.channel({
 }),
 ```
 
-`when: { field, equals }` points at a **sibling** in the same object and means
-"this only applies when that one says so". Leave `equals` out and the condition
-is met whenever the sibling holds anything. The dashboard disables the field
-while the condition is unmet and explains why, built from the sibling's label,
-so the `help` text should not repeat it. Naming a sibling that does not exist
-fails the test suite rather than silently disabling the field forever.
+**`when: { field, equals }`** names a sibling in the same object and means "only applies when that one says so". Leave out `equals` and it applies whenever the sibling has any value. The dashboard disables the field while the condition isn't met and explains why, using the sibling's label, so don't repeat that in `help`. A sibling that doesn't exist fails the test suite.
 
 ```ts
 action: s.choice({
@@ -115,13 +94,7 @@ timeoutDuration: s.duration({
 }),
 ```
 
-`guided: true` marks a setting the quick setup asks about. The wizard walks a
-reduced copy of the schema: the fields tagged here, plus every `essential` one,
-which it asks whether or not it is tagged, and renders it through the same form
-renderer as the full page. Tag the handful of settings someone has to decide
-before the feature is any use, and leave the rest; the point of the short path
-is that it is short. A module that tags nothing offers no quick setup, which is
-a reasonable answer for one whose settings are all repeating rows.
+**`guided: true`** marks a setting the quick setup asks about. The quick setup draws a reduced copy of your schema, with the fields tagged `guided` plus every `essential` one, through the same renderer as the full page. Tag the few things someone has to decide before the feature is useful and leave the rest. A module that tags nothing gets no quick setup, which is fine if its settings are all repeating rows.
 
 ```ts
 modLogChannel: s.channel({
@@ -132,25 +105,13 @@ modLogChannel: s.channel({
 }),
 ```
 
-Two things follow from the wizard editing the module's whole settings object and
-sending it back intact. Settings it does not draw keep the values they already
-have, so tagging a field is not a decision about what the module stores. And a
-tagged field whose `when` names a sibling pulls that sibling in as well, so the
-wizard never shows a control greyed out with the switch that would enable it
-left behind on the full page.
+The quick setup sends the module's whole settings object back, so settings it doesn't show keep their values. A tagged field whose `when` names a sibling pulls that sibling in too, so you never see a control greyed out with the switch that enables it left on the full page.
 
-The bundles the quick setup offers (which modules it walks, and in what order)
-live in `apps/web/lib/guided.ts`. That is the one place the dashboard names
-modules directly, and a module missing from an install is dropped from a bundle
-rather than breaking it.
+Which modules the quick setup walks, and in what order, is set in `apps/web/lib/guided.ts`. It's the only place the dashboard names modules directly. A module that isn't installed is dropped from a bundle.
 
 ### Groups that switch off
 
-A top-level `s.object` becomes a card of its own. When the first field in that
-object is a boolean named `enabled`, the dashboard lifts it out of the body and
-draws it as a switch in the card header, dimming the rest of the group while it
-is off. Nothing enforces the name, so a group that wants its first boolean to
-stay in the body simply calls it something else.
+A top-level `s.object` becomes its own card. If its first field is a boolean named `enabled`, the dashboard moves it into the card header as a switch and dims the rest of the group while it's off. Nothing enforces the name. Call the boolean something else if you want it to stay in the body.
 
 ```ts
 transcript: s.object(
@@ -162,10 +123,9 @@ transcript: s.object(
 ),
 ```
 
-### Hosting settings inside an area
+### Hosting settings in an area
 
-Every module gets a settings page of its own at `/guilds/:id/:moduleId`. A module
-that belongs to a larger part of the dashboard can say so with `area`:
+Each module's settings page is at `/guilds/:id/:moduleId`. A module that belongs to a bigger part of the dashboard can say so with `area`:
 
 ```ts
 export default defineModule({
@@ -176,25 +136,13 @@ export default defineModule({
 });
 ```
 
-The only area today is `moderation`. The settings are still drawn from the
-schema by the same form, with the same validation and save bar; `area` changes
-where that form sits. Moderation and automod are hosted under the Moderation
-tabs, at `/guilds/:id/mod/settings` and `/guilds/:id/mod/settings/automod`, and
-the old module pages redirect there. A module with an area is not listed again
-under its category in the sidebar. Hosted settings need Manage Server, which a
-staff role does not grant, so the Settings tab is shown to managers only.
+`moderation` is the only area. The form is still drawn from the schema and saves the same way. Only where it sits changes. Moderation and automod live under the Moderation tabs, at `/guilds/:id/mod/settings` and `/guilds/:id/mod/settings/automod`, and the old module pages redirect there. They aren't listed again in the sidebar. They still need Manage Server, which a staff role doesn't grant, so the Settings tab only shows for server managers.
 
-Links to a module's settings go through `moduleHref` in
-`apps/web/lib/module-href.ts`, which returns the hosted address when the module
-declares an area. Do not build `/guilds/${id}/${module.id}` by hand.
+Link to a module's settings with `moduleHref` from `apps/web/lib/module-href.ts`, which returns the hosted address when there is one. Don't build `/guilds/${id}/${module.id}` by hand.
 
-## Status and actions on list rows
+## Rows: status and actions
 
-A setting that is a list of objects (feeds, role menus, reward tiers) is drawn
-as one row per entry. A module can attach two things to those rows without any
-dashboard code: a status line beside each one, and buttons that do something to
-one. Both are declared under `rows`, keyed by the list's path in the schema
-without indices.
+A setting that's a list of objects (feeds, role menus, reward tiers) is drawn as one row per entry. You can attach a status line and buttons to those rows without any dashboard code, with `rows`, keyed by the list's schema path without indices.
 
 ```ts
 rows: {
@@ -215,35 +163,19 @@ rows: {
 },
 ```
 
-`tone` is `ok`, `problem` or `idle`, and the text is what the row shows. An
-action's `input` is an ordinary settings object, so the dashboard asks for it
-with the same controls and the bot validates it the same way. The message that
-`run` returns is shown to whoever pressed the button, so it should say what
-happened, in words.
+`tone` is `ok`, `problem` or `idle`, and `text` is what the row shows. An action's `input` is a normal settings object, so the dashboard asks for it with the usual controls and the bot validates it the same way. Whatever `run` returns as `message` is shown to the person who pressed the button, so say what happened.
 
-Both hooks work on the settings as last saved, never on a draft, which is why
-the dashboard disables the buttons while there are unsaved changes. A row
-reaches the hook as a `RowRef`: its indexed path (`patchNotes.destinations[0].games[1]`),
-the row itself, and the object that holds the list, so a game can be read in the
-context of the channel it sits under.
+Both hooks work on the settings as last saved, not on a draft. That's why the dashboard disables the buttons while there are unsaved changes. A row arrives as a `RowRef`: its indexed path (`patchNotes.destinations[0].games[1]`), the row itself, and the object that holds the list. That lets a game be read in the context of the channel it sits under.
 
 ## Commands
 
-Each command declares its own name, which must be unique across all modules.
-The registry rejects a duplicate at startup, so two modules can never end up
-fighting over one command at runtime.
+Each command has a name, which has to be unique across every module. The registry rejects a duplicate at startup.
 
-Commands are registered per guild. The set is recalculated whenever a module is
-toggled or an override changes, and registration is debounced so that an
-operator clicking through several switches produces one API call.
+Commands are registered per server. The set is recalculated when a module is toggled or an override changes, and registration is debounced so clicking through several switches makes one API call.
 
 ### Right-click entries
 
-A module can also add entries to Discord's right-click menu on members and on
-messages with `contextCommands`. They share the command namespace, the Commands
-page and the per-server switches with slash commands, so a name has to be unique
-across both. Discord allows spaces and capitals in these names and at most five
-of each kind per server.
+`contextCommands` adds entries to Discord's right-click menu on members and messages. They share the command namespace, the Commands page and the per-server switches with slash commands, so a name must be unique across both. Discord allows spaces and capitals in these names, and at most five of each kind per server.
 
 ```ts
 contextCommands: [
@@ -264,37 +196,37 @@ contextCommands: [
 ],
 ```
 
-`setDefaultMemberPermissions` only decides who is shown the entry. It is not an
-authorisation check, so `run` has to make its own, and anything that needs input
-should open a modal and check again when it is submitted.
+`setDefaultMemberPermissions` only controls who sees the entry. It isn't an authorization check, so `run` has to do its own. If it needs input, open a modal and check again on submit.
 
 ## Events
 
-A module declares handlers for the events it cares about. Each is optional, and
-handlers are only called for guilds where the module is switched on.
+Handlers are optional and only run for servers where the module is switched on.
 
 | Handler | Fires on |
 | --- | --- |
-| `messageCreate(message, ctx)` | a message in a guild, bots excluded |
+| `messageCreate(message, ctx)` | a message in a server, bots excluded |
 | `messageDelete(message, ctx)` | a deletion, often with a partial message |
 | `messageUpdate(before, after, ctx)` | an edit |
 | `memberJoin(member, ctx)` | someone joins |
 | `memberLeave(member, ctx)` | someone leaves or is removed |
 | `memberUpdate(before, after, ctx)` | nickname, roles or timeout changed |
-| `channelCreate(channel, ctx)` / `channelDelete` | a channel appears or goes |
-| `roleCreate(role, ctx)` / `roleDelete` | a role appears or goes |
+| `channelCreate(channel, ctx)` / `channelDelete` | a channel is created or deleted |
+| `roleCreate(role, ctx)` / `roleDelete` | a role is created or deleted |
 | `banAdd(ban, ctx)` / `banRemove(ban, ctx)` | a ban is placed or lifted |
 
-Partials are enabled, so anything about an object the bot never cached arrives
-with most fields null. Handle that, or your log fills up with `undefined`.
+Partials are on, so anything about an object the bot never cached arrives with most fields null. Handle that or your log fills with `undefined`.
 
-Every handler runs inside its own error boundary. A module that throws is
-logged with its id and the others still receive the event.
+Each handler runs in its own try/catch. If your module throws, it's logged with the module id and the others still get the event.
+
+## Lifecycle hooks
+
+- `onEnable(ctx)` runs when someone switches the module on for a server.
+- `onDisable(ctx)` runs when they switch it off. Remove whatever the module created, because it might be switched on again later.
+- `onSettingsChange(ctx, previous)` runs after settings are saved. Use it for work that should happen once and not on every command, such as rebuilding a posted role menu.
 
 ## Buttons and modals
 
-Components are addressed by custom id, which is namespaced the same way task
-kinds are:
+Components are addressed by a custom id, which is namespaced to the module:
 
 ```ts
 import { customId } from "@tier0/core";
@@ -315,9 +247,7 @@ modals: {
 },
 ```
 
-The router splits the id, finds the module that owns it and hands the
-interaction over, so two modules can both have a `confirm` button without
-colliding. Always build ids with `customId`. Do not assemble one by hand.
+The router splits the id, finds the module that owns it and passes the interaction on, so two modules can both have a `confirm` button without clashing. Always build ids with `customId`.
 
 ## Deferred work
 
@@ -336,40 +266,16 @@ tasks: {
 },
 ```
 
-Rows outlive the process, so a restart between scheduling and running loses
-nothing. `cancel` matches on a subset of the payload, so an action reversed by
-hand can drop its pending reversal without knowing what else was recorded
-alongside it.
+Tasks are database rows, so a restart between scheduling and running loses nothing. `cancel` matches on a subset of the payload, so reversing something by hand can drop its pending task without knowing what else was stored with it.
 
-## Lifecycle
+## Testing
 
-All three hooks are optional.
+`pnpm test` builds the workspace and runs the tests with Node's built-in runner. Put them in a `test` folder next to the module. They import the built output, not the source.
 
-- `onEnable(ctx)` runs when an operator switches the module on for a server.
-- `onDisable(ctx)` runs when they switch it off. Remove anything the module
-  created. Somebody may switch the module back on later.
-- `onSettingsChange(ctx, previous)` runs after settings are saved. Use it for
-  work that has to happen once and not on every command, such as rebuilding a
-  posted role menu.
-
-## Testing a module
-
-`pnpm test` builds the workspace and runs the suite through Node's own test
-runner. Tests live in a `test` directory beside the module.
-
-Two things shape how a module should be laid out for testing. Tests import
-built output, not source. And Node runs TypeScript by stripping the types out
-instead of compiling, so a file under test cannot use syntax that needs real
-code generation.
-
-The practical consequence is worth following even if you never write a test:
-**keep the logic worth checking in a file that does not import discord.js.**
-Rule evaluation, curve arithmetic, template rendering and permission decisions
-are all pure functions of their inputs, and pulling them out of the handler
-makes them both testable and easier to read.
+Node runs TypeScript by stripping types, so a file under test can't use syntax that needs real compilation. Keep logic you want tested in a file that doesn't import discord.js. Rule checks, curve math, template rendering and permission decisions are all plain functions, and pulling them out of the handler makes them testable and easier to read.
 
 ```ts
-// src/levels.ts - no discord.js import
+// src/levels.ts, no discord.js import
 export function levelForXp(xp: number): number { ... }
 ```
 
@@ -384,8 +290,7 @@ test("is monotonic", () => {
 });
 ```
 
-Settings parsing is pure too, so a schema can be checked without a Discord
-connection at all:
+Settings parsing is pure too, so you can check a schema without a Discord connection:
 
 ```ts
 const result = module.settings.parse({ channel: "123456789012345678" });
