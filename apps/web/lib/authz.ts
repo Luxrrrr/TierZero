@@ -3,6 +3,14 @@ import { auth } from "./auth";
 import { fetchUserGuilds, refreshDiscordToken } from "./discord";
 import { authorizedGuildIds } from "./permissions";
 import { listBotGuilds } from "./control-api";
+import {
+  afterAuthzFailure,
+  isTransientFailure,
+  readAuthzCache,
+  recordAuthzFailure,
+  recordAuthzSuccess,
+  type AuthzCacheEntry,
+} from "./authz-cache";
 
 /**
  * The one place that decides whether a signed-in user may configure a given
@@ -30,10 +38,9 @@ export type AuthzResult = AuthzOk | AuthzFail;
 // each picker's route), and Discord rate limits /users/@me/guilds harshly
 // enough that the uncached version 429s in ordinary use. The cost of the cache
 // is that a permission revoked on Discord keeps working here for up to a
-// minute, which is the right trade for a dashboard one operator uses.
-const AUTHZ_TTL_MS = 60_000;
-
-const authorizedCache = new Map<string, { guildIds: Set<string>; expiresAt: number }>();
+// minute, or up to 15 while Discord itself is failing; authz-cache.ts has the
+// rules.
+const authorizedCache = new Map<string, AuthzCacheEntry>();
 
 interface DiscordAccountTokens {
   accessToken: string;
@@ -74,22 +81,51 @@ async function getValidAccessToken(userId: string): Promise<DiscordAccountTokens
  */
 export async function getAuthorizedGuildIds(userId: string): Promise<Set<string>> {
   const cached = authorizedCache.get(userId);
-  if (cached && cached.expiresAt > Date.now()) return cached.guildIds;
+  const read = readAuthzCache(cached, Date.now());
+  if (read.kind === "use") return read.guildIds;
+  if (read.kind === "fail") throw read.error;
 
-  const tokens = await getValidAccessToken(userId);
-  if (!tokens) return new Set();
+  // A page and each picker on it ask at the same moment, and none of them has an
+  // answer cached yet right after a start. Without sharing one lookup they all go
+  // to Discord together, which is what trips its rate limit.
+  const running = lookups.get(userId);
+  if (running) return running;
+  const lookup = lookUpGuildIds(userId, cached).finally(() => lookups.delete(userId));
+  lookups.set(userId, lookup);
+  return lookup;
+}
 
-  const [userGuilds, botGuilds] = await Promise.all([
-    fetchUserGuilds(tokens.accessToken),
-    listBotGuilds(),
-  ]);
+const lookups = new Map<string, Promise<Set<string>>>();
 
-  const authorized = authorizedGuildIds(
-    userGuilds,
-    botGuilds.map((g) => g.id),
-  );
-  authorizedCache.set(userId, { guildIds: authorized, expiresAt: Date.now() + AUTHZ_TTL_MS });
-  return authorized;
+async function lookUpGuildIds(userId: string, cached: AuthzCacheEntry | undefined): Promise<Set<string>> {
+  try {
+    const tokens = await getValidAccessToken(userId);
+    if (!tokens) return new Set();
+
+    const [userGuilds, botGuilds] = await Promise.all([
+      fetchUserGuilds(tokens.accessToken),
+      listBotGuilds(),
+    ]);
+
+    const authorized = authorizedGuildIds(
+      userGuilds,
+      botGuilds.map((g) => g.id),
+    );
+    authorizedCache.set(userId, recordAuthzSuccess(authorized, Date.now()));
+    return authorized;
+  } catch (error) {
+    // A refusal from Discord (revoked token, no access) ends the grant now. Only
+    // "could not find out" failures may be covered by the last good answer.
+    if (!isTransientFailure(error)) {
+      authorizedCache.delete(userId);
+      throw error;
+    }
+    const entry = recordAuthzFailure(cached, error, Date.now());
+    authorizedCache.set(userId, entry);
+    const fallback = afterAuthzFailure(entry, Date.now());
+    if (fallback.kind === "use") return fallback.guildIds;
+    throw error;
+  }
 }
 
 /** Drops a user's cached grants so a permission change can be picked up early. */
