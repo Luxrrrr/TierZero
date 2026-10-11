@@ -19,6 +19,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     Discord({
       clientId: process.env.DISCORD_CLIENT_ID,
       clientSecret: process.env.DISCORD_CLIENT_SECRET,
+      // Discord returns `iss` on the callback (RFC 9207) and the provider's
+      // default issuer is a placeholder, so without this every sign-in is
+      // rejected as an issuer mismatch.
+      issuer: "https://discord.com",
       authorization: { params: { scope: SCOPES } },
     }),
   ],
