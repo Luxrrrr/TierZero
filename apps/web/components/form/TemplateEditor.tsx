@@ -129,12 +129,12 @@ function render(value: string, serverName: string | undefined): ReactNode[] {
       case "user":
         parts.push(
           <span className="dm-mention" key={key}>
-            @Lux
+            @Alex
           </span>,
         );
         break;
       case "username":
-        parts.push(<Fragment key={key}>Lux</Fragment>);
+        parts.push(<Fragment key={key}>Alex</Fragment>);
         break;
       case "server":
         parts.push(<Fragment key={key}>{serverName ?? "your server"}</Fragment>);
