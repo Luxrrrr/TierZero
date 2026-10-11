@@ -6,6 +6,8 @@ It covers moderation, automod, tickets, logging and leveling, which most bots ch
 
 Your server's data stays on the machine you run it on.
 
+![The server overview in the TierZero dashboard, with every feature as a tile](docs/images/dashboard-overview.png)
+
 ## Status
 
 Everything listed below works and is running on a real server. There's no tagged release yet, so settings and the database can still change between commits. If you're going to build on the internals, read [docs/architecture.md](docs/architecture.md) first.
@@ -57,6 +59,10 @@ Every feature is a module and every module starts off. You switch them on and of
 | Leveling | XP for activity, role rewards and a leaderboard. No image rank cards, on purpose. |
 | News and patch notes | Posts new items from RSS feeds and Steam patch notes as embeds with the game's logo. For sources Discord's Follow button can't handle. |
 | Utility | Server and member info. |
+
+![The moderation overview: statistics, actions per day and what automod did](docs/images/moderation-overview.png)
+
+![A member's record with a timeline of actions and staff notes](docs/images/member-profile.png)
 
 More detail on each is in [docs/features.md](docs/features.md).
 
