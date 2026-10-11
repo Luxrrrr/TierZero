@@ -1,6 +1,31 @@
 # Features
 
-Every feature is a module. You switch modules on per server from the dashboard and the change applies immediately. A module that's off does nothing, and most settings are optional. Leave one blank and that part stays quiet.
+## The short version
+
+| Feature | What it does |
+| --- | --- |
+| Moderation | Warn, timeout, kick, ban and temporary bans, with numbered cases and role hierarchy checks. |
+| Moderation dashboard | Member records, staff notes, actions from the web or Discord's right-click menu, statistics, an audit trail and CSV export. |
+| Automod | Seven rules: invites, links, capitals, repeated text, mentions, banned words, rate limiting. |
+| Tickets | A button that opens a private channel with your staff. |
+| Welcome messages | Greetings, farewells and roles on join. |
+| Role menus | Members pick their roles from buttons. |
+| Audit logging | Logs edits, deletions, joins, role changes and more to a channel. |
+| Leveling | XP, role rewards and a leaderboard. No image cards. |
+| News and patch notes | RSS feeds and Steam patch notes, posted as embeds. |
+| Utility | Server and member info. |
+
+Good to know:
+
+- Every feature starts off. You switch them on per server, and it applies immediately with no restart.
+- **Quick setup** in the sidebar gets a feature running with just the settings it needs.
+- Moderators don't need Manage Server. The owner adds them under Moderation, then Access.
+- Moderators can only use the dashboard if it's reachable from their devices. The [install guide](install.md#reaching-the-dashboard-from-other-devices) covers how.
+- Only the owner can permanently delete a case or note. Anyone else's removal leaves a trace.
+
+## In detail
+
+Every feature is a module, and a module that's off does nothing. Most settings are optional. Leave one blank and that part stays quiet.
 
 - [Quick setup](#quick-setup)
 - [Moderation](#moderation)
