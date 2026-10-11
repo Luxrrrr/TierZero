@@ -1,0 +1,641 @@
+/* Access tab. Layout and the few controls the shared mod primitives do not
+   cover: the level selector, the add form, the confirm dialog and the
+   permission matrix. Everything reads tokens, so both themes follow. */
+
+.access-room {
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+}
+
+.access-room .mod-kpi-value {
+  font-size: var(--text-xl);
+}
+
+.access-kpi-note {
+  align-items: flex-start;
+  justify-content: flex-start;
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+  line-height: 1.45;
+}
+
+/* Staff table -------------------------------------------------------------- */
+
+.access-staff th:last-child,
+.access-staff td.access-actions {
+  width: 1%;
+  white-space: nowrap;
+  text-align: right;
+}
+
+.access-staff tbody tr[data-fresh="true"] {
+  animation: access-flash 1.8s var(--ease-out);
+}
+
+.access-added {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  color: var(--text-secondary);
+  line-height: 1.35;
+}
+
+.access-added time {
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+}
+
+.access-level {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-3);
+}
+
+.access-seg {
+  display: inline-flex;
+  margin: 0;
+  padding: 2px;
+  min-width: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+}
+
+.access-seg label {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: 1.75rem;
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  cursor: pointer;
+  transition:
+    background-color var(--mod-motion) var(--ease-out),
+    color var(--mod-motion) var(--ease-out);
+}
+
+.access-seg label:hover {
+  color: var(--text);
+}
+
+.access-seg input {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  opacity: 0;
+  cursor: inherit;
+}
+
+.access-seg label svg {
+  display: none;
+  width: 12px;
+  height: 12px;
+}
+
+.access-seg label:has(input:checked) {
+  background: var(--surface-3);
+  color: var(--text);
+  font-weight: 600;
+  box-shadow: inset 0 0 0 1px var(--border-strong);
+}
+
+.access-seg label[data-role="admin"]:has(input:checked) {
+  background: var(--info-soft);
+  color: var(--info);
+  box-shadow: inset 0 0 0 1px var(--info);
+}
+
+.access-seg label:has(input:checked) svg {
+  display: block;
+}
+
+.access-seg label:has(input:focus-visible) {
+  outline: 2px solid var(--focus, var(--accent));
+  outline-offset: 1px;
+}
+
+.access-seg[aria-disabled="true"] label {
+  cursor: not-allowed;
+}
+
+.access-rowstatus {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: 1.25rem;
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+}
+
+.access-rowstatus svg {
+  width: 12px;
+  height: 12px;
+  flex: none;
+}
+
+.access-rowstatus[data-status="saved"] {
+  color: var(--on);
+}
+
+.access-rowstatus[data-status="error"] {
+  flex-basis: 100%;
+  align-items: flex-start;
+  color: var(--danger);
+  font-size: var(--text-sm);
+}
+
+.access-rowstatus[data-status="error"] svg {
+  margin-top: 0.2em;
+}
+
+.access-draft-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.btn[aria-disabled="true"] {
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.access-rowstatus[data-status="dirty"] {
+  color: var(--attention);
+}
+
+.access-dialog-list {
+  margin: 0;
+  padding-left: var(--space-5);
+  color: var(--text);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+}
+
+.access-remove {
+  min-height: 2rem;
+  color: var(--text-secondary);
+}
+
+.access-remove:hover:not(:disabled) {
+  color: var(--danger);
+  background: var(--danger-soft);
+}
+
+/* Remove dialog ------------------------------------------------------------ */
+
+.access-dialog {
+  width: min(28rem, calc(100vw - var(--space-8)));
+  padding: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow-lg);
+}
+
+.access-dialog::backdrop {
+  background: var(--scrim);
+}
+
+.access-dialog[open] {
+  animation: mod-pop var(--mod-motion) var(--ease-out);
+}
+
+.access-dialog-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-5);
+}
+
+.access-dialog-title {
+  font-size: var(--text-lg);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  overflow-wrap: anywhere;
+}
+
+.access-dialog-person {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+}
+
+.access-dialog-text {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.access-dialog-muted {
+  color: var(--text-tertiary);
+}
+
+.access-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.access-danger {
+  background: var(--danger);
+  color: var(--text-inverse);
+  font-weight: 600;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.access-danger:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+
+/* Add form ----------------------------------------------------------------- */
+
+.access-add {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.access-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.access-search {
+  position: relative;
+  max-width: 28rem;
+}
+
+.access-search .mod-search {
+  max-width: none;
+}
+
+.access-id-input {
+  max-width: 28rem;
+  font-family: var(--font-mono);
+}
+
+.access-picked {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  max-width: 28rem;
+  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-3);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+}
+
+.access-quiet {
+  align-self: flex-start;
+  min-height: 2rem;
+  padding: 0 var(--space-1);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text-tertiary);
+  font-size: var(--text-sm);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-color: var(--border-strong);
+  cursor: pointer;
+  transition: color var(--mod-motion) var(--ease-out);
+}
+
+.access-quiet:hover {
+  color: var(--text);
+}
+
+.access-results {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 0.25rem);
+  left: 0;
+  right: 0;
+  max-height: 16rem;
+  overflow-y: auto;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  box-shadow: var(--shadow-lg);
+}
+
+.access-results-note {
+  padding: var(--space-3);
+  color: var(--text-tertiary);
+  font-size: var(--text-sm);
+}
+
+.access-result {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: var(--mod-row-height);
+  padding: var(--space-1) var(--space-3);
+  cursor: pointer;
+}
+
+.access-result[data-active="true"] {
+  background: var(--accent-soft);
+}
+
+.access-result[aria-disabled="true"] {
+  cursor: not-allowed;
+  color: var(--text-secondary);
+}
+
+.access-result-text {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  line-height: 1.3;
+}
+
+.access-result-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+}
+
+.access-result-note {
+  flex: none;
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+}
+
+.access-level-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+  max-width: 40rem;
+}
+
+.access-level-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+  cursor: pointer;
+  transition:
+    border-color var(--mod-motion) var(--ease-out),
+    background-color var(--mod-motion) var(--ease-out);
+}
+
+.access-level-card:hover {
+  border-color: var(--text-tertiary);
+}
+
+.access-level-card input {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.access-level-card:has(input:checked) {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.access-level-card:has(input:focus-visible) {
+  outline: 2px solid var(--focus, var(--accent));
+  outline-offset: 2px;
+}
+
+.access-level-name {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-weight: 600;
+}
+
+/* A text marker as well as the border, so the choice does not rest on colour. */
+.access-level-card:has(input:checked) .access-level-name::after {
+  content: "Selected";
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-full);
+  background: var(--accent);
+  color: var(--text-inverse);
+  font-size: var(--text-2xs);
+  font-weight: 600;
+  line-height: 1.25rem;
+}
+
+.access-level-desc {
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  line-height: 1.45;
+}
+
+.access-level-meta {
+  margin-top: auto;
+  padding-top: var(--space-1);
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.access-add-foot {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-3) var(--space-4);
+}
+
+.access-add-hint {
+  min-width: 0;
+  color: var(--text-tertiary);
+  font-size: var(--text-sm);
+}
+
+.access-add-hint[data-problem="true"] {
+  color: var(--attention);
+}
+
+/* Permission matrix -------------------------------------------------------- */
+
+.access-matrix-wrap {
+  overflow-x: auto;
+}
+
+.access-matrix-wrap:focus-visible {
+  outline: 2px solid var(--focus, var(--accent));
+  outline-offset: -2px;
+}
+
+.access-matrix {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+}
+
+.access-matrix thead th {
+  height: 2.25rem;
+  padding: 0 var(--space-4);
+  border-bottom: 1px solid var(--border);
+  color: var(--text-tertiary);
+  font-size: var(--text-2xs);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-align: left;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.access-matrix .access-cell {
+  width: 6.5rem;
+  text-align: center;
+}
+
+.access-matrix thead th.access-cell {
+  text-align: center;
+}
+
+.access-group th {
+  height: 2rem;
+  padding: 0 var(--space-4);
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  text-align: left;
+}
+
+.access-matrix tbody:not(:first-of-type) .access-group th {
+  border-top: 1px solid var(--border);
+}
+
+.access-matrix td,
+.access-matrix th.access-perm {
+  height: 2.5rem;
+  padding: var(--space-1) var(--space-4);
+  border-bottom: 1px solid var(--border);
+}
+
+.access-matrix th.access-perm {
+  color: var(--text);
+  font-weight: 400;
+  text-align: left;
+}
+
+.access-matrix tbody:last-of-type tr:last-child > * {
+  border-bottom: 0;
+}
+
+.access-mark {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--text-xs);
+  font-weight: 500;
+}
+
+.access-mark svg {
+  width: 14px;
+  height: 14px;
+}
+
+td[data-allowed="true"] .access-mark {
+  color: var(--on);
+}
+
+td[data-allowed="false"] .access-mark {
+  color: var(--text-tertiary);
+}
+
+.access-notes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  border-top: 1px solid var(--border);
+}
+
+/* Motion ------------------------------------------------------------------- */
+
+@keyframes access-flash {
+  from {
+    background: var(--accent-soft);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .access-staff tbody tr[data-fresh="true"],
+  .access-dialog[open] {
+    animation: none;
+  }
+
+  .access-seg label,
+  .access-level-card,
+  .access-quiet {
+    transition: none;
+  }
+}
+
+/* Narrow screens ----------------------------------------------------------- */
+
+@media (max-width: 40rem) {
+  .access-level-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .access-add-foot .btn {
+    width: 100%;
+  }
+
+  .access-matrix thead th,
+  .access-group th,
+  .access-matrix td,
+  .access-matrix th.access-perm {
+    padding-left: var(--space-3);
+    padding-right: var(--space-2);
+  }
+
+  .access-matrix .access-cell {
+    width: 3.5rem;
+  }
+
+  /* The word stays for screen readers; sighted users keep the icon and the dash. */
+  .access-mark span:last-child {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+  }
+
+  .access-dialog-actions .btn {
+    flex: 1 1 100%;
+  }
+
+  .access-staff td.access-actions {
+    text-align: left;
+  }
+}
