@@ -28,6 +28,7 @@ Good to know:
 Every feature is a module, and a module that's off does nothing. Most settings are optional. Leave one blank and that part stays quiet.
 
 - [Quick setup](#quick-setup)
+- [Commands](#commands)
 - [Moderation](#moderation)
 - [Moderation dashboard](#moderation-dashboard)
 - [Automod](#automod)
@@ -44,6 +45,14 @@ Every feature is a module, and a module that's off does nothing. Most settings a
 Quick setup in the sidebar asks only for the few settings a feature can't work without, one feature per screen, and switches the feature on at the end. **Moderation** and **Tickets** walk through several related features together, and every feature that has a quick setup is listed on its own below them.
 
 Nothing is locked in. Settings it doesn't ask about keep their values, skipping a step leaves that feature as it was, and you can change anything later on the feature's own page. Features made of repeating rows, like role menus, have no quick setup.
+
+![Quick setup asking for the few settings a feature needs](images/quick-setup.png)
+
+## Commands
+
+The Commands page lists every command on the server, including the right-click entries. Each one can be switched off, or limited to certain roles and channels.
+
+![The Commands page with a hidden command and role limits](images/commands.png)
 
 ## Moderation
 
@@ -70,6 +79,8 @@ The Moderation area in the sidebar is where staff read a member's record, leave 
 | Settings | Moderation and Automod settings | Anyone with Manage Server |
 
 A search box in the header finds a member from any tab. Press Ctrl+K (Cmd+K on a Mac), or `/` when you're not typing in a field.
+
+![The Overview tab: totals, actions per day and a breakdown by type](images/moderation-overview.png)
 
 ### Who can use it
 
@@ -101,11 +112,17 @@ Notes are for staff only. Members never see them and the bot never sends them to
 
 Nothing disappears from the timeline when it's removed. A removed action or deleted note stays in place, marked with who removed it and when. Admins and the owner can still read a deleted note. A moderator sees that it was deleted and by whom, but not the text.
 
+![The Members tab listing everyone with a record](images/members-list.png)
+
+![A member's page with their timeline and a box to add a note](images/member-profile.png)
+
 ### Taking action
 
 The **Take action** button on a member's page offers what your level allows, and only what fits the member. Unban shows for someone banned, Clear timeout only while a timeout is running. Each choice opens a short form with a reason (up to 500 characters, and required if the Moderation setting says so) and, for timeouts and bans, a length. A ban can also delete up to 7 days of the member's messages.
 
 It runs the same code as the slash commands, so it behaves the same: hierarchy check, direct message if that setting is on, the Discord action, the case, the unban schedule for a temporary ban and the mod log post. The case names you as the moderator.
+
+![The warn form with a reason and what will happen](images/take-action.png)
 
 Refused with a message that says why:
 
@@ -141,11 +158,15 @@ Three levels, each stronger than the last.
 
 Case numbers are never renumbered or reused. Purging case 12 leaves a permanent gap, and no later case gets 12.
 
+![The dialog for removing a case from a record, with a required reason](images/remove-from-record.png)
+
 ### Audit trail
 
 Admins and the owner can open the Audit tab. It lists every change made through the dashboard: notes added, edited, deleted or restored, actions removed or restored, and staff added, changed or removed. The owner's changes are included. Purges are left out on purpose. Entries show who did it and at what level, and edits and removals expand to show before and after. You can filter by type, staff member, member ID, date range and words. The same entries appear on a member's timeline as staff activity.
 
 Cases made by commands and automod are the actions themselves, in the Actions tab.
+
+![The audit trail listing what staff changed](images/audit-trail.png)
 
 ### Statistics
 
@@ -164,23 +185,33 @@ Below the tiles:
 
 The Actions tab lists every case, newest first. You can filter by type, state (in force, expired, removed or on record), source (manual or automod) and moderator, and search the reason, a case number or a member ID. It doesn't search by name.
 
+![The action log with filters and an export button](images/action-log.png)
+
 Admins and the owner can export the current filter as a CSV, newest first, up to 5,000 rows. Removed entries are included. Names are looked up from Discord, so the oldest cases in a large export can have blank names, and the ID columns are always filled in. Cells that start with `=`, `+`, `-` or `@` get an apostrophe in front so a spreadsheet won't treat them as formulas. Strip it if you load the file anywhere else.
 
 ### Access tab
 
 The owner adds staff to a server, switches them between Moderator and Admin, and removes them. Bots can't be added. Removing someone takes away their access and nothing else. Their notes and actions stay. Every change is in the audit trail.
 
+![The Access tab with staff levels and who added them](images/access.png)
+
 ### Settings tab
 
 Moderation and Automod settings live here, with a switch at the top to move between them. They're the usual settings forms, and the old pages for them redirect here. Opening the tab needs Manage Server, which a staff role doesn't include.
+
+![The Moderation settings on the Settings tab](images/moderation-settings.png)
 
 ### Sidebar
 
 The sidebar shrinks to a strip of icons with the button in its header or Ctrl+B (Cmd+B). The browser remembers it per browser, not per account. On a phone it's a drawer.
 
+![The sidebar collapsed to icons](images/sidebar-collapsed.png)
+
 ## Automod
 
 Seven rules you switch on separately, each with its own action and exemptions: invites, links, capital letters, repeated text, mention limits, banned words and rate limiting. Every rule starts off, so switching the module on does nothing until you pick some.
+
+![Automod settings with one card per rule](images/automod-settings.png)
 
 Banned word matching is conservative on purpose. Text is lowercased, common letter-for-number swaps are folded back, a letter stretched out three or more times is collapsed, and it matches on word boundaries. So `assassin` doesn't trip a rule for the rude three letters inside it. The cost is that spacing letters out gets past it, since catching that means stripping whitespace, which glues unrelated words together and brings the false positives back. Missing a few real cases beats deleting innocent messages.
 
@@ -190,13 +221,19 @@ Anyone with moderator permissions is exempt by default, and you can turn that of
 
 Greetings on join, farewells on leave, an optional direct message, and roles given on arrival. Messages support `{user}`, `{username}`, `{server}` and `{memberCount}`. An unknown placeholder fails the save and names it, so a typo shows up right away. The bot can't give a role above its own. It logs that and carries on with the rest of the join.
 
+![Welcome message settings with a live preview](images/welcome-settings.png)
+
 ## Role menus
 
 Members pick roles from buttons on a menu you publish to a channel. Buttons keep working after the message leaves the bot's cache, need no message content permission, and give the member a private confirmation. Publishing a menu again edits the existing message. Mark a menu exclusive and picking one option clears the others, which suits pronouns or colors.
 
+![A role menu being edited with its options](images/role-menus.png)
+
 ## Tickets
 
 A panel with a button. A member presses it, gives a subject and gets a private channel with your support team. The channel denies the whole server and grants access back to the opener, your support roles and the bot, whatever other roles anyone has. Transcripts (sent to a channel you pick when the ticket closes) and auto-close (the clock resets when anyone speaks) are optional. A member who's hit their ticket limit is told so.
+
+![Ticket panel settings with a preview](images/tickets-settings.png)
 
 ## Audit logging
 
@@ -205,6 +242,8 @@ Writes what changed on the server to a channel you pick: message edits and delet
 ## News and patch notes
 
 Posts what's new from sources you can't follow with Discord's Follow button.
+
+![News feeds and Steam patch note channels with their status](images/news-feeds.png)
 
 **News feeds** take any RSS or Atom address: a site, a subreddit with `.rss` added, a YouTube channel's feed. Each has its own channel, an optional name above the post, and an optional role to ping.
 
@@ -220,6 +259,8 @@ Feed addresses are fetched from the public internet only. An address pointing at
 ## Leveling
 
 XP for taking part, levels, and roles at thresholds you choose. Each message is worth a random amount inside a range you set, so nobody can count to the next level, and a cooldown means a burst of one-word messages isn't worth more than a conversation. Role rewards either stack or replace. A role can carry an XP multiplier, and when a member has several, only the biggest applies. Rank and the leaderboard are plain embeds. There's no generated image card, since drawing one adds a native dependency that makes every install harder.
+
+![Leveling settings](images/leveling-settings.png)
 
 ## Utility
 
