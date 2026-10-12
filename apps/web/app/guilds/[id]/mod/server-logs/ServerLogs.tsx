@@ -5,7 +5,6 @@ import { HistoryIcon } from "../../../../../components/Icons";
 import { EventFilters } from "./EventFilters";
 import { EventList } from "./EventList";
 import { MessagesView } from "./MessagesView";
-import { PurgeLog } from "./PurgeLog";
 import type { MessageLogQuery } from "./message-params";
 import type { ServerLogQuery, ServerLogView } from "./params";
 import "./messages.css";
@@ -30,7 +29,8 @@ export function ServerLogs({ guildId, role, view, events, messages, refused }: P
   const base = `/guilds/${guildId}/mod/server-logs`;
   const settings = `/guilds/${guildId}/mod/settings/serverlog`;
   const data = view === "events" ? events?.data : messages?.data;
-  const canPurge = can(role, "messages.purge") && data?.logEnabled;
+  // Deleting logs lives in the Danger zone tab, which only the owner can open.
+  const canPurge = can(role, "purge");
 
   return (
     <div className="mod-root mod-page sl-page">
@@ -41,7 +41,7 @@ export function ServerLogs({ guildId, role, view, events, messages, refused }: P
               Server logs
             </h2>
             <p className="mod-section-desc">
-              What happened on the server, saved here so you can search it. Only channels you can read in Discord are shown.
+              A searchable record of what happens on the server. You only see channels you can read in Discord.
             </p>
           </div>
           <div className="sl-head-actions">
@@ -50,7 +50,11 @@ export function ServerLogs({ guildId, role, view, events, messages, refused }: P
                 Settings
               </Link>
             ) : null}
-            {canPurge ? <PurgeLog guildId={guildId} /> : null}
+            {canPurge ? (
+              <Link className="btn btn-ghost btn-sm sl-danger-link" href={`/guilds/${guildId}/mod/danger`}>
+                Delete logs…
+              </Link>
+            ) : null}
           </div>
         </div>
 
@@ -82,9 +86,9 @@ export function ServerLogs({ guildId, role, view, events, messages, refused }: P
               <p className="mod-empty-title">{view === "messages" ? "Saving messages is off" : "Server logs are off"}</p>
               <p className="mod-empty-text">
                 {view === "messages"
-                  ? "Turn on Messages in the Server logs settings and the bot saves what members post, every edit, and what gets deleted."
-                  : "Turn on the Server logs feature and choose what to record. The bot then saves joins, leaves, role and nickname changes, edits and deletions, channel and role changes, voice activity, bans and more."}{" "}
-                It only has what happened after it was turned on.
+                  ? "Turn on Messages in the Server logs settings to save member messages, edits and deletions."
+                  : "Turn on the Server logs feature and choose what to record: joins and leaves, role and nickname changes, edits and deletions, channel and role changes, voice activity, bans and more."}{" "}
+                Anything from before it was turned on is not included.
               </p>
               <div className="mod-empty-action">
                 <Link className="btn btn-secondary btn-sm" href={settings}>

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 import { isTabCurrent, type ModTab } from "../../lib/mod-tabs";
-import { HistoryIcon, KeyIcon, MessagesIcon, OverviewIcon, SetupIcon, UserIcon } from "../Icons";
+import { AlertIcon, HistoryIcon, KeyIcon, MessagesIcon, OverviewIcon, SetupIcon, UserIcon } from "../Icons";
 
 const TAB_ICON: Record<ModTab["id"], (props: { className?: string }) => ReactNode> = {
   overview: OverviewIcon,
@@ -13,6 +13,7 @@ const TAB_ICON: Record<ModTab["id"], (props: { className?: string }) => ReactNod
   serverlogs: MessagesIcon,
   access: KeyIcon,
   settings: SetupIcon,
+  danger: AlertIcon,
 };
 
 export function ModTabs({ tabs }: { tabs: ModTab[] }) {

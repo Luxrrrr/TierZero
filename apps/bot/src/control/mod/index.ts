@@ -4,6 +4,7 @@ import type { GuildState } from "../../runtime/guild-state.js";
 import { actionContextFor, editInfraction, memberMessages, takeAction } from "./actions.js";
 import { listAudit } from "./audit-list.js";
 import { exportInfractions, listInfractions, purgeInfraction, restoreInfraction, voidInfraction } from "./infractions.js";
+import { dangerDelete } from "./danger.js";
 import { listLoggedMessages, listServerLog, purgeServerLog } from "./server-log.js";
 import { listMembers, memberProfile, searchGuildMembers } from "./members.js";
 import { addNote, deleteNote, editNote, purgeNote, restoreNote } from "./notes.js";
@@ -124,6 +125,7 @@ export async function handleMod(request: ModRequest): Promise<Reply | null> {
     }
     if (area === "staff" && a !== undefined && b === undefined) return removeStaff(ctx, a, actor);
     if (area === "server-logs" && a === undefined) return purgeServerLog(ctx, actor);
+    if (area === "danger" && a === undefined) return dangerDelete(ctx, actor, query.get("targets"));
   }
 
   return null;

@@ -14,13 +14,13 @@ describe("modTabsFor", () => {
   });
 
   test("only the owner sees access", () => {
-    assert.deepEqual(ids("owner"), ["overview", "members", "logs", "serverlogs", "access"]);
+    assert.deepEqual(ids("owner"), ["overview", "members", "logs", "serverlogs", "access", "danger"]);
   });
 
   test("settings appears only for someone who can manage the server", () => {
     assert.deepEqual(
       modTabsFor("1", "owner", true).map((tab) => tab.id),
-      ["overview", "members", "logs", "serverlogs", "access", "settings"],
+      ["overview", "members", "logs", "serverlogs", "access", "settings", "danger"],
     );
     assert.deepEqual(
       modTabsFor("1", "mod", true).map((tab) => tab.id),

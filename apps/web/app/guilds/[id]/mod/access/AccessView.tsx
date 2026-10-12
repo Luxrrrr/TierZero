@@ -39,8 +39,8 @@ export function AccessView({ guildId, staff, loadError }: AccessViewProps) {
                 Access
               </h2>
               <p className="mod-section-desc">
-                You decide who can sign in to this server&rsquo;s moderation records and at what level. Everyone signs in
-                with Discord, and only the people below and the instance owner get in.
+                Choose who can open this server&rsquo;s moderation records and what each person can do. Everyone signs in
+                with Discord. Only the people listed here and the instance owner have access.
               </p>
             </div>
           </div>
@@ -50,7 +50,7 @@ export function AccessView({ guildId, staff, loadError }: AccessViewProps) {
                 <RoleBadge role="owner" />
               </span>
               <span className="mod-kpi-value">You</span>
-              <span className="mod-kpi-foot access-kpi-note">Always in, on every server. Never listed.</span>
+              <span className="mod-kpi-foot access-kpi-note">Has access to every server. Not shown in the list.</span>
             </div>
             <div className="mod-kpi">
               <span className="mod-kpi-label">

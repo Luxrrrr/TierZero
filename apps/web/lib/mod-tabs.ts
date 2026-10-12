@@ -1,7 +1,7 @@
 import { can, type StaffRole } from "@tier0/core";
 
 export interface ModTab {
-  id: "overview" | "members" | "logs" | "serverlogs" | "access" | "settings";
+  id: "overview" | "members" | "logs" | "serverlogs" | "access" | "settings" | "danger";
   label: string;
   href: string;
 }
@@ -29,6 +29,8 @@ export function modTabsFor(guildId: string, role: StaffRole | null, canManage = 
     if (can(role, "staff.manage")) tabs.push({ id: "access", label: "Access", href: `${base}/access` });
   }
   if (canManage) tabs.push({ id: "settings", label: "Settings", href: `${base}/settings` });
+  // Deleting whole logs is the owner's alone, so the tab is too.
+  if (role && can(role, "purge")) tabs.push({ id: "danger", label: "Danger zone", href: `${base}/danger` });
   return tabs;
 }
 

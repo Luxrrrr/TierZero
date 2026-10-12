@@ -154,6 +154,16 @@ describe("isProfileRead", () => {
   });
 });
 
+describe("the danger zone", () => {
+  test("only a DELETE is served, and it needs the owner-only purge permission", () => {
+    assert.equal(modProxyPermission("DELETE", ["danger"]), "purge");
+    assert.equal(modProxyPermission("GET", ["danger"]), null);
+    assert.equal(modProxyPermission("DELETE", ["danger", "mod-logs"]), null);
+    assert.equal(can("admin", "purge"), false);
+    assert.equal(can("owner", "purge"), true);
+  });
+});
+
 describe("editing a case", () => {
   test("only a PATCH of one case is served, with the edit permission", () => {
     assert.equal(modProxyPermission("PATCH", ["infractions", "4"]), "infraction.edit");

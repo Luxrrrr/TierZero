@@ -272,6 +272,10 @@ The owner adds staff to a server, switches them between Moderator and Admin, and
 
 ![The Access tab with staff levels and who added them](images/access.png)
 
+### Danger zone
+
+The owner has a **Danger zone** tab that no one else sees. It deletes whole logs for good: Member actions (every case on every record), Staff activity, the Server log events and the saved messages. Tick any number of them, then hold the button for three seconds while a red bar fills it, so a stray click does nothing. Letting go early cancels. One entry is left in Staff activity saying who deleted what.
+
 ### Settings tab
 
 Moderation and Automod settings live here, with a switch at the top to move between them. They're the usual settings forms, and the old pages for them redirect here. Opening the tab needs Manage Server, which a staff role doesn't include.

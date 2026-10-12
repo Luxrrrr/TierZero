@@ -167,6 +167,7 @@ export type AuditKind =
   | "infraction.edit"
   | "action.take"
   | "messagelog.purge"
+  | "logs.purge"
   | "staff.add"
   | "staff.update"
   | "staff.remove";
@@ -181,6 +182,7 @@ export const AUDIT_KIND_LABEL: Record<AuditKind, string> = {
   "infraction.restore": "Restored an action to a record",
   "action.take": "Took an action on a member",
   "messagelog.purge": "Deleted the server logs",
+  "logs.purge": "Deleted a whole log",
   "staff.add": "Added staff",
   "staff.update": "Changed a staff role",
   "staff.remove": "Removed staff",

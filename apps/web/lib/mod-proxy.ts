@@ -17,6 +17,7 @@ export const MOD_PROXY_ROOTS: readonly string[] = [
   "actions",
   "messages",
   "server-logs",
+  "danger",
 ];
 
 export const MOD_PROXY_MAX_BODY_BYTES = 32 * 1024;
@@ -60,6 +61,9 @@ export function modProxyPermission(method: string, path: readonly string[]): Mod
 
   // Changing a case's reason. Only a PATCH of one case exists; the bot decides whose cases a moderator may edit.
   if (first === "infractions" && path.length === 2 && method === "PATCH") return "infraction.edit";
+
+  // Deleting a whole log for good. Only a DELETE of one named log exists, and only the owner holds this.
+  if (first === "danger") return path.length === 1 && method === "DELETE" ? "purge" : null;
 
   // The export is the whole action log in one file, which is an
   // admin's view of the server rather than a moderator's.
