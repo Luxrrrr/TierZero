@@ -115,7 +115,7 @@ describe("every registered module", () => {
 
     test(`${module.id} belongs to a dashboard section`, () => {
       assert.ok(
-        ["moderation", "members", "engagement", "support", "logging", "utility"].includes(
+        ["moderation", "members", "engagement", "support", "logging", "utility", "more"].includes(
           module.category,
         ),
         `${module.id} has category ${module.category}, which no dashboard section renders`,

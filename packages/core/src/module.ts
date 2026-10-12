@@ -268,7 +268,8 @@ export type ModuleCategory =
   | "engagement"
   | "support"
   | "logging"
-  | "utility";
+  | "utility"
+  | "more";
 
 export interface ModuleDefinition<S extends Shape = Shape> {
   id: string;

@@ -8,6 +8,7 @@ import { navGroups } from "../lib/sections";
 import { initialsOf } from "../lib/discord-cdn";
 import { GuildSwitcher } from "./GuildSwitcher";
 import { NavLink } from "./NavLink";
+import { NavMore } from "./NavMore";
 import { SidebarToggle } from "./SidebarToggle";
 import { ThemeToggle } from "./ThemeToggle";
 import { CommandsIcon, HelpIcon, MessagesIcon, OverviewIcon, SetupIcon, ShieldIcon, SignOutIcon } from "./Icons";
@@ -101,25 +102,33 @@ export function Sidebar({
               ) : null}
             </div>
 
-            {groups.map((group) => (
-              <div className="nav-group" key={group.id}>
-                <div className="nav-group-title">{group.heading}</div>
-                {group.modules.map((module) => (
-                  <NavLink
-                    key={module.id}
-                    href={moduleHref(currentGuild.id, module)}
-                    tip={`${module.name} · ${statusWord(module.status)}`}
-                  >
-                    <span className="nav-mono" aria-hidden="true">
-                      {module.name.charAt(0).toUpperCase()}
-                    </span>
-                    <span className="dot" data-status={module.status} aria-hidden="true" />
-                    <span className="nav-link-text">{module.name}</span>
-                    <span className="visually-hidden">, {statusWord(module.status).toLowerCase()}</span>
-                  </NavLink>
-                ))}
-              </div>
-            ))}
+            {groups.map((group) => {
+              const links = group.modules.map((module) => (
+                <NavLink
+                  key={module.id}
+                  href={moduleHref(currentGuild.id, module)}
+                  tip={`${module.name} · ${statusWord(module.status)}`}
+                >
+                  <span className="nav-mono" aria-hidden="true">
+                    {module.name.charAt(0).toUpperCase()}
+                  </span>
+                  <span className="dot" data-status={module.status} aria-hidden="true" />
+                  <span className="nav-link-text">{module.name}</span>
+                  <span className="visually-hidden">, {statusWord(module.status).toLowerCase()}</span>
+                </NavLink>
+              ));
+              // "More" holds the tools most servers never touch, so it starts folded.
+              return group.id === "more" ? (
+                <NavMore key={group.id} heading={group.heading}>
+                  {links}
+                </NavMore>
+              ) : (
+                <div className="nav-group" key={group.id}>
+                  <div className="nav-group-title">{group.heading}</div>
+                  {links}
+                </div>
+              );
+            })}
           </>
         ) : (
           <div className="nav-group">

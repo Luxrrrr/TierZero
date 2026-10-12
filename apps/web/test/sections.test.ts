@@ -63,6 +63,17 @@ describe("groupModulesBySection", () => {
   });
 });
 
+describe("the More section", () => {
+  test("comes last, after every main category", () => {
+    assert.equal(SECTIONS[SECTIONS.length - 1]?.id, "more");
+  });
+
+  test("holds the log channel, apart from the Logging section", () => {
+    const groups = navGroups([{ id: "auditlog", category: "more" as const, area: null }, { id: "feeds", category: "logging" as const, area: null }]);
+    assert.deepEqual(groups.map((group) => group.id), ["logging", "more"]);
+  });
+});
+
 describe("navGroups", () => {
   const withAreas = [
     { id: "automod", category: "moderation" as const, area: "moderation" as const },

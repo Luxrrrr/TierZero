@@ -7,7 +7,7 @@ export interface SectionMeta {
 }
 
 /**
- * The dashboard's six categories, in the order the sidebar shows them. A
+ * The dashboard's categories, in the order the sidebar shows them. A
  * module's own `category` decides which one it is filed under; nothing here
  * knows about individual modules. Adding a module means declaring a category
  * on it, never touching this list.
@@ -42,6 +42,11 @@ export const SECTIONS: SectionMeta[] = [
     id: "utility",
     heading: "Utility",
     description: "General-purpose commands and server information.",
+  },
+  {
+    id: "more",
+    heading: "More",
+    description: "Extra tools that most servers do not need.",
   },
 ];
 

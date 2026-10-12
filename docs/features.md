@@ -10,7 +10,7 @@
 | Tickets | A button that opens a private channel with your staff. |
 | Welcome messages | Greetings, farewells and roles on join. |
 | Role menus | Members pick their roles from buttons. |
-| Audit logging | Logs edits, deletions, joins, role changes and more to a channel. |
+| Log channel | Posts edits, deletions, joins, role changes and more into a Discord channel. |
 | Leveling | XP, role rewards and a leaderboard. No image cards. |
 | News and patch notes | RSS feeds and Steam patch notes, posted as embeds. |
 | Messages | Build a message or embed, save it as a template, sort templates into folders and send it to any channel. |
@@ -36,7 +36,7 @@ Every feature is a module, and a module that's off does nothing. Most settings a
 - [Welcome messages](#welcome-messages)
 - [Role menus](#role-menus)
 - [Tickets](#tickets)
-- [Audit logging](#audit-logging)
+- [Log channel](#log-channel)
 - [News and patch notes](#news-and-patch-notes)
 - [Leveling](#leveling)
 - [Utility](#utility)
@@ -316,9 +316,9 @@ A panel with a button. A member presses it, gives a subject and gets a private c
 
 ![Ticket panel settings with a preview](images/tickets-settings.png)
 
-## Audit logging
+## Log channel
 
-Writes what changed on the server to a channel you pick: message edits and deletions, joins and departures, nickname and role changes, channels and roles created and deleted, bans and unbans. Every category has its own switch. Entries for messages the bot never cached say what's known and leave out the rest. An edit that didn't change the text, like a link preview loading, is skipped. The log channel isn't logged about itself, and bot messages are skipped unless you ask for them.
+Found under **More** in the sidebar, since most servers use [Server logs](#server-logs) instead. Posts what changed on the server into a channel you pick, so staff who stay in Discord see it as it happens. It doesn't keep anything searchable. It posts: message edits and deletions, joins and departures, nickname and role changes, channels and roles created and deleted, bans and unbans. Every category has its own switch. Entries for messages the bot never cached say what's known and leave out the rest. An edit that didn't change the text, like a link preview loading, is skipped. The log channel isn't logged about itself, and bot messages are skipped unless you ask for them.
 
 ## News and patch notes
 

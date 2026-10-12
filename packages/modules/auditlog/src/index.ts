@@ -75,9 +75,9 @@ const COLOR_NEUTRAL = 0x5865f2;
 
 export default defineModule({
   id: "auditlog",
-  name: "Audit log",
-  summary: "Writes a record of what changed on the server to a channel.",
-  category: "logging",
+  name: "Log channel",
+  summary: "Posts what changes on the server into a Discord channel, for staff who stay in Discord. Server logs is the searchable record.",
+  category: "more",
 
   settings: settingsSchema,
 
