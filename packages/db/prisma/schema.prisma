@@ -12,17 +12,20 @@ model Guild {
   name     String
   joinedAt DateTime @default(now())
 
-  modules     GuildModule[]
-  overrides   CommandOverride[]
-  infractions Infraction[]
-  tasks       ScheduledTask[]
-  menus       ReactionRoleMenu[]
-  tickets     Ticket[]
-  levels      LevelMember[]
-  feeds       FeedCursor[]
-  notes       ModNote[]
-  audits      ModAudit[]
-  staff       StaffMember[]
+  modules          GuildModule[]
+  overrides        CommandOverride[]
+  infractions      Infraction[]
+  tasks            ScheduledTask[]
+  menus            ReactionRoleMenu[]
+  tickets          Ticket[]
+  levels           LevelMember[]
+  feeds            FeedCursor[]
+  notes            ModNote[]
+  audits           ModAudit[]
+  staff            StaffMember[]
+  messageFolders   MessageFolder[]
+  messageTemplates MessageTemplate[]
+  messageInteractions MessageInteraction[]
 
   /// The last case number handed out here. It only ever goes up, so a number
   /// that was purged is never given to a different case.
@@ -49,9 +52,20 @@ model GuildModule {
 model CommandOverride {
   guildId      String
   command      String
-  enabled      Boolean @default(true)
-  allowRoles   String  @default("[]")
-  denyChannels String  @default("[]")
+  enabled      Boolean  @default(true)
+  allowRoles   String   @default("[]")
+  denyChannels String   @default("[]")
+  /// Discord permission bits a member needs to see the command, as a decimal
+  /// string, or "everyone". Null keeps the command's own default.
+  permissions  String?
+  /// Null keeps whatever the command does by default.
+  ephemeral    Boolean?
+  /// The text an owner wrote before replies became full messages. Still read, and
+  /// cleared the next time the reply is saved.
+  response     String?
+  /// A full message (text, embeds, buttons, reactions) as JSON, sent in place of
+  /// the command's own reply, for commands that offer it.
+  responseBody String?
 
   guild Guild @relation(fields: [guildId], references: [id], onDelete: Cascade)
 
@@ -280,4 +294,61 @@ model StaffMember {
   guild Guild @relation(fields: [guildId], references: [id], onDelete: Cascade)
 
   @@id([guildId, userId])
+}
+
+/// A folder for message templates. One level deep: a folder holds templates,
+/// never other folders, which is enough to keep a long list tidy.
+model MessageFolder {
+  id        Int      @id @default(autoincrement())
+  guildId   String
+  name      String
+  createdAt DateTime @default(now())
+
+  guild     Guild             @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  templates MessageTemplate[]
+
+  @@index([guildId])
+}
+
+/// A message an owner built in the dashboard, kept so it can be sent again.
+/// `embeds` is a JSON array in the shape packages/core/src/message.ts
+/// validates, so a template that was valid when saved stays valid to send.
+model MessageTemplate {
+  id         Int       @id @default(autoincrement())
+  guildId    String
+  /// Null for a template that sits outside every folder. Deleting a folder
+  /// leaves its templates here rather than taking them along.
+  folderId   Int?
+  name       String
+  content    String    @default("")
+  embeds     String    @default("[]")
+  /// Link buttons, as JSON. Reactions are a JSON list of emoji.
+  buttons    String    @default("[]")
+  /// Select menus, as JSON.
+  selects    String    @default("[]")
+  reactions  String    @default("[]")
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  lastSentAt DateTime?
+
+  guild  Guild          @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  folder MessageFolder? @relation(fields: [folderId], references: [id], onDelete: SetNull)
+
+  @@index([guildId, folderId])
+}
+
+/// What the buttons and menus of a message that was sent do. Kept per message, so
+/// editing a template afterwards never changes one that is already out.
+model MessageInteraction {
+  messageId String   @id
+  guildId   String
+  channelId String
+  /// Buttons and menus as sent, with their actions, as JSON.
+  buttons   String   @default("[]")
+  selects   String   @default("[]")
+  createdAt DateTime @default(now())
+
+  guild Guild @relation(fields: [guildId], references: [id], onDelete: Cascade)
+
+  @@index([guildId])
 }

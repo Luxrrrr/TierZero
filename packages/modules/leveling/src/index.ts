@@ -1,6 +1,6 @@
 import { SlashCommandBuilder, EmbedBuilder, MessageFlags } from "discord.js";
 import type { GuildMember } from "discord.js";
-import { defineModule, isRoleAssignable, s } from "@tier0/core";
+import { defineModule, emptyEmbed, isRoleAssignable, s } from "@tier0/core";
 import type { Infer, ModuleContext } from "@tier0/core";
 import { prisma } from "@tier0/db";
 import {
@@ -124,6 +124,36 @@ export default defineModule({
   commands: [
     {
       name: "rank",
+      publicReply: true,
+      response: {
+        starting: {
+          content: "",
+          embeds: [
+            {
+              ...emptyEmbed(),
+              title: "{user} - Level {level}",
+              thumbnailUrl: "{user.avatar}",
+              fields: [
+                { name: "Experience", value: "{xp} / {need}", inline: true },
+                { name: "Rank", value: "{rank}", inline: true },
+                { name: "Progress", value: "{progress}", inline: false },
+              ],
+            },
+          ],
+          buttons: [],
+          selects: [],
+          reactions: [],
+        },
+        placeholders: [
+          { name: "user", description: "The member's username", sample: "spamlord_42" },
+          { name: "user.avatar", description: "The member's picture, for an image or thumbnail", sample: "" },
+          { name: "level", description: "Their level", sample: "12" },
+          { name: "xp", description: "Experience earned toward the next level", sample: "340" },
+          { name: "need", description: "Experience needed for the next level", sample: "620" },
+          { name: "rank", description: "Their place on the leaderboard", sample: "#7" },
+          { name: "progress", description: "A bar showing how far through the level they are", sample: "▰▰▰▰▰▱▱▱▱▱" },
+        ],
+      },
       description: "Show a member's level and experience.",
       build: () =>
         new SlashCommandBuilder()
@@ -154,11 +184,42 @@ export default defineModule({
             { name: "Progress", value: renderProgressBar(into, need) },
           );
 
-        await interaction.reply({ embeds: [embed] });
+        const custom = ctx.customReply?.({
+          user: target.username,
+          "user.avatar": target.displayAvatarURL(),
+          level,
+          xp: into,
+          need,
+          rank: rank ? `#${rank}` : "Unranked",
+          progress: renderProgressBar(into, need),
+        });
+        await interaction.reply(custom ?? { embeds: [embed] });
       },
     },
     {
       name: "leaderboard",
+      publicReply: true,
+      response: {
+        starting: {
+          content: "",
+          embeds: [
+            {
+              ...emptyEmbed(),
+              title: "{server} leaderboard",
+              description: "{leaderboard}",
+              footerText: "Page {page}",
+            },
+          ],
+          buttons: [],
+          selects: [],
+          reactions: [],
+        },
+        placeholders: [
+          { name: "leaderboard", description: "The members on this page, one to a line", sample: "**1.** spamlord_42 - level 12 (4,020 xp)\n**2.** quillfeather - level 10 (3,110 xp)" },
+          { name: "page", description: "Which page was asked for", sample: "1" },
+        ],
+        note: "Used when there is something to show. An empty leaderboard keeps its own message.",
+      },
       description: "Show the server's experience leaderboard.",
       build: () =>
         new SlashCommandBuilder()
@@ -209,7 +270,8 @@ export default defineModule({
           .setDescription(lines.join("\n"))
           .setFooter({ text: `Page ${page}` });
 
-        await interaction.reply({ embeds: [embed] });
+        const custom = ctx.customReply?.({ leaderboard: lines.join("\n"), page });
+        await interaction.reply(custom ?? { embeds: [embed] });
       },
     },
   ],

@@ -8,6 +8,7 @@ import { ControlApiError, type BotGuildSummary } from "../../lib/control-api";
 import { botGuilds, guildModules } from "../../lib/guild-data";
 import { AppShell } from "../../components/AppShell";
 import { Sidebar } from "../../components/Sidebar";
+import { inviteUrl } from "../../lib/invite";
 import { BotOffline } from "../../components/BotOffline";
 import { guildIconUrl, initialsOf } from "../../lib/discord-cdn";
 import { ChevronRightIcon, DiscordMark, ExternalLinkIcon } from "../../components/Icons";
@@ -16,16 +17,6 @@ import { signOutAction } from "./actions";
 export const metadata: Metadata = {
   title: "Your servers",
 };
-
-// The scopes the bot needs for every feature. Documented alongside the same
-// number in docs/install.md; changing one means changing both.
-const INVITE_PERMISSIONS = "1391837965526";
-
-function inviteUrl(): string | null {
-  const clientId = process.env.DISCORD_CLIENT_ID;
-  if (!clientId) return null;
-  return `https://discord.com/oauth2/authorize?client_id=${encodeURIComponent(clientId)}&permissions=${INVITE_PERMISSIONS}&scope=bot%20applications.commands`;
-}
 
 interface GuildCard {
   guild: BotGuildSummary;
@@ -109,9 +100,11 @@ export default async function GuildsPage() {
           <DiscordMark className="empty-icon" />
           <p className="empty-title">No servers to show yet</p>
           <p className="empty-text">
-            To configure a server, invite the bot to one where you have the
-            Manage Server permission, then reload this page. To moderate one,
-            ask the owner of this installation to add you to its staff.
+            To change a server's settings, invite the bot to one where you have the
+            Manage Server permission. That is a Discord permission set on roles
+            under Server Settings, and the server's owner always has it. Then
+            reload this page. To moderate one, ask the owner of this installation
+            to add you to its staff.
           </p>
           {invite ? (
             <div className="empty-actions">

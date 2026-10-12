@@ -1,6 +1,8 @@
 import type { Client, Guild } from "discord.js";
 import type {
+  CommandSummary,
   FieldError,
+  MessageBody,
   ModuleContext,
   ModuleDefinition,
   ModuleRegistry,
@@ -11,7 +13,8 @@ import type {
 } from "@tier0/core";
 import { prisma } from "@tier0/db";
 import { matchesPayload, namespaceKind } from "./task-payload.js";
-import { parseIdList, type CommandPolicy } from "./command-policy.js";
+import { parseIdList, type CommandSettings } from "./command-policy.js";
+import { storedReply } from "./command-reply.js";
 
 // The router resolves a module by name at runtime, so the cache cannot be
 // generic over one module's shape. This is the widest settings type that
@@ -23,12 +26,13 @@ export interface Resync {
   schedule(guildId: string): void;
 }
 
-export interface CommandState {
-  name: string;
-  description: string;
+export interface CommandState extends CommandSummary {
   enabled: boolean;
   allowRoles: string[];
   denyChannels: string[];
+  permissions: string | null;
+  ephemeral: boolean | null;
+  customReply: MessageBody | null;
 }
 
 export interface GuildModuleState extends Omit<ModuleSummary, "commands"> {
@@ -48,7 +52,7 @@ export type ApplyModuleUpdateResult = { ok: true } | { ok: false; errors: FieldE
 export class GuildState {
   private readonly cache = new Map<string, Map<string, Settings>>();
   private readonly enabledCache = new Map<string, ModuleDefinition[]>();
-  private readonly policyCache = new Map<string, Map<string, CommandPolicy>>();
+  private readonly policyCache = new Map<string, Map<string, CommandSettings>>();
 
   constructor(
     private readonly client: Client,
@@ -81,7 +85,7 @@ export class GuildState {
    * result is cached alongside the rest of a guild's state and dropped by the
    * same invalidation.
    */
-  async commandPolicy(guildId: string, command: string): Promise<CommandPolicy> {
+  async commandPolicy(guildId: string, command: string): Promise<CommandSettings> {
     let guildPolicies = this.policyCache.get(guildId);
     const cached = guildPolicies?.get(command);
     if (cached) return cached;
@@ -89,9 +93,12 @@ export class GuildState {
     const row = await prisma.commandOverride.findUnique({
       where: { guildId_command: { guildId, command } },
     });
-    const policy: CommandPolicy = {
+    const policy: CommandSettings = {
       allowRoles: row ? parseIdList(row.allowRoles) : [],
       denyChannels: row ? parseIdList(row.denyChannels) : [],
+      ephemeral: row?.ephemeral ?? null,
+      customReply: storedReply(row),
+      permissions: row?.permissions ?? null,
     };
 
     if (!guildPolicies) {
@@ -181,6 +188,9 @@ export class GuildState {
             enabled: override?.enabled ?? true,
             allowRoles: override ? parseIdList(override.allowRoles) : [],
             denyChannels: override ? parseIdList(override.denyChannels) : [],
+            permissions: override?.permissions ?? null,
+            ephemeral: override?.ephemeral ?? null,
+            customReply: storedReply(override ?? null),
           };
         });
         return { ...summary, enabled: row?.enabled ?? false, settings, commands };

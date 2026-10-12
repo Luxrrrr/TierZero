@@ -274,6 +274,7 @@ export default defineModule({
   commands: [
     {
       name: "ticket",
+      variedReply: true,
       description: "Manage support tickets.",
       build: () =>
         new SlashCommandBuilder()

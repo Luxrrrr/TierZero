@@ -4,7 +4,7 @@ import {
   ButtonStyle,
   EmbedBuilder,
   MessageFlags,
-  SlashCommandBuilder,
+  PermissionFlagsBits, SlashCommandBuilder,
   type Guild,
 } from "discord.js";
 import { customId, defineModule, isRoleAssignable, s, type Infer } from "@tier0/core";
@@ -137,6 +137,7 @@ export default defineModule({
         new SlashCommandBuilder()
           .setName("rolemenu")
           .setDescription("Publish or refresh a self-service role menu.")
+          .setDefaultMemberPermissions(PermissionFlagsBits.ManageRoles)
           .addStringOption((option) =>
             option
               .setName("name")

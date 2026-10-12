@@ -1,4 +1,5 @@
 import type { ModuleCategory, ModuleDefinition } from "./module.js";
+import type { ResponseTemplate } from "./response.js";
 import type { Shape } from "./schema.js";
 import type { FieldDescriptor, FieldError } from "./schema.js";
 
@@ -10,10 +11,27 @@ export interface ModuleSummary {
   /** Where the dashboard hosts this module's settings, when not on its own page. */
   area: "moderation" | null;
   requires: string[];
-  commands: { name: string; description: string; kind: CommandKind }[];
+  commands: CommandSummary[];
   schema: FieldDescriptor;
   /** Which list settings have a status line, and the actions on their rows. */
   rows: Record<string, RowDescription>;
+}
+
+export interface CommandSummary {
+  name: string;
+  description: string;
+  kind: CommandKind;
+  /**
+   * The permission bits Discord requires to see the command, as a decimal
+   * string. Null means everyone sees it.
+   */
+  defaultPermissions: string | null;
+  /** Whether the command answers privately unless an owner says otherwise. */
+  privateByDefault: boolean;
+  /** True when the command decides per reply, so one private or public choice would misdescribe it. */
+  repliesVary: boolean;
+  /** Null when the command's reply is not plain text an owner can reword. */
+  response: ResponseTemplate | null;
 }
 
 /** A slash command, or an entry in the right-click menu of a member or a message. */
@@ -88,11 +106,19 @@ export class ModuleRegistry {
           name: c.name,
           description: c.description,
           kind: "slash" as CommandKind,
+          defaultPermissions: defaultPermissionsOf(c.build()),
+          response: c.response ?? null,
+          privateByDefault: c.publicReply !== true,
+          repliesVary: c.variedReply === true,
         })),
         ...(module.contextCommands ?? []).map((c) => ({
           name: c.name,
           description: c.description,
           kind: c.kind as CommandKind,
+          defaultPermissions: defaultPermissionsOf(c.build()),
+          response: null,
+          privateByDefault: c.publicReply !== true,
+          repliesVary: false,
         })),
       ],
       schema: module.settings.describe(),
@@ -127,4 +153,10 @@ export class ModuleRegistry {
     }
     return module.settings.parse(stored ?? {});
   }
+}
+
+function defaultPermissionsOf(builder: { toJSON(): unknown }): string | null {
+  const value = (builder.toJSON() as { default_member_permissions?: string | null })
+    .default_member_permissions;
+  return value ?? null;
 }

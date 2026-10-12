@@ -1,11 +1,21 @@
 import { SlashCommandBuilder, PermissionFlagsBits, MessageFlags } from "discord.js";
 import type { ChatInputCommandInteraction } from "discord.js";
-import type { CommandDefinition, ModuleContext } from "@tier0/core";
+import { plainReply, type CommandDefinition, type ModuleContext } from "@tier0/core";
 import type { ModerationSettings } from "../settings.js";
 import { parseDuration } from "../duration.js";
 import { runFromCommand } from "./run-action.js";
 
 type Ctx = ModuleContext<ModerationSettings>;
+
+const TIMEOUT_REPLY = {
+  starting: plainReply("Timed out {user} until {until}. Case #{case}."),
+  placeholders: [
+    { name: "user", description: "The member's username", sample: "spamlord_42" },
+    { name: "until", description: "When the timeout ends, as a Discord date", sample: "Oct 18, 4:12 PM" },
+    { name: "case", description: "The case number", sample: "118" },
+  ],
+  note: "Used when a timeout is set. Lifting one keeps its own reply.",
+};
 
 async function runSet(interaction: ChatInputCommandInteraction, ctx: Ctx): Promise<void> {
   const target = interaction.options.getUser("member", true);
@@ -21,8 +31,10 @@ async function runSet(interaction: ChatInputCommandInteraction, ctx: Ctx): Promi
   });
   if (!record) return;
 
+  const until = `<t:${Math.floor(record.expiresAt!.getTime() / 1000)}:f>`;
+  const custom = ctx.customReply?.({ user: target.username, until, case: record.caseNumber });
   await interaction.reply({
-    content: `Timed out ${target.username} until <t:${Math.floor(record.expiresAt!.getTime() / 1000)}:f>. Case #${record.caseNumber}.`,
+    ...(custom ?? { content: `Timed out ${target.username} until ${until}. Case #${record.caseNumber}.` }),
     flags: MessageFlags.Ephemeral,
   });
 }
@@ -40,6 +52,7 @@ async function runClear(interaction: ChatInputCommandInteraction, ctx: Ctx): Pro
 
 export const timeoutCommand: CommandDefinition<ModerationSettings> = {
   name: "timeout",
+  response: TIMEOUT_REPLY,
   description: "Time a member out, or lift an existing timeout.",
   build: () =>
     new SlashCommandBuilder()

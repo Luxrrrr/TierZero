@@ -1,6 +1,6 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { checkCommandPolicy, parseIdList } from "../src/runtime/command-policy.ts";
+import { checkCommandPolicy, parseIdList, permissionOverrideAllowed } from "../src/runtime/command-policy.ts";
 
 const OPEN = { allowRoles: [] as string[], denyChannels: [] as string[] };
 
@@ -59,5 +59,33 @@ describe("parseIdList", () => {
 
   test("drops entries that are not ids", () => {
     assert.deepEqual(parseIdList('["a",5,null,"b"]'), ["a", "b"]);
+  });
+});
+
+describe("permissionOverrideAllowed", () => {
+  const BAN = "4";
+
+  test("lets a command with no default be shown to everyone or limited", () => {
+    assert.equal(permissionOverrideAllowed("everyone", null), true);
+    assert.equal(permissionOverrideAllowed("8192", null), true);
+  });
+
+  test("refuses to open a command that already needs a permission", () => {
+    assert.equal(permissionOverrideAllowed("everyone", BAN), false);
+  });
+
+  test("refuses a sideways move to a different single permission", () => {
+    assert.equal(permissionOverrideAllowed("2", BAN), false);
+  });
+
+  test("allows adding to the requirement, and Administrator", () => {
+    assert.equal(permissionOverrideAllowed("6", BAN), true);
+    assert.equal(permissionOverrideAllowed("8", BAN), true);
+  });
+
+  test("refuses values that are not permission bits", () => {
+    assert.equal(permissionOverrideAllowed("0", null), false);
+    assert.equal(permissionOverrideAllowed("-1", null), false);
+    assert.equal(permissionOverrideAllowed("ban", null), false);
   });
 });

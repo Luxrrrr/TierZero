@@ -1,5 +1,5 @@
 import { Client, GatewayIntentBits, MessageFlags, Partials, REST, Events } from "discord.js";
-import { ModuleRegistry } from "@tier0/core";
+import { ModuleRegistry, type ReplyValues } from "@tier0/core";
 import { prisma } from "@tier0/db";
 import utility from "@tier0/module-utility";
 import welcome from "@tier0/module-welcome";
@@ -15,6 +15,11 @@ import { CommandSync } from "./runtime/commands.js";
 import { registerEventDispatch } from "./runtime/dispatch.js";
 import { Scheduler } from "./runtime/scheduler.js";
 import { checkCommandPolicy } from "./runtime/command-policy.js";
+import { forceReplyVisibility } from "./runtime/reply-visibility.js";
+import { buildReply } from "./runtime/command-reply.js";
+import { commandVariables, stringValues } from "./runtime/command-variables.js";
+import { registerMessageComponents, saveInteractions } from "./runtime/message-components.js";
+import { hasInteractiveComponents } from "./control/message-payload.js";
 import { startControlApi } from "./control/server.js";
 import { config } from "./config.js";
 
@@ -50,6 +55,7 @@ const commands = new CommandSync(rest, config.applicationId, registry, state);
 const scheduler = new Scheduler(client, registry, state);
 
 registerEventDispatch({ client, state });
+registerMessageComponents(client);
 
 client.once(Events.ClientReady, async (ready) => {
   console.log(`Connected as ${ready.user.tag}`);
@@ -113,8 +119,26 @@ client.on(Events.InteractionCreate, async (interaction) => {
   }
 
   const module = registry.get(moduleId);
-  const ctx = await state.context(interaction.guild, moduleId);
-  if (!module || !ctx) return;
+  const baseCtx = await state.context(interaction.guild, moduleId);
+  if (!module || !baseCtx) return;
+  // The reply the owner wrote, if any. A command asks for it with the values it
+  // knows and falls back to its own wording when this says there is none.
+  const owned = policy.customReply;
+  let usedOwnedReply = false;
+  const ctx =
+    owned === null
+      ? baseCtx
+      : {
+          ...baseCtx,
+          customReply: (values: ReplyValues) => {
+            const reply = buildReply(owned, { ...commandVariables(interaction), ...stringValues(values) }, interaction.guild ?? undefined);
+            usedOwnedReply = usedOwnedReply || reply !== null;
+            return reply;
+          },
+        };
+
+  const restoreReply =
+    policy.ephemeral === null ? null : forceReplyVisibility(interaction, policy.ephemeral);
 
   try {
     if (interaction.isContextMenuCommand()) {
@@ -126,8 +150,20 @@ client.on(Events.InteractionCreate, async (interaction) => {
       if (!command) return;
       await command.run(interaction, ctx);
     }
+    if (usedOwnedReply && owned !== null) {
+      const interactive = hasInteractiveComponents(owned);
+      // Reactions can only go on a reply everyone can see.
+      const reactions = owned.reactions.length > 0 && !interaction.ephemeral;
+      if (interactive || reactions) {
+        const sent = await interaction.fetchReply().catch(() => null);
+        if (sent && interactive) await saveInteractions(interaction.guild.id, interaction.channelId, sent.id, owned);
+        if (reactions) for (const reaction of owned.reactions) await sent?.react(reaction).catch(() => undefined);
+      }
+    }
   } catch (error) {
     console.error(`${interaction.commandName} failed:`, error);
+    // The failure notice is always private, whatever the owner chose for the command.
+    restoreReply?.();
     const message = "That command did not finish. The server log has the details.";
     if (interaction.replied || interaction.deferred) {
       await interaction.followUp({ content: message, flags: MessageFlags.Ephemeral });

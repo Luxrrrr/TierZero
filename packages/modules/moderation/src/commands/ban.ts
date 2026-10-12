@@ -1,11 +1,19 @@
 import { SlashCommandBuilder, PermissionFlagsBits, MessageFlags } from "discord.js";
-import type { CommandDefinition } from "@tier0/core";
+import { plainReply, type CommandDefinition } from "@tier0/core";
 import type { ModerationSettings } from "../settings.js";
 import { parseDuration } from "../duration.js";
 import { runFromCommand } from "./run-action.js";
 
 export const banCommand: CommandDefinition<ModerationSettings> = {
   name: "ban",
+  response: {
+    starting: plainReply("Banned {user}. Case #{case}.{expiry}"),
+    placeholders: [
+      { name: "user", description: "The member's username", sample: "spamlord_42" },
+      { name: "case", description: "The case number", sample: "118" },
+      { name: "expiry", description: "A note when the ban is temporary, otherwise empty", sample: " It expires in 7 days." },
+    ],
+  },
   description: "Ban a member, permanently or for a fixed duration.",
   build: () =>
     new SlashCommandBuilder()
@@ -40,8 +48,9 @@ export const banCommand: CommandDefinition<ModerationSettings> = {
     const durationNote = record.expiresAt
       ? ` It expires <t:${Math.floor(record.expiresAt.getTime() / 1000)}:R>.`
       : "";
+    const custom = ctx.customReply?.({ user: target.username, case: record.caseNumber, expiry: durationNote });
     await interaction.reply({
-      content: `Banned ${target.username}. Case #${record.caseNumber}.${durationNote}`,
+      ...(custom ?? { content: `Banned ${target.username}. Case #${record.caseNumber}.${durationNote}` }),
       flags: MessageFlags.Ephemeral,
     });
   },

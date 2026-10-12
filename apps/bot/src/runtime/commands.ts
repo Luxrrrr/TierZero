@@ -1,9 +1,21 @@
 import { REST, Routes } from "discord.js";
-import type { ModuleRegistry } from "@tier0/core";
+import type { MessageBody, ModuleRegistry } from "@tier0/core";
 import { prisma } from "@tier0/db";
 import type { GuildState } from "./guild-state.js";
+import { EVERYONE } from "./command-policy.js";
 
 const RESYNC_DELAY_MS = 5_000;
+
+/** Fields left out are unchanged; null clears an override. */
+export interface CommandPatch {
+  enabled?: boolean;
+  allowRoles?: string[];
+  denyChannels?: string[];
+  permissions?: string | null;
+  ephemeral?: boolean | null;
+  /** A full reply, or null to go back to what the command says. */
+  customReply?: MessageBody | null;
+}
 
 /**
  * Owns which slash commands exist in each guild.
@@ -48,7 +60,7 @@ export class CommandSync {
   async setOverride(
     guildId: string,
     command: string,
-    patch: { enabled?: boolean; allowRoles?: string[]; denyChannels?: string[] },
+    patch: CommandPatch,
   ): Promise<void> {
     await prisma.commandOverride.upsert({
       where: { guildId_command: { guildId, command } },
@@ -58,6 +70,9 @@ export class CommandSync {
         enabled: patch.enabled ?? true,
         allowRoles: JSON.stringify(patch.allowRoles ?? []),
         denyChannels: JSON.stringify(patch.denyChannels ?? []),
+        permissions: patch.permissions ?? null,
+        ephemeral: patch.ephemeral ?? null,
+        responseBody: patch.customReply ? JSON.stringify(patch.customReply) : null,
       },
       update: {
         ...(patch.enabled !== undefined ? { enabled: patch.enabled } : {}),
@@ -66,6 +81,14 @@ export class CommandSync {
           : {}),
         ...(patch.denyChannels !== undefined
           ? { denyChannels: JSON.stringify(patch.denyChannels) }
+          : {}),
+        // Null clears an override back to the command's own behaviour, so
+        // these are written whenever they are present at all.
+        ...(patch.permissions !== undefined ? { permissions: patch.permissions } : {}),
+        ...(patch.ephemeral !== undefined ? { ephemeral: patch.ephemeral } : {}),
+        // Saving a reply also retires the plain text an older version kept.
+        ...(patch.customReply !== undefined
+          ? { responseBody: patch.customReply ? JSON.stringify(patch.customReply) : null, response: null }
           : {}),
       },
     });
@@ -79,14 +102,21 @@ export class CommandSync {
   /** visible = commands of enabled modules, minus anything switched off. */
   private async resolve(guildId: string): Promise<unknown[]> {
     const modules = await this.state.enabledModules(guildId);
-    const overrides = await prisma.commandOverride.findMany({
-      where: { guildId, enabled: false },
-    });
-    const disabled = new Set(overrides.map((o) => o.command));
+    const overrides = await prisma.commandOverride.findMany({ where: { guildId } });
+    const byCommand = new Map(overrides.map((o) => [o.command, o]));
 
     return modules
       .flatMap((module) => [...(module.commands ?? []), ...(module.contextCommands ?? [])])
-      .filter((command) => !disabled.has(command.name))
-      .map((command) => command.build().toJSON());
+      .filter((command) => byCommand.get(command.name)?.enabled !== false)
+      .map((command) => {
+        const json: { default_member_permissions?: string | null } = command.build().toJSON();
+        const permissions = byCommand.get(command.name)?.permissions;
+        // Hiding a command from members who cannot run it is Discord's job, and
+        // this field is the only way a bot token can ask for it.
+        if (permissions) {
+          json.default_member_permissions = permissions === EVERYONE ? null : permissions;
+        }
+        return json;
+      });
   }
 }

@@ -2,7 +2,7 @@
 
 import { useEffect, useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { CheckIcon, ChevronDownIcon } from "./Icons";
+import { CheckIcon, ChevronDownIcon, PlusIcon } from "./Icons";
 import { guildIconUrl, initialsOf } from "../lib/discord-cdn";
 
 const MENU_MIN_WIDTH = 240;
@@ -17,6 +17,8 @@ export interface SwitcherGuild {
 interface Props {
   guilds: SwitcherGuild[];
   current?: SwitcherGuild;
+  /** Where "Add a server" goes. The entry is left out when there is no link to offer. */
+  inviteUrl?: string | null;
 }
 
 /**
@@ -24,7 +26,7 @@ interface Props {
  * an entry navigates instead of setting a value, so the roving focus and the
  * Enter-to-activate behavior below follow the menu button pattern.
  */
-export function GuildSwitcher({ guilds, current }: Props) {
+export function GuildSwitcher({ guilds, current, inviteUrl }: Props) {
   const router = useRouter();
   const menuId = useId();
   const [open, setOpen] = useState(false);
@@ -34,9 +36,9 @@ export function GuildSwitcher({ guilds, current }: Props) {
   const menuRef = useRef<HTMLDivElement>(null);
   const itemRefs = useRef<(HTMLElement | null)[]>([]);
 
-  // "All servers" sits at the end of the same roving-focus ring as the guilds,
-  // so the count below is one more than the number of servers.
-  const itemCount = guilds.length + 1;
+  // "All servers", and "Add a server" when there is a link for it, sit at the
+  // end of the same roving-focus ring as the guilds.
+  const itemCount = guilds.length + 1 + (inviteUrl ? 1 : 0);
 
   useEffect(() => {
     if (!open) return;
@@ -247,6 +249,28 @@ export function GuildSwitcher({ guilds, current }: Props) {
           >
             <span className="popover-item-text">All servers</span>
           </button>
+
+          {inviteUrl ? (
+            <a
+              role="menuitem"
+              href={inviteUrl}
+              target="_blank"
+              rel="noreferrer"
+              tabIndex={active === guilds.length + 1 ? 0 : -1}
+              ref={(node) => {
+                itemRefs.current[guilds.length + 1] = node;
+              }}
+              className={"popover-item" + (active === guilds.length + 1 ? " is-active" : "")}
+              onMouseEnter={() => setActive(guilds.length + 1)}
+              onClick={() => close(false)}
+            >
+              <span className="avatar" aria-hidden="true">
+                <PlusIcon />
+              </span>
+              <span className="popover-item-text">Add a server</span>
+              <span className="visually-hidden">Opens Discord in a new tab</span>
+            </a>
+          ) : null}
         </div>
       ) : null}
     </div>

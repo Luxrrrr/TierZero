@@ -1,0 +1,324 @@
+import { describe, test } from "node:test";
+import assert from "node:assert/strict";
+import {
+  MESSAGE_LIMITS,
+  applyVariables,
+  applyVariablesToMessage,
+  cleanName,
+  colorToInt,
+  discordTimestamp,
+  emptyEmbed,
+  isEmojiToken,
+  parseMessage,
+  parseSendOptions,
+} from "../dist/message.js";
+
+const embed = (patch: Record<string, unknown> = {}) => ({ ...emptyEmbed(), title: "Rules", ...patch });
+
+describe("parseMessage", () => {
+  test("accepts plain text", () => {
+    const result = parseMessage({ content: "Welcome" });
+    assert.equal(result.ok, true);
+  });
+
+  test("accepts an embed with no text", () => {
+    assert.equal(parseMessage({ content: "", embeds: [embed()] }).ok, true);
+  });
+
+  test("refuses a message with nothing in it", () => {
+    const result = parseMessage({ content: "   ", embeds: [] });
+    assert.equal(result.ok, false);
+  });
+
+  test("fills a missing embed field with its empty value", () => {
+    const result = parseMessage({ embeds: [{ title: "Only a title" }] });
+    assert.ok(result.ok);
+    assert.equal(result.value.embeds[0]?.fields.length, 0);
+    assert.equal(result.value.embeds[0]?.color, "");
+  });
+
+  test("counts over-long text against Discord's limits", () => {
+    const result = parseMessage({ content: "x".repeat(MESSAGE_LIMITS.content + 1) });
+    assert.ok(!result.ok);
+    assert.equal(result.errors[0]?.path, "content");
+  });
+
+  test("names the field a problem is in", () => {
+    const result = parseMessage({ embeds: [embed({ fields: [{ name: "Ok", value: "" }] })] });
+    assert.ok(!result.ok);
+    assert.ok(result.errors.some((e) => e.path === "embeds[0].fields[0].value"));
+  });
+
+  test("refuses a link that is not http or https", () => {
+    const result = parseMessage({ embeds: [embed({ url: "javascript:alert(1)", imageUrl: "ftp://x/y.png" })] });
+    assert.ok(!result.ok);
+    const paths = result.errors.map((e) => e.path);
+    assert.ok(paths.includes("embeds[0].url"));
+    assert.ok(paths.includes("embeds[0].imageUrl"));
+  });
+
+  test("refuses a colour that is not six hex digits", () => {
+    assert.ok(!parseMessage({ embeds: [embed({ color: "red" })] }).ok);
+    assert.ok(parseMessage({ embeds: [embed({ color: "#E3B34A" })] }).ok);
+  });
+
+  test("refuses an embed that would show nothing", () => {
+    const result = parseMessage({ content: "hi", embeds: [emptyEmbed()] });
+    assert.ok(!result.ok);
+  });
+
+  test("limits embeds, fields and the combined length", () => {
+    assert.ok(!parseMessage({ embeds: Array.from({ length: 11 }, () => embed()) }).ok);
+    const fields = Array.from({ length: 26 }, (_, i) => ({ name: `n${i}`, value: "v" }));
+    assert.ok(!parseMessage({ embeds: [embed({ fields })] }).ok);
+    const big = { description: "x".repeat(4000) };
+    assert.ok(!parseMessage({ embeds: [embed(big), embed(big)] }).ok);
+  });
+
+  test("ignores anything that is not an object", () => {
+    assert.ok(!parseMessage("hello").ok);
+    assert.ok(!parseMessage(null).ok);
+  });
+});
+
+describe("colorToInt", () => {
+  test("reads a hex colour", () => {
+    assert.equal(colorToInt("#e3b34a"), 0xe3b34a);
+    assert.equal(colorToInt(""), undefined);
+  });
+});
+
+describe("cleanName", () => {
+  test("trims and collapses spaces", () => {
+    assert.deepEqual(cleanName("  Rules   v2 ", 80, "The name"), { ok: true, value: "Rules v2" });
+  });
+
+  test("refuses an empty or over-long name", () => {
+    assert.equal(cleanName("   ", 80, "The name").ok, false);
+    assert.equal(cleanName("x".repeat(81), 80, "The name").ok, false);
+  });
+});
+
+describe("timestamps on an embed", () => {
+  test("reads the old true as the time it is sent", () => {
+    const result = parseMessage({ embeds: [embed({ timestamp: true })] });
+    assert.ok(result.ok);
+    assert.equal(result.value.embeds[0]?.timestamp, "now");
+  });
+
+  test("accepts a chosen date and refuses nonsense", () => {
+    assert.ok(parseMessage({ embeds: [embed({ timestamp: "2026-12-25T09:00:00.000Z" })] }).ok);
+    assert.ok(!parseMessage({ embeds: [embed({ timestamp: "next tuesday" })] }).ok);
+  });
+});
+
+describe("buttons and reactions", () => {
+  test("a link button needs a label or emoji and a web address", () => {
+    assert.ok(parseMessage({ content: "x", buttons: [{ label: "Rules", url: "https://example.com" }] }).ok);
+    assert.ok(!parseMessage({ content: "x", buttons: [{ label: "", url: "https://example.com" }] }).ok);
+    assert.ok(!parseMessage({ content: "x", buttons: [{ label: "Go", style: "link", url: "" }] }).ok);
+    assert.ok(!parseMessage({ content: "x", buttons: [{ label: "Go", url: "javascript:1" }] }).ok);
+    assert.ok(!parseMessage({ content: "x", buttons: [{ label: "Go", style: "link", url: "javascript:1" }] }).ok);
+  });
+
+  test("allows twenty-five buttons and no more", () => {
+    const many = (n: number) => Array.from({ length: n }, (_, i) => ({ label: `b${i}`, url: "https://example.com" }));
+    assert.ok(parseMessage({ content: "x", buttons: many(25) }).ok);
+    assert.ok(!parseMessage({ content: "x", buttons: many(26) }).ok);
+  });
+
+  test("keeps real emoji and refuses words", () => {
+    assert.ok(parseMessage({ content: "x", reactions: ["👍", "<:party:123456789012345678>"] }).ok);
+    assert.ok(!parseMessage({ content: "x", reactions: ["thumbsup"] }).ok);
+  });
+
+  test("drops repeated reactions", () => {
+    const result = parseMessage({ content: "x", reactions: ["👍", "👍"] });
+    assert.ok(result.ok);
+    assert.deepEqual(result.value.reactions, ["👍"]);
+  });
+});
+
+describe("isEmojiToken", () => {
+  test("accepts the shapes Discord uses", () => {
+    for (const ok of ["😀", "👍🏽", "❤️", "1️⃣", "🇬🇧", "👨‍👩‍👧", "<a:wave:123456789012345678>"]) assert.ok(isEmojiToken(ok), ok);
+    for (const bad of ["a", "", "ab", ":smile:", "<:x:1>"]) assert.ok(!isEmojiToken(bad), bad);
+  });
+});
+
+describe("variables", () => {
+  const values = { server: "Northwind", members: "2,431", "channel.name": "rules" };
+
+  test("fills known names and leaves anything else as typed", () => {
+    assert.equal(applyVariables("Welcome to {server}! {oops} {members}", values), "Welcome to Northwind! {oops} 2,431");
+    assert.equal(applyVariables("in #{channel.name}", values), "in #rules");
+  });
+
+  test("reaches every piece of text and picture address but not links someone follows", () => {
+    const message = applyVariablesToMessage(
+      {
+        content: "{server}",
+        embeds: [{ ...emptyEmbed(), title: "{server}", description: "{members}", url: "https://example.com/{server}", thumbnailUrl: "https://example.com/{server}.png", footerText: "{server}", fields: [{ name: "{server}", value: "{members}", inline: false }] }],
+        buttons: [{ label: "{server}", url: "https://example.com/{server}", emoji: "", style: "link" as const, disabled: false, action: { type: "none" as const } }],
+        selects: [],
+        reactions: [],
+      },
+      values,
+    );
+    assert.equal(message.content, "Northwind");
+    assert.equal(message.embeds[0]?.title, "Northwind");
+    assert.equal(message.embeds[0]?.fields[0]?.value, "2,431");
+    assert.equal(message.embeds[0]?.url, "https://example.com/{server}");
+    assert.equal(message.embeds[0]?.thumbnailUrl, "https://example.com/Northwind.png");
+    assert.equal(message.buttons[0]?.label, "Northwind");
+    assert.equal(message.buttons[0]?.url, "https://example.com/{server}");
+  });
+});
+
+describe("discordTimestamp", () => {
+  test("writes the unix time Discord expects", () => {
+    assert.equal(discordTimestamp(new Date("2026-01-01T00:00:00Z"), "F"), "<t:1767225600:F>");
+  });
+});
+
+describe("parseSendOptions", () => {
+  const channelId = "123456789012345678";
+
+  test("needs a real channel id", () => {
+    assert.ok(!parseSendOptions({}).ok);
+    assert.ok(parseSendOptions({ channelId }).ok);
+  });
+
+  test("everything is off unless it is turned on", () => {
+    const result = parseSendOptions({ channelId });
+    assert.ok(result.ok);
+    assert.equal(result.value.allowEveryone, false);
+    assert.equal(result.value.pin, false);
+    assert.equal(result.value.silent, false);
+  });
+
+  test("takes a message link or an id for a reply", () => {
+    const link = parseSendOptions({ channelId, replyTo: "https://discord.com/channels/1/2/987654321098765432" });
+    assert.ok(link.ok);
+    assert.equal(link.value.replyTo, "987654321098765432");
+    assert.ok(!parseSendOptions({ channelId, replyTo: "latest" }).ok);
+  });
+
+  test("limits a thread name", () => {
+    assert.ok(!parseSendOptions({ channelId, threadName: "x".repeat(101) }).ok);
+  });
+});
+
+describe("button styles and actions", () => {
+  test("a button saved with only an address is a link", () => {
+    const result = parseMessage({ content: "x", buttons: [{ label: "Go", url: "https://example.com" }] });
+    assert.ok(result.ok);
+    assert.equal(result.value.buttons[0]?.style, "link");
+  });
+
+  test("a coloured button takes an action and no address", () => {
+    const result = parseMessage({ content: "x", buttons: [{ label: "Hi", style: "success", url: "https://example.com", action: { type: "reply", reply: { content: "Hello {user}" } } }] });
+    assert.ok(result.ok);
+    const button = result.value.buttons[0];
+    assert.equal(button?.url, "");
+    assert.equal(button?.action.type, "reply");
+    assert.equal(button?.action.type === "reply" && button.action.reply.ephemeral, true);
+  });
+
+  test("a role action needs a real role", () => {
+    assert.ok(!parseMessage({ content: "x", buttons: [{ label: "Join", style: "primary", action: { type: "role", mode: "toggle", roleId: "nope" } }] }).ok);
+    assert.ok(parseMessage({ content: "x", buttons: [{ label: "Join", style: "primary", action: { type: "role", mode: "add", roleId: "123456789012345678" } }] }).ok);
+  });
+
+  test("a reply that says nothing is refused", () => {
+    assert.ok(!parseMessage({ content: "x", buttons: [{ label: "Hi", style: "primary", action: { type: "reply", reply: { content: " " } } }] }).ok);
+  });
+
+  test("a disabled button is kept disabled", () => {
+    const result = parseMessage({ content: "x", buttons: [{ label: "Hi", style: "secondary", disabled: true }] });
+    assert.ok(result.ok);
+    assert.equal(result.value.buttons[0]?.disabled, true);
+  });
+});
+
+describe("select menus", () => {
+  const menu = (patch: Record<string, unknown> = {}) => ({
+    kind: "string",
+    placeholder: "Pick one",
+    options: [
+      { label: "Red", value: "red" },
+      { label: "Blue", value: "blue" },
+    ],
+    ...patch,
+  });
+
+  test("accepts a menu of your own choices", () => {
+    assert.ok(parseMessage({ content: "x", selects: [menu()] }).ok);
+  });
+
+  test("makes up a value for a choice that has none, and refuses two the same", () => {
+    const made = parseMessage({ content: "x", selects: [menu({ options: [{ label: "A" }, { label: "B" }] })] });
+    assert.ok(made.ok);
+    assert.notEqual(made.value.selects[0]?.options[0]?.value, made.value.selects[0]?.options[1]?.value);
+    assert.ok(!parseMessage({ content: "x", selects: [menu({ options: [{ label: "A", value: "v" }, { label: "B", value: "v" }] })] }).ok);
+  });
+
+  test("a menu of choices needs at least one, each with a label", () => {
+    assert.ok(!parseMessage({ content: "x", selects: [menu({ options: [] })] }).ok);
+    assert.ok(!parseMessage({ content: "x", selects: [menu({ options: [{ label: "" }] })] }).ok);
+  });
+
+  test("limits how many can be picked to how many choices there are", () => {
+    assert.ok(parseMessage({ content: "x", selects: [menu({ maxValues: 2 })] }).ok);
+    assert.ok(!parseMessage({ content: "x", selects: [menu({ maxValues: 3 })] }).ok);
+    assert.ok(!parseMessage({ content: "x", selects: [menu({ minValues: 2, maxValues: 1 })] }).ok);
+  });
+
+  test("a menu of members, roles or channels has no choices of its own", () => {
+    const result = parseMessage({ content: "x", selects: [{ kind: "role", options: [{ label: "ignored" }], action: { type: "none" } }] });
+    assert.ok(result.ok);
+    assert.deepEqual(result.value.selects[0]?.options, []);
+  });
+
+  test("a channel menu keeps only channel types Discord has", () => {
+    const result = parseMessage({ content: "x", selects: [{ kind: "channel", channelTypes: [0, 2, 99] }] });
+    assert.ok(result.ok);
+    assert.deepEqual(result.value.selects[0]?.channelTypes, [0, 2]);
+  });
+
+  test("buttons and menus share five rows", () => {
+    const buttons = Array.from({ length: 10 }, (_, i) => ({ label: `b${i}`, url: "https://example.com" }));
+    assert.ok(parseMessage({ content: "x", buttons, selects: [menu(), menu(), menu()] }).ok);
+    assert.ok(!parseMessage({ content: "x", buttons, selects: [menu(), menu(), menu(), menu()] }).ok);
+  });
+});
+
+describe("sending as another name", () => {
+  const channelId = "123456789012345678";
+
+  test("a name and a picture go together", () => {
+    assert.ok(parseSendOptions({ channelId, asName: "Announcer", asAvatarUrl: "https://example.com/a.png" }).ok);
+    assert.ok(!parseSendOptions({ channelId, asAvatarUrl: "https://example.com/a.png" }).ok);
+    assert.ok(!parseSendOptions({ channelId, asName: "A", asAvatarUrl: "ftp://x" }).ok);
+    assert.ok(!parseSendOptions({ channelId, asName: "x".repeat(81) }).ok);
+  });
+});
+
+describe("menus limited to particular channels or roles", () => {
+  const ids = ["123456789012345678", "223456789012345678"];
+
+  test("keeps the ids for a channel or role menu and drops them for others", () => {
+    const channel = parseMessage({ content: "x", selects: [{ kind: "channel", limitTo: ids }] });
+    assert.ok(channel.ok);
+    assert.deepEqual(channel.value.selects[0]?.limitTo, ids);
+    const user = parseMessage({ content: "x", selects: [{ kind: "user", limitTo: ids }] });
+    assert.ok(user.ok);
+    assert.deepEqual(user.value.selects[0]?.limitTo, []);
+  });
+
+  test("caps how many can be picked at how many are offered, and refuses bad ids", () => {
+    assert.ok(parseMessage({ content: "x", selects: [{ kind: "role", limitTo: ids, maxValues: 2 }] }).ok);
+    assert.ok(!parseMessage({ content: "x", selects: [{ kind: "role", limitTo: ids, maxValues: 3 }] }).ok);
+    assert.ok(!parseMessage({ content: "x", selects: [{ kind: "channel", limitTo: ["general"] }] }).ok);
+  });
+});

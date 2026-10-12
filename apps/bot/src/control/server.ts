@@ -1,11 +1,13 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { timingSafeEqual } from "node:crypto";
 import { ChannelType, type Client, type NonThreadGuildBasedChannel } from "discord.js";
-import type { ModuleRegistry } from "@tier0/core";
+import { parseMessage, type MessageBody, type ModuleRegistry } from "@tier0/core";
+import { permissionOverrideAllowed } from "../runtime/command-policy.js";
 import type { GuildState } from "../runtime/guild-state.js";
 import type { CommandSync } from "../runtime/commands.js";
 import { config } from "../config.js";
 import { rowStatuses, runRowAction } from "./rows.js";
+import { handleMessages } from "./messages.js";
 import { handleMod } from "./mod/index.js";
 import { rawHeaders, type Reply } from "./mod/types.js";
 
@@ -63,6 +65,24 @@ export function startControlApi({ client, registry, state, commands }: Deps): vo
 
     if (url.pathname === "/modules") {
       return send(200, registry.describe());
+    }
+
+    const messagesMatch = /^\/guilds\/(\d+)\/messages(?:\/(.*))?$/.exec(url.pathname);
+    if (messagesMatch) {
+      const [, guildId, rest] = messagesMatch;
+      const guild = guildId === undefined ? undefined : client.guilds.cache.get(guildId);
+      if (!guild) return send(404, { error: "guild not found" });
+
+      let parsed: unknown = undefined;
+      if (req.method !== "GET" && req.method !== "DELETE") {
+        const body = await readJsonBody(req);
+        if (!body.ok) return send(400, { error: body.error });
+        parsed = body.value;
+      }
+      const segments = rest ? decodeSegments(rest) : [];
+      if (!segments) return send(400, { error: "the path is not valid" });
+      const reply = await handleMessages({ guild, method: req.method ?? "GET", segments, body: parsed });
+      return reply ? sendReply(reply) : send(404, { error: "not found" });
     }
 
     const modMatch = /^\/guilds\/(\d+)\/mod\/(.+)$/.exec(url.pathname);
@@ -186,10 +206,13 @@ export function startControlApi({ client, registry, state, commands }: Deps): vo
         return send(400, { error: "body must be a JSON object" });
       }
 
-      const { enabled, allowRoles, denyChannels } = body.value as {
+      const { enabled, allowRoles, denyChannels, permissions, ephemeral, customReply } = body.value as {
         enabled?: unknown;
         allowRoles?: unknown;
         denyChannels?: unknown;
+        permissions?: unknown;
+        ephemeral?: unknown;
+        customReply?: unknown;
       };
       if (enabled !== undefined && typeof enabled !== "boolean") {
         return send(400, { error: "enabled must be a boolean" });
@@ -201,7 +224,50 @@ export function startControlApi({ client, registry, state, commands }: Deps): vo
         return send(400, { error: "denyChannels must be a list of channel IDs" });
       }
 
-      await commands.setOverride(guild.id, commandName, { enabled, allowRoles, denyChannels });
+      const summary = registry
+        .describe()
+        .flatMap((module) => module.commands)
+        .find((command) => command.name === commandName);
+
+      if (permissions !== undefined && permissions !== null) {
+        if (
+          typeof permissions !== "string" ||
+          !permissionOverrideAllowed(permissions, summary?.defaultPermissions ?? null)
+        ) {
+          return send(400, {
+            error: "that permission cannot be set on this command; a command that already needs one can only be made stricter",
+          });
+        }
+      }
+      if (ephemeral !== undefined && ephemeral !== null && typeof ephemeral !== "boolean") {
+        return send(400, { error: "ephemeral must be true, false or null" });
+      }
+      if (typeof ephemeral === "boolean" && summary?.repliesVary) {
+        return send(400, { error: "that command decides for each reply whether it is private" });
+      }
+      let reply: MessageBody | null | undefined;
+      if (customReply !== undefined) {
+        if (customReply === null) {
+          reply = null;
+        } else if (!summary?.response) {
+          return send(400, { error: "that command does not have a reply that can be rewritten" });
+        } else {
+          const parsed = parseMessage(customReply);
+          if (!parsed.ok) {
+            return send(400, { error: parsed.errors[0]?.message ?? "the reply is not valid", errors: parsed.errors });
+          }
+          reply = parsed.value;
+        }
+      }
+
+      await commands.setOverride(guild.id, commandName, {
+        enabled,
+        allowRoles,
+        denyChannels,
+        permissions: permissions as string | null | undefined,
+        ephemeral: ephemeral as boolean | null | undefined,
+        customReply: reply,
+      });
       return send(200, { ok: true });
     }
 

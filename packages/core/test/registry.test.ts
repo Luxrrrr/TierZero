@@ -139,7 +139,15 @@ describe("describe", () => {
     assert.equal(described?.id, "utility");
     assert.deepEqual(described?.requires, ["ManageRoles"]);
     assert.deepEqual(described?.commands, [
-      { name: "ping", description: "The ping command.", kind: "slash" },
+      {
+        name: "ping",
+        description: "The ping command.",
+        kind: "slash",
+        defaultPermissions: null,
+        privateByDefault: true,
+        repliesVary: false,
+        response: null,
+      },
     ]);
     assert.equal(described?.schema.kind, "object");
   });
@@ -253,5 +261,40 @@ describe("isRoleAssignable", () => {
 
   test("refuses an equal position, which Discord also refuses", () => {
     assert.equal(isRoleAssignable(5, 5), false);
+  });
+});
+
+describe("reply templates", () => {
+  test("plainReply is a message that is only a sentence", async () => {
+    const { plainReply } = await import("../dist/index.js");
+    assert.deepEqual(plainReply("Hi {user}"), { content: "Hi {user}", embeds: [], buttons: [], selects: [], reactions: [] });
+  });
+
+  test("describe reports a command's template and default permissions", () => {
+    const registry = new ModuleRegistry();
+    registry.register(
+      defineModule({
+        id: "t",
+        name: "t",
+        summary: "t",
+        settings: s.object({}),
+        commands: [
+          {
+            ...command("hello"),
+            response: {
+              starting: { content: "Hello {user}", embeds: [], buttons: [], reactions: [] },
+              placeholders: [{ name: "user", description: "who", sample: "Ada" }],
+            },
+            build: () => ({ toJSON: () => ({ name: "hello", default_member_permissions: "4" }) }) as never,
+          },
+          command("plain"),
+        ],
+      }),
+    );
+    const [hello, plain] = registry.describe()[0]!.commands;
+    assert.equal(hello!.response?.starting.content, "Hello {user}");
+    assert.equal(hello!.defaultPermissions, "4");
+    assert.equal(plain!.response, null);
+    assert.equal(plain!.defaultPermissions, null);
   });
 });

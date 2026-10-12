@@ -3,13 +3,14 @@ import type { BotGuildSummary } from "../lib/control-api";
 import type { ModuleView } from "../lib/module-view";
 import { statusWord } from "../lib/module-view";
 import { isHosted, moduleHref } from "../lib/module-href";
+import { inviteUrl } from "../lib/invite";
 import { navGroups } from "../lib/sections";
 import { initialsOf } from "../lib/discord-cdn";
 import { GuildSwitcher } from "./GuildSwitcher";
 import { NavLink } from "./NavLink";
 import { SidebarToggle } from "./SidebarToggle";
 import { ThemeToggle } from "./ThemeToggle";
-import { CommandsIcon, HelpIcon, OverviewIcon, SetupIcon, ShieldIcon, SignOutIcon } from "./Icons";
+import { CommandsIcon, HelpIcon, MessagesIcon, OverviewIcon, SetupIcon, ShieldIcon, SignOutIcon } from "./Icons";
 
 interface Props {
   user: { name: string | null | undefined; image: string | null | undefined };
@@ -56,7 +57,7 @@ export function Sidebar({
           </Link>
           <SidebarToggle />
         </div>
-        <GuildSwitcher guilds={guilds} current={currentGuild} />
+        <GuildSwitcher guilds={guilds} current={currentGuild} inviteUrl={inviteUrl()} />
       </div>
 
       <nav className="sidebar-nav" aria-label="Dashboard">
@@ -76,6 +77,10 @@ export function Sidebar({
                   <NavLink href={`/guilds/${currentGuild.id}/commands`} tip="Commands">
                     <CommandsIcon />
                     <span className="nav-link-text">Commands</span>
+                  </NavLink>
+                  <NavLink href={`/guilds/${currentGuild.id}/messages`} tip="Messages">
+                    <MessagesIcon />
+                    <span className="nav-link-text">Messages</span>
                   </NavLink>
                 </>
               ) : null}

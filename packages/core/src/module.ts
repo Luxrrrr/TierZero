@@ -7,6 +7,7 @@ import type {
   GuildBan,
   GuildChannel,
   GuildMember,
+  InteractionReplyOptions,
   MessageComponentInteraction,
   ModalSubmitInteraction,
   Message,
@@ -17,6 +18,7 @@ import type {
   SlashCommandOptionsOnlyBuilder,
   SlashCommandSubcommandsOnlyBuilder,
 } from "discord.js";
+import type { ReplyValues, ResponseTemplate } from "./response.js";
 import type { ObjectField, Shape, ShapeValues } from "./schema.js";
 
 /**
@@ -32,6 +34,13 @@ export interface ModuleContext<T = unknown> {
   update(patch: Partial<T>): Promise<void>;
   /** Work to carry out later, such as lifting a temporary ban. */
   tasks: ScheduledWork;
+  /**
+   * Set by the router while a command runs. Called with the values a command
+   * knows (the member it acted on, a case number), it returns the reply the
+   * owner wrote for this command with those filled in, or null when the owner
+   * has not written one and the command should say what it always says.
+   */
+  customReply?(values: ReplyValues): InteractionReplyOptions | null;
 }
 
 export type TaskPayload = Record<string, unknown>;
@@ -65,6 +74,20 @@ export interface CommandDefinition<T = unknown> {
   name: string;
   description: string;
   build(): CommandBuilder;
+  /**
+   * True when the command answers in the channel for everyone to see. Most
+   * answer privately, so that is the default. The dashboard uses this to show
+   * which choice an owner has not changed.
+   */
+  publicReply?: boolean;
+  /**
+   * True when whether a reply is private depends on what happens: a refusal is
+   * shown to one person and a confirmation to the channel. The dashboard does
+   * not offer a single private or public choice for such a command.
+   */
+  variedReply?: boolean;
+  /** Present when the owner may rewrite the reply from the dashboard. */
+  response?: ResponseTemplate;
   run(interaction: ChatInputCommandInteraction, ctx: ModuleContext<T>): Promise<void>;
 }
 
@@ -80,6 +103,12 @@ export interface ContextCommandDefinition<T = unknown> {
   /** Whether it appears when right-clicking a member or a message. */
   kind: "user" | "message";
   build(): ContextMenuCommandBuilder;
+  /**
+   * True when the command answers in the channel for everyone to see. Most
+   * answer privately, so that is the default. The dashboard uses this to show
+   * which choice an owner has not changed.
+   */
+  publicReply?: boolean;
   run(interaction: ContextMenuCommandInteraction, ctx: ModuleContext<T>): Promise<void>;
 }
 

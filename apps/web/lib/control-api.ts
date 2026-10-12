@@ -2,7 +2,7 @@
 // from route handlers and server components, both of which run on the
 // server, so the secret never reaches anything shipped to the browser.
 
-import type { ModuleCategory, RowDescription, RowStatus } from "@tier0/core";
+import type { MessageBody, ModuleCategory, ResponseTemplate, RowDescription, RowStatus } from "@tier0/core";
 
 export interface FieldValidationError {
   path: string;
@@ -160,6 +160,20 @@ export interface GuildCommandState {
   allowRoles: string[];
   /** Empty means it works in every channel. */
   denyChannels: string[];
+  /** The permission bits Discord needs a member to have to see it. Null means everyone. */
+  defaultPermissions: string | null;
+  /** True when the command answers privately unless an owner changes it. */
+  privateByDefault: boolean;
+  /** True when the command decides per reply, so there is no single private or public choice. */
+  repliesVary: boolean;
+  /** What an owner can rewrite about the command's reply, or null when it has no reply that can be. */
+  response: ResponseTemplate | null;
+  /** An owner's permission, "everyone", or null to keep the command's own. */
+  permissions: string | null;
+  /** True for private, false for public, null to keep the command's own. */
+  ephemeral: boolean | null;
+  /** The reply the owner wrote, sent in place of the command's own, or null to keep it. */
+  customReply: MessageBody | null;
 }
 
 export async function getGuildModules(guildId: string): Promise<GuildModuleState[]> {
@@ -287,6 +301,29 @@ export async function modRequest(
   const body: unknown = await res.json().catch((error: unknown) => {
     // The timeout also covers reading the body; an empty object would pass
     // for a successful empty answer.
+    if (isTimeout(error)) throw new ControlApiError(504, "The bot took too long to answer. Try again in a moment.");
+    return {};
+  });
+  return { status: res.status, body };
+}
+
+/**
+ * Calls the message library part of the control API. The bot's own answer,
+ * status included, goes back to the caller, so a refusal such as "that name is
+ * taken" reaches the page in the words the bot used.
+ */
+export async function messagesRequest(
+  guildId: string,
+  path: string,
+  init: { method?: string; body?: unknown } = {},
+): Promise<ModReply> {
+  const res = await controlFetch(`/guilds/${encodeURIComponent(guildId)}/messages${path ? `/${path}` : ""}`, {
+    method: init.method ?? "GET",
+    headers: init.body === undefined ? undefined : { "content-type": "application/json" },
+    body: init.body === undefined ? undefined : JSON.stringify(init.body),
+    signal: AbortSignal.timeout(MOD_TIMEOUT_MS),
+  });
+  const body: unknown = await res.json().catch((error: unknown) => {
     if (isTimeout(error)) throw new ControlApiError(504, "The bot took too long to answer. Try again in a moment.");
     return {};
   });
