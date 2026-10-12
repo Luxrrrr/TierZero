@@ -901,10 +901,10 @@ table.visually-hidden {
   display: block;
   width: 1.5rem;
   height: 1.5rem;
-  border-radius: var(--radius-sm);
-  object-fit: cover;
+  object-fit: contain;
   flex: none;
-  box-shadow: 0 0 0 1px var(--border), 0 0 12px var(--accent-soft);
+  /* The logo has a transparent background, so it glows instead of sitting in a tile. */
+  filter: drop-shadow(0 0 5px rgba(150, 90, 255, 0.35));
 }
 
 .sidebar-guild {
