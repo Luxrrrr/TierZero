@@ -7,6 +7,7 @@ import { EventList } from "./EventList";
 import { MessagesView } from "./MessagesView";
 import type { MessageLogQuery } from "./message-params";
 import type { ServerLogQuery, ServerLogView } from "./params";
+import "../audit/audit.css";
 import "./messages.css";
 import "./server-logs.css";
 
