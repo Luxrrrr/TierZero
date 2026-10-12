@@ -3,7 +3,7 @@ import { s, type Infer, type ModuleContext } from "@tier0/core";
 export const settingsSchema = s.object({
   pollEvery: s.duration({
     label: "Check for new posts every",
-    help: "Shorter than 5 minutes is treated as 5, which keeps the bot polite to the sites it reads.",
+    help: "Anything under 5 minutes is treated as 5, to avoid hammering the sites it reads.",
     default: "15m",
     max: "1d",
   }),

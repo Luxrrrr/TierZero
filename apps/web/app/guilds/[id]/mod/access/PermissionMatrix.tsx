@@ -12,7 +12,7 @@ export function PermissionMatrix() {
           <h2 className="mod-card-title" id="access-matrix-title">
             What each level can do
           </h2>
-          <p className="mod-card-desc">Read straight from the rules the bot enforces, so this table is never out of date.</p>
+          <p className="mod-card-desc">Generated from the permission rules the bot enforces.</p>
         </div>
       </div>
 

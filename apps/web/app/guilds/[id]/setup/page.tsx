@@ -100,8 +100,8 @@ export default async function QuickSetupPage({ params }: { params: Promise<{ id:
             <div className="section-title">
               <h2>One feature at a time</h2>
               <p>
-                The same questions, for a single feature. Run any of these
-                whenever you want, however many times you want.
+                The same questions, for a single feature. You can run any of
+                these as often as you like.
               </p>
             </div>
             <div className="card">

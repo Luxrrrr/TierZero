@@ -64,9 +64,9 @@ export default async function HelpPage() {
           <p className="page-eyebrow">Help</p>
           <h1 className="page-title">How TierZero works</h1>
           <p className="page-summary">
-            Everything the bot does is switched on and configured from this
-            dashboard, one server at a time. Nothing here needs you to edit a
-            file or restart anything.
+            Everything the bot does is turned on and configured from this
+            dashboard, one server at a time. You never need to edit a file or
+            restart anything.
           </p>
         </div>
       </div>
@@ -85,10 +85,9 @@ export default async function HelpPage() {
             </span>
             <h3>Features</h3>
             <p>
-              The bot is a set of features that are separate from each other:
-              moderation, tickets, welcome messages, and so on. Each one is off
-              until you turn it on, and each is turned on per server. Nothing is
-              locked behind a subscription, because there isn&apos;t one.
+              The bot is made of separate features: moderation, tickets,
+              welcome messages and so on. Each one is off until you turn it on,
+              and you turn it on per server. There is no paid tier.
             </p>
           </article>
 
@@ -111,9 +110,8 @@ export default async function HelpPage() {
             </span>
             <h3>Changes are immediate</h3>
             <p>
-              Saving a setting takes effect straight away. There is no restart,
-              no deploy, and no wait. If you turn a feature off in the middle of
-              an argument in your server, it is off.
+              A saved setting takes effect straight away, with no restart.
+              Turn a feature off and it stops right then.
             </p>
           </article>
 
@@ -123,8 +121,8 @@ export default async function HelpPage() {
             </span>
             <h3>On, off, and needs setup</h3>
             <p>
-              A coloured dot next to a feature tells you where it stands. The
-              feature page names exactly what is missing.
+              A coloured dot next to each feature shows its status. If
+              something is missing, the feature page says what.
             </p>
             <ul className="help-key">
               <li>
@@ -175,10 +173,10 @@ export default async function HelpPage() {
           <p>The short path, for when a full settings page is more than you want.</p>
         </div>
         <p className="help-lead">
-          A feature&apos;s settings page shows everything it has, which is a lot
-          if you have not decided what you want yet. Quick setup asks only the
-          few questions a feature genuinely needs, one screen at a time, and
-          turns it on at the end.
+          A feature&apos;s settings page shows every option it has, which is a
+          lot if you are still deciding what you want. Quick setup asks only the
+          few questions a feature needs, one screen at a time, and turns it on
+          at the end.
         </p>
         <div className="help-grid help-grid-wide">
           <article className="help-card">
@@ -239,9 +237,8 @@ export default async function HelpPage() {
           </article>
         </div>
         <p className="help-footnote">
-          Changes reach Discord within a few seconds. They are batched
-          deliberately, so flipping several switches in a row sends one update
-          rather than one per switch.
+          Changes reach Discord within a few seconds. Several switches flipped
+          in a row are sent as one update.
         </p>
       </section>
 
@@ -309,10 +306,10 @@ export default async function HelpPage() {
               <ChevronDownIcon />
             </summary>
             <div className="faq-body">
-              The dashboard and the bot are two programs. This message means the
-              dashboard is fine and the bot is not running, or not reachable from
-              it. Whoever installed it can check the bot is started. Your
-              settings are safe: they live in the database, not in the bot.
+              The dashboard and the bot are two separate programs. This message
+              means the bot is not running, or the dashboard cannot reach it.
+              Whoever installed TierZero can check that the bot is started. Your
+              settings are safe, since they are stored in the database.
             </div>
           </details>
           <details>
@@ -356,8 +353,7 @@ export default async function HelpPage() {
               <ChevronDownIcon />
             </summary>
             <div className="faq-body">
-              Servers without a custom icon show their initials instead. That is
-              normal, and not a sign anything is broken.
+              Servers without a custom icon show their initials instead.
             </div>
           </details>
         </div>
