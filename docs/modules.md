@@ -149,7 +149,9 @@ Both hooks see the settings as last saved, never a draft, so the dashboard disab
 
 ## Commands
 
-Command names are unique across all modules, and the registry throws on a duplicate at startup. Commands are registered per server and re-synced, debounced by five seconds, when a module is toggled or an override changes.
+Command names are unique across all modules, and the registry throws on a duplicate at startup. A command whose reply an owner may rewrite declares `response: { starting, placeholders }`. `starting` is the message the editor opens with, written to match what the command says now, and each placeholder has a name, a description and a sample for the preview. In the handler, call `ctx.customReply?.({ ...values })` and send that when it isn't null; otherwise reply the way the command always has.
+
+Commands are registered per server and re-synced, debounced by five seconds, when a module is toggled or an override changes.
 
 ### Right-click entries
 

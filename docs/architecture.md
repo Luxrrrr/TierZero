@@ -38,7 +38,16 @@ GET    /guilds/:id/modules              every module with its enabled flag and r
 PATCH  /guilds/:id/modules/:moduleId    { enabled?, settings? }
 GET    /guilds/:id/modules/:moduleId/rows/:path/status
 POST   /guilds/:id/modules/:moduleId/rows/:path/actions/:actionId
-PATCH  /guilds/:id/commands/:name       { enabled?, allowRoles?, denyChannels? }
+PATCH  /guilds/:id/commands/:name       { enabled?, allowRoles?, denyChannels?, permissions?, ephemeral?, customReply? }
+GET    /guilds/:id/messages              template folders and templates
+POST   /guilds/:id/messages/folders      { name }
+PATCH  /guilds/:id/messages/folders/:id  { name }
+DELETE /guilds/:id/messages/folders/:id  templates inside move out, none deleted
+POST   /guilds/:id/messages/templates    { name, folderId?, content, embeds, buttons, reactions }
+PATCH  /guilds/:id/messages/templates/:id
+DELETE /guilds/:id/messages/templates/:id
+GET    /guilds/:id/messages/emojis       the server's custom emoji
+POST   /guilds/:id/messages/send         { channelId, content, embeds, buttons, reactions, templateId?, ...send options }
 POST   /guilds/:id/reload               re-read config, resync commands
 *      /guilds/:id/mod/...              the moderation area
 ```
@@ -61,11 +70,15 @@ Settings are JSON, validated against the module's current schema on every read. 
 
 The dashboard never writes `GuildModule` or `CommandOverride`. Validate, save and reload stay in one process, which is what keeps the no-restart behavior reliable.
 
+Message templates (`MessageTemplate`, `MessageFolder`) follow the same rule. They aren't module settings, so the Messages page has its own control API routes. The limits Discord puts on a message live in `packages/core/src/message.ts`, which the dashboard uses as you type and the bot uses again before saving or sending. Variables are filled in by the bot at send time, and the message is checked a second time afterwards because they can make it longer.
+
+Buttons other than links, and every menu, get an id built from their place in the message (`tzmsg:b:0`, `tzmsg:s:1`). When one is used, the bot looks up the message in `MessageInteraction`, a snapshot of its components taken when it was sent, and runs the action stored there. Because of the snapshot, editing a template never changes a message that is already out. The handler is `runtime/message-components.ts`.
+
 ## Command visibility
 
 Enabled modules' commands, minus anything switched off in `CommandOverride`, are registered per guild. Global commands are cached by Discord for about an hour and look the same everywhere, which breaks per-server visibility. Registration is debounced by five seconds. Slash commands and right-click entries share the namespace and the switches.
 
-Where Discord's `default_member_permissions` can express a rule, it's used, since it hides the command in the client. The rest (a command allowed only in certain channels, say) is stored on `CommandOverride` and enforced in the interaction router. Those rules are cached per guild, and the write path clears the cache itself so a saved restriction can't silently do nothing until a restart.
+Where Discord's `default_member_permissions` can express a rule, it's used, since it hides the command in the client. The rest (a command allowed only in certain channels, say) is stored on `CommandOverride` and enforced in the interaction router. An owner can also replace the permission with a stricter one; the control API refuses to loosen a command that already has a default, because the command itself never checks the invoker. Reply visibility is forced on the first response by wrapping `reply` and `deferReply` in the router, and an owner's reply, a full message stored on `CommandOverride.responseBody`, reaches the handler as `ctx.customReply`, which a command calls with the values it knows and falls back from when it returns null. Reactions are added by the router, and only to a reply everyone can see. Those rules are cached per guild, and the write path clears the cache itself so a saved restriction can't silently do nothing until a restart.
 
 ## Moderation area
 
@@ -92,6 +105,10 @@ The bot checks the role again in each handler. Reads have no actor, so their res
 Dashboard, slash command and right-click actions all go through `performAction` in `packages/modules/moderation/src/perform.ts`: checks, DM, Discord call, case, scheduled unban, mod log post. The commands are thin wrappers. Rules that need no Discord objects are in `action-rules.ts` and tested alone.
 
 The dashboard adds a few rules the commands don't need, because Discord didn't vet the actor. No acting on yourself or the bot. A staff member who isn't in the server is refused, since their roles can't be compared with the target's. No DMs to non-members except on an unban, or a staff member's text could be sent to any Discord account.
+
+### Attached messages
+
+The moderation module keeps the latest messages of each member in memory (`recent-messages.ts`: 30 per member, 5,000 members, 72 hours, content cut at 4,000 characters). Nothing is written to disk until a moderator attaches one. `resolveEvidence` in `evidence.ts` turns the chosen channel and message ids into copies, from the buffer or by fetching, and refuses any message the acting staff member can't view in Discord, or that isn't by the target. The copies are stored as JSON in `Infraction.evidence` and are captured before the action runs, since a ban can delete the messages. The picker reads `GET members/:id/messages`. Reads carry no actor, so the proxy adds the signed-in `viewer` and `owner` to that query.
 
 ### Removing and purging
 

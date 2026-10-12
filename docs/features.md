@@ -13,6 +13,7 @@
 | Audit logging | Logs edits, deletions, joins, role changes and more to a channel. |
 | Leveling | XP, role rewards and a leaderboard. No image cards. |
 | News and patch notes | RSS feeds and Steam patch notes, posted as embeds. |
+| Messages | Build a message or embed, save it as a template, sort templates into folders and send it to any channel. |
 | Utility | Server and member info. |
 
 Good to know:
@@ -50,9 +51,40 @@ Nothing is locked in. Settings it doesn't ask about keep their values, skipping 
 
 ## Commands
 
-The Commands page lists every command on the server, including the right-click entries. Each one can be switched off, or limited to certain roles and channels.
+The Commands page lists every command on the server, including the right-click entries. Each one can be switched off, limited to certain roles and channels, or hidden from members without a chosen permission. You can also decide whether its reply is private or public, and for /ping, /serverinfo, /userinfo, /rank, /leaderboard, /warn, /kick, /ban, /unban and /timeout, write the reply yourself with the same editor as the [Messages](#messages) page: text, embeds, buttons, menus and variables, plus reactions on a public reply. The editor starts from what the command says now, and each command has its own variables, such as `{user}` and `{case}` for /warn. Discord can't hide a command by role, so the role list blocks use but doesn't hide it.
 
 ![The Commands page with a hidden command and role limits](images/commands.png)
+
+## Messages
+
+The Messages page builds messages and embeds for the bot to post, such as rules, announcements or event notices. You edit on the left and see the message drawn the way Discord shows it on the right.
+
+What you can set:
+
+- Message text, with buttons for bold, italic, underline, strikethrough, code, spoilers and quotes.
+- Up to 10 embeds. Each has a color, an author with icon and link, a title with a link, a description, up to 25 fields (inline or not), an image, a thumbnail, a footer with an icon, and a time in the footer. The time can be none, the moment it's sent, or a time you pick.
+- Up to 25 buttons, five to a row. Each has a label, an optional emoji, a color (blue, grey, green or red) and an off switch that greys it out. A link button opens a web address. The others do something when pressed, which you choose.
+- Up to 5 menus, each on a row of its own: a list of your own choices, or a picker for members, roles, members or roles, or channels. A menu sets how few and how many can be picked, a placeholder, whether it's off, and for a channel menu which kinds of channel appear. Each of your own choices has a label, a description, an emoji, and whether it starts picked.
+- Up to 20 reactions the bot adds under the message.
+
+A button, a choice, or a member, role or channel menu can do nothing, reply, or give or take a role. A reply is built with the same text and embeds as a message, with `{user}`, `{user.mention}` and `{selected}` filled in for the person who used it, and is private by default. A role action gives the role, takes it away, or toggles it, and can say something back. The bot can only change roles below its own highest role.
+
+What a message's buttons and menus do is saved when the message is sent, so editing the template later doesn't change a message that's already out.
+
+Above each text box there are tools to insert:
+
+| Tool | What it adds |
+| --- | --- |
+| Variables | A name in braces that the bot fills in when it sends: `{server}`, `{members}`, `{channel}`, `{channel.name}`, `{date}`, `{time}`, `{now}`, `{sender}` and `{bot}`. The preview fills them in with stand-ins. |
+| Time | A Discord timestamp. You pick a date, time and style (short time, long date, relative and so on), and each reader sees it in their own timezone. |
+| Mention | A role, a channel, @everyone, @here, or a member by user ID. |
+| Emoji | Your server's custom emoji and a set of common ones. |
+
+Name a message and press Save to keep it as a template. Folders group templates, one level deep. Deleting a folder moves its templates out and deletes nothing.
+
+Send posts it to the channel you pick, after a confirmation that shows the message once more. The bot needs View Channel and Send Messages there, and Embed Links for an embed. Each send has its own options: send under another name and picture (through a webhook, which needs Manage Webhooks in that channel), send silently, pin it, publish it to followers of an announcement channel, hide link previews, read it out loud, start a thread on it, and reply to a message. These are chosen when you send and aren't saved with the template.
+
+A sent message can mention people and roles. @everyone and @here only ping when you turn on "Let @everyone and @here ping" for that send, and Discord still ignores them unless the bot has the Mention Everyone permission.
 
 ## Moderation
 
@@ -120,6 +152,8 @@ Nothing disappears from the timeline when it's removed. A removed action or dele
 
 The **Take action** button on a member's page offers what your level allows, and only what fits the member. Unban shows for someone banned, Clear timeout only while a timeout is running. Each choice opens a short form with a reason (up to 500 characters, and required if the Moderation setting says so) and, for timeouts and bans, a length. A ban can also delete up to 7 days of the member's messages.
 
+Warns, timeouts, kicks and bans also have an **Attach messages** section. It lists the member's latest messages in any channel you can read, deleted ones included, and you tick the ones that belong on the case (up to 10). You can also paste a message link for one that isn't listed. Attached messages show on the case in the member's timeline and in the Actions tab. The list comes from what the bot has seen while Moderation was on. It is kept in memory for three days and is empty after a restart, so a link is the way to attach anything older. File names are kept, but the files stay on Discord and their links can stop working. CSV exports include the links only.
+
 It runs the same code as the slash commands, so it behaves the same: hierarchy check, direct message if that setting is on, the Discord action, the case, the unban schedule for a temporary ban and the mod log post. The case names you as the moderator.
 
 ![The warn form with a reason and what will happen](images/take-action.png)
@@ -142,7 +176,7 @@ With Moderation on, staff can act without opening the dashboard. Right-click (or
 - On a member: Warn member, Timeout member, Kick member, Ban member, Member history.
 - On a message: Warn author, Timeout author, Kick author, Ban author.
 
-Actions open the same form as the dashboard. From a message, a link to it is added to the reason.
+Actions open the same form as the dashboard. From a message, the message itself is attached to the case: its text, channel, time and any file names, copied as they read when you acted. The copy stays readable if the member edits or deletes the original. If the bot never saw the message, only a link is added to the reason.
 
 Discord shows an entry only to members with the matching permission: Timeout Members for warn, timeout and history, Kick Members for kick, Ban Members for ban. Seeing it isn't enough. The person also has to be on the staff list or be the install owner, with the same levels as the dashboard. If a moderator can't see the entries, give their role Timeout Members. Server owners can change who sees each entry under Server Settings, Integrations. Each entry is also a command on the Commands page, so it can be switched off or limited like any other.
 
@@ -162,7 +196,7 @@ Case numbers are never renumbered or reused. Purging case 12 leaves a permanent 
 
 ### Audit trail
 
-Admins and the owner can open the Audit tab. It lists every change made through the dashboard: notes added, edited, deleted or restored, actions removed or restored, and staff added, changed or removed. The owner's changes are included. Purges are left out on purpose. Entries show who did it and at what level, and edits and removals expand to show before and after. You can filter by type, staff member, member ID, date range and words. The same entries appear on a member's timeline as staff activity.
+Admins and the owner can open the Audit tab. It lists every change made through the dashboard: actions taken on a member (warn, timeout, kick, ban and so on), notes added, edited, deleted or restored, actions removed or restored, and staff added, changed or removed. The owner's changes are included. Actions taken from Discord, with a slash command or the right-click menu, are on the member's record and in the Actions tab but not here, and actions taken before this was added aren't listed. Purges are left out on purpose. Entries show who did it and at what level, and edits and removals expand to show before and after. You can filter by type, staff member, member ID, date range and words. The same entries appear on a member's timeline as staff activity.
 
 Cases made by commands and automod are the actions themselves, in the Actions tab.
 
