@@ -1,6 +1,7 @@
 import { PermissionFlagsBits, type Guild, type GuildMember, type Message } from "discord.js";
 import { EVIDENCE_LIMITS, type EvidenceMessage, type EvidenceRef } from "@tier0/core";
 import { ActionRefused } from "./action-rules.js";
+import { evidenceFromLogged, loadLogged } from "@tier0/module-serverlog";
 import { recentMessages, type RecentMessage } from "./recent-messages.js";
 
 /** Who is attaching, which decides which channels' messages they may see. */
@@ -81,6 +82,19 @@ export async function resolveEvidence(
       throw new ActionRefused(403, `You can't attach messages from #${channel.name}, because you can't read that channel.`);
     }
 
+    // The log has the whole history of a message, so it is asked first.
+    const [logged] = await loadLogged({ guildId: guild.id, messageId: ref.messageId }, 1);
+    if (logged) {
+      if (logged.authorId !== targetId || logged.channelId !== ref.channelId) {
+        throw new ActionRefused(400, "One of the messages wasn't sent by this member.");
+      }
+      if (ref.version !== undefined && ref.version >= logged.edits.length + 1) {
+        throw new ActionRefused(400, "One of the messages doesn't have the version you chose. Reload the list and pick again.");
+      }
+      out.push(evidenceFromLogged(logged, channel.name, ref.version));
+      continue;
+    }
+
     const remembered = recentMessages.find(ref.messageId);
     if (remembered) {
       if (remembered.authorId !== targetId || remembered.channelId !== ref.channelId) {
@@ -100,10 +114,22 @@ export async function resolveEvidence(
   return out;
 }
 
-/** What the picker shows: the member's remembered messages the viewer can read, newest first. */
-export function recentFor(guild: Guild, userId: string, viewer: EvidenceViewer): EvidenceMessage[] {
-  return recentMessages
+const PICKER_SIZE = 50;
+
+/**
+ * What the picker shows: the member's latest messages the viewer can read, newest first. The log
+ * is the main source, with its edits and deletions. The memory buffer adds what it holds that
+ * the log does not, which is everything when the log is off.
+ */
+export async function recentFor(guild: Guild, userId: string, viewer: EvidenceViewer): Promise<EvidenceMessage[]> {
+  const nameOf = (channelId: string, fallback: string) => guild.channels.cache.get(channelId)?.name ?? fallback;
+  const logged = (await loadLogged({ guildId: guild.id, authorId: userId }, PICKER_SIZE))
+    .filter((row) => viewerCanRead(guild, viewer, row.channelId))
+    .map((row) => evidenceFromLogged(row, nameOf(row.channelId, row.channelName)));
+  const known = new Set(logged.map((message) => message.id));
+  const remembered = recentMessages
     .forMember(guild.id, userId)
-    .filter((message) => viewerCanRead(guild, viewer, message.channelId))
-    .map((message) => fromRemembered(guild.id, guild.channels.cache.get(message.channelId)?.name ?? message.channelName, message));
+    .filter((message) => !known.has(message.id) && viewerCanRead(guild, viewer, message.channelId))
+    .map((message) => fromRemembered(guild.id, nameOf(message.channelId, message.channelName), message));
+  return [...logged, ...remembered].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, PICKER_SIZE);
 }

@@ -26,6 +26,8 @@ model Guild {
   messageFolders   MessageFolder[]
   messageTemplates MessageTemplate[]
   messageInteractions MessageInteraction[]
+  loggedMessages      LoggedMessage[]
+  serverLogEntries    ServerLogEntry[]
 
   /// The last case number handed out here. It only ever goes up, so a number
   /// that was purged is never given to a different case.
@@ -152,6 +154,9 @@ model Infraction {
   voidedAt    DateTime?
   voidedBy    String?
   voidReason  String?
+  /// Set when someone changes the reason after the action was taken.
+  editedAt    DateTime?
+  editedBy    String?
   /// Messages a moderator attached, copied as they read when the action was taken, as JSON.
   evidence    String    @default("[]")
 
@@ -353,4 +358,76 @@ model MessageInteraction {
   guild Guild @relation(fields: [guildId], references: [id], onDelete: Cascade)
 
   @@index([guildId])
+}
+
+/// A message the bot saw, kept so staff can search what was said, including what
+/// was deleted or edited. Only written while a server has the message log on, and
+/// pruned to the number of days that server chose. `content` is the current text;
+/// earlier text is in LoggedMessageEdit.
+model LoggedMessage {
+  id          Int       @id @default(autoincrement())
+  guildId     String
+  messageId   String
+  channelId   String
+  /// The channel's name when the message was sent, so the log still reads if it is renamed or deleted.
+  channelName String    @default("")
+  authorId    String
+  authorName  String    @default("")
+  content     String    @default("")
+  /// Names and links of attached files as JSON. The files themselves stay on Discord.
+  attachments String    @default("[]")
+  createdAt   DateTime
+  editedAt    DateTime?
+  deletedAt   DateTime?
+
+  guild Guild               @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  edits LoggedMessageEdit[]
+
+  @@unique([guildId, messageId])
+  @@index([guildId, createdAt])
+  @@index([guildId, authorId, createdAt])
+  @@index([guildId, channelId, createdAt])
+}
+
+/// A version of a message's text that an edit replaced, and when that text went up.
+model LoggedMessageEdit {
+  id       Int      @id @default(autoincrement())
+  loggedId Int
+  content  String
+  at       DateTime
+
+  message LoggedMessage @relation(fields: [loggedId], references: [id], onDelete: Cascade)
+
+  @@index([loggedId])
+}
+
+/// One thing that happened on the server, kept so staff can search it. Written only for the
+/// kinds of event a server has switched on, and pruned to the number of days it chose. The
+/// ids and names are copied in, so an entry still reads right after a member or channel is gone.
+model ServerLogEntry {
+  id          Int      @id @default(autoincrement())
+  guildId     String
+  at          DateTime @default(now())
+  /// One of the categories in packages/core/src/serverlog.ts.
+  category    String
+  /// One of the types in packages/core/src/serverlog.ts.
+  type        String
+  actorId     String?
+  actorName   String   @default("")
+  targetId    String?
+  targetName  String   @default("")
+  channelId   String?
+  channelName String   @default("")
+  summary     String
+  /// Changes, notes and the message it is about, as JSON.
+  details     String   @default("{}")
+
+  guild Guild @relation(fields: [guildId], references: [id], onDelete: Cascade)
+
+  @@index([guildId, at])
+  @@index([guildId, category, at])
+  @@index([guildId, type, at])
+  @@index([guildId, actorId, at])
+  @@index([guildId, targetId, at])
+  @@index([guildId, channelId, at])
 }

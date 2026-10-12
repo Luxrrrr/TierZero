@@ -233,5 +233,5 @@ Leave `CONTROL_HOST` unset so the bot only listens on localhost, and set `CONTRO
 | "This request did not come from the dashboard" when saving | The reverse proxy isn't passing the host through | See [Reaching the dashboard from other devices](#reaching-the-dashboard-from-other-devices) |
 | Channel or role lists won't load | Discord rate limited the server list lookup | Wait 30 seconds and reload |
 | A teammate signs in and sees no servers | They aren't on the Moderation list and lack Manage Server | Add them on the Access tab |
-| No moderation statistics, or no Audit tab | The bot is running an old version, or you aren't an admin | Run `docker compose up -d --build`. Only admins and the owner see Audit |
+| No moderation statistics, or no Staff activity page | The bot is running an old version, or you aren't an admin | Run `docker compose up -d --build`. Only admins and the owner see Audit |
 | Commands don't show up in Discord | A feature's commands only exist while it's switched on | Switch the feature on and wait a few seconds |

@@ -46,6 +46,7 @@ export { resolveList, resolveRow, schemaPathOf } from "./rows.js";
 
 export {
   EVIDENCE_LIMITS,
+  MESSAGE_LOG_STATES,
   evidenceRefFromLink,
   parseEvidenceRefs,
   readEvidence,
@@ -55,6 +56,7 @@ export {
   can,
   canDeleteNote,
   canEditNote,
+  canEditInfraction,
   canVoidAction,
   MOD_ACTION_KINDS,
   canTakeAction,
@@ -68,6 +70,9 @@ export type {
   EvidenceAttachment,
   EvidenceMessage,
   EvidenceRef,
+  LoggedMessageDto,
+  MessageLogState,
+  MessageVersion,
   ActionRequest,
   ActionResult,
   Actor,
@@ -148,3 +153,21 @@ export type {
   TimestampStyle,
   VariableValues,
 } from "./message.js";
+
+export {
+  SERVER_LOG_CATEGORIES,
+  SERVER_LOG_CATEGORY_IDS,
+  isServerLogCategory,
+  isServerLogType,
+  readServerLogDetails,
+  serverLogCategoryOf,
+  serverLogTypeLabel,
+} from "./serverlog.js";
+export type {
+  ServerLogCategory,
+  ServerLogCategoryId,
+  ServerLogChange,
+  ServerLogDetails,
+  ServerLogEntryDto,
+  ServerLogType,
+} from "./serverlog.js";

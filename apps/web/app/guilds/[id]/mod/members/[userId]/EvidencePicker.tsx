@@ -3,6 +3,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { EVIDENCE_LIMITS, evidenceRefFromLink, type EvidenceMessage, type EvidenceRef } from "@tier0/core";
 import { When } from "../../../../../../components/mod/ModUi";
+import { DeletedTag, Versions, versionLabel } from "../../../../../../components/mod/Evidence";
 
 interface Props {
   guildId: string;
@@ -10,6 +11,10 @@ interface Props {
   selected: EvidenceRef[];
   onChange(next: EvidenceRef[]): void;
   disabled: boolean;
+  /** Messages already chosen elsewhere, such as in the message log, shown even when they are not among the latest. */
+  seed?: EvidenceMessage[];
+  /** The heading of the section. */
+  title?: string;
 }
 
 type Load = { status: "idle" } | { status: "loading" } | { status: "ready"; messages: EvidenceMessage[] } | { status: "error"; message: string };
@@ -20,8 +25,8 @@ type Load = { status: "idle" } | { status: "loading" } | { status: "ready"; mess
  * this moderator can read, deleted ones included. A message the bot did not
  * see, such as an older one, can be added by pasting its link.
  */
-export function EvidencePicker({ guildId, userId, selected, onChange, disabled }: Props) {
-  const [open, setOpen] = useState(false);
+export function EvidencePicker({ guildId, userId, selected, onChange, disabled, seed = [], title = "Attach messages" }: Props) {
+  const [open, setOpen] = useState(selected.length > 0);
   const [load, setLoad] = useState<Load>({ status: "idle" });
   const [link, setLink] = useState("");
   const [linkError, setLinkError] = useState<string | null>(null);
@@ -61,6 +66,17 @@ export function EvidencePicker({ guildId, userId, selected, onChange, disabled }
     else if (!full) onChange([...selected, { channelId: message.channelId, messageId: message.id }]);
   }
 
+  function chooseVersion(messageId: string, value: string) {
+    const version = Number(value);
+    onChange(
+      selected.map((ref) => {
+        if (ref.messageId !== messageId) return ref;
+        const { version: _dropped, ...rest } = ref;
+        return Number.isInteger(version) ? { ...rest, version } : rest;
+      }),
+    );
+  }
+
   function addLink() {
     const ref = evidenceRefFromLink(link);
     if (!ref) {
@@ -81,14 +97,16 @@ export function EvidencePicker({ guildId, userId, selected, onChange, disabled }
     setLinkError(null);
   }
 
-  const known = load.status === "ready" ? load.messages : [];
+  const loaded = load.status === "ready" ? load.messages : [];
+  // A message that is already attached is shown as it was saved, since that is what the case holds.
+  const known = [...seed, ...loaded.filter((message) => !seed.some((m) => m.id === message.id))];
   const linked = selected.filter((ref) => !known.some((message) => message.id === ref.messageId));
 
   return (
     <div className="pf-field ev-picker">
       <button type="button" className="ev-toggle" aria-expanded={open} aria-controls={`${id}-panel`} onClick={() => setOpen(!open)}>
         <span className="pf-field-label ta-label">
-          Attach messages
+          {title}
           <span className="ta-tag">Optional</span>
         </span>
         <span className="ev-count">
@@ -121,8 +139,8 @@ export function EvidencePicker({ guildId, userId, selected, onChange, disabled }
           {known.length > 0 ? (
             <ul className="ev-choices" aria-label="Their latest messages">
               {known.map((message) => (
-                <li key={message.id}>
-                  <label className="ev-choice" data-checked={isPicked(message.id) ? "true" : undefined}>
+                <li key={message.id} className="ev-choice-item" data-checked={isPicked(message.id) ? "true" : undefined}>
+                  <label className="ev-choice">
                     <input
                       type="checkbox"
                       checked={isPicked(message.id)}
@@ -133,11 +151,31 @@ export function EvidencePicker({ guildId, userId, selected, onChange, disabled }
                       <span className="ev-head">
                         <span className="ev-channel">#{message.channelName || "unknown"}</span>
                         <When iso={message.createdAt} />
-                        {message.deleted ? <span className="ev-tag">Deleted</span> : null}
+                        {message.deleted ? <DeletedTag deletedAt={message.deletedAt} /> : null}
                       </span>
-                      <span className="ev-choice-text">{message.content !== "" ? message.content : message.attachments.length > 0 ? `${message.attachments.length} attachment${message.attachments.length === 1 ? "" : "s"}` : "No text"}</span>
+                      <span className="ev-choice-text" data-deleted={message.deleted ? "true" : undefined}>{message.content !== "" ? message.content : message.attachments.length > 0 ? `${message.attachments.length} attachment${message.attachments.length === 1 ? "" : "s"}` : "No text"}</span>
                     </span>
                   </label>
+                  {isPicked(message.id) && message.versions && message.versions.length > 1 ? (
+                    <div className="ev-which">
+                      <label htmlFor={`${id}-v-${message.id}`}>Which version broke the rules?</label>
+                      <select
+                        id={`${id}-v-${message.id}`}
+                        className="mod-select"
+                        disabled={disabled}
+                        value={String(selected.find((ref) => ref.messageId === message.id)?.version ?? message.versions.length - 1)}
+                        onChange={(event) => chooseVersion(message.id, event.target.value)}
+                      >
+                        {message.versions.map((version, index) => (
+                          <option key={index} value={index}>
+                            {versionLabel(index, message.versions!.length)}: {version.content.slice(0, 50) || "No text"}
+                            {version.content.length > 50 ? "…" : ""}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  ) : null}
+                  <Versions versions={message.versions} />
                 </li>
               ))}
             </ul>

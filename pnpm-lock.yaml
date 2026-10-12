@@ -53,6 +53,9 @@ importers:
       '@tier0/module-roles':
         specifier: workspace:*
         version: link:../../packages/modules/roles
+      '@tier0/module-serverlog':
+        specifier: workspace:*
+        version: link:../../packages/modules/serverlog
       '@tier0/module-tickets':
         specifier: workspace:*
         version: link:../../packages/modules/tickets
@@ -182,11 +185,26 @@ importers:
       '@tier0/db':
         specifier: workspace:*
         version: link:../../db
+      '@tier0/module-serverlog':
+        specifier: workspace:*
+        version: link:../serverlog
       discord.js:
         specifier: ^14.16.0
         version: 14.27.0
 
   packages/modules/roles:
+    dependencies:
+      '@tier0/core':
+        specifier: workspace:*
+        version: link:../../core
+      '@tier0/db':
+        specifier: workspace:*
+        version: link:../../db
+      discord.js:
+        specifier: ^14.16.0
+        version: 14.27.0
+
+  packages/modules/serverlog:
     dependencies:
       '@tier0/core':
         specifier: workspace:*

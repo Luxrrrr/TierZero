@@ -1,22 +1,28 @@
 import type {
   ChatInputCommandInteraction,
   Client,
+  ReadonlyCollection,
   ContextMenuCommandBuilder,
   ContextMenuCommandInteraction,
   Guild,
   GuildBan,
   GuildChannel,
+  GuildEmoji,
   GuildMember,
   InteractionReplyOptions,
+  Invite,
   MessageComponentInteraction,
   ModalSubmitInteraction,
   Message,
   PartialGuildMember,
   PartialMessage,
   Role,
+  Snowflake,
   SlashCommandBuilder,
   SlashCommandOptionsOnlyBuilder,
   SlashCommandSubcommandsOnlyBuilder,
+  ThreadChannel,
+  VoiceState,
 } from "discord.js";
 import type { ReplyValues, ResponseTemplate } from "./response.js";
 import type { ObjectField, Shape, ShapeValues } from "./schema.js";
@@ -136,6 +142,23 @@ export interface EventHandlers<T = unknown> {
   channelDelete(channel: GuildChannel, ctx: ModuleContext<T>): Promise<void>;
   roleCreate(role: Role, ctx: ModuleContext<T>): Promise<void>;
   roleDelete(role: Role, ctx: ModuleContext<T>): Promise<void>;
+  /** A purge: one event for the whole batch, instead of one messageDelete for each message in it. */
+  messageDeleteBulk(
+    messages: ReadonlyCollection<Snowflake, Message | PartialMessage>,
+    channel: GuildChannel | ThreadChannel,
+    ctx: ModuleContext<T>,
+  ): Promise<void>;
+  channelUpdate(before: GuildChannel, after: GuildChannel, ctx: ModuleContext<T>): Promise<void>;
+  threadCreate(thread: ThreadChannel, ctx: ModuleContext<T>): Promise<void>;
+  threadDelete(thread: ThreadChannel, ctx: ModuleContext<T>): Promise<void>;
+  roleUpdate(before: Role, after: Role, ctx: ModuleContext<T>): Promise<void>;
+  guildUpdate(before: Guild, after: Guild, ctx: ModuleContext<T>): Promise<void>;
+  voiceStateUpdate(before: VoiceState, after: VoiceState, ctx: ModuleContext<T>): Promise<void>;
+  inviteCreate(invite: Invite, ctx: ModuleContext<T>): Promise<void>;
+  inviteDelete(invite: Invite, ctx: ModuleContext<T>): Promise<void>;
+  emojiCreate(emoji: GuildEmoji, ctx: ModuleContext<T>): Promise<void>;
+  emojiUpdate(before: GuildEmoji, after: GuildEmoji, ctx: ModuleContext<T>): Promise<void>;
+  emojiDelete(emoji: GuildEmoji, ctx: ModuleContext<T>): Promise<void>;
   banAdd(ban: GuildBan, ctx: ModuleContext<T>): Promise<void>;
   banRemove(ban: GuildBan, ctx: ModuleContext<T>): Promise<void>;
 }

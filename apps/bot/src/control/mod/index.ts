@@ -1,9 +1,10 @@
 import type { Client, Guild } from "discord.js";
 import { isStaffRole, type Actor } from "@tier0/core";
 import type { GuildState } from "../../runtime/guild-state.js";
-import { actionContextFor, memberMessages, takeAction } from "./actions.js";
+import { actionContextFor, editInfraction, memberMessages, takeAction } from "./actions.js";
 import { listAudit } from "./audit-list.js";
 import { exportInfractions, listInfractions, purgeInfraction, restoreInfraction, voidInfraction } from "./infractions.js";
+import { listLoggedMessages, listServerLog, purgeServerLog } from "./server-log.js";
 import { listMembers, memberProfile, searchGuildMembers } from "./members.js";
 import { addNote, deleteNote, editNote, purgeNote, restoreNote } from "./notes.js";
 import { listStaff, removeStaff, setStaff } from "./staff.js";
@@ -59,6 +60,8 @@ export async function handleMod(request: ModRequest): Promise<Reply | null> {
     if (area === "members" && a !== undefined && b === "messages") {
       return memberMessages(ctx, a, query.get("viewer"), query.get("owner") === "1");
     }
+    if (area === "server-logs" && a === undefined) return listServerLog(ctx, state, query);
+    if (area === "messages" && a === undefined) return listLoggedMessages(ctx, state, query);
     if (area === "member-search") return searchGuildMembers(ctx, query.get("q") ?? "");
     if (area === "infractions" && a === undefined) return listInfractions(ctx, query);
     if (area === "infractions" && a === "export" && b === undefined) return exportInfractions(ctx, query);
@@ -93,6 +96,11 @@ export async function handleMod(request: ModRequest): Promise<Reply | null> {
     return null;
   }
 
+  if (method === "PATCH" && area === "infractions" && a !== undefined && b === undefined) {
+    const id = idOf(a);
+    return id === null ? refuse(400, "Bad case id") : editInfraction(ctx, state, id, actor, payload);
+  }
+
   if (method === "PATCH" && area === "notes" && a !== undefined && b === undefined) {
     const id = idOf(a);
     return id === null ? refuse(400, "Bad note id") : editNote(ctx, id, actor, payload.content);
@@ -115,6 +123,7 @@ export async function handleMod(request: ModRequest): Promise<Reply | null> {
       return purge ? purgeInfraction(ctx, id, actor) : forbidden("remove a case without voiding it first");
     }
     if (area === "staff" && a !== undefined && b === undefined) return removeStaff(ctx, a, actor);
+    if (area === "server-logs" && a === undefined) return purgeServerLog(ctx, actor);
   }
 
   return null;

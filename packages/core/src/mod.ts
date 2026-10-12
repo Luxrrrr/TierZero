@@ -20,11 +20,14 @@ export type ModPermission =
   | "view"
   | "stats.view"
   | "audit.view"
+  | "messages.view"
+  | "messages.purge"
   | "note.add"
   | "note.edit.any"
   | "note.delete.any"
   | "note.restore"
   | "infraction.void"
+  | "infraction.edit"
   | "infraction.void.any-action"
   | "infraction.restore"
   | "action.warn"
@@ -36,16 +39,19 @@ export type ModPermission =
   | "staff.manage";
 
 const GRANTS: Record<StaffRole, ModPermission[]> = {
-  mod: ["view", "stats.view", "note.add", "infraction.void", "action.warn", "action.timeout"],
+  mod: ["view", "stats.view", "messages.view", "note.add", "infraction.void", "infraction.edit", "action.warn", "action.timeout"],
   admin: [
     "view",
     "stats.view",
     "audit.view",
+    "messages.view",
+    "messages.purge",
     "note.add",
     "note.edit.any",
     "note.delete.any",
     "note.restore",
     "infraction.void",
+    "infraction.edit",
     "infraction.restore",
     "action.warn",
     "action.timeout",
@@ -57,11 +63,14 @@ const GRANTS: Record<StaffRole, ModPermission[]> = {
     "view",
     "stats.view",
     "audit.view",
+    "messages.view",
+    "messages.purge",
     "note.add",
     "note.edit.any",
     "note.delete.any",
     "note.restore",
     "infraction.void",
+    "infraction.edit",
     "infraction.void.any-action",
     "infraction.restore",
     "action.warn",
@@ -84,6 +93,15 @@ export function can(role: StaffRole, permission: ModPermission): boolean {
  * is the owner's call.
  */
 const VOIDABLE_BY_STAFF = new Set(["warn", "timeout", "automod-warn", "automod-timeout", "automod-delete"]);
+
+/**
+ * Whether this role may change the reason on a case. A moderator can correct their own, and an admin or the
+ * owner any, automod's included.
+ */
+export function canEditInfraction(role: StaffRole, madeByViewer: boolean): boolean {
+  if (!can(role, "infraction.edit")) return false;
+  return role === "mod" ? madeByViewer : true;
+}
 
 export function canVoidAction(role: StaffRole, action: string): boolean {
   if (!can(role, "infraction.void")) return false;
@@ -146,7 +164,9 @@ export type AuditKind =
   | "note.restore"
   | "infraction.void"
   | "infraction.restore"
+  | "infraction.edit"
   | "action.take"
+  | "messagelog.purge"
   | "staff.add"
   | "staff.update"
   | "staff.remove";
@@ -157,8 +177,10 @@ export const AUDIT_KIND_LABEL: Record<AuditKind, string> = {
   "note.delete": "Deleted a note",
   "note.restore": "Restored a note",
   "infraction.void": "Removed an action from a record",
+  "infraction.edit": "Edited an action on a record",
   "infraction.restore": "Restored an action to a record",
   "action.take": "Took an action on a member",
+  "messagelog.purge": "Deleted the server logs",
   "staff.add": "Added staff",
   "staff.update": "Changed a staff role",
   "staff.remove": "Removed staff",
@@ -181,7 +203,7 @@ export interface Page<T> {
   pageSize: number;
 }
 
-export const EVIDENCE_LIMITS = { messages: 10, content: 1500, attachments: 5, name: 200 } as const;
+export const EVIDENCE_LIMITS = { messages: 10, content: 1500, attachments: 5, name: 200, versions: 51 } as const;
 
 export interface EvidenceAttachment {
   name: string;
@@ -204,12 +226,46 @@ export interface EvidenceMessage {
   url: string;
   /** The message was already deleted when it was saved. */
   deleted: boolean;
+  /** When it was deleted, if the bot saw that happen. */
+  deletedAt?: string | null;
+  /** Every version of the text, oldest first, the last being the current one. Present only when it was edited. */
+  versions?: MessageVersion[];
+  /** Which of `versions` the moderator picked as the one that broke the rules. Left out when it is the latest. */
+  flagged?: number;
 }
+
+/** One version of a message's text, and when that text was posted or edited in. */
+export interface MessageVersion {
+  content: string;
+  at: string;
+}
+
+/** A message in the server's message log, with its whole edit history. */
+export interface LoggedMessageDto {
+  id: string;
+  channelId: string;
+  channelName: string;
+  author: UserRef;
+  content: string;
+  attachments: EvidenceAttachment[];
+  createdAt: string;
+  /** Null unless the bot saw the message being deleted. */
+  deletedAt: string | null;
+  /** Oldest first, the last being what the message says now. One entry when it was never edited. */
+  versions: MessageVersion[];
+  url: string;
+}
+
+/** What the log asks for, in the words of the query string the dashboard sends. */
+export const MESSAGE_LOG_STATES = ["all", "deleted", "edited"] as const;
+export type MessageLogState = (typeof MESSAGE_LOG_STATES)[number];
 
 /** A message a moderator picked, by where it is. The bot reads its contents itself. */
 export interface EvidenceRef {
   channelId: string;
   messageId: string;
+  /** For an edited message, which version is the problem, counting from the oldest at 0. Left out for the latest. */
+  version?: number;
 }
 
 const SNOWFLAKE = /^\d{17,20}$/;
@@ -229,7 +285,11 @@ export function parseEvidenceRefs(input: unknown): { ok: true; refs: EvidenceRef
     }
     if (seen.has(messageId)) continue;
     seen.add(messageId);
-    refs.push({ channelId, messageId });
+    const version = source.version;
+    if (version !== undefined && version !== null && (!Number.isInteger(version) || (version as number) < 0 || (version as number) >= EVIDENCE_LIMITS.versions)) {
+      return { ok: false, error: "One of the messages to attach names a version that does not exist." };
+    }
+    refs.push(typeof version === "number" ? { channelId, messageId, version } : { channelId, messageId });
   }
   if (refs.length > EVIDENCE_LIMITS.messages) {
     return { ok: false, error: `You can attach at most ${EVIDENCE_LIMITS.messages} messages to one action.` };
@@ -267,6 +327,8 @@ export interface InfractionDto {
   /** Still in force, such as a timeout that has not run out. */
   active: boolean;
   voided: null | { at: string; by: UserRef; reason: string | null };
+  /** Set when the reason was changed after the action was taken. */
+  edited: null | { at: string; by: UserRef };
   /** Messages a moderator attached, as they read when the action was taken. */
   evidence: EvidenceMessage[];
 }

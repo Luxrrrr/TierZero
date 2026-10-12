@@ -1,6 +1,6 @@
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
-import { can, canDeleteNote, canEditNote, canTakeAction, canVoidAction, isInForce, isModActionKind, isStaffRole, permissionForAction } from "../dist/mod.js";
+import { canEditInfraction, can, canDeleteNote, canEditNote, canTakeAction, canVoidAction, isInForce, isModActionKind, isStaffRole, permissionForAction } from "../dist/mod.js";
 
 describe("can", () => {
   test("lets every role look and add notes", () => {
@@ -181,5 +181,61 @@ describe("evidence", () => {
     assert.deepEqual(readEvidence("{oops"), []);
     assert.deepEqual(readEvidence(null), []);
     assert.deepEqual(readEvidence("[]"), []);
+  });
+});
+
+describe("evidence versions", () => {
+  const base = { channelId: "123456789012345678", messageId: "223456789012345678" };
+
+  test("a version choice is kept, and its absence stays absent", () => {
+    const withVersion = parseEvidenceRefs([{ ...base, version: 0 }]);
+    assert.ok(withVersion.ok);
+    assert.deepEqual(withVersion.refs, [{ ...base, version: 0 }]);
+    const without = parseEvidenceRefs([base]);
+    assert.ok(without.ok);
+    assert.equal("version" in without.refs[0]!, false);
+  });
+
+  test("a version that cannot exist is refused", () => {
+    assert.ok(!parseEvidenceRefs([{ ...base, version: -1 }]).ok);
+    assert.ok(!parseEvidenceRefs([{ ...base, version: 1.5 }]).ok);
+    assert.ok(!parseEvidenceRefs([{ ...base, version: 500 }]).ok);
+    assert.ok(!parseEvidenceRefs([{ ...base, version: "0" }]).ok);
+  });
+});
+
+describe("canEditInfraction", () => {
+  test("a moderator edits their own cases and no one else's", () => {
+    assert.equal(canEditInfraction("mod", true), true);
+    assert.equal(canEditInfraction("mod", false), false);
+  });
+
+  test("admins and the owner edit any case", () => {
+    assert.equal(canEditInfraction("admin", false), true);
+    assert.equal(canEditInfraction("owner", false), true);
+  });
+});
+
+import { SERVER_LOG_CATEGORIES, isServerLogCategory, isServerLogType, serverLogCategoryOf, serverLogTypeLabel } from "../dist/serverlog.js";
+
+describe("the server log catalog", () => {
+  test("every type belongs to exactly one category and has a label", () => {
+    const seen = new Set<string>();
+    for (const category of SERVER_LOG_CATEGORIES) {
+      for (const type of category.types) {
+        assert.equal(seen.has(type.id), false, `${type.id} is listed twice`);
+        seen.add(type.id);
+        assert.equal(serverLogCategoryOf(type.id), category.id);
+        assert.equal(serverLogTypeLabel(type.id), type.label);
+      }
+    }
+  });
+
+  test("unknown ids are told apart from known ones", () => {
+    assert.equal(isServerLogCategory("members"), true);
+    assert.equal(isServerLogCategory("nope"), false);
+    assert.equal(isServerLogType("member.join"), true);
+    assert.equal(isServerLogType("member"), false);
+    assert.equal(serverLogTypeLabel("custom.thing"), "custom.thing");
   });
 });

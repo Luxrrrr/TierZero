@@ -7,6 +7,7 @@ import type { MemberProfile, ModActionKind, StaffRole } from "@tier0/core";
 import { ChevronDownIcon, ShieldIcon } from "../../../../../../components/Icons";
 import { StateIcon } from "../../../../../../components/mod/ModUi";
 import { useToast } from "../../../../../../components/Toaster";
+import { readAttach } from "../../../../../../lib/attach-handoff";
 import { actionOptions, memberState, successTitle, type ActionOption } from "./actions";
 import { ActionFormDialog } from "./ActionForm";
 import { useActionContext } from "./useActionContext";
@@ -43,6 +44,11 @@ export function TakeAction({ guildId, profile, name, role, now, timeZone, canCon
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(0);
   const [dialog, setDialog] = useState<ModActionKind | null>(null);
+  // Messages picked in the message log, waiting for an action to be attached to.
+  const [pending, setPending] = useState(0);
+  useEffect(() => {
+    setPending(readAttach(guildId, profile.user.userId).length);
+  }, [guildId, profile.user.userId, dialog]);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const itemRefs = useRef<(HTMLButtonElement | null)[]>([]);
@@ -143,6 +149,12 @@ export function TakeAction({ guildId, profile, name, role, now, timeZone, canCon
         <span>Take action</span>
         <ChevronDownIcon className="ta-chevron" />
       </button>
+
+      {pending > 0 && !dialog ? (
+        <p className="ev-pending">
+          {pending} {pending === 1 ? "message is" : "messages are"} ready to attach. Choose an action.
+        </p>
+      ) : null}
 
       {open ? (
         <div id={menuId} ref={menuRef} role="menu" aria-label={`Take action on ${name}`} className="popover ta-menu" onKeyDown={onMenuKeyDown}>

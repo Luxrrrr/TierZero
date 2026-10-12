@@ -7,6 +7,7 @@ import roles from "@tier0/module-roles";
 import automod from "@tier0/module-automod";
 import leveling from "@tier0/module-leveling";
 import moderation, { backfillEvidence } from "@tier0/module-moderation";
+import serverlog from "@tier0/module-serverlog";
 import tickets from "@tier0/module-tickets";
 import auditlog from "@tier0/module-auditlog";
 import feeds from "@tier0/module-feeds";
@@ -30,6 +31,7 @@ registry.register(roles);
 registry.register(automod);
 registry.register(leveling);
 registry.register(moderation);
+registry.register(serverlog);
 registry.register(tickets);
 registry.register(auditlog);
 registry.register(feeds);
@@ -40,6 +42,9 @@ const client = new Client({
     GatewayIntentBits.GuildMembers,
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.GuildModeration,
+    GatewayIntentBits.GuildVoiceStates,
+    GatewayIntentBits.GuildInvites,
+    GatewayIntentBits.GuildEmojisAndStickers,
     GatewayIntentBits.MessageContent,
   ],
   // Without these, an event about something the bot never cached just gets

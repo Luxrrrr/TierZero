@@ -28,6 +28,7 @@ export {
 } from "./action-rules.js";
 export { fetchMemberOrNull } from "./lookups.js";
 export { recentFor, resolveEvidence, viewerCanRead, type EvidenceViewer } from "./evidence.js";
+export { changeLength, type ChangeLengthInput } from "./edit-length.js";
 export { backfillEvidence, splitMessageLink } from "./backfill.js";
 export { RecentMessages, RECENT_LIMITS, recentMessages } from "./recent-messages.js";
 export type { InfractionRecord } from "./infractions.js";
@@ -57,8 +58,9 @@ export default defineModule({
 
   modals: { ctxact: submitContextAction },
 
-  // What a member said recently is kept in memory, so a moderator can attach a
-  // message to an action, including one deleted since. See recent-messages.ts.
+  // What a member said lately is kept in memory, so a moderator can attach it to an
+  // action even on a server that has not turned on Server logs, including a message
+  // deleted since. With the message log on, Server logs keeps the full history.
   events: {
     async messageCreate(message) {
       if (message.author.bot || !message.guild) return;
@@ -79,6 +81,9 @@ export default defineModule({
     },
     async messageDelete(message) {
       recentMessages.markDeleted(message.id);
+    },
+    async messageDeleteBulk(messages) {
+      for (const message of messages.values()) recentMessages.markDeleted(message.id);
     },
   },
 

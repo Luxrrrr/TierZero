@@ -54,6 +54,16 @@ export function registerEventDispatch({ client, state }: Deps): void {
     );
   });
 
+  // A purge deletes many at once and Discord reports it as one event. Modules get it as one,
+  // since a purge of a hundred messages is a single thing that happened, not a hundred.
+  client.on(Events.MessageBulkDelete, async (messages, channel) => {
+    if (channel.isDMBased()) return;
+    const guild = channel.guild;
+    await deliver(state, guild, "messageDeleteBulk", (handler, ctx) =>
+      (handler as EventHandlers["messageDeleteBulk"])(messages, channel, ctx),
+    );
+  });
+
   client.on(Events.MessageUpdate, async (before, after) => {
     if (!after.guild) return;
     const guild = after.guild;
@@ -91,6 +101,70 @@ export function registerEventDispatch({ client, state }: Deps): void {
     await deliver(state, channel.guild, "channelDelete", (handler, ctx) =>
       (handler as EventHandlers["channelDelete"])(channel, ctx),
     );
+  });
+
+  client.on(Events.ChannelUpdate, async (before, after) => {
+    if (before.isDMBased() || after.isDMBased()) return;
+    await deliver(state, after.guild, "channelUpdate", (handler, ctx) =>
+      (handler as EventHandlers["channelUpdate"])(before, after, ctx),
+    );
+  });
+
+  client.on(Events.ThreadCreate, async (thread) => {
+    await deliver(state, thread.guild, "threadCreate", (handler, ctx) =>
+      (handler as EventHandlers["threadCreate"])(thread, ctx),
+    );
+  });
+
+  client.on(Events.ThreadDelete, async (thread) => {
+    await deliver(state, thread.guild, "threadDelete", (handler, ctx) =>
+      (handler as EventHandlers["threadDelete"])(thread, ctx),
+    );
+  });
+
+  client.on(Events.GuildRoleUpdate, async (before, after) => {
+    await deliver(state, after.guild, "roleUpdate", (handler, ctx) =>
+      (handler as EventHandlers["roleUpdate"])(before, after, ctx),
+    );
+  });
+
+  client.on(Events.GuildUpdate, async (before, after) => {
+    await deliver(state, after, "guildUpdate", (handler, ctx) =>
+      (handler as EventHandlers["guildUpdate"])(before, after, ctx),
+    );
+  });
+
+  client.on(Events.VoiceStateUpdate, async (before, after) => {
+    await deliver(state, after.guild, "voiceStateUpdate", (handler, ctx) =>
+      (handler as EventHandlers["voiceStateUpdate"])(before, after, ctx),
+    );
+  });
+
+  client.on(Events.InviteCreate, async (invite) => {
+    if (!invite.guild || !("channels" in invite.guild)) return;
+    const guild = client.guilds.cache.get(invite.guild.id);
+    if (!guild) return;
+    await deliver(state, guild, "inviteCreate", (handler, ctx) => (handler as EventHandlers["inviteCreate"])(invite, ctx));
+  });
+
+  client.on(Events.InviteDelete, async (invite) => {
+    const guild = invite.guild ? client.guilds.cache.get(invite.guild.id) : undefined;
+    if (!guild) return;
+    await deliver(state, guild, "inviteDelete", (handler, ctx) => (handler as EventHandlers["inviteDelete"])(invite, ctx));
+  });
+
+  client.on(Events.GuildEmojiCreate, async (emoji) => {
+    await deliver(state, emoji.guild, "emojiCreate", (handler, ctx) => (handler as EventHandlers["emojiCreate"])(emoji, ctx));
+  });
+
+  client.on(Events.GuildEmojiUpdate, async (before, after) => {
+    await deliver(state, after.guild, "emojiUpdate", (handler, ctx) =>
+      (handler as EventHandlers["emojiUpdate"])(before, after, ctx),
+    );
+  });
+
+  client.on(Events.GuildEmojiDelete, async (emoji) => {
+    await deliver(state, emoji.guild, "emojiDelete", (handler, ctx) => (handler as EventHandlers["emojiDelete"])(emoji, ctx));
   });
 
   client.on(Events.GuildRoleCreate, async (role) => {

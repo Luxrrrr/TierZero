@@ -1593,20 +1593,30 @@ a.mod-user:hover {
   overflow-y: auto;
 }
 
+/* The card is the list item, so a message and its version dropdown read as one thing. */
+.ev-choice-item {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-raised);
+}
+
+.ev-choice-item[data-checked="true"] {
+  border-color: var(--accent-ring);
+  background: var(--accent-soft);
+}
+
+.ev-choice-item .ev-versions {
+  margin: 0;
+  padding: var(--space-2) var(--space-3) var(--space-3) calc(var(--space-3) * 2 + 16px);
+  border-top: 1px solid var(--border);
+}
+
 .ev-choice {
   display: flex;
   align-items: flex-start;
   gap: var(--space-3);
   padding: var(--space-2) var(--space-3);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  background: var(--bg-raised);
   cursor: pointer;
-}
-
-.ev-choice[data-checked="true"] {
-  border-color: var(--accent-ring);
-  background: var(--accent-soft);
 }
 
 .ev-choice input {
@@ -1652,4 +1662,182 @@ a.mod-user:hover {
   align-items: center;
   justify-content: space-between;
   gap: var(--space-3);
+}
+
+/* Edited and deleted messages ---------------------------------------------- */
+
+.ev-tag[data-kind="edited"] {
+  border-color: transparent;
+  background: var(--attention-soft);
+  color: var(--mod-warn-text);
+}
+
+.ev-choice-text[data-deleted="true"] {
+  color: var(--text-secondary);
+}
+
+.ev-versions {
+  margin-top: var(--space-2);
+  font-size: var(--text-xs);
+}
+
+.ev-versions summary {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  cursor: pointer;
+  color: var(--accent-text);
+}
+
+.ev-version-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: var(--space-2) 0 0;
+  padding: 0 0 0 var(--space-3);
+  list-style: none;
+  border-left: 2px solid var(--border);
+}
+
+.ev-version-list li[data-current="true"] {
+  border-left: 2px solid var(--accent-ring);
+  margin-left: calc(-1 * var(--space-3) - 2px);
+  padding-left: var(--space-3);
+}
+
+.ev-version-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  color: var(--text-tertiary);
+}
+
+.ev-version-label {
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.ev-pending {
+  margin: var(--space-2) 0 0;
+  font-size: var(--text-xs);
+  color: var(--accent-text);
+}
+
+.ev-which {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: 0 var(--space-3) var(--space-2) calc(var(--space-3) * 2 + 16px);
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+}
+
+.ev-which .mod-select {
+  max-width: 100%;
+}
+
+.ev-tag[data-kind="flagged"] {
+  border-color: transparent;
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.ev-flagged {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: var(--space-2) 0 0;
+  font-size: var(--text-xs);
+}
+
+
+.ev-version-list li[data-flagged="true"] {
+  background: var(--danger-soft);
+  border-radius: var(--radius-sm);
+  padding: var(--space-1) var(--space-2);
+}
+
+/* The switch between the two logs on the Logs tab ---------------------------- */
+
+.log-switch {
+  display: inline-flex;
+  gap: 2px;
+  margin-bottom: var(--space-4);
+  padding: 3px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-raised);
+}
+
+.log-switch a {
+  padding: var(--space-1) var(--space-4);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--text-secondary);
+  text-decoration: none;
+}
+
+.log-switch a:hover {
+  color: var(--text);
+  background: var(--surface-hover);
+}
+
+.log-switch a[aria-current="page"] {
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+
+/* A case whose reason was edited -------------------------------------------- */
+
+.actions-edited {
+  margin-left: var(--space-2);
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-full);
+  background: var(--attention-soft);
+  color: var(--mod-warn-text);
+  font-size: var(--text-2xs);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+/* Telling the two kinds of "edited" apart: the member edited a message, or staff edited a case. */
+
+.case-edited,
+.actions-edited {
+  display: inline-block;
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-full);
+  background: var(--info-soft);
+  color: var(--info, var(--accent-text));
+  font-size: var(--text-2xs);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.actions-edited {
+  margin-left: var(--space-2);
+}
+
+.actions-go {
+  white-space: nowrap;
+}
+
+.actions-go .btn {
+  margin-right: var(--space-1);
+}
+
+.audit-case {
+  margin: var(--space-3) 0;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-raised);
+  font-size: var(--text-sm);
+}
+
+.pf-activity-link {
+  margin: var(--space-2) 0 0;
+  font-size: var(--text-xs);
 }

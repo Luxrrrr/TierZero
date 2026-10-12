@@ -15,6 +15,8 @@ export const MOD_PROXY_ROOTS: readonly string[] = [
   "staff",
   "member-search",
   "actions",
+  "messages",
+  "server-logs",
 ];
 
 export const MOD_PROXY_MAX_BODY_BYTES = 32 * 1024;
@@ -47,6 +49,17 @@ export function modProxyPermission(method: string, path: readonly string[]): Mod
   if (first === "members" && path[2] === "messages") {
     return path.length === 3 && (method === "GET" || method === "HEAD") ? "action.warn" : null;
   }
+
+  // The server logs are read through these two paths, the events and the saved messages. Reads, and the
+  // purge of everything, are the only calls that exist.
+  if (first === "messages" || first === "server-logs") {
+    if (path.length !== 1) return null;
+    if (method === "GET" || method === "HEAD") return "messages.view";
+    return method === "DELETE" && first === "server-logs" ? "messages.purge" : null;
+  }
+
+  // Changing a case's reason. Only a PATCH of one case exists; the bot decides whose cases a moderator may edit.
+  if (first === "infractions" && path.length === 2 && method === "PATCH") return "infraction.edit";
 
   // The export is the whole action log in one file, which is an
   // admin's view of the server rather than a moderator's.
@@ -102,7 +115,16 @@ export function isProfileRead(method: string, path: string[]): boolean {
   return method === "GET" && path.length === 2 && path[0] === "members";
 }
 
-/** A read of the messages the bot remembers for one member. */
+/**
+ * A read whose answer depends on who is asking: the messages the bot remembers for one member, and
+ * the message log. The bot is told the viewer and shows only channels that person can read.
+ */
 export function isMemberMessagesRead(method: string, path: readonly string[]): boolean {
-  return method === "GET" && path.length === 3 && path[0] === "members" && path[2] === "messages";
+  if (method !== "GET") return false;
+  return (path.length === 3 && path[0] === "members" && path[2] === "messages") || isMessageLogRead(method, path);
+}
+
+/** Whether the read is one of the server logs, which also needs to be limited by the viewer's role. */
+export function isMessageLogRead(method: string, path: readonly string[]): boolean {
+  return method === "GET" && path.length === 1 && (path[0] === "messages" || path[0] === "server-logs");
 }

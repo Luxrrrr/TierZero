@@ -45,6 +45,7 @@ import { failureText } from "./a11y";
 import { DialogShell, type FocusFallback } from "./Dialog";
 import { CharacterCount } from "./CharacterCount";
 import { EvidencePicker } from "./EvidencePicker";
+import { clearAttach, readAttach } from "../../../../../../lib/attach-handoff";
 import { formatDateTime } from "./timeline";
 import type { ContextState } from "./useActionContext";
 
@@ -240,7 +241,9 @@ function ActionForm({
   const what = kind === "timeout" ? "timeout" : "ban";
 
   const [reason, setReason] = useState("");
-  const [evidence, setEvidence] = useState<EvidenceRef[]>([]);
+  // Messages picked in the message log wait in session storage until this form opens.
+  const [seed] = useState(() => readAttach(guildId, userId));
+  const [evidence, setEvidence] = useState<EvidenceRef[]>(() => seed.map((m) => ({ channelId: m.channelId, messageId: m.id })));
   const [duration, setDuration] = useState<DurationDraft>(() =>
     initialDuration(presets, kind === "timeout" ? context.defaultTimeoutMs : BAN_START_MS, Math.max(ceiling, 1)),
   );
@@ -329,7 +332,10 @@ function ActionForm({
       submitting.current = false;
       setBusy(false);
     }
-    if (outcome) onDone(outcome);
+    if (outcome) {
+      clearAttach(guildId, userId);
+      onDone(outcome);
+    }
   }
 
   function clearError(field: keyof DraftErrors) {
@@ -480,7 +486,7 @@ function ActionForm({
         </div>
 
         {kind !== "timeout-clear" && kind !== "unban" ? (
-          <EvidencePicker guildId={guildId} userId={userId} selected={evidence} onChange={setEvidence} disabled={busy} />
+          <EvidencePicker guildId={guildId} userId={userId} selected={evidence} onChange={setEvidence} disabled={busy} seed={seed} />
         ) : null}
 
         <div className="ta-summary" data-tone={heavy ? "danger" : undefined} id={descriptionId}>

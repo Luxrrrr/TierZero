@@ -5,6 +5,7 @@ import { requireStaff } from "../../../../../../lib/mod-access";
 import { redactProfile } from "../../../../../../lib/profile-redact";
 import {
   isMemberMessagesRead,
+  isMessageLogRead,
   isProfileRead,
   isSameOriginWrite,
   modProxyPermission,
@@ -64,9 +65,15 @@ async function handle(method: string, request: Request, { params }: Params) {
   const url = new URL(request.url);
   // The bot is told who is asking, because it limits the list to channels that person can read. The browser
   // cannot name itself: whatever query it sent is dropped for this read.
-  const target = isMemberMessagesRead(method, path)
-    ? `${path.map(encodeURIComponent).join("/")}?viewer=${encodeURIComponent(access.actor.userId)}&owner=${access.role === "owner" ? "1" : "0"}`
-    : `${path.map(encodeURIComponent).join("/")}${url.search}`;
+  const viewer = `viewer=${encodeURIComponent(access.actor.userId)}&owner=${access.role === "owner" ? "1" : "0"}`;
+  let target = `${path.map(encodeURIComponent).join("/")}${url.search}`;
+  if (isMemberMessagesRead(method, path)) {
+    // The log takes the viewer's filters too. Anything the browser sent under these names is dropped.
+    const filters = new URLSearchParams(isMessageLogRead(method, path) ? url.search : "");
+    for (const key of ["viewer", "owner", "role"]) filters.delete(key);
+    const extra = filters.toString();
+    target = `${path.map(encodeURIComponent).join("/")}?${viewer}&role=${access.role}${extra ? `&${extra}` : ""}`;
+  }
 
   let body: unknown;
   if (method !== "GET") {

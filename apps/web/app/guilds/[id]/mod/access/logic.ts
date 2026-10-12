@@ -51,7 +51,9 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
     rows: [
       { permission: "view", label: "Open the mod dashboard and read member records" },
       { permission: "stats.view", label: "See moderation statistics" },
-      { permission: "audit.view", label: "Read the audit trail of staff activity" },
+      { permission: "audit.view", label: "Read staff activity" },
+      { permission: "messages.view", label: "Open the server logs, if the owner has allowed it for moderators" },
+      { permission: "messages.purge", label: "Delete the server logs" },
     ],
   },
   {
@@ -72,6 +74,7 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
   {
     title: "Removing from records",
     rows: [
+      { permission: "infraction.edit", label: "Edit a case: the reason, length and attached messages (moderators: their own)" },
       { permission: "infraction.void", label: "Take a warn or timeout off a record" },
       { permission: "infraction.void.any-action", label: "Take a kick, ban or other action off a record" },
       { permission: "infraction.restore", label: "Put a removed action back on a record" },

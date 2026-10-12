@@ -106,13 +106,29 @@ Dashboard, slash command and right-click actions all go through `performAction` 
 
 The dashboard adds a few rules the commands don't need, because Discord didn't vet the actor. No acting on yourself or the bot. A staff member who isn't in the server is refused, since their roles can't be compared with the target's. No DMs to non-members except on an unban, or a staff member's text could be sent to any Discord account.
 
+### Server logs
+
+The `serverlog` module records what happens on a server into `ServerLogEntry` and, for messages, `LoggedMessage` with its `LoggedMessageEdit` rows. The kinds of event are one catalog in `packages/core/src/serverlog.ts`: categories, types and labels. The bot writes entries with those ids, the settings are one switch per category, and the dashboard builds its filters from the same list, so a new kind of event is one line there and one handler in `events.ts`.
+
+Handlers write through `record()`, which checks that the category is on and the channel is not left out, trims long values, and prunes. Pruning runs from the write path at most once an hour per server, so a server with no traffic keeps what it has until someone deletes the logs. Who did something comes from `executorOf()`, which waits a moment and reads the server's audit log. It returns null without the View Audit Log permission. A kick and a departure look the same on the gateway, so a leave is checked against the audit log before it is recorded as a kick. Purges arrive as one `messageDeleteBulk` event instead of one delete per message.
+
+For messages the row holds the current text and the edit table holds each earlier version, up to 50 per message. Deletions set `deletedAt`. A message the log never saw is created on its first edit or deletion. The message handlers return what they saved, so the entry can show before and after without a second query.
+
+Reads go through `GET mod/server-logs` (events) and `GET mod/messages` (saved messages). The proxy adds `viewer`, `owner` and `role` from the session and the bot narrows the channels to those the viewer can open, in the query itself (`server-log-filters.ts`, `message-filters.ts`). Entries that are not about a channel stay visible to every viewer. A moderator is refused unless `modsCanView` is set. Search runs as `LIKE` over the summary, the names and the details JSON, which is where edited and deleted text lives. `DELETE mod/server-logs` removes both tables for the server and writes an audit row. The earlier message log was a Moderation setting; migration `20261015120000_server_log` moves a server that had it on into this module with the same days, left-out channels and moderator access.
+
 ### Attached messages
 
-The moderation module keeps the latest messages of each member in memory (`recent-messages.ts`: 30 per member, 5,000 members, 72 hours, content cut at 4,000 characters). Nothing is written to disk until a moderator attaches one. `resolveEvidence` in `evidence.ts` turns the chosen channel and message ids into copies, from the buffer or by fetching, and refuses any message the acting staff member can't view in Discord, or that isn't by the target. The copies are stored as JSON in `Infraction.evidence` and are captured before the action runs, since a ban can delete the messages. The picker reads `GET members/:id/messages`. Reads carry no actor, so the proxy adds the signed-in `viewer` and `owner` to that query.
+Without the log, the moderation module keeps the latest messages of each member in memory (`recent-messages.ts`: 30 per member, 5,000 members, 72 hours, content cut at 4,000 characters). Nothing is written to disk until a moderator attaches one. `resolveEvidence` in `evidence.ts` turns the chosen channel and message ids into copies, from the buffer or by fetching, and refuses any message the acting staff member can't view in Discord, or that isn't by the target. The copies are stored as JSON in `Infraction.evidence` and are captured before the action runs, since a ban can delete the messages. The picker reads `GET members/:id/messages`. Reads carry no actor, so the proxy adds the signed-in `viewer` and `owner` to that query.
 
 ### Removing and purging
 
 Removal is a soft delete. The row keeps who, when and why, and the change and its audit row are written in one transaction. Staff can remove warns and timeouts, admins can restore, and only the owner can purge, which deletes the row and every audit row about it and writes nothing. SQLite may keep the bytes in free pages until overwritten, so a purge isn't secure erasure.
+
+### Editing a case
+
+`PATCH infractions/:id` takes any of `reason`, `durationMs` and `evidence`, and leaves out what is missing. It sets `editedAt` and `editedBy` and writes one `infraction.edit` audit row with before and after snapshots, in the same transaction as the update. A moderator is limited to cases where `moderatorId` is their own, checked in the bot. Saving what is already there writes nothing.
+
+A new length goes to Discord first (`edit-length.ts`: `member.timeout` for a timeout, cancelling and rescheduling the `unban` task for a ban), and the record is only updated if that succeeds. It needs the same role as taking the action, passes the dashboard's hierarchy guard, and counts from now. Attached messages already on the case keep the text they were saved with and only their flagged version can change; new ones are resolved the same way as when an action is taken. The audit list takes `infractionId` to show everything about one case.
 
 ### Case numbers
 

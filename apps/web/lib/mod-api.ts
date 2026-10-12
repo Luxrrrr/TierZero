@@ -1,5 +1,8 @@
 import type {
   AuditDto,
+  LoggedMessageDto,
+  ServerLogEntryDto,
+  StaffRole,
   InfractionDto,
   MemberProfile,
   MemberSummary,
@@ -68,6 +71,8 @@ export interface AuditListParams {
   kind?: string;
   actorId?: string;
   targetUserId?: string;
+  /** Only entries about this case. */
+  infractionId?: number;
   /** ISO timestamps bounding the entry time, inclusive. */
   since?: string;
   until?: string;
@@ -84,3 +89,63 @@ export const modStats = (guildId: string, days = 30) =>
   read<StatsDto>(guildId, `stats${query({ days })}`);
 
 export const modStaff = (guildId: string) => read<StaffDto[]>(guildId, "staff");
+
+export interface MessageLogParams {
+  q?: string;
+  author?: string;
+  message?: string;
+  channel?: string;
+  since?: string;
+  until?: string;
+  state?: string;
+  page?: number;
+  pageSize?: number;
+}
+
+/** What the message log tab shows, plus what it needs to explain an empty list. */
+export interface MessageLogResult extends Page<LoggedMessageDto> {
+  logEnabled: boolean;
+  days: number;
+  channels: { id: string; name: string }[];
+}
+
+/**
+ * The message log as one staff member may see it. The bot only returns channels this person can read
+ * in Discord, so it has to be told who is asking. This is called from the server with the signed-in
+ * session, never from the browser.
+ */
+export const modMessages = (guildId: string, params: MessageLogParams, viewer: { discordUserId: string; role: StaffRole }) =>
+  read<MessageLogResult>(
+    guildId,
+    `messages${query({ ...params, viewer: viewer.discordUserId, owner: viewer.role === "owner" ? "1" : "0", role: viewer.role })}`,
+  );
+
+export interface ServerLogParams {
+  q?: string;
+  category?: string;
+  type?: string;
+  member?: string;
+  channel?: string;
+  since?: string;
+  until?: string;
+  page?: number;
+  pageSize?: number;
+}
+
+/** What the Events view of Server logs shows, plus what it needs to label its filters and explain an empty list. */
+export interface ServerLogResult extends Page<ServerLogEntryDto> {
+  logEnabled: boolean;
+  days: number;
+  /** Which kinds of event the server is saving. */
+  recording: Record<string, boolean>;
+  channels: { id: string; name: string }[];
+  /** Entries per category under every other filter. */
+  counts: Record<string, number>;
+}
+
+/** The server log as one staff member may see it. Called from the server with the signed-in session, never the browser. */
+export const modServerLog = (guildId: string, params: ServerLogParams, viewer: { discordUserId: string; role: StaffRole }) =>
+  read<ServerLogResult>(
+    guildId,
+    `server-logs${query({ ...params, viewer: viewer.discordUserId, owner: viewer.role === "owner" ? "1" : "0", role: viewer.role })}`,
+  );

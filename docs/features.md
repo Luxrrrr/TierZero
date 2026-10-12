@@ -5,7 +5,7 @@
 | Feature | What it does |
 | --- | --- |
 | Moderation | Warn, timeout, kick, ban and temporary bans, with numbered cases and role hierarchy checks. |
-| Moderation dashboard | Member records, staff notes, actions from the web or Discord's right-click menu, statistics, an audit trail and CSV export. |
+| Moderation dashboard | Member records, staff notes, actions from the web or Discord's right-click menu, statistics, a log of staff activity and CSV export. |
 | Automod | Seven rules: invites, links, capitals, repeated text, mentions, banned words, rate limiting. |
 | Tickets | A button that opens a private channel with your staff. |
 | Welcome messages | Greetings, farewells and roles on join. |
@@ -125,9 +125,12 @@ A search box in the header finds a member from any tab. Press Ctrl+K (Cmd+K on a
 | Read member records and statistics | Yes | Yes | Yes |
 | Write notes | Yes | Yes | Yes |
 | Warn, time out, end a timeout | Yes | Yes | Yes |
+| Edit a case | Their own | Any | Any |
 | Take a warn or timeout off a record | Yes | Yes | Yes |
 | Kick, ban, unban | No | Yes | Yes |
-| Read the audit trail, export the log as CSV | No | Yes | Yes |
+| Read staff activity, export member actions as CSV | No | Yes | Yes |
+| Open the server logs | If the owner allows it | Yes | Yes |
+| Delete the server logs | No | Yes | Yes |
 | Edit or delete others' notes, restore deleted notes | No | Yes | Yes |
 | Put a removed action back | No | Yes | Yes |
 | Take a kick, ban or unban off a record | No | No | Yes |
@@ -152,7 +155,7 @@ Nothing disappears from the timeline when it's removed. A removed action or dele
 
 The **Take action** button on a member's page offers what your level allows, and only what fits the member. Unban shows for someone banned, Clear timeout only while a timeout is running. Each choice opens a short form with a reason (up to 500 characters, and required if the Moderation setting says so) and, for timeouts and bans, a length. A ban can also delete up to 7 days of the member's messages.
 
-Warns, timeouts, kicks and bans also have an **Attach messages** section. It lists the member's latest messages in any channel you can read, deleted ones included, and you tick the ones that belong on the case (up to 10). You can also paste a message link for one that isn't listed. Attached messages show on the case in the member's timeline and in the Actions tab. The list comes from what the bot has seen while Moderation was on. It is kept in memory for three days and is empty after a restart, so a link is the way to attach anything older. File names are kept, but the files stay on Discord and their links can stop working. CSV exports include the links only.
+Warns, timeouts, kicks and bans also have an **Attach messages** section. It lists the member's latest messages in any channel you can read, deleted ones included, and you tick the ones that belong on the case (up to 10). You can also paste a message link for one that isn't listed. Attached messages show on the case in the member's timeline and under Member actions. The list comes from the Messages part of [Server logs](#server-logs) when that is on. Without it, the bot only remembers the last three days in memory, and that is empty after a restart, so a link is the way to attach anything older. A message that was edited has a dropdown with every version, and the case keeps all of them. Once you tick it, choose which version broke the rules, the original or any edit. The case shows that version first, marked as the one the member was warned for, with the rest under the dropdown. This works the same for a message that was edited and then deleted. A deleted one carries a red Deleted label. File names are kept, but the files stay on Discord and their links can stop working. CSV exports include the links only.
 
 It runs the same code as the slash commands, so it behaves the same: hierarchy check, direct message if that setting is on, the Discord action, the case, the unban schedule for a temporary ban and the mod log post. The case names you as the moderator.
 
@@ -180,6 +183,14 @@ Actions open the same form as the dashboard. From a message, the message itself 
 
 Discord shows an entry only to members with the matching permission: Timeout Members for warn, timeout and history, Kick Members for kick, Ban Members for ban. Seeing it isn't enough. The person also has to be on the staff list or be the install owner, with the same levels as the dashboard. If a moderator can't see the entries, give their role Timeout Members. Server owners can change who sees each entry under Server Settings, Integrations. Each entry is also a command on the Commands page, so it can be switched off or limited like any other.
 
+### Editing a case
+
+Open a case on the member's page and choose **Edit case**. You can change the reason, the attached messages (remove one, add one, or choose which version of an edited message the member was warned for), and, while a timeout or ban is still running, how long it lasts. A new length counts from now and is applied in Discord straight away, including making a ban permanent. A timeout or ban that has already ended can't have its length changed.
+
+Moderators can edit their own cases, admins and the owner any case, including automod's. Changing the length of a ban needs the same level as banning. A case that was removed from the record has to be restored first.
+
+An edited case shows a blue **Case edited by staff** note with who and when, on the member's page and in Member actions. That is different from the amber **Message edited** label inside an attached message, which means the member changed their own message. Staff activity records every edit with what it said before and after, and each case has a **See everything staff did on this case** link, which Member actions also offers as **Staff activity** next to **Profile** on every row. The post in the mod log channel and any direct message already sent keep the old text.
+
 ### Removing, restoring and purging
 
 Three levels, each stronger than the last.
@@ -194,13 +205,45 @@ Case numbers are never renumbered or reused. Purging case 12 leaves a permanent 
 
 ![The dialog for removing a case from a record, with a required reason](images/remove-from-record.png)
 
-### Audit trail
+### Server logs
 
-Admins and the owner can open the Audit tab. It lists every change made through the dashboard: actions taken on a member (warn, timeout, kick, ban and so on), notes added, edited, deleted or restored, actions removed or restored, and staff added, changed or removed. The owner's changes are included. Actions taken from Discord, with a slash command or the right-click menu, are on the member's record and in the Actions tab but not here, and actions taken before this was added aren't listed. Purges are left out on purpose. Entries show who did it and at what level, and edits and removals expand to show before and after. You can filter by type, staff member, member ID, date range and words. The same entries appear on a member's timeline as staff activity.
+The Server logs tab is a searchable record of what happened in the server, so staff don't have to scroll channels or Discord's own audit log to find it. It's off until you turn on the **Server logs** feature. Choose what to record in its settings, which you reach from the **Settings** button on the tab:
 
-Cases made by commands and automod are the actions themselves, in the Actions tab.
+- **Members:** joins, departures, nickname changes and role changes.
+- **Messages:** every message members post, every edit and what was deleted, including messages removed by /purge. Bots are left out.
+- **Moderation:** bans, unbans, kicks and timeouts, from any source, with who did it when Discord says.
+- **Roles:** roles created, changed (name, colour, permissions) and deleted.
+- **Channels:** channels and threads created, changed (name, topic, category, slowmode, permissions) and deleted.
+- **Voice:** joining, leaving and moving between voice channels, and being server muted or deafened.
+- **Server:** server settings, invites and emojis.
 
-![The audit trail listing what staff changed](images/audit-trail.png)
+Who did something comes from Discord's audit log, so the bot needs the View Audit Log permission, which the invite link already asks for. Without it the log still works and entries just don't say who.
+
+The tab has two views. **Events** is the timeline of everything above. Every filter applies as soon as you change it and shows as a chip you can take off:
+
+- Search any text: names, channels, summaries, and what was said in edited and deleted messages.
+- Category chips, with how many entries each has under your other filters. You can pick several.
+- **Event types**, to pick exact events such as "Roles changed" and "Joined voice".
+- A member, by name or ID. It matches who did something and who it happened to. Clicking a name in an entry filters to that person.
+- A channel, and a date range with shortcuts for today, 7 days and 30 days.
+
+An entry's **Details** show what changed, before and after. A message entry links to the message with all its versions. The filtered view is in the address, so you can bookmark it or send it to another moderator.
+
+**Messages** is the saved text itself. Search by words, member, channel and dates, and show only deleted or edited messages. A search also matches earlier versions, so an edited message is found by what it said before. Deleted messages are labelled in red and edited ones have a dropdown with each version. Tick messages from one member and choose **Take action** to open the action form with them already attached.
+
+Staff only see channels they can read in Discord, so the logs can't be used to get into a private channel. Admins and the owner can always open the tab. Moderators can if you switch on **Let moderators open the server logs**.
+
+The logs are stored in this installation's database, not on Discord, and Messages holds everything members type, so tell your members. You choose how many days to keep (30 by default) and old entries are deleted automatically. You can leave channels out, such as private staff ones. Switching a kind off, or the feature off, stops saving but doesn't delete what's there. **Delete the logs** on the tab does, for everyone, and is recorded in Staff activity. Files members attach aren't copied: Messages keeps their names and links, which stop working when Discord removes the file.
+
+A server that already had the message log on keeps it, now as the Messages part of Server logs with the same days and settings. The other kinds start off for those servers.
+
+### Staff activity
+
+The Mod logs tab has two pages with a switch at the top: Member actions and Staff activity. Staff activity is for admins and the owner and lists every change made through the dashboard: actions taken on a member (warn, timeout, kick, ban and so on), notes added, edited, deleted or restored, actions removed or restored, and staff added, changed or removed. The owner's changes are included. Actions taken from Discord, with a slash command or the right-click menu, are on the member's record and in the Actions tab but not here, and actions taken before this was added aren't listed. Purges are left out on purpose. Entries show who did it and at what level, and edits and removals expand to show before and after. You can filter by type, staff member, member ID, date range and words. The same entries appear on a member's timeline as staff activity.
+
+Cases made by commands and automod are the actions themselves, under Member actions.
+
+![Staff activity listing what staff changed](images/audit-trail.png)
 
 ### Statistics
 
@@ -210,22 +253,22 @@ Below the tiles:
 
 - **Right now:** timeouts and bans in force, and members with anything on record. Not limited to the range.
 - **Repeat actions:** the share of members actioned again within 30 days of an earlier action. It appears once at least five members were actioned. Automod, unbans and cleared timeouts don't count.
-- **Automod:** what automod's rules did in the range, which rules fired most, and a link to the action log filtered to automod.
+- **Automod:** what automod's rules did in the range, which rules fired most, and a link to Member actions filtered to automod.
 - **Busiest hours:** actions by hour of the day, in UTC.
-- **Moderators:** who acted, how much, and when they last did. Selecting a name opens the action log for them.
+- **Moderators:** who acted, how much, and when they last did. Selecting a name opens Member actions for them.
 - **Most actioned members:** the ten with the most actions.
 
-### Action log
+### Member actions
 
-The Actions tab lists every case, newest first. You can filter by type, state (in force, expired, removed or on record), source (manual or automod) and moderator, and search the reason, a case number or a member ID. It doesn't search by name.
+Member actions, on the Mod logs tab, lists every case, newest first. You can filter by type, state (in force, expired, removed or on record), source (manual or automod) and moderator, and search the reason, a case number or a member ID. It doesn't search by name.
 
-![The action log with filters and an export button](images/action-log.png)
+![Member actions with filters and an export button](images/action-log.png)
 
 Admins and the owner can export the current filter as a CSV, newest first, up to 5,000 rows. Removed entries are included. Names are looked up from Discord, so the oldest cases in a large export can have blank names, and the ID columns are always filled in. Cells that start with `=`, `+`, `-` or `@` get an apostrophe in front so a spreadsheet won't treat them as formulas. Strip it if you load the file anywhere else.
 
 ### Access tab
 
-The owner adds staff to a server, switches them between Moderator and Admin, and removes them. Bots can't be added. Removing someone takes away their access and nothing else. Their notes and actions stay. Every change is in the audit trail.
+The owner adds staff to a server, switches them between Moderator and Admin, and removes them. Bots can't be added. Removing someone takes away their access and nothing else. Their notes and actions stay. Every change is in Staff activity.
 
 ![The Access tab with staff levels and who added them](images/access.png)
 

@@ -137,7 +137,7 @@ describe("level changes", () => {
   test("lists what an admin gains over a moderator", () => {
     const gained = gainedPermissions("mod", "admin");
     assert.ok(gained.length > 0);
-    assert.ok(gained.some((label) => /audit trail/.test(label)));
+    assert.ok(gained.some((label) => /staff activity/.test(label)));
     assert.ok(!gained.some((label) => /erase|Choose who has access/.test(label)));
   });
 

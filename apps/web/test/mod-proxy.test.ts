@@ -153,3 +153,31 @@ describe("isProfileRead", () => {
     assert.equal(isProfileRead("GET", ["audit"]), false);
   });
 });
+
+describe("editing a case", () => {
+  test("only a PATCH of one case is served, with the edit permission", () => {
+    assert.equal(modProxyPermission("PATCH", ["infractions", "4"]), "infraction.edit");
+    assert.equal(can("mod", "infraction.edit"), true);
+  });
+});
+
+describe("the message log", () => {
+  test("reading needs the view permission and deleting needs purge", () => {
+    assert.equal(modProxyPermission("GET", ["messages"]), "messages.view");
+    assert.equal(modProxyPermission("GET", ["server-logs"]), "messages.view");
+    assert.equal(modProxyPermission("DELETE", ["server-logs"]), "messages.purge");
+    assert.equal(modProxyPermission("DELETE", ["messages"]), null);
+  });
+
+  test("nothing else under it is served", () => {
+    assert.equal(modProxyPermission("POST", ["messages"]), null);
+    assert.equal(modProxyPermission("GET", ["messages", "1"]), null);
+    assert.equal(modProxyPermission("DELETE", ["messages", "1"]), null);
+  });
+
+  test("moderators can read it, and only the owner and admins can delete it", () => {
+    assert.equal(can("mod", "messages.view"), true);
+    assert.equal(can("mod", "messages.purge"), false);
+    assert.equal(can("admin", "messages.purge"), true);
+  });
+});
