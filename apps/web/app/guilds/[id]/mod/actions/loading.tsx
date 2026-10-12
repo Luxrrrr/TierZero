@@ -2,7 +2,7 @@ import { SkeletonFrame, SkeletonTable, SkeletonToolbar } from "../../../../../co
 
 export default function Loading() {
   return (
-    <SkeletonFrame label="Loading the action log">
+    <SkeletonFrame label="Loading member actions">
       <SkeletonToolbar chips={5} />
       <SkeletonTable rows={12} columns={6} title={false} />
     </SkeletonFrame>

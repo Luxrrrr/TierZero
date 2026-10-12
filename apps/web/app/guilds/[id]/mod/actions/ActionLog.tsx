@@ -1,5 +1,6 @@
 import { EvidenceList } from "../../../../../components/mod/Evidence";
 import Link from "next/link";
+import { LogSwitch } from "../../../../../components/mod/LogSwitch";
 import type { InfractionDto, Page, UserRef } from "@tier0/core";
 import {
   ActionBadge,
@@ -14,7 +15,7 @@ import {
   parseAutomodReason,
   ruleLabel,
 } from "../../../../../components/mod/ModUi";
-import { DownloadIcon, HistoryIcon, SearchIcon, ShieldIcon } from "../../../../../components/Icons";
+import { DownloadIcon, HistoryIcon, SearchIcon, ShieldIcon, UserIcon } from "../../../../../components/Icons";
 import {
   ACTION_CHIPS,
   SOURCE_CHIPS,
@@ -49,11 +50,12 @@ export function ActionLog({ guildId, query, data, staff, canExport }: Props) {
 
   return (
     <div className="mod-root mod-page actions-page">
+      <LogSwitch guildId={guildId} current="actions" canSeeStaffActivity={canExport} />
       <section className="mod-section" aria-labelledby="actions-heading">
         <div className="mod-section-head">
           <div className="mod-section-text">
             <h2 className="mod-section-title" id="actions-heading">
-              Action log
+              Member actions
             </h2>
             <p className="mod-section-desc">Every warn, timeout, kick, ban and unban, newest first.</p>
           </div>
@@ -215,11 +217,14 @@ export function ActionLog({ guildId, query, data, staff, canExport }: Props) {
                     <th scope="col">Moderator</th>
                     <th scope="col">When</th>
                     <th scope="col">State</th>
+                    <th scope="col">
+                      <span className="visually-hidden">Go to</span>
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
                   {data.items.map((item) => (
-                    <ActionRow key={item.id} guildId={guildId} item={item} now={now} />
+                    <ActionRow key={item.id} guildId={guildId} item={item} now={now} canSeeStaffActivity={canExport} />
                   ))}
                 </tbody>
               </table>
@@ -238,7 +243,7 @@ export function ActionLog({ guildId, query, data, staff, canExport }: Props) {
   );
 }
 
-function ActionRow({ guildId, item, now }: { guildId: string; item: InfractionDto; now: Date }) {
+function ActionRow({ guildId, item, now, canSeeStaffActivity }: { guildId: string; item: InfractionDto; now: Date; canSeeStaffActivity: boolean }) {
   const state = describeState(item, now);
   const removed = state.state === "removed";
 
@@ -255,6 +260,11 @@ function ActionRow({ guildId, item, now }: { guildId: string; item: InfractionDt
       </td>
       <td data-label="Reason" className="actions-reason-cell">
         <Reason text={item.reason} automod={isAutomodAction(item.action)} />
+        {item.edited ? (
+          <span className="actions-edited" title={`A staff member changed this case after it was made: ${displayName(item.edited.by)}`}>
+            Case edited by staff
+          </span>
+        ) : null}
         {item.evidence.length > 0 ? (
           <details className="ev-inline">
             <summary>
@@ -273,6 +283,18 @@ function ActionRow({ guildId, item, now }: { guildId: string; item: InfractionDt
       <td data-label="State">
         <Pill tone={state.tone}>{state.label}</Pill>
         {removed ? <span className="actions-state-detail">{state.detail}</span> : null}
+      </td>
+      <td data-label="Go to" className="actions-go">
+        <Link className="btn btn-ghost btn-sm" href={memberHref(guildId, item.user.userId)}>
+          <UserIcon />
+          Profile
+        </Link>
+        {canSeeStaffActivity ? (
+          <Link className="btn btn-ghost btn-sm" href={`/guilds/${guildId}/mod/audit?infractionId=${item.id}`}>
+            <HistoryIcon />
+            Staff activity
+          </Link>
+        ) : null}
       </td>
     </tr>
   );

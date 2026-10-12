@@ -8,7 +8,7 @@ import { LoadError } from "../actions/LoadError";
 import { AuditLog, type ActorOption } from "./AuditLog";
 import { auditApiParams, narrowAudit, parseAuditQuery } from "./params";
 
-export const metadata: Metadata = { title: "Audit trail · Moderation" };
+export const metadata: Metadata = { title: "Staff activity · Moderation" };
 
 /** Staff as listed now, plus anyone seen acting on this page (the owner is never in the staff list). */
 async function actorOptions(guildId: string, seen: AuditDto[]): Promise<ActorOption[]> {
@@ -57,6 +57,6 @@ export default async function AuditPage({
     );
   } catch (error) {
     if (!(error instanceof ControlApiError)) throw error;
-    return <LoadError what="the audit trail" status={error.status} message={error.message} />;
+    return <LoadError what="staff activity" status={error.status} message={error.message} />;
   }
 }

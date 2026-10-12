@@ -1,7 +1,7 @@
 import { can, type StaffRole } from "@tier0/core";
 
 export interface ModTab {
-  id: "overview" | "members" | "actions" | "audit" | "access" | "settings";
+  id: "overview" | "members" | "logs" | "serverlogs" | "access" | "settings";
   label: string;
   href: string;
 }
@@ -21,9 +21,11 @@ export function modTabsFor(guildId: string, role: StaffRole | null, canManage = 
     tabs.push(
       { id: "overview", label: "Overview", href: base },
       { id: "members", label: "Members", href: `${base}/members` },
-      { id: "actions", label: "Actions", href: `${base}/actions` },
+      // Member actions and staff activity share this tab, with a switch between them on each page.
+      { id: "logs", label: "Mod logs", href: `${base}/actions` },
+      // Moderators get the tab too. Whether they may open the logs is a server setting, which the page explains.
+      { id: "serverlogs", label: "Server logs", href: `${base}/server-logs` },
     );
-    if (can(role, "audit.view")) tabs.push({ id: "audit", label: "Audit", href: `${base}/audit` });
     if (can(role, "staff.manage")) tabs.push({ id: "access", label: "Access", href: `${base}/access` });
   }
   if (canManage) tabs.push({ id: "settings", label: "Settings", href: `${base}/settings` });
@@ -36,5 +38,9 @@ export function modTabsFor(guildId: string, role: StaffRole | null, canManage = 
  */
 export function isTabCurrent(tab: ModTab, pathname: string): boolean {
   if (tab.id === "overview") return pathname === tab.href || pathname === `${tab.href}/`;
+  if (tab.id === "logs") {
+    const base = tab.href.replace(/\/actions$/, "");
+    return [`${base}/actions`, `${base}/audit`].some((href) => pathname === href || pathname.startsWith(`${href}/`));
+  }
   return pathname === tab.href || pathname.startsWith(`${tab.href}/`);
 }

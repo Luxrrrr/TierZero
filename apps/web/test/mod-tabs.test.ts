@@ -5,26 +5,26 @@ import { isTabCurrent, modTabsFor } from "../lib/mod-tabs.ts";
 const ids = (role: "owner" | "admin" | "mod") => modTabsFor("1", role).map((tab) => tab.id);
 
 describe("modTabsFor", () => {
-  test("a moderator sees the three shared tabs", () => {
-    assert.deepEqual(ids("mod"), ["overview", "members", "actions"]);
+  test("a moderator sees the shared tabs", () => {
+    assert.deepEqual(ids("mod"), ["overview", "members", "logs", "serverlogs"]);
   });
 
-  test("an admin also sees the audit trail", () => {
-    assert.deepEqual(ids("admin"), ["overview", "members", "actions", "audit"]);
+  test("an admin sees the same tabs", () => {
+    assert.deepEqual(ids("admin"), ["overview", "members", "logs", "serverlogs"]);
   });
 
   test("only the owner sees access", () => {
-    assert.deepEqual(ids("owner"), ["overview", "members", "actions", "audit", "access"]);
+    assert.deepEqual(ids("owner"), ["overview", "members", "logs", "serverlogs", "access"]);
   });
 
   test("settings appears only for someone who can manage the server", () => {
     assert.deepEqual(
       modTabsFor("1", "owner", true).map((tab) => tab.id),
-      ["overview", "members", "actions", "audit", "access", "settings"],
+      ["overview", "members", "logs", "serverlogs", "access", "settings"],
     );
     assert.deepEqual(
       modTabsFor("1", "mod", true).map((tab) => tab.id),
-      ["overview", "members", "actions", "settings"],
+      ["overview", "members", "logs", "serverlogs", "settings"],
     );
   });
 
@@ -66,5 +66,15 @@ describe("isTabCurrent", () => {
   test("a tab stays current on its sub-pages", () => {
     assert.equal(isTabCurrent(members!, "/guilds/1/mod/members/123"), true);
     assert.equal(isTabCurrent(members!, "/guilds/1/mod/membership"), false);
+  });
+});
+
+describe("the logs tab", () => {
+  const logs = modTabsFor("1", "admin").find((tab) => tab.id === "logs")!;
+
+  test("stays current on both logs it holds", () => {
+    assert.equal(isTabCurrent(logs, "/guilds/1/mod/actions"), true);
+    assert.equal(isTabCurrent(logs, "/guilds/1/mod/audit"), true);
+    assert.equal(isTabCurrent(logs, "/guilds/1/mod/members"), false);
   });
 });

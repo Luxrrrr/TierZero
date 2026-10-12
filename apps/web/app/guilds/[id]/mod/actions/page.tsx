@@ -11,7 +11,7 @@ import {
   parseActionsQuery,
 } from "./params";
 
-export const metadata: Metadata = { title: "Actions · Moderation" };
+export const metadata: Metadata = { title: "Mod logs · Moderation" };
 
 async function staffUsers(guildId: string): Promise<UserRef[]> {
   try {
@@ -52,6 +52,6 @@ export default async function ActionsPage({
     );
   } catch (error) {
     if (!(error instanceof ControlApiError)) throw error;
-    return <LoadError what="the action log" status={error.status} message={error.message} />;
+    return <LoadError what="member actions" status={error.status} message={error.message} />;
   }
 }

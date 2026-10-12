@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { LogSwitch } from "../../../../../components/mod/LogSwitch";
 import type { AuditDto, Page, UserRef } from "@tier0/core";
 import { Avatar, Pager, RoleBadge, UserChip, When } from "../../../../../components/mod/ModUi";
 import { NoteIcon, PencilIcon, SearchIcon, TrashIcon, UndoIcon, UserIcon, HistoryIcon } from "../../../../../components/Icons";
@@ -61,18 +62,20 @@ export function AuditLog({ guildId, query, data, actors: known, narrowedHere }: 
 
   return (
     <div className="mod-root mod-page audit-page">
+      <LogSwitch guildId={guildId} current="audit" canSeeStaffActivity />
       <section className="mod-section" aria-labelledby="audit-heading">
         <div className="mod-section-head">
           <div className="mod-section-text">
             <h2 className="mod-section-title" id="audit-heading">
-              Audit trail
+              Staff activity
             </h2>
             <p className="mod-section-desc">Everything staff did in this dashboard, newest first.</p>
           </div>
         </div>
 
-        <form className="mod-toolbar audit-toolbar" method="get" role="search" aria-label="Filter the audit trail">
+        <form className="mod-toolbar audit-toolbar" method="get" role="search" aria-label="Filter staff activity">
           {query.kind ? <input type="hidden" name="kind" value={query.kind} /> : null}
+          {query.infractionId ? <input type="hidden" name="infractionId" value={query.infractionId} /> : null}
 
           <div className="mod-search">
             <SearchIcon />
@@ -81,7 +84,7 @@ export function AuditLog({ guildId, query, data, actors: known, narrowedHere }: 
               type="search"
               defaultValue={query.q}
               placeholder="Search what happened"
-              aria-label="Search the audit trail"
+              aria-label="Search staff activity"
             />
           </div>
 
@@ -150,6 +153,13 @@ export function AuditLog({ guildId, query, data, actors: known, narrowedHere }: 
             </Link>
           ) : null}
         </div>
+
+        {query.infractionId ? (
+          <p className="audit-case" role="status">
+            Showing only what staff did on one case.{" "}
+            <Link href={auditHref(guildId, { ...query, infractionId: 0, page: 1 })}>Show all staff activity</Link>
+          </p>
+        ) : null}
 
         <p className="audit-count" role="status">
           <strong>{total.toLocaleString()}</strong> {total === 1 ? "entry" : "entries"}

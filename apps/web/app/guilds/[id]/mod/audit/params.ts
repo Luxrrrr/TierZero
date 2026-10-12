@@ -11,6 +11,8 @@ export interface AuditQuery {
   kind: string;
   actorId: string;
   targetUserId: string;
+  /** Only entries about this case, or 0 for all. */
+  infractionId: number;
   /** Calendar days as YYYY-MM-DD, or empty. */
   since: string;
   until: string;
@@ -37,7 +39,9 @@ export const AUDIT_KIND_SHORT: Record<AuditKind, string> = {
   "note.restore": "Note restored",
   "infraction.void": "Action removed",
   "infraction.restore": "Action restored",
+  "infraction.edit": "Action edited",
   "action.take": "Action taken",
+  "messagelog.purge": "Server logs deleted",
   "staff.add": "Staff added",
   "staff.update": "Role changed",
   "staff.remove": "Staff removed",
@@ -63,6 +67,7 @@ export function parseAuditQuery(raw: RawParams): AuditQuery {
     kind: AUDIT_KINDS.includes(kind as AuditKind) ? kind : "",
     actorId: SNOWFLAKE.test(actorId) ? actorId : "",
     targetUserId: SNOWFLAKE.test(targetUserId) ? targetUserId : "",
+    infractionId: /^\d{1,9}$/.test(first(raw.infractionId).trim()) ? Number(first(raw.infractionId).trim()) : 0,
     since,
     until,
     q: first(raw.q).trim().slice(0, 100),
@@ -76,6 +81,7 @@ export function auditApiParams(query: AuditQuery) {
     kind: query.kind || undefined,
     actorId: query.actorId || undefined,
     targetUserId: query.targetUserId || undefined,
+    infractionId: query.infractionId || undefined,
     since: query.since ? `${query.since}T00:00:00.000Z` : undefined,
     until: query.until ? `${query.until}T23:59:59.999Z` : undefined,
     q: query.q || undefined,
@@ -89,6 +95,7 @@ export function auditHref(guildId: string, query: Partial<AuditQuery>): string {
   if (query.kind) search.set("kind", query.kind);
   if (query.actorId) search.set("actorId", query.actorId);
   if (query.targetUserId) search.set("targetUserId", query.targetUserId);
+  if (query.infractionId) search.set("infractionId", String(query.infractionId));
   if (query.since) search.set("since", query.since);
   if (query.until) search.set("until", query.until);
   if (query.q) search.set("q", query.q);
@@ -99,7 +106,7 @@ export function auditHref(guildId: string, query: Partial<AuditQuery>): string {
 
 export function hasAuditFilters(query: AuditQuery): boolean {
   return Boolean(
-    query.kind || query.actorId || query.targetUserId || query.since || query.until || query.q,
+    query.kind || query.actorId || query.targetUserId || query.infractionId || query.since || query.until || query.q,
   );
 }
 
@@ -121,11 +128,11 @@ export function narrowAudit(items: AuditDto[], query: AuditQuery): AuditDto[] {
   });
 }
 
-interface DayGroup {
+interface DayGroup<T = AuditDto> {
   /** YYYY-MM-DD in the grouping time zone. */
   key: string;
   label: string;
-  items: AuditDto[];
+  items: T[];
 }
 
 /**
@@ -133,7 +140,7 @@ interface DayGroup {
  * the calendar day changes. Days are UTC unless told otherwise, because the
  * server's zone is not the reader's and the page says which one it means.
  */
-export function groupByDay(items: AuditDto[], timeZone = "UTC", now: Date = new Date()): DayGroup[] {
+export function groupByDay<T extends { at: string }>(items: T[], timeZone = "UTC", now: Date = new Date()): DayGroup<T>[] {
   const keyOf = new Intl.DateTimeFormat("en-CA", { year: "numeric", month: "2-digit", day: "2-digit", timeZone });
   const labelOf = new Intl.DateTimeFormat("en", {
     weekday: "long",
@@ -145,7 +152,7 @@ export function groupByDay(items: AuditDto[], timeZone = "UTC", now: Date = new 
   const today = keyOf.format(now);
   const yesterday = keyOf.format(new Date(now.getTime() - 24 * 60 * 60 * 1000));
 
-  const groups: DayGroup[] = [];
+  const groups: DayGroup<T>[] = [];
   for (const entry of items) {
     const date = new Date(entry.at);
     const key = keyOf.format(date);
@@ -189,6 +196,8 @@ export function auditVisual(kind: string, before: unknown, after: unknown): Audi
       return { icon: "trash", tone };
     case "infraction.restore":
       return { icon: "undo", tone };
+    case "infraction.edit":
+      return { icon: "pencil", tone };
     case "action.take":
       return { icon: "user", tone };
     default:

@@ -159,6 +159,9 @@ export function auditWhere(guildId: string, query: URLSearchParams): Prisma.ModA
   if (actorId) where.actorId = actorId;
   const targetUserId = query.get("targetUserId");
   if (targetUserId) where.targetUserId = targetUserId;
+  // Everything staff did on one case: making it, editing it, removing and restoring it.
+  const infractionId = Number(query.get("infractionId"));
+  if (Number.isInteger(infractionId) && infractionId > 0) where.infractionId = infractionId;
 
   const since = parseDay(query.get("since"));
   const until = parseDay(query.get("until"));
