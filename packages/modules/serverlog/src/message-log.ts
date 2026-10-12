@@ -126,6 +126,8 @@ export interface SavedDeletion {
   authorName: string;
   channelName: string;
   attachments: EvidenceAttachment[];
+  /** It was edited at least once before it was deleted. */
+  edited: boolean;
 }
 
 /**
@@ -147,6 +149,7 @@ export async function logDeleted(message: Message | PartialMessage, settings: Lo
         authorName: row.authorName,
         channelName: row.channelName,
         attachments: parseAttachments(row.attachments),
+        edited: row.editedAt !== null,
       };
       return;
     }
@@ -170,6 +173,7 @@ export async function logDeleted(message: Message | PartialMessage, settings: Lo
       authorName: created.authorName,
       channelName: created.channelName,
       attachments: attachmentsOf(message),
+      edited: false,
     };
   });
   return known;

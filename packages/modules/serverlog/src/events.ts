@@ -173,7 +173,9 @@ export const serverLogEvents: Handlers = {
       channel: { id: message.channelId, name: channelName },
       summary: saved ? `A message by ${saved.authorName} was deleted in #${channelName}` : `A message was deleted in #${channelName}`,
       details: {
-        messageId: message.id,
+        // Only a message the log has can be opened in the Messages view.
+        messageId: saved?.edited ? message.id : undefined,
+        edited: saved?.edited ? true : undefined,
         changes: saved ? [{ label: "Message", before: saved.content || "(no text)", after: null }] : [],
         notes: saved && saved.attachments.length > 0 ? [`Files: ${saved.attachments.map((a) => a.name).join(", ")}`] : saved ? [] : ["What it said was not saved."],
       },

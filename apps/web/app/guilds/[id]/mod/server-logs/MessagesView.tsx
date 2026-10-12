@@ -1,15 +1,17 @@
 import Link from "next/link";
 import type { MessageLogResult } from "../../../../../lib/mod-api";
-import { HistoryIcon, SearchIcon } from "../../../../../components/Icons";
+import { HistoryIcon } from "../../../../../components/Icons";
 import { Pager } from "../../../../../components/mod/ModUi";
+import { MessageFilters } from "./MessageFilters";
 import { MessageList } from "./MessageList";
 import { hasMessageLogFilters, messageLogHref, type MessageLogQuery } from "./message-params";
 
-const STATES = [
-  { id: "all", label: "All messages" },
-  { id: "deleted", label: "Deleted" },
-  { id: "edited", label: "Edited" },
-] as const;
+const clipExcerpt = (text: string) => (text.length > 40 ? `${text.slice(0, 39)}…` : text);
+
+/** Names the single-message filter by who wrote it and what it said, so the chip is not just "one message". */
+function oneMessage(item: MessageLogResult["items"][number] | undefined) {
+  return item ? { author: item.author.name ?? `User ${item.author.userId.slice(-4)}`, excerpt: clipExcerpt(item.content.replace(/\s+/g, " ").trim()) } : null;
+}
 
 /** The saved text of what members posted, with every edit. Tick messages to take action on their author. */
 export function MessagesView({ guildId, query, data }: { guildId: string; query: MessageLogQuery; data: MessageLogResult }) {
@@ -17,55 +19,7 @@ export function MessagesView({ guildId, query, data }: { guildId: string; query:
 
   return (
     <>
-      <form className="mod-toolbar ml-toolbar" method="get" role="search" aria-label="Search saved messages">
-        <input type="hidden" name="view" value="messages" />
-        {query.state !== "all" ? <input type="hidden" name="state" value={query.state} /> : null}
-        {query.message ? <input type="hidden" name="message" value={query.message} /> : null}
-        <div className="mod-search">
-          <SearchIcon />
-          <input name="q" type="search" defaultValue={query.q} placeholder="Search what was said" aria-label="Search saved messages" />
-        </div>
-        <input className="ml-author" name="author" defaultValue={query.author} placeholder="Member name or ID" aria-label="Member name or ID" />
-        <select name="channel" className="mod-select ml-select" defaultValue={query.channel} aria-label="Channel">
-          <option value="">Any channel</option>
-          {data.channels.map((channel) => (
-            <option key={channel.id} value={channel.id}>
-              #{channel.name}
-            </option>
-          ))}
-        </select>
-        <label className="ml-date">
-          <span>From</span>
-          <input type="date" name="since" defaultValue={query.since} max={query.until || undefined} />
-        </label>
-        <label className="ml-date">
-          <span>To</span>
-          <input type="date" name="until" defaultValue={query.until} min={query.since || undefined} />
-        </label>
-        <button type="submit" className="btn btn-secondary btn-sm">
-          Apply
-        </button>
-      </form>
-
-      <div className="mod-toolbar ml-chips">
-        <div className="mod-toolbar-group" role="group" aria-label="Which messages">
-          {STATES.map((state) => (
-            <Link
-              key={state.id}
-              className="mod-chip"
-              href={messageLogHref(guildId, { ...query, state: state.id, page: 1 })}
-              aria-current={query.state === state.id ? "true" : undefined}
-            >
-              {state.label}
-            </Link>
-          ))}
-        </div>
-        {filtered ? (
-          <Link className="btn btn-ghost btn-sm" href={messageLogHref(guildId, {})}>
-            Clear filters
-          </Link>
-        ) : null}
-      </div>
+      <MessageFilters guildId={guildId} query={query} channels={data.channels} single={query.message ? oneMessage(data.items[0]) : null} />
 
       <p className="ml-count" role="status">
         <strong>{data.total.toLocaleString("en")}</strong> {data.total === 1 ? "message" : "messages"}
@@ -79,12 +33,21 @@ export function MessagesView({ guildId, query, data }: { guildId: string; query:
             <span className="mod-empty-icon">
               <HistoryIcon />
             </span>
-            <p className="mod-empty-title">{filtered ? "No messages match" : "Nothing has been saved yet"}</p>
+            <p className="mod-empty-title">{query.message ? "That message isn't saved" : filtered ? "No messages match" : "Nothing has been saved yet"}</p>
             <p className="mod-empty-text">
-              {filtered
-                ? "Widen the dates or clear a filter. Searching also looks at earlier versions of edited messages."
-                : "Messages appear here as members post them."}
+              {query.message
+                ? "It was posted before saving messages was turned on, or in a channel you can't read, or it has been pruned."
+                : filtered
+                  ? "Widen the dates or take a filter off. Searching also looks at earlier versions of edited messages."
+                  : "Messages appear here as members post them."}
             </p>
+            {filtered ? (
+              <div className="mod-empty-action">
+                <Link className="btn btn-secondary btn-sm" href={messageLogHref(guildId, {})}>
+                  Clear all filters
+                </Link>
+              </div>
+            ) : null}
           </div>
         </div>
       ) : (

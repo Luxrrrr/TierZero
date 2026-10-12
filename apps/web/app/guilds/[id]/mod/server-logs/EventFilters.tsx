@@ -1,10 +1,12 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useEffect, useId, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { SERVER_LOG_CATEGORIES, type ServerLogCategoryId } from "@tier0/core";
 import { ChevronDownIcon, SearchIcon, XIcon } from "../../../../../components/Icons";
-import { QUICK_RANGES, activeFilters, activeRange, dayAgo, hasServerLogFilters, serverLogHref, type ServerLogQuery } from "./params";
+import { Combobox } from "../../../../../components/form/Combobox";
+import { DateRangePicker } from "../../../../../components/form/DateRangePicker";
+import { activeFilters, hasServerLogFilters, serverLogHref, type ServerLogQuery } from "./params";
 
 interface Props {
   guildId: string;
@@ -26,6 +28,7 @@ export function EventFilters({ guildId, query, channels, counts, recording }: Pr
   const [q, setQ] = useState(query.q);
   const [member, setMember] = useState(query.member);
   const first = useRef(true);
+  const comboId = useId();
 
   function go(next: Partial<ServerLogQuery>) {
     start(() => router.replace(serverLogHref(guildId, { ...query, ...next, page: 1 }), { scroll: false }));
@@ -50,7 +53,6 @@ export function EventFilters({ guildId, query, channels, counts, recording }: Pr
 
   const channelName = (id: string) => channels.find((c) => c.id === id)?.name ?? "unknown";
   const filters = activeFilters(query, channelName);
-  const range = activeRange(query);
 
   function toggleCategory(id: ServerLogCategoryId) {
     go({ category: query.category.includes(id) ? query.category.filter((c) => c !== id) : [...query.category, id] });
@@ -82,14 +84,19 @@ export function EventFilters({ guildId, query, channels, counts, recording }: Pr
           placeholder="Member name or ID"
           aria-label="Member name or ID. Matches who did it and who it happened to"
         />
-        <select className="mod-select sl-channel" value={query.channel} onChange={(event) => go({ channel: event.target.value })} aria-label="Channel">
-          <option value="">Any channel</option>
-          {channels.map((channel) => (
-            <option key={channel.id} value={channel.id}>
-              #{channel.name}
-            </option>
-          ))}
-        </select>
+        <div className="sl-combo">
+          <Combobox
+            id={`${comboId}-channel`}
+            value={query.channel || undefined}
+            onChange={(next) => go({ channel: next ?? "" })}
+            options={channels.map((channel) => ({ value: channel.id, label: `#${channel.name}`, keywords: channel.name }))}
+            placeholder="Any channel"
+            clearable
+            clearLabel="Any channel"
+            searchPlaceholder="Find a channel"
+            emptyText="No channel by that name"
+          />
+        </div>
       </div>
 
       <div className="mod-toolbar sl-row sl-categories" role="group" aria-label="What happened">
@@ -117,27 +124,7 @@ export function EventFilters({ guildId, query, channels, counts, recording }: Pr
       </div>
 
       <div className="mod-toolbar sl-row sl-dates">
-        <div className="mod-toolbar-group" role="group" aria-label="When">
-          {QUICK_RANGES.map((quick) => (
-            <button
-              key={quick.id}
-              type="button"
-              className="mod-chip"
-              aria-pressed={range === quick.id}
-              onClick={() => (range === quick.id ? go({ since: "", until: "" }) : go({ since: dayAgo(quick.days), until: "" }))}
-            >
-              {quick.label}
-            </button>
-          ))}
-        </div>
-        <label className="sl-date">
-          <span>From</span>
-          <input type="date" value={query.since} max={query.until || undefined} onChange={(event) => go({ since: event.target.value })} />
-        </label>
-        <label className="sl-date">
-          <span>To</span>
-          <input type="date" value={query.until} min={query.since || undefined} onChange={(event) => go({ until: event.target.value })} />
-        </label>
+        <DateRangePicker since={query.since} until={query.until} onChange={(range) => go(range)} aria-label="Dates" />
 
         <details className="sl-types">
           <summary className="mod-chip">

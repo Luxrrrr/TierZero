@@ -109,6 +109,18 @@ export async function listServerLog(ctx: ModCtx, state: GuildState, query: URLSe
     };
   });
 
+  // Whether a deleted message had been edited is read from the saved message itself, so entries written
+  // before that was recorded on the entry still know.
+  const unknown = items.filter((item) => item.type === "message.delete" && item.details.edited === undefined && item.details.messageId);
+  if (unknown.length > 0) {
+    const edited = await prisma.loggedMessage.findMany({
+      where: { guildId: ctx.guild.id, messageId: { in: unknown.map((item) => item.details.messageId!) }, editedAt: { not: null } },
+      select: { messageId: true },
+    });
+    const ids = new Set(edited.map((row) => row.messageId));
+    for (const item of unknown) item.details.edited = ids.has(item.details.messageId!);
+  }
+
   const counts: Record<string, number> = {};
   for (const id of SERVER_LOG_CATEGORY_IDS) counts[id] = 0;
   for (const group of grouped) counts[group.category] = group._count._all;

@@ -129,6 +129,8 @@ export interface ServerLogDetails {
   notes?: string[];
   /** The message an entry is about, so the Messages view can open it. */
   messageId?: string;
+  /** True when the message was edited before it was deleted, so there is more than one version to open. */
+  edited?: boolean;
 }
 
 export interface ServerLogEntryDto {

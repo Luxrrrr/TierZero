@@ -376,3 +376,38 @@
     margin-left: var(--space-4);
   }
 }
+
+.sl-banner {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--accent-ring);
+  border-radius: var(--radius-md);
+  background: var(--accent-soft);
+  font-size: var(--text-sm);
+}
+
+.sl-banner-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent-text);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.sl-history {
+  display: flex;
+  margin-top: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border);
+}
+
+.sl-history .btn svg {
+  width: 14px;
+  height: 14px;
+}
+
+.sl-danger-link {
+  color: var(--danger);
+}

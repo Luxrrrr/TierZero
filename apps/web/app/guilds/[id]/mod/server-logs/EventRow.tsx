@@ -7,6 +7,7 @@ import {
   BanIcon,
   ChevronDownIcon,
   HashIcon,
+  HistoryIcon,
   KeyIcon,
   MessagesIcon,
   SetupIcon,
@@ -49,7 +50,9 @@ export function EventRow({ guildId, entry }: { guildId: string; entry: ServerLog
   const Icon = entry.type.startsWith("member.ban") || entry.type === "member.kick" ? BanIcon : CATEGORY_ICON[entry.category];
   const changes = entry.details.changes ?? [];
   const notes = entry.details.notes ?? [];
-  const expandable = changes.length > 0 || notes.length > 0 || Boolean(entry.details.messageId);
+  // An edit always has two versions to look at. A deletion only does if the message was edited first.
+  const hasVersions = Boolean(entry.details.messageId) && (entry.type === "message.edit" || entry.details.edited === true);
+  const expandable = changes.length > 0 || notes.length > 0 || hasVersions;
 
   return (
     <li className="sl-entry" data-open={open ? "true" : undefined} data-category={entry.category}>
@@ -115,12 +118,17 @@ export function EventRow({ guildId, entry }: { guildId: string; entry: ServerLog
               ))}
             </ul>
           ) : null}
-          {entry.details.messageId ? (
-            <p className="sl-message-link">
-              <Link href={`/guilds/${guildId}/mod/server-logs?view=messages&message=${entry.details.messageId}`}>
-                Open this message with all its versions
+          {hasVersions ? (
+            <div className="sl-history">
+              <Link
+                className="btn btn-secondary btn-sm"
+                href={`/guilds/${guildId}/mod/server-logs?view=messages&message=${entry.details.messageId}`}
+                title="Opens the saved message with the text of every edit"
+              >
+                <HistoryIcon />
+                View message history
               </Link>
-            </p>
+            </div>
           ) : null}
         </div>
       ) : null}

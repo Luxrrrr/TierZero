@@ -23,7 +23,7 @@ export const LISTED_ROLES: ListedRole[] = ["mod", "admin"];
 export const ROLE_SUMMARY: Record<StaffRole, string> = {
   mod: "Reads member records, writes notes, warns and times out members, and can take back a warn or timeout.",
   admin: "Everything a moderator can, plus kicking, banning and unbanning, managing other staff’s notes, restoring removed actions and reading the audit trail.",
-  owner: "The person running this TierZero install. Full access on every server, including purging records.",
+  owner: "Runs this TierZero install. Full access on every server, including purging records.",
 };
 
 export interface PermissionRow {
