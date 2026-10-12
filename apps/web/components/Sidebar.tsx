@@ -7,6 +7,7 @@ import { inviteUrl } from "../lib/invite";
 import { navGroups } from "../lib/sections";
 import { initialsOf } from "../lib/discord-cdn";
 import { GuildSwitcher } from "./GuildSwitcher";
+import { Logo } from "./Logo";
 import { NavLink } from "./NavLink";
 import { NavMore } from "./NavMore";
 import { SidebarToggle } from "./SidebarToggle";
@@ -51,9 +52,7 @@ export function Sidebar({
       <div className="sidebar-head">
         <div className="sidebar-top">
           <Link href="/guilds" className="sidebar-brand" data-rail-tip="TierZero">
-            <span className="mark" aria-hidden="true">
-              0
-            </span>
+            <Logo />
             <span className="sidebar-brand-word">TierZero</span>
           </Link>
           <SidebarToggle />

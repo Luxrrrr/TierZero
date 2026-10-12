@@ -1,3 +1,4 @@
+import { Logo } from "./Logo";
 import Link from "next/link";
 import type { ReactNode } from "react";
 
@@ -20,9 +21,7 @@ export function AuthCard({ children, mark, alert, brand = true }: Props) {
     <main className="auth">
       {brand ? (
         <Link href="/" className="auth-brand">
-          <span className="mark" aria-hidden="true">
-            0
-          </span>
+          <Logo />
           TierZero
         </Link>
       ) : null}
