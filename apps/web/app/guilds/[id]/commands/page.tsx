@@ -49,8 +49,8 @@ export default async function CommandsPage({ params }: { params: Promise<{ id: s
             <p className="page-eyebrow">Server</p>
             <h1 className="page-title">Commands</h1>
             <p className="page-summary">
-              Turn a command off to remove it from Discord on this server, or
-              limit who can use it and where.
+              Turn a command off, limit who can use it and where, or change how it
+              replies.
             </p>
           </div>
         </div>

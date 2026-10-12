@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useState, type ReactNode } from "react";
 import type { GuildCommandState } from "../lib/control-api";
-import { MultiChannelPicker, MultiRolePicker, Switch } from "./form";
-import { AlertIcon } from "./Icons";
+import { Combobox, MultiChannelPicker, MultiRolePicker, Switch } from "./form";
+import { AlertIcon, ChevronDownIcon } from "./Icons";
+import { permissionChoices, shortLabel } from "../lib/command-permissions";
 
 interface Props {
   guildId: string;
@@ -21,16 +22,23 @@ const SAVED_LINGER_MS = 2000;
  * otherwise, so an empty restriction list is shown as that permissive default
  * rather than as something waiting to be filled in. Every change is written on
  * its own: there is no draft to lose, and a failed write puts the control back
- * where it was instead of leaving the screen disagreeing with Discord.
+ * where it was instead of leaving the screen disagreeing with Discord. The
+ * reply text is the exception, because it is typed rather than picked.
  */
 export function CommandRow({ guildId, command }: Props) {
   const [enabled, setEnabled] = useState(command.enabled);
   const [allowRoles, setAllowRoles] = useState(command.allowRoles);
   const [denyChannels, setDenyChannels] = useState(command.denyChannels);
+  const [permissions, setPermissions] = useState(command.permissions);
+  const [ephemeral, setEphemeral] = useState(command.ephemeral);
+  const customReply = command.customReply;
   const [open, setOpen] = useState(false);
   const [state, setState] = useState<RowState>("idle");
 
   const panelId = useId();
+  const permissionId = useId();
+  const permissionLabelId = useId();
+  const visibilityLabelId = useId();
   const rolesId = useId();
   const rolesLabelId = useId();
   const channelsId = useId();
@@ -67,23 +75,108 @@ export function CommandRow({ guildId, command }: Props) {
     }
   }
 
-  const restricted = allowRoles.length > 0 || denyChannels.length > 0;
   const displayName = command.kind === "slash" ? `/${command.name}` : command.name;
 
+  // Private or public as the person sees it: the owner's choice, else how the command ships.
+  const replyIsPrivate = ephemeral ?? command.privateByDefault;
+
+  const accessChanged = permissions !== null || allowRoles.length > 0 || denyChannels.length > 0;
+  const replyChanged = ephemeral !== null || customReply !== null;
+  const changed = accessChanged || replyChanged;
+
+  const accessSummary = [
+    permissions === null
+      ? command.defaultPermissions === null
+        ? "Everyone"
+        : shortLabel(command.defaultPermissions)
+      : permissions === "everyone"
+        ? "Everyone"
+        : shortLabel(permissions),
+    allowRoles.length > 0 ? `${allowRoles.length} ${allowRoles.length === 1 ? "role" : "roles"}` : null,
+    denyChannels.length > 0 ? `off in ${denyChannels.length}` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+  const replySummary = [command.repliesVary ? "Varies" : replyIsPrivate ? "Private" : "Public", customReply !== null ? "custom reply" : null]
+    .filter(Boolean)
+    .join(" · ");
+
+  function resetPermissions() {
+    const previous = permissions;
+    setPermissions(null);
+    void persist({ permissions: null }, () => setPermissions(previous));
+  }
+
+  function resetRoles() {
+    const previous = allowRoles;
+    setAllowRoles([]);
+    void persist({ allowRoles: [] }, () => setAllowRoles(previous));
+  }
+
+  function resetChannels() {
+    const previous = denyChannels;
+    setDenyChannels([]);
+    void persist({ denyChannels: [] }, () => setDenyChannels(previous));
+  }
+
+  function resetVisibility() {
+    const previous = ephemeral;
+    setEphemeral(null);
+    void persist({ ephemeral: null }, () => setEphemeral(previous));
+  }
+
+  function resetAll() {
+    const before = { permissions, allowRoles, denyChannels, ephemeral };
+    setPermissions(null);
+    setAllowRoles([]);
+    setDenyChannels([]);
+    setEphemeral(null);
+    void persist(
+      { permissions: null, allowRoles: [], denyChannels: [], ephemeral: null },
+      () => {
+        setPermissions(before.permissions);
+        setAllowRoles(before.allowRoles);
+        setDenyChannels(before.denyChannels);
+        setEphemeral(before.ephemeral);
+      },
+    );
+  }
+
+  function pickVisibility(wantPrivate: boolean) {
+    if (wantPrivate === replyIsPrivate) return;
+    const previous = ephemeral;
+    // Landing back on how the command ships stores nothing.
+    const next = wantPrivate === command.privateByDefault ? null : wantPrivate;
+    setEphemeral(next);
+    void persist({ ephemeral: next }, () => setEphemeral(previous));
+  }
+
   return (
-    <li className="command-row" data-off={enabled ? undefined : "true"}>
+    <li className="command-row" data-off={enabled ? undefined : "true"} data-open={open ? "true" : undefined}>
       <div className="command-head">
         <div className="command-identity">
-          <code className="command-name">{displayName}</code>
-          {command.kind === "slash" ? null : (
-            <span className="badge">{command.kind === "user" ? "Right-click a member" : "Right-click a message"}</span>
-          )}
+          <div className="command-title">
+            <code className="command-name">{displayName}</code>
+            {command.kind === "slash" ? null : (
+              <span className="badge">
+                {command.kind === "user" ? "Right-click a member" : "Right-click a message"}
+              </span>
+            )}
+            {!enabled ? <span className="badge badge-off">Hidden</span> : null}
+          </div>
           <p className="command-description">{command.description}</p>
         </div>
 
+        <p className="command-cell" data-changed={accessChanged ? "true" : undefined}>
+          <span className="command-cell-label">Access</span>
+          {accessSummary}
+        </p>
+        <p className="command-cell" data-changed={replyChanged ? "true" : undefined}>
+          <span className="command-cell-label">Reply</span>
+          {replySummary}
+        </p>
+
         <div className="command-actions">
-          {!enabled ? <span className="badge badge-off">Hidden</span> : null}
-          {restricted ? <span className="badge">Restricted</span> : null}
           <span className={state === "error" ? "command-status is-error" : "command-status"} role="status">
             {state === "saving" ? "Saving…" : null}
             {state === "saved" ? "Saved" : null}
@@ -91,12 +184,13 @@ export function CommandRow({ guildId, command }: Props) {
           </span>
           <button
             type="button"
-            className="btn btn-ghost btn-sm"
+            className="btn btn-ghost btn-sm command-edit"
             aria-expanded={open}
             aria-controls={panelId}
             onClick={() => setOpen(!open)}
           >
-            Restrict
+            Customize
+            <ChevronDownIcon className="command-edit-chevron" />
           </button>
           <Switch
             checked={enabled}
@@ -119,57 +213,171 @@ export function CommandRow({ guildId, command }: Props) {
       ) : null}
 
       {open ? (
-        <div className="command-restrictions" id={panelId}>
-          <div className="field">
-            <span className="field-label" id={rolesLabelId}>
-              Only these roles can use it
-            </span>
-            <MultiRolePicker
-              id={rolesId}
-              guildId={guildId}
-              values={allowRoles}
-              emptyLabel="Anyone"
-              addLabel="Add a role"
-              aria-labelledby={rolesLabelId}
-              onChange={(next) => {
-                const previous = allowRoles;
-                setAllowRoles(next);
-                void persist({ allowRoles: next }, () => setAllowRoles(previous));
-              }}
-            />
-            <p className="field-hint">
-              {allowRoles.length === 0
-                ? "Anyone can use it."
-                : "Nobody outside these roles sees it in Discord."}
-            </p>
+        <div className="command-panel" id={panelId}>
+          <div className="command-panel-bar">
+            <span>{changed ? "Some settings differ from the default." : "Everything is at its default."}</span>
+            {changed ? (
+              <button type="button" className="link-button" onClick={resetAll}>
+                Reset all to default
+              </button>
+            ) : null}
           </div>
 
-          <div className="field">
-            <span className="field-label" id={channelsLabelId}>
-              Not in these channels
-            </span>
-            <MultiChannelPicker
-              id={channelsId}
-              guildId={guildId}
-              types={["text"]}
-              values={denyChannels}
-              emptyLabel="Works everywhere"
-              addLabel="Add a channel"
-              aria-labelledby={channelsLabelId}
-              onChange={(next) => {
-                const previous = denyChannels;
-                setDenyChannels(next);
-                void persist({ denyChannels: next }, () => setDenyChannels(previous));
-              }}
-            />
-            <p className="field-hint">
-              {denyChannels.length === 0
-                ? "It works in every channel."
-                : "It works in every other channel."}
-            </p>
+          <div className="command-columns">
+            <section className="command-section" aria-labelledby={`${panelId}-access`}>
+              <h3 className="command-section-title" id={`${panelId}-access`}>
+                Access
+              </h3>
+
+              <Labelled
+                labelId={permissionLabelId}
+                label="Who sees it in Discord"
+                onReset={permissions !== null ? resetPermissions : undefined}
+              >
+                <Combobox
+                  id={permissionId}
+                  value={permissions ?? ""}
+                  searchable={false}
+                  aria-labelledby={permissionLabelId}
+                  options={permissionChoices(command.defaultPermissions)}
+                  onChange={(next) => {
+                    const previous = permissions;
+                    const value = next === undefined || next === "" ? null : next;
+                    setPermissions(value);
+                    void persist({ permissions: value }, () => setPermissions(previous));
+                  }}
+                />
+                <p className="field-hint">
+                  Members without it don&apos;t see the command at all. Server admins can
+                  override this under Server Settings, Integrations.
+                </p>
+              </Labelled>
+
+              <Labelled
+                labelId={rolesLabelId}
+                label="Only these roles can use it"
+                onReset={allowRoles.length > 0 ? resetRoles : undefined}
+              >
+                <MultiRolePicker
+                  id={rolesId}
+                  guildId={guildId}
+                  values={allowRoles}
+                  emptyLabel="Anyone"
+                  addLabel="Add a role"
+                  aria-labelledby={rolesLabelId}
+                  onChange={(next) => {
+                    const previous = allowRoles;
+                    setAllowRoles(next);
+                    void persist({ allowRoles: next }, () => setAllowRoles(previous));
+                  }}
+                />
+                <p className="field-hint">
+                  {allowRoles.length === 0
+                    ? "Anyone who can see it can use it."
+                    : "Everyone else gets a message saying they can't. Discord can't hide a command by role, so it stays visible to them."}
+                </p>
+              </Labelled>
+
+              <Labelled
+                labelId={channelsLabelId}
+                label="Not in these channels"
+                onReset={denyChannels.length > 0 ? resetChannels : undefined}
+              >
+                <MultiChannelPicker
+                  id={channelsId}
+                  guildId={guildId}
+                  types={["text"]}
+                  values={denyChannels}
+                  emptyLabel="Works everywhere"
+                  addLabel="Add a channel"
+                  aria-labelledby={channelsLabelId}
+                  onChange={(next) => {
+                    const previous = denyChannels;
+                    setDenyChannels(next);
+                    void persist({ denyChannels: next }, () => setDenyChannels(previous));
+                  }}
+                />
+              </Labelled>
+            </section>
+
+            <section className="command-section" aria-labelledby={`${panelId}-reply`}>
+              <h3 className="command-section-title" id={`${panelId}-reply`}>
+                Reply
+              </h3>
+
+              {command.repliesVary ? (
+                <p className="field-hint">Refusals are shown only to the person who ran it, and confirmations to the channel. The command decides for each reply, so there is nothing to choose here.</p>
+              ) : (
+              <Labelled
+                labelId={visibilityLabelId}
+                label="Who sees the reply"
+                onReset={ephemeral !== null ? resetVisibility : undefined}
+              >
+                <div className="choice-group" role="radiogroup" aria-labelledby={visibilityLabelId}>
+                  {[
+                    { wantPrivate: true, label: "Private", hint: "Only the person who ran it" },
+                    { wantPrivate: false, label: "Public", hint: "Everyone in the channel" },
+                  ].map((choice) => (
+                    <button
+                      key={choice.label}
+                      type="button"
+                      role="radio"
+                      aria-checked={replyIsPrivate === choice.wantPrivate}
+                      className="choice"
+                      onClick={() => pickVisibility(choice.wantPrivate)}
+                    >
+                      <span className="choice-label">
+                        {choice.label}
+                        {command.privateByDefault === choice.wantPrivate ? (
+                          <span className="choice-tag">Default</span>
+                        ) : null}
+                      </span>
+                      <span className="choice-hint">{choice.hint}</span>
+                    </button>
+                  ))}
+                </div>
+              </Labelled>
+              )}
+
+              {command.response ? (
+                <p className="field-hint">
+                  {customReply === null ? "This command replies the way it always has." : "This command has a reply of its own."} Rewrite it on the{" "}
+                  <a href={`/guilds/${guildId}/commands`}>Commands page</a>, with the full message editor.
+                </p>
+              ) : null}
+            </section>
           </div>
         </div>
       ) : null}
     </li>
+  );
+}
+
+/** A field label with a Reset link that only appears once the value has moved off the default. */
+function Labelled({
+  labelId,
+  label,
+  onReset,
+  children,
+}: {
+  labelId: string;
+  label: string;
+  onReset?: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <div className="field">
+      <div className="field-label-row">
+        <span className="field-label" id={labelId}>
+          {label}
+        </span>
+        {onReset ? (
+          <button type="button" className="link-button" onClick={onReset}>
+            Reset
+          </button>
+        ) : null}
+      </div>
+      {children}
+    </div>
   );
 }

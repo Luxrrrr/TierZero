@@ -20,6 +20,8 @@ export interface ComboboxOption {
   group?: string;
   /** A short aside on the right of the row, such as why it cannot be picked. */
   note?: string;
+  /** A line under the label that says what choosing it does. */
+  hint?: string;
   disabled?: boolean;
   icon?: ReactNode;
   /** Extra text the search should match on, beyond the label. */
@@ -44,6 +46,8 @@ interface SharedProps {
 }
 
 interface SingleProps extends SharedProps {
+  /** Shows the search box. Turn it off for a short list that fits on screen. */
+  searchable?: boolean;
   id: string;
   value: string | undefined;
   onChange(next: string | undefined): void;
@@ -73,6 +77,7 @@ export function Combobox({
   missingLabel,
   clearable = false,
   clearLabel = "Clear this",
+  searchable = true,
   searchLabel = "Search",
   searchPlaceholder = "Search",
   emptyText = "Nothing matches that.",
@@ -138,6 +143,7 @@ export function Combobox({
         <Popup
           options={listOptions}
           selectedValues={value === undefined ? [] : [value]}
+          searchable={searchable}
           searchLabel={searchLabel}
           searchPlaceholder={searchPlaceholder}
           emptyText={emptyText}
@@ -277,6 +283,7 @@ export function MultiCombobox({
 interface PopupProps {
   options: ComboboxOption[];
   selectedValues: string[];
+  searchable?: boolean;
   searchLabel: string;
   searchPlaceholder: string;
   emptyText: string;
@@ -304,6 +311,7 @@ interface OptionGroup {
 function Popup({
   options,
   selectedValues,
+  searchable = true,
   searchLabel,
   searchPlaceholder,
   emptyText,
@@ -390,7 +398,7 @@ function Popup({
 
   return (
     <div className="combobox-popover">
-      <div className="combobox-search">
+      <div className={searchable ? "combobox-search" : "combobox-search visually-hidden"}>
         <SearchIcon />
         <input
           ref={searchRef}
@@ -451,7 +459,10 @@ function Popup({
         }}
       >
         {option.icon}
-        <span className="combobox-option-text">{option.label}</span>
+        <span className="combobox-option-text">
+          {option.label}
+          {option.hint ? <span className="combobox-option-hint">{option.hint}</span> : null}
+        </span>
         {option.note ? <span className="combobox-option-note">{option.note}</span> : null}
       </div>
     );
