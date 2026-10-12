@@ -55,9 +55,13 @@ The Commands page lists every command on the server, including the right-click e
 
 ![The Commands page with a hidden command and role limits](images/commands.png)
 
+![A command's settings sheet: who can use it, where, and its reply](images/command-sheet.png)
+
 ## Messages
 
 The Messages page builds messages and embeds for the bot to post, such as rules, announcements or event notices. You edit on the left and see the message drawn the way Discord shows it on the right.
+
+![The Messages page with a saved template, its live preview and the editor](images/messages.png)
 
 What you can set:
 
@@ -187,6 +191,10 @@ Discord shows an entry only to members with the matching permission: Timeout Mem
 
 Open a case on the member's page and choose **Edit case**. You can change the reason, the attached messages (remove one, add one, or choose which version of an edited message the member was warned for), and, while a timeout or ban is still running, how long it lasts. A new length counts from now and is applied in Discord straight away, including making a ban permanent. A timeout or ban that has already ended can't have its length changed.
 
+![The Edit case dialog, choosing which version of an edited message broke the rules](images/edit-case.png)
+
+![A case marked as edited, with the version the member was warned for](images/member-case.png)
+
 Moderators can edit their own cases, admins and the owner any case, including automod's. Changing the length of a ban needs the same level as banning. A case that was removed from the record has to be restored first.
 
 An edited case shows a blue **Case edited by staff** note with who and when, on the member's page and in Member actions. That is different from the amber **Message edited** label inside an attached message, which means the member changed their own message. Staff activity records every edit with what it said before and after, and each case has a **See everything staff did on this case** link, which Member actions also offers as **Staff activity** next to **Profile** on every row. The post in the mod log channel and any direct message already sent keep the old text.
@@ -209,6 +217,8 @@ Case numbers are never renumbered or reused. Purging case 12 leaves a permanent 
 
 The Server logs tab is a searchable record of what happened in the server, so staff don't have to scroll channels or Discord's own audit log to find it. It's off until you turn on the **Server logs** feature. Choose what to record in its settings, which you reach from the **Settings** button on the tab:
 
+![The Server logs Events view with category filters and counts](images/server-logs.png)
+
 - **Members:** joins, departures, nickname changes and role changes.
 - **Messages:** every message members post, every edit and what was deleted, including messages removed by /purge. Bots are left out.
 - **Moderation:** bans, unbans, kicks and timeouts, from any source, with who did it when Discord says.
@@ -227,9 +237,17 @@ The tab has two views. **Events** is the timeline of everything above. Every fil
 - A member, by name or ID. It matches who did something and who it happened to. Clicking a name in an entry filters to that person.
 - A channel, and a date range with shortcuts for today, 7 days and 30 days.
 
-An entry's **Details** show what changed, before and after. A message entry links to the message with all its versions. The filtered view is in the address, so you can bookmark it or send it to another moderator.
+An entry's **Details** show what changed, before and after.
 
-**Messages** is the saved text itself. Search by words, member, channel and dates, and show only deleted or edited messages. A search also matches earlier versions, so an edited message is found by what it said before. Deleted messages are labelled in red and edited ones have a dropdown with each version. Tick messages from one member and choose **Take action** to open the action form with them already attached.
+![Entries opened to show what changed, with a button for the message's history](images/server-logs-details.png)
+
+![The date range picker, with shortcuts and a calendar](images/server-logs-dates.png)
+ A message entry links to the message with all its versions. The filtered view is in the address, so you can bookmark it or send it to another moderator.
+
+**Messages** is the saved text itself.
+
+![The Messages view with filters, a deleted message and an edited one](images/server-logs-messages.png)
+ Search by words, member, channel and dates, and show only deleted or edited messages. A search also matches earlier versions, so an edited message is found by what it said before. Deleted messages are labelled in red and edited ones have a dropdown with each version. Tick messages from one member and choose **Take action** to open the action form with them already attached.
 
 Staff only see channels they can read in Discord, so the logs can't be used to get into a private channel. Admins and the owner can always open the tab. Moderators can if you switch on **Let moderators open the server logs**.
 
@@ -243,7 +261,7 @@ The Mod logs tab has two pages with a switch at the top: Member actions and Staf
 
 Cases made by commands and automod are the actions themselves, under Member actions.
 
-![Staff activity listing what staff changed](images/audit-trail.png)
+![Staff activity listing what staff changed](images/staff-activity.png)
 
 ### Statistics
 
@@ -262,7 +280,7 @@ Below the tiles:
 
 Member actions, on the Mod logs tab, lists every case, newest first. You can filter by type, state (in force, expired, removed or on record), source (manual or automod) and moderator, and search the reason, a case number or a member ID. It doesn't search by name.
 
-![Member actions with filters and an export button](images/action-log.png)
+![Mod logs, with the switch between Member actions and Staff activity](images/mod-logs.png)
 
 Admins and the owner can export the current filter as a CSV, newest first, up to 5,000 rows. Removed entries are included. Names are looked up from Discord, so the oldest cases in a large export can have blank names, and the ID columns are always filled in. Cells that start with `=`, `+`, `-` or `@` get an apostrophe in front so a spreadsheet won't treat them as formulas. Strip it if you load the file anywhere else.
 
@@ -275,6 +293,8 @@ The owner adds staff to a server, switches them between Moderator and Admin, and
 ### Danger zone
 
 The owner has a **Danger zone** tab that no one else sees. It deletes whole logs for good: Member actions (every case on every record), Staff activity, the Server log events and the saved messages. Tick any number of them, then hold the button for three seconds while a red bar fills it, so a stray click does nothing. Letting go early cancels. One entry is left in Staff activity saying who deleted what.
+
+![The Danger zone with two logs ticked and the hold button](images/danger-zone.png)
 
 ### Settings tab
 
