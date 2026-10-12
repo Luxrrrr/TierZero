@@ -1,3 +1,4 @@
+import { EvidenceList } from "../../../../../components/mod/Evidence";
 import Link from "next/link";
 import type { InfractionDto, Page, UserRef } from "@tier0/core";
 import {
@@ -254,6 +255,14 @@ function ActionRow({ guildId, item, now }: { guildId: string; item: InfractionDt
       </td>
       <td data-label="Reason" className="actions-reason-cell">
         <Reason text={item.reason} automod={isAutomodAction(item.action)} />
+        {item.evidence.length > 0 ? (
+          <details className="ev-inline">
+            <summary>
+              {item.evidence.length} attached {item.evidence.length === 1 ? "message" : "messages"}
+            </summary>
+            <EvidenceList evidence={item.evidence} full />
+          </details>
+        ) : null}
       </td>
       <td data-label="Moderator">
         {isAutomodAction(item.action) ? <AutomodActor /> : <UserChip user={item.moderator} muted />}

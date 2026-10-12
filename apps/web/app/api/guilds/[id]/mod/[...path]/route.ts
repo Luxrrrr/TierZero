@@ -4,6 +4,7 @@ import type { MemberProfile } from "@tier0/core";
 import { requireStaff } from "../../../../../../lib/mod-access";
 import { redactProfile } from "../../../../../../lib/profile-redact";
 import {
+  isMemberMessagesRead,
   isProfileRead,
   isSameOriginWrite,
   modProxyPermission,
@@ -61,7 +62,11 @@ async function handle(method: string, request: Request, { params }: Params) {
   if (!access.ok) return fail(access.status, access.message);
 
   const url = new URL(request.url);
-  const target = `${path.map(encodeURIComponent).join("/")}${url.search}`;
+  // The bot is told who is asking, because it limits the list to channels that person can read. The browser
+  // cannot name itself: whatever query it sent is dropped for this read.
+  const target = isMemberMessagesRead(method, path)
+    ? `${path.map(encodeURIComponent).join("/")}?viewer=${encodeURIComponent(access.actor.userId)}&owner=${access.role === "owner" ? "1" : "0"}`
+    : `${path.map(encodeURIComponent).join("/")}${url.search}`;
 
   let body: unknown;
   if (method !== "GET") {

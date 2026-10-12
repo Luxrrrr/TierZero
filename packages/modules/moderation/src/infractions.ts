@@ -1,4 +1,5 @@
 import { createInfraction, prisma } from "@tier0/db";
+import type { EvidenceMessage } from "@tier0/core";
 import type { ModerationAction } from "./modlog.js";
 
 export interface InfractionRecord {
@@ -12,6 +13,8 @@ export interface InfractionRecord {
   createdAt: Date;
   expiresAt: Date | null;
   active: boolean;
+  /** Messages kept with the action, as JSON. */
+  evidence: string;
 }
 
 export interface RecordInfractionInput {
@@ -22,6 +25,7 @@ export interface RecordInfractionInput {
   reason: string | null;
   expiresAt?: Date | null;
   active?: boolean;
+  evidence?: EvidenceMessage[];
 }
 
 /**
@@ -39,6 +43,7 @@ export async function recordInfraction(input: RecordInfractionInput): Promise<In
     reason: input.reason ?? null,
     expiresAt: input.expiresAt ?? null,
     active: input.active ?? true,
+    evidence: JSON.stringify(input.evidence ?? []),
   });
 }
 

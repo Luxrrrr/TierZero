@@ -15,6 +15,7 @@ import {
 import {
   canTakeAction,
   customId,
+  type EvidenceMessage,
   type ComponentEvent,
   type ContextCommandDefinition,
   type ModActionKind,
@@ -23,6 +24,7 @@ import {
 import type { ModerationSettings } from "../settings.js";
 import { ActionRefused } from "../action-rules.js";
 import { parseDuration } from "../duration.js";
+import { resolveEvidence } from "../evidence.js";
 import { fetchMemberOrNull } from "../lookups.js";
 import { performAction } from "../perform.js";
 import { staffRoleOf } from "../staff.js";
@@ -127,7 +129,7 @@ async function openForm(interaction: ContextMenuCommandInteraction, ctx: Ctx, ac
     .setStyle(TextInputStyle.Paragraph)
     .setRequired(ctx.settings.requireReason)
     .setMaxLength(REASON_ROOM)
-    .setPlaceholder(target.message ? "Why. A link to the message is added for you." : "Why");
+    .setPlaceholder(target.message ? "Why. The message is saved with the case." : "Why");
   modal.addComponents(new ActionRowBuilder<TextInputBuilder>().addComponents(reason));
 
   if (action === "timeout" || action === "ban") {
@@ -202,7 +204,6 @@ export async function submitContextAction(
     channelId && messageId && /^\d{17,20}$/.test(channelId) && /^\d{17,20}$/.test(messageId)
       ? `https://discord.com/channels/${ctx.guild.id}/${channelId}/${messageId}`
       : null;
-  const reason = [typed, link ? `Message: ${link}` : ""].filter(Boolean).join("\n") || null;
 
   let durationMs: number | null = null;
   let unreadableDuration: string | undefined;
@@ -223,6 +224,19 @@ export async function submitContextAction(
       fetchMemberOrNull(ctx.guild, interaction.user.id),
       ctx.client.users.fetch(targetId).catch(() => null),
     ]);
+
+    // The message is copied now, before the action, so it is kept even if the action deletes it. If it
+    // cannot be read, the case still records a link to it, as it always has.
+    let evidence: EvidenceMessage[] = [];
+    if (channelId && messageId && link) {
+      try {
+        evidence = await resolveEvidence(ctx.guild, targetId, [{ channelId, messageId }], { member: actorMember, isOwner: false });
+      } catch (error) {
+        if (!(error instanceof ActionRefused)) throw error;
+      }
+    }
+    const reason = [typed, link && evidence.length === 0 ? `Message: ${link}` : ""].filter(Boolean).join("\n") || null;
+
     const { record, notes } = await performAction(ctx, {
       action,
       targetId,
@@ -235,6 +249,7 @@ export async function submitContextAction(
       actorMember,
       actorIsInstanceOwner: false,
       origin: "command",
+      evidence,
     });
 
     const name = user?.username ?? "the member";

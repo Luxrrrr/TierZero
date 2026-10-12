@@ -146,6 +146,7 @@ export type AuditKind =
   | "note.restore"
   | "infraction.void"
   | "infraction.restore"
+  | "action.take"
   | "staff.add"
   | "staff.update"
   | "staff.remove";
@@ -157,6 +158,7 @@ export const AUDIT_KIND_LABEL: Record<AuditKind, string> = {
   "note.restore": "Restored a note",
   "infraction.void": "Removed an action from a record",
   "infraction.restore": "Restored an action to a record",
+  "action.take": "Took an action on a member",
   "staff.add": "Added staff",
   "staff.update": "Changed a staff role",
   "staff.remove": "Removed staff",
@@ -179,6 +181,80 @@ export interface Page<T> {
   pageSize: number;
 }
 
+export const EVIDENCE_LIMITS = { messages: 10, content: 1500, attachments: 5, name: 200 } as const;
+
+export interface EvidenceAttachment {
+  name: string;
+  url: string;
+  contentType: string | null;
+}
+
+/**
+ * A message kept with an action, as it read when the action was taken. It is a
+ * copy, so it stays readable after the member edits or deletes the message.
+ */
+export interface EvidenceMessage {
+  id: string;
+  channelId: string;
+  channelName: string;
+  content: string;
+  attachments: EvidenceAttachment[];
+  createdAt: string;
+  /** A link to the message in Discord, which only works while the message exists. */
+  url: string;
+  /** The message was already deleted when it was saved. */
+  deleted: boolean;
+}
+
+/** A message a moderator picked, by where it is. The bot reads its contents itself. */
+export interface EvidenceRef {
+  channelId: string;
+  messageId: string;
+}
+
+const SNOWFLAKE = /^\d{17,20}$/;
+
+/** Reads the messages a request asks to attach, refusing anything that is not a message id pair. */
+export function parseEvidenceRefs(input: unknown): { ok: true; refs: EvidenceRef[] } | { ok: false; error: string } {
+  if (input === undefined || input === null) return { ok: true, refs: [] };
+  if (!Array.isArray(input)) return { ok: false, error: "The messages to attach must be a list." };
+  const refs: EvidenceRef[] = [];
+  const seen = new Set<string>();
+  for (const entry of input) {
+    const source = typeof entry === "object" && entry !== null ? (entry as Record<string, unknown>) : {};
+    const channelId = typeof source.channelId === "string" ? source.channelId : "";
+    const messageId = typeof source.messageId === "string" ? source.messageId : "";
+    if (!SNOWFLAKE.test(channelId) || !SNOWFLAKE.test(messageId)) {
+      return { ok: false, error: "One of the messages to attach is not a valid Discord message." };
+    }
+    if (seen.has(messageId)) continue;
+    seen.add(messageId);
+    refs.push({ channelId, messageId });
+  }
+  if (refs.length > EVIDENCE_LIMITS.messages) {
+    return { ok: false, error: `You can attach at most ${EVIDENCE_LIMITS.messages} messages to one action.` };
+  }
+  return { ok: true, refs };
+}
+
+/** A pasted Discord message link as the pair it names, or null when it is not one. */
+export function evidenceRefFromLink(link: string): EvidenceRef | null {
+  const match = /^https?:\/\/(?:\w+\.)?discord(?:app)?\.com\/channels\/(?:\d+|@me)\/(\d{17,20})\/(\d{17,20})\/?$/.exec(link.trim());
+  return match?.[1] && match[2] ? { channelId: match[1], messageId: match[2] } : null;
+}
+
+/** Reads stored evidence back. A damaged value reads as none rather than failing a whole list. */
+export function readEvidence(stored: string | null | undefined): EvidenceMessage[] {
+  if (!stored) return [];
+  try {
+    const parsed: unknown = JSON.parse(stored);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((entry): entry is EvidenceMessage => typeof entry === "object" && entry !== null && typeof (entry as { id?: unknown }).id === "string");
+  } catch {
+    return [];
+  }
+}
+
 export interface InfractionDto {
   id: number;
   caseNumber: number;
@@ -191,6 +267,8 @@ export interface InfractionDto {
   /** Still in force, such as a timeout that has not run out. */
   active: boolean;
   voided: null | { at: string; by: UserRef; reason: string | null };
+  /** Messages a moderator attached, as they read when the action was taken. */
+  evidence: EvidenceMessage[];
 }
 
 export interface NoteDto {
@@ -341,6 +419,8 @@ export interface ActionRequest {
   reason: string | null;
   durationMs: number | null;
   deleteDays: number | null;
+  /** Messages from the member to keep with the action. */
+  evidence?: EvidenceRef[];
 }
 
 export interface ActionResult {

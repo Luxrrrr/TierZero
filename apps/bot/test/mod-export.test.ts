@@ -20,6 +20,7 @@ function infraction(over: Record<string, unknown> = {}) {
     voidedAt: null,
     voidedBy: null,
     voidReason: null,
+    evidence: "[]",
     ...over,
   } as any;
 }
@@ -111,7 +112,15 @@ describe("exportRow", () => {
       null,
       null,
       null,
+      null,
     ]);
+  });
+
+  test("lists the links of attached messages, and nothing else from them", () => {
+    const evidence = JSON.stringify([{ id: "1", url: "https://discord.com/channels/1/2/3", content: "secret words" }, { id: "4", url: "https://discord.com/channels/1/2/4", content: "more" }]);
+    const row = exportRow(infraction({ evidence }), NOW, names);
+    assert.equal(row[13], "https://discord.com/channels/1/2/3 https://discord.com/channels/1/2/4");
+    assert.ok(!row.includes("secret words"));
   });
 
   test("a removed case carries who, when and why, falling back to the id for an unknown remover", () => {

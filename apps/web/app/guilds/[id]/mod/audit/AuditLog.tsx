@@ -178,8 +178,8 @@ export function AuditLog({ guildId, query, data, actors: known, narrowedHere }: 
                 <>
                   <p className="mod-empty-title">Nothing has been recorded yet</p>
                   <p className="mod-empty-text">
-                    Every note a moderator adds, edits or deletes, every action removed from or restored to a record,
-                    and every change to who has access appears here, with who did it and when.
+                    Every action taken from this dashboard, every note added, edited or deleted, every action removed from
+                    or restored to a record, and every change to who has access appears here, with who did it and when.
                   </p>
                 </>
               )}

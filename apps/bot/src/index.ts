@@ -6,7 +6,7 @@ import welcome from "@tier0/module-welcome";
 import roles from "@tier0/module-roles";
 import automod from "@tier0/module-automod";
 import leveling from "@tier0/module-leveling";
-import moderation from "@tier0/module-moderation";
+import moderation, { backfillEvidence } from "@tier0/module-moderation";
 import tickets from "@tier0/module-tickets";
 import auditlog from "@tier0/module-auditlog";
 import feeds from "@tier0/module-feeds";
@@ -68,6 +68,12 @@ client.once(Events.ClientReady, async (ready) => {
     });
     await commands.run(guild.id);
   }
+
+  // Old right-click cases only have a link to the message. Not awaited, since it fetches from Discord.
+  void backfillEvidence(client).then(
+    (count) => count > 0 && console.log(`Attached messages to ${count} older cases`),
+    (error) => console.error("Could not attach messages to older cases", error),
+  );
 
   scheduler.start();
   startControlApi({ client, registry, state, commands });

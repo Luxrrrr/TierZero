@@ -1,5 +1,5 @@
 import type { GuildMember } from "discord.js";
-import type { ModuleContext } from "@tier0/core";
+import type { EvidenceMessage, ModuleContext } from "@tier0/core";
 import type { ModerationSettings } from "./settings.js";
 import {
   ACTION_IN_PROGRESS,
@@ -54,6 +54,8 @@ export interface PerformInput {
   /** The person running this install, trusted to act on a server they have not joined. */
   actorIsInstanceOwner: boolean;
   origin: ActionOrigin;
+  /** Copies of messages to keep with the case. Taken before the action, because a ban can delete the messages. */
+  evidence?: EvidenceMessage[];
 }
 
 export interface PerformOutcome {
@@ -207,6 +209,7 @@ async function perform(ctx: Ctx, input: PerformInput): Promise<PerformOutcome> {
     action,
     reason,
     expiresAt,
+    evidence: input.evidence ?? [],
   });
 
   if (action === "ban" && expiresAt) {

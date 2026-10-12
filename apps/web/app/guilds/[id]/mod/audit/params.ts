@@ -37,6 +37,7 @@ export const AUDIT_KIND_SHORT: Record<AuditKind, string> = {
   "note.restore": "Note restored",
   "infraction.void": "Action removed",
   "infraction.restore": "Action restored",
+  "action.take": "Action taken",
   "staff.add": "Staff added",
   "staff.update": "Role changed",
   "staff.remove": "Staff removed",
@@ -188,6 +189,8 @@ export function auditVisual(kind: string, before: unknown, after: unknown): Audi
       return { icon: "trash", tone };
     case "infraction.restore":
       return { icon: "undo", tone };
+    case "action.take":
+      return { icon: "user", tone };
     default:
       return { icon: "user", tone: "" };
   }

@@ -152,6 +152,8 @@ model Infraction {
   voidedAt    DateTime?
   voidedBy    String?
   voidReason  String?
+  /// Messages a moderator attached, copied as they read when the action was taken, as JSON.
+  evidence    String    @default("[]")
 
   guild Guild @relation(fields: [guildId], references: [id], onDelete: Cascade)
 

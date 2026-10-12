@@ -14,6 +14,7 @@ import { banOutlivesTask } from "./action-rules.js";
 import { formatDirectMessage } from "./modlog.js";
 import { tryDirectMessage } from "./dm.js";
 import { postModLog } from "./reply.js";
+import { recentMessages } from "./recent-messages.js";
 
 export { performAction, type PerformInput, type PerformOutcome } from "./perform.js";
 export {
@@ -26,6 +27,9 @@ export {
   type ActionOrigin,
 } from "./action-rules.js";
 export { fetchMemberOrNull } from "./lookups.js";
+export { recentFor, resolveEvidence, viewerCanRead, type EvidenceViewer } from "./evidence.js";
+export { backfillEvidence, splitMessageLink } from "./backfill.js";
+export { RecentMessages, RECENT_LIMITS, recentMessages } from "./recent-messages.js";
 export type { InfractionRecord } from "./infractions.js";
 export type { ModerationSettings } from "./settings.js";
 
@@ -52,6 +56,31 @@ export default defineModule({
   contextCommands,
 
   modals: { ctxact: submitContextAction },
+
+  // What a member said recently is kept in memory, so a moderator can attach a
+  // message to an action, including one deleted since. See recent-messages.ts.
+  events: {
+    async messageCreate(message) {
+      if (message.author.bot || !message.guild) return;
+      const channel = message.channel;
+      recentMessages.record(message.guild.id, {
+        id: message.id,
+        channelId: message.channelId,
+        channelName: "name" in channel && typeof channel.name === "string" ? channel.name : "",
+        authorId: message.author.id,
+        content: message.content,
+        attachments: [...message.attachments.values()].map((a) => ({ name: a.name, url: a.url, contentType: a.contentType })),
+        createdAt: message.createdTimestamp,
+        deleted: false,
+      });
+    },
+    async messageUpdate(_before, after) {
+      if (after.content !== null) recentMessages.edit(after.id, after.content);
+    },
+    async messageDelete(message) {
+      recentMessages.markDeleted(message.id);
+    },
+  },
 
   tasks: {
     // Lifts a temporary ban. This runs from the scheduled task table, not a

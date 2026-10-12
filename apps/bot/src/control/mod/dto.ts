@@ -1,4 +1,4 @@
-import { isInForce as restrictionInForce, type InfractionDto, type MemberSummary, type NoteDto, type UserRef } from "@tier0/core";
+import { isInForce as restrictionInForce, readEvidence, type InfractionDto, type MemberSummary, type NoteDto, type UserRef } from "@tier0/core";
 
 /**
  * Mappers and rules for the mod dashboard that need neither Discord nor a
@@ -20,6 +20,7 @@ export interface InfractionRow {
   voidedAt: Date | null;
   voidedBy: string | null;
   voidReason: string | null;
+  evidence: string;
 }
 
 export interface NoteRow {
@@ -68,6 +69,7 @@ export function infractionDto(row: InfractionRow, ref: RefLookup): InfractionDto
     voided: row.voidedAt
       ? { at: row.voidedAt.toISOString(), by: ref(row.voidedBy ?? ""), reason: row.voidReason }
       : null,
+    evidence: readEvidence(row.evidence),
   };
 }
 

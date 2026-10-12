@@ -1,7 +1,7 @@
 import type { Client, Guild } from "discord.js";
 import { isStaffRole, type Actor } from "@tier0/core";
 import type { GuildState } from "../../runtime/guild-state.js";
-import { actionContextFor, takeAction } from "./actions.js";
+import { actionContextFor, memberMessages, takeAction } from "./actions.js";
 import { listAudit } from "./audit-list.js";
 import { exportInfractions, listInfractions, purgeInfraction, restoreInfraction, voidInfraction } from "./infractions.js";
 import { listMembers, memberProfile, searchGuildMembers } from "./members.js";
@@ -55,6 +55,10 @@ export async function handleMod(request: ModRequest): Promise<Reply | null> {
     if (area === "actions" && a === "context" && b === undefined) return actionContextFor(ctx, state);
     if (area === "members" && a === undefined) return listMembers(ctx, query);
     if (area === "members" && a !== undefined && b === undefined) return memberProfile(ctx, a);
+    // The viewer is named by the dashboard from the signed-in session, never by the browser.
+    if (area === "members" && a !== undefined && b === "messages") {
+      return memberMessages(ctx, a, query.get("viewer"), query.get("owner") === "1");
+    }
     if (area === "member-search") return searchGuildMembers(ctx, query.get("q") ?? "");
     if (area === "infractions" && a === undefined) return listInfractions(ctx, query);
     if (area === "infractions" && a === "export" && b === undefined) return exportInfractions(ctx, query);

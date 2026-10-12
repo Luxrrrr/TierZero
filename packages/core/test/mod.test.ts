@@ -145,3 +145,41 @@ describe("taking actions", () => {
     assert.equal(isModActionKind(undefined), false);
   });
 });
+
+import { evidenceRefFromLink, parseEvidenceRefs, readEvidence } from "../dist/mod.js";
+
+describe("evidence", () => {
+  const ref = { channelId: "123456789012345678", messageId: "223456789012345678" };
+
+  test("reads a list of message ids and drops repeats", () => {
+    const result = parseEvidenceRefs([ref, ref]);
+    assert.ok(result.ok);
+    assert.equal(result.refs.length, 1);
+  });
+
+  test("none is fine, and a bad entry is refused", () => {
+    assert.deepEqual(parseEvidenceRefs(undefined), { ok: true, refs: [] });
+    assert.ok(!parseEvidenceRefs([{ channelId: "x", messageId: "y" }]).ok);
+    assert.ok(!parseEvidenceRefs("nope").ok);
+  });
+
+  test("limits how many can be attached", () => {
+    const many = Array.from({ length: 11 }, (_, i) => ({ channelId: "123456789012345678", messageId: String(223456789012345678n + BigInt(i)) }));
+    assert.ok(!parseEvidenceRefs(many).ok);
+  });
+
+  test("reads a pasted message link", () => {
+    assert.deepEqual(evidenceRefFromLink("https://discord.com/channels/1558837695382425641/1558837695973695550/1559010743503036480"), {
+      channelId: "1558837695973695550",
+      messageId: "1559010743503036480",
+    });
+    assert.equal(evidenceRefFromLink("https://example.com/channels/1/2/3"), null);
+    assert.equal(evidenceRefFromLink("not a link"), null);
+  });
+
+  test("damaged stored evidence reads as none", () => {
+    assert.deepEqual(readEvidence("{oops"), []);
+    assert.deepEqual(readEvidence(null), []);
+    assert.deepEqual(readEvidence("[]"), []);
+  });
+});

@@ -1,3 +1,4 @@
+import { readEvidence } from "@tier0/core";
 import type { InfractionRow } from "./dto.js";
 
 /**
@@ -42,6 +43,7 @@ export const EXPORT_HEADER = [
   "removed at",
   "removed by",
   "removal reason",
+  "evidence links",
 ] as const;
 
 export type CaseState = "active" | "expired" | "removed";
@@ -77,6 +79,8 @@ export function exportRow(row: InfractionRow, now: Date, name: NameLookup): (str
     // No separate id column for this one, so fall back to the id rather than leave it unattributed.
     row.voidedAt && row.voidedBy ? (name(row.voidedBy) ?? row.voidedBy) : null,
     row.voidedAt ? row.voidReason : null,
+    // Links only. The copies of the messages stay in the dashboard, since they can hold anything a member typed.
+    readEvidence(row.evidence).map((message) => message.url).join(" ") || null,
   ];
 }
 

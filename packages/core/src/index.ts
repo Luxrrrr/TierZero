@@ -45,6 +45,10 @@ export type { CommandSummary, ModuleSummary, RowDescription } from "./registry.j
 export { resolveList, resolveRow, schemaPathOf } from "./rows.js";
 
 export {
+  EVIDENCE_LIMITS,
+  evidenceRefFromLink,
+  parseEvidenceRefs,
+  readEvidence,
   AUDIT_KIND_LABEL,
   ROLE_LABEL,
   STAFF_ROLES,
@@ -61,6 +65,9 @@ export {
 } from "./mod.js";
 export type {
   ActionContextDto,
+  EvidenceAttachment,
+  EvidenceMessage,
+  EvidenceRef,
   ActionRequest,
   ActionResult,
   Actor,

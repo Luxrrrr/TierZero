@@ -1,5 +1,6 @@
 "use client";
 
+import { EvidenceList } from "../../../../../../components/mod/Evidence";
 import { forwardRef, useEffect, useId, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import type { AuditDto, InfractionDto, NoteDto, StaffRole, UserRef } from "@tier0/core";
@@ -267,6 +268,7 @@ export function InfractionRow({
           <p className="pf-text pf-reason" data-clamp={expanded ? undefined : "true"} data-removed={removed ? "true" : undefined}>
             {infraction.reason ?? <span className="pf-dim">No reason given.</span>}
           </p>
+          <EvidenceList evidence={infraction.evidence} full={expanded} />
           <p className="pf-byline">
             <Avatar user={infraction.moderator} size="sm" />
             <span>

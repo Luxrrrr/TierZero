@@ -1,5 +1,5 @@
 import { canTakeAction, isInForce, isModActionKind } from "@tier0/core";
-import type { ActionContextDto, ActionRequest, ActionResult, InfractionDto, ModActionKind, StaffRole } from "@tier0/core";
+import type { ActionContextDto, ActionRequest, ActionResult, InfractionDto, ModActionKind, StaffRole, EvidenceRef } from "@tier0/core";
 
 /**
  * The rules behind the profile's "Take action" control: which actions a role
@@ -355,6 +355,8 @@ export interface ActionDraft {
   duration: DurationDraft;
   banLength: BanLength;
   deleteDays: number;
+  /** Messages from the member to keep with the action. */
+  evidence?: EvidenceRef[];
 }
 
 export interface DraftErrors {
@@ -403,6 +405,8 @@ export function buildRequest(draft: ActionDraft, context: ActionContextDto): Dra
       reason: text === "" ? null : text,
       durationMs,
       deleteDays: draft.kind === "ban" ? clampDeleteDays(draft.deleteDays) : null,
+      // Only an action that puts something on the record has anything to attach it to.
+      ...(draft.evidence && draft.evidence.length > 0 && draft.kind !== "timeout-clear" && draft.kind !== "unban" ? { evidence: draft.evidence } : {}),
     },
   };
 }

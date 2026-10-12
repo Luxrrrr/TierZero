@@ -273,6 +273,23 @@ describe("buildRequest", () => {
     });
   });
 
+  test("attached messages are sent, and left out when there are none", () => {
+    const ref = { channelId: "123456789012345678", messageId: "223456789012345678" };
+    const withEvidence = buildRequest(draft({ reason: "spam", evidence: [ref] }), context);
+    assert.ok(withEvidence.ok);
+    assert.deepEqual(withEvidence.request.evidence, [ref]);
+    const without = buildRequest(draft({ reason: "spam", evidence: [] }), context);
+    assert.ok(without.ok);
+    assert.equal("evidence" in without.request, false);
+  });
+
+  test("an action that adds nothing to the record carries no messages", () => {
+    const ref = { channelId: "123456789012345678", messageId: "223456789012345678" };
+    const result = buildRequest(draft({ kind: "unban", reason: "ok", evidence: [ref] }), context);
+    assert.ok(result.ok);
+    assert.equal("evidence" in result.request, false);
+  });
+
   test("an empty optional reason is sent as null", () => {
     const result = buildRequest(draft({}), context);
     assert.ok(result.ok);

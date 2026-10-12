@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useId, useRef, useState } from "react";
-import type { ModActionKind } from "@tier0/core";
+import type { EvidenceRef, ModActionKind } from "@tier0/core";
 import { AlertIcon, ShieldIcon } from "../../../../../../components/Icons";
 import { StateIcon } from "../../../../../../components/mod/ModUi";
 import {
@@ -44,6 +44,7 @@ import {
 import { failureText } from "./a11y";
 import { DialogShell, type FocusFallback } from "./Dialog";
 import { CharacterCount } from "./CharacterCount";
+import { EvidencePicker } from "./EvidencePicker";
 import { formatDateTime } from "./timeline";
 import type { ContextState } from "./useActionContext";
 
@@ -239,6 +240,7 @@ function ActionForm({
   const what = kind === "timeout" ? "timeout" : "ban";
 
   const [reason, setReason] = useState("");
+  const [evidence, setEvidence] = useState<EvidenceRef[]>([]);
   const [duration, setDuration] = useState<DurationDraft>(() =>
     initialDuration(presets, kind === "timeout" ? context.defaultTimeoutMs : BAN_START_MS, Math.max(ceiling, 1)),
   );
@@ -291,7 +293,7 @@ function ActionForm({
 
   async function submit() {
     if (submitting.current) return;
-    const check = buildRequest({ kind, reason, duration, banLength, deleteDays }, context);
+    const check = buildRequest({ kind, reason, duration, banLength, deleteDays, evidence }, context);
     if (!check.ok) {
       setErrors(check.errors);
       focusFirstInvalid(check.errors);
@@ -476,6 +478,10 @@ function ActionForm({
               : "Saved on their record for staff to read."}
           </p>
         </div>
+
+        {kind !== "timeout-clear" && kind !== "unban" ? (
+          <EvidencePicker guildId={guildId} userId={userId} selected={evidence} onChange={setEvidence} disabled={busy} />
+        ) : null}
 
         <div className="ta-summary" data-tone={heavy ? "danger" : undefined} id={descriptionId}>
           <p className="ta-summary-title">{heavy ? "Before you confirm" : "What happens"}</p>

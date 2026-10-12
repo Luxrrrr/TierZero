@@ -2,6 +2,7 @@ import {
   canTakeAction,
   isModActionKind,
   type ActionContextDto,
+  parseEvidenceRefs,
   type ActionResult,
   type Actor,
   type ModActionKind,
@@ -17,9 +18,12 @@ import {
   fetchMemberOrNull,
   performAction,
   readRequestFields,
+  recentFor,
+  resolveEvidence,
   type ModerationSettings,
 } from "@tier0/module-moderation";
 import type { GuildState } from "../../runtime/guild-state.js";
+import { writeAudit } from "./audit.js";
 import { infractionDto, isSnowflake } from "./dto.js";
 import { createLimiter } from "./limiter.js";
 import { refOf, resolveUsers } from "./names.js";
@@ -54,6 +58,17 @@ const PERMISSION_TEXT: Record<ModActionKind, string> = {
 };
 
 type ModerationContext = ModuleContext<ModerationSettings>;
+
+const ACTION_PAST: Record<ModActionKind, string> = {
+  warn: "Warned",
+  timeout: "Timed out",
+  "timeout-clear": "Cleared the timeout of",
+  kick: "Kicked",
+  ban: "Banned",
+  unban: "Unbanned",
+};
+
+const clipReason = (text: string): string => (text.length > 120 ? `${text.slice(0, 117)}...` : text);
 
 /** The moderation module's context for this server, or null when its stored settings fail validation. */
 async function moderationContext(ctx: ModCtx, state: GuildState): Promise<ModerationContext | null> {
@@ -116,10 +131,15 @@ export async function takeAction(
 
   try {
     const fields = readRequestFields(action, payload);
+    const evidenceRefs = parseEvidenceRefs(payload.evidence);
+    if (!evidenceRefs.ok) return refuse(400, evidenceRefs.error);
     const [actorMember, names] = await Promise.all([
       fetchMemberOrNull(ctx.guild, actor.userId),
       resolveUsers(ctx.client, ctx.guild, [targetId]),
     ]);
+
+    // Copied before the action runs: a ban can delete the member's recent messages.
+    const evidence = await resolveEvidence(ctx.guild, targetId, evidenceRefs.refs, { member: actorMember, isOwner: actor.role === "owner" });
 
     const { record, notes } = await performAction(moduleCtx, {
       action,
@@ -132,6 +152,7 @@ export async function takeAction(
       actorMember,
       actorIsInstanceOwner: actor.role === "owner",
       origin: "dashboard",
+      evidence,
     });
 
     const refs = await resolveUsers(ctx.client, ctx.guild, [targetId, actor.userId]);
@@ -143,9 +164,29 @@ export async function takeAction(
     };
     const infraction = infractionDto({ ...record, voidedAt: null, voidedBy: null, voidReason: null }, ref);
     const body: ActionResult = { caseNumber: record.caseNumber, infraction, notes };
+
+    // The case is the record of the action, and the audit trail is the record of who took it from the
+    // dashboard, owner included. A failure to write the entry must not undo an action that already happened.
+    await writeAudit({
+      guildId: ctx.guild.id,
+      actor,
+      kind: "action.take",
+      summary: `${ACTION_PAST[action]} ${refOf(refs, targetId).name ?? targetId} (case #${record.caseNumber})${record.reason ? `: ${clipReason(record.reason)}` : ""}`,
+      targetUserId: targetId,
+      infractionId: record.id,
+      after: { action, caseNumber: record.caseNumber, reason: record.reason },
+    }).catch((error: unknown) => console.error("mod: could not write the audit entry for an action:", error));
+
     return ok(body);
   } catch (error) {
     if (error instanceof ActionRefused) return refusal(error);
     throw error;
   }
+}
+
+/** GET /mod/members/:id/messages -> what the bot remembers of the member's latest messages that the viewer can read. */
+export async function memberMessages(ctx: ModCtx, userId: string, viewerId: string | null, isOwner: boolean): Promise<Reply> {
+  if (!isSnowflake(userId)) return refuse(400, "That is not a valid Discord user id.");
+  const member = viewerId ? await fetchMemberOrNull(ctx.guild, viewerId) : null;
+  return ok({ messages: recentFor(ctx.guild, userId, { member, isOwner }) });
 }

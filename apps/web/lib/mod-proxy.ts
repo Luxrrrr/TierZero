@@ -42,6 +42,12 @@ export function modProxyPermission(method: string, path: readonly string[]): Mod
     return path.length === 3 && method === "POST" ? "action.warn" : null;
   }
 
+  // What a member said lately, to attach to an action. Any staff member may read it, and the bot narrows
+  // it to the channels that person can read themselves.
+  if (first === "members" && path[2] === "messages") {
+    return path.length === 3 && (method === "GET" || method === "HEAD") ? "action.warn" : null;
+  }
+
   // The export is the whole action log in one file, which is an
   // admin's view of the server rather than a moderator's.
   if (first === "infractions" && second === "export") return "audit.view";
@@ -94,4 +100,9 @@ export function utf8Length(text: string): number {
 /** A read of one member's whole record, the only reply that carries audit entries and note text. */
 export function isProfileRead(method: string, path: string[]): boolean {
   return method === "GET" && path.length === 2 && path[0] === "members";
+}
+
+/** A read of the messages the bot remembers for one member. */
+export function isMemberMessagesRead(method: string, path: readonly string[]): boolean {
+  return method === "GET" && path.length === 3 && path[0] === "members" && path[2] === "messages";
 }
