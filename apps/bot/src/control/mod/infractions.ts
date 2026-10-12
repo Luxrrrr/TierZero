@@ -22,6 +22,7 @@ const TIMEOUT_ACTIONS = ["timeout", "automod-timeout"];
 async function present(ctx: ModCtx, row: InfractionRow): Promise<InfractionDto> {
   const ids = [row.userId, row.moderatorId];
   if (row.voidedBy) ids.push(row.voidedBy);
+  if (row.editedBy) ids.push(row.editedBy);
   const refs = await resolveUsers(ctx.client, ctx.guild, ids);
   return infractionDto(row, (id) => refOf(refs, id));
 }
@@ -51,6 +52,7 @@ export async function listInfractions(ctx: ModCtx, query: URLSearchParams): Prom
     ids.add(row.userId);
     ids.add(row.moderatorId);
     if (row.voidedBy) ids.add(row.voidedBy);
+    if (row.editedBy) ids.add(row.editedBy);
   }
   const refs = await resolveUsers(ctx.client, ctx.guild, ids);
   const body: Page<InfractionDto> = {
@@ -81,6 +83,7 @@ export async function exportInfractions(ctx: ModCtx, query: URLSearchParams): Pr
     ids.add(row.userId);
     ids.add(row.moderatorId);
     if (row.voidedBy) ids.add(row.voidedBy);
+    if (row.editedBy) ids.add(row.editedBy);
   }
   const refs = await resolveUsers(ctx.client, ctx.guild, ids, { maxFetches: EXPORT_NAME_LOOKUPS });
 

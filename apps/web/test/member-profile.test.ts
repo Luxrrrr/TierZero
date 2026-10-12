@@ -631,3 +631,18 @@ describe("applyPending", () => {
     assert.equal(pendingKey({ type: "infraction.restore", id: 1 }), "i1");
   });
 });
+
+describe("editing a case", () => {
+  const mine = infraction(1, "warn", "2026-01-01T00:00:00Z");
+  const removed = infraction(2, "warn", "2026-01-01T00:00:00Z", { voided: { at: "2026-01-02T00:00:00Z", by: user("300"), reason: "x" } });
+
+  test("a moderator may edit their own case but not another moderator's", () => {
+    assert.equal(infractionControls("mod", mine, "200").edit, true);
+    assert.equal(infractionControls("mod", mine, "999").edit, false);
+  });
+
+  test("an admin may edit any case, and a removed case cannot be edited", () => {
+    assert.equal(infractionControls("admin", mine, "999").edit, true);
+    assert.equal(infractionControls("admin", removed, "999").edit, false);
+  });
+});

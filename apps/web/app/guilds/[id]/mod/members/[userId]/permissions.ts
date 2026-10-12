@@ -1,4 +1,4 @@
-import { can, canDeleteNote, canEditNote, canVoidAction } from "@tier0/core";
+import { can, canDeleteNote, canEditInfraction, canEditNote, canVoidAction } from "@tier0/core";
 import type { InfractionDto, NoteDto, StaffRole } from "@tier0/core";
 
 /**
@@ -7,14 +7,17 @@ import type { InfractionDto, NoteDto, StaffRole } from "@tier0/core";
  */
 
 export interface InfractionControls {
+  /** Change the reason. */
+  edit: boolean;
   remove: boolean;
   restore: boolean;
   purge: boolean;
 }
 
-export function infractionControls(role: StaffRole, infraction: InfractionDto): InfractionControls {
+export function infractionControls(role: StaffRole, infraction: InfractionDto, viewerId = ""): InfractionControls {
   const removed = infraction.voided !== null;
   return {
+    edit: !removed && canEditInfraction(role, infraction.moderator.userId === viewerId),
     remove: !removed && canVoidAction(role, infraction.action),
     restore: removed && can(role, "infraction.restore"),
     purge: can(role, "purge"),

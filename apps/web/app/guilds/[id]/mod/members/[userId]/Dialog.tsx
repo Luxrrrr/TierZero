@@ -140,7 +140,7 @@ interface ActionDialogProps {
   confirmLabel: string;
   danger?: boolean;
   /** When set, the dialog asks for a written reason and will not continue without one. */
-  reason?: { label: string; placeholder?: string; maxLength: number; hint?: string };
+  reason?: { label: string; placeholder?: string; maxLength: number; hint?: string; initial?: string };
   /** Asks for the word "purge" before the confirm button wakes up. */
   typedConfirm?: boolean;
   /** True closes the dialog; a string is shown inside it as the reason the change failed. */
@@ -161,7 +161,7 @@ export function ActionDialog({
   onClose,
   fallbackFocus,
 }: ActionDialogProps) {
-  const [text, setText] = useState("");
+  const [text, setText] = useState(reason?.initial ?? "");
   const [word, setWord] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);

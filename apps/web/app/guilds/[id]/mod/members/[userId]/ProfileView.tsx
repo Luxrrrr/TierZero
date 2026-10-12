@@ -196,6 +196,7 @@ export function ProfileView({ guildId, profile, role, viewerId, viewerName, rend
         <InfractionRow
           key={item.key}
           {...frame}
+          guildId={guildId}
           infraction={item.infraction}
           role={role}
           viewer={viewer}

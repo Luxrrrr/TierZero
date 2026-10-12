@@ -88,6 +88,13 @@ describe("infractionDto", () => {
     assert.equal(dto.moderator.name, "name-300000000000000001");
   });
 
+  test("is not edited until the reason changes, then says who and when", () => {
+    assert.equal(infractionDto(infraction(), ref).edited, null);
+    const dto = infractionDto(infraction({ editedAt: new Date("2026-10-02T00:00:00Z"), editedBy: "400000000000000001" }), ref);
+    assert.equal(dto.edited?.at, "2026-10-02T00:00:00.000Z");
+    assert.equal(dto.edited?.by.userId, "400000000000000001");
+  });
+
   test("describes who removed a case and why", () => {
     const dto = infractionDto(
       infraction({ voidedAt: new Date("2026-10-03T00:00:00Z"), voidedBy: "400000000000000001", voidReason: "mistake" }),
@@ -348,5 +355,20 @@ describe("member filter and notes sort", () => {
     assert.deepEqual(ids(sortMembers(entries, "notes")), ["d", "b", "c", "a"]);
     const tied = [entry("x", { noteCount: 2 }, 1), entry("y", { noteCount: 2 }, 9)];
     assert.deepEqual(ids(sortMembers(tied, "notes")), ["y", "x"]);
+  });
+});
+
+describe("infractionSnapshot", () => {
+  test("lists the attached messages, and which version of an edited one is flagged", async () => {
+    const { infractionSnapshot } = await import("../dist/control/mod/dto.js");
+    const evidence = JSON.stringify([
+      { id: "1", url: "https://discord.com/channels/1/2/1", versions: [{ content: "a", at: "x" }, { content: "b", at: "y" }], flagged: 0 },
+      { id: "2", url: "https://discord.com/channels/1/2/2" },
+    ]);
+    const snapshot = infractionSnapshot(infraction({ evidence }));
+    assert.deepEqual(snapshot.attachedMessages, [
+      "https://discord.com/channels/1/2/1 (warned for version 1 of 2)",
+      "https://discord.com/channels/1/2/2",
+    ]);
   });
 });

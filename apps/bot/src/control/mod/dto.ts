@@ -21,6 +21,8 @@ export interface InfractionRow {
   voidedBy: string | null;
   voidReason: string | null;
   evidence: string;
+  editedAt?: Date | null;
+  editedBy?: string | null;
 }
 
 export interface NoteRow {
@@ -70,6 +72,7 @@ export function infractionDto(row: InfractionRow, ref: RefLookup): InfractionDto
       ? { at: row.voidedAt.toISOString(), by: ref(row.voidedBy ?? ""), reason: row.voidReason }
       : null,
     evidence: readEvidence(row.evidence),
+    edited: row.editedAt ? { at: row.editedAt.toISOString(), by: ref(row.editedBy ?? "") } : null,
   };
 }
 
@@ -105,6 +108,10 @@ export function infractionSnapshot(row: InfractionRow): Record<string, unknown> 
     voidedAt: row.voidedAt ? row.voidedAt.toISOString() : null,
     voidedBy: row.voidedBy,
     voidReason: row.voidReason,
+    // What is attached, in words, so an edit to it reads as a change in the history.
+    attachedMessages: readEvidence(row.evidence).map((m) =>
+      m.versions && m.flagged !== undefined ? `${m.url} (warned for version ${m.flagged + 1} of ${m.versions.length})` : m.url,
+    ),
   };
 }
 

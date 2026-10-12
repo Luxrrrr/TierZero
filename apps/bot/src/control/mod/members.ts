@@ -130,6 +130,7 @@ export async function memberProfile(ctx: ModCtx, userId: string): Promise<Reply>
   for (const row of infractions) {
     ids.add(row.moderatorId);
     if (row.voidedBy) ids.add(row.voidedBy);
+    if (row.editedBy) ids.add(row.editedBy);
   }
   for (const row of notes) {
     ids.add(row.authorId);

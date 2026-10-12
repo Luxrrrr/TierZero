@@ -1,6 +1,7 @@
 "use client";
 
 import { EvidenceList } from "../../../../../../components/mod/Evidence";
+import Link from "next/link";
 import { forwardRef, useEffect, useId, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import type { AuditDto, InfractionDto, NoteDto, StaffRole, UserRef } from "@tier0/core";
@@ -10,6 +11,7 @@ import { ActionBadge, Avatar, StateIcon, actionLabel, displayName, timeAgo } fro
 import { changeSubject, controlName, infractionSubject, noteSubject, toggleName } from "./a11y";
 import { CharacterCount } from "./CharacterCount";
 import { ActionDialog } from "./Dialog";
+import { EditCaseDialog } from "./EditCaseDialog";
 import { canRestoreOwnRemoval, infractionControls, noteControls } from "./permissions";
 import { diffSnapshots, expiryState, formatDate, formatDateTime, historyFor, type SnapshotDiff } from "./timeline";
 import type { Run } from "./useModAction";
@@ -190,9 +192,10 @@ const Toggle = forwardRef<
 
 /* Infraction ---------------------------------------------------------------- */
 
-type EntryDialog = "remove" | "restore" | "purge" | null;
+type EntryDialog = "edit" | "remove" | "restore" | "purge" | null;
 
 export function InfractionRow({
+  guildId,
   infraction,
   role,
   viewer,
@@ -205,6 +208,7 @@ export function InfractionRow({
   onToggle,
   pending,
 }: RowFrame & {
+  guildId: string;
   infraction: InfractionDto;
   role: StaffRole;
   viewer: UserRef;
@@ -217,14 +221,14 @@ export function InfractionRow({
   const [dialog, setDialog] = useState<EntryDialog>(null);
   const panelId = useId();
   const toggleRef = useRef<HTMLButtonElement>(null);
-  const controls = infractionControls(role, infraction);
+  const controls = infractionControls(role, infraction, viewer.userId);
   const removed = infraction.voided;
   const expiry = expiryState(infraction, now);
   const entries = showHistory ? historyFor(audit, { infractionId: infraction.id }) : [];
   const base = `infractions/${infraction.id}`;
   const label = `case ${infraction.caseNumber}`;
   const subject = infractionSubject(actionLabel(infraction.action), infraction.caseNumber);
-  const hasControls = controls.remove || controls.restore || controls.purge;
+  const hasControls = controls.edit || controls.remove || controls.restore || controls.purge;
   const fallbackFocus = () => toggleRef.current ?? timelineHeading();
 
   return (
@@ -268,6 +272,13 @@ export function InfractionRow({
           <p className="pf-text pf-reason" data-clamp={expanded ? undefined : "true"} data-removed={removed ? "true" : undefined}>
             {infraction.reason ?? <span className="pf-dim">No reason given.</span>}
           </p>
+          {infraction.edited ? (
+            <p className="pf-edit-tip" title="A staff member changed this case after it was made. Staff activity has what it said before.">
+              <PencilIcon />
+              <span className="case-edited">Case edited by staff</span> <strong>{displayName(infraction.edited.by)}</strong>{" "}
+              <Stamp iso={infraction.edited.at} now={now} timeZone={timeZone} />
+            </p>
+          ) : null}
           <EvidenceList evidence={infraction.evidence} full={expanded} />
           <p className="pf-byline">
             <Avatar user={infraction.moderator} size="sm" />
@@ -299,8 +310,22 @@ export function InfractionRow({
               {removed ? <Detail label="Removed">{formatDateTime(removed.at, timeZone)}</Detail> : null}
             </dl>
             <History entries={entries} timeZone={timeZone} />
+            {showHistory ? (
+              <p className="pf-activity-link">
+                <Link href={`/guilds/${guildId}/mod/audit?infractionId=${infraction.id}`}>See everything staff did on this case</Link>
+              </p>
+            ) : null}
             {hasControls ? (
               <div className="pf-acts" role="group" aria-label={`Actions for ${subject}`}>
+                {controls.edit ? (
+                  <QuietButton
+                    icon={<PencilIcon />}
+                    label="Edit case"
+                    name={controlName("Edit case", subject)}
+                    onClick={() => setDialog("edit")}
+                    busy={pending}
+                  />
+                ) : null}
                 {controls.remove ? (
                   <QuietButton
                     icon={<TrashIcon />}
@@ -334,6 +359,18 @@ export function InfractionRow({
           </div>
         ) : null}
       </article>
+
+      {dialog === "edit" ? (
+        <EditCaseDialog
+          guildId={guildId}
+          infraction={infraction}
+          now={now}
+          timeZone={timeZone}
+          run={run}
+          fallbackFocus={fallbackFocus}
+          onClose={() => setDialog(null)}
+        />
+      ) : null}
 
       {dialog === "remove" ? (
         <ActionDialog
