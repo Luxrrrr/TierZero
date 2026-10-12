@@ -28,7 +28,9 @@ services:
       DATABASE_URL: file:/data/tier0.db
       CONTROL_API_URL: http://bot:8081
     ports:
-      - "8080:8080"
+      # The host side is configurable for a machine where 8080 is taken. The
+      # container always listens on 8080.
+      - "${DASHBOARD_PORT:-8080}:8080"
     volumes:
       - ./data:/data
     depends_on: [bot]

@@ -40,7 +40,20 @@ export type AuthzResult = AuthzOk | AuthzFail;
 // is that a permission revoked on Discord keeps working here for up to a
 // minute, or up to 15 while Discord itself is failing; authz-cache.ts has the
 // rules.
-const authorizedCache = new Map<string, AuthzCacheEntry>();
+//
+// Next.js bundles pages and route handlers separately, and each bundle gets its
+// own copy of this module. State kept in a plain module variable is therefore
+// per bundle, and a page and the API routes it calls would each ask Discord for
+// themselves. The state lives on globalThis so every bundle shares one.
+const shared = globalThis as typeof globalThis & {
+  __tier0Authz?: {
+    cache: Map<string, AuthzCacheEntry>;
+    lookups: Map<string, Promise<Set<string>>>;
+  };
+};
+const state = (shared.__tier0Authz ??= { cache: new Map(), lookups: new Map() });
+const authorizedCache = state.cache;
+const lookups = state.lookups;
 
 interface DiscordAccountTokens {
   accessToken: string;
@@ -95,15 +108,13 @@ export async function getAuthorizedGuildIds(userId: string): Promise<Set<string>
   return lookup;
 }
 
-const lookups = new Map<string, Promise<Set<string>>>();
-
 async function lookUpGuildIds(userId: string, cached: AuthzCacheEntry | undefined): Promise<Set<string>> {
   try {
     const tokens = await getValidAccessToken(userId);
     if (!tokens) return new Set();
 
     const [userGuilds, botGuilds] = await Promise.all([
-      fetchUserGuilds(tokens.accessToken),
+      fetchUserGuildsOnce(tokens.accessToken),
       listBotGuilds(),
     ]);
 
@@ -154,9 +165,31 @@ export async function requireGuildAccess(guildId: string): Promise<AuthzResult> 
     return {
       ok: false,
       status: 403,
-      message: "You need the Manage Server permission there, and the bot needs to be in it.",
+      message:
+        "Your Discord account needs the Manage Server permission on that server (a Discord permission set on roles under Server Settings), and the bot has to be a member of it.",
     };
   }
 
   return { ok: true, userId: session.user.id, discordUserId: account?.providerAccountId ?? "" };
+}
+
+/** Discord asks for waits this short when two requests land in the same second. */
+const SHORT_RETRY_MAX_MS = 3_000;
+
+/**
+ * Asks Discord for the user's servers, and once more if it says to try again in
+ * a moment. A one-second limit is a burst, not a ban, and failing the whole
+ * lookup for it would lock the person out for the length of the failure cache.
+ */
+async function fetchUserGuildsOnce(accessToken: string) {
+  try {
+    return await fetchUserGuilds(accessToken);
+  } catch (error) {
+    const wait = (error as { retryAfterMs?: unknown } | null)?.retryAfterMs;
+    if ((error as { status?: unknown } | null)?.status !== 429 || typeof wait !== "number" || wait > SHORT_RETRY_MAX_MS) {
+      throw error;
+    }
+    await new Promise((resolve) => setTimeout(resolve, wait + 100));
+    return fetchUserGuilds(accessToken);
+  }
 }

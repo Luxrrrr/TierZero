@@ -27,6 +27,8 @@ export class DiscordApiError extends Error {
   constructor(
     public readonly status: number,
     message: string,
+    /** How long Discord asked callers to wait, when it said. */
+    public readonly retryAfterMs?: number,
   ) {
     super(message);
     this.name = "DiscordApiError";
@@ -41,7 +43,12 @@ export async function fetchUserGuilds(accessToken: string): Promise<DiscordUserG
     cache: "no-store",
   });
   if (!res.ok) {
-    throw new DiscordApiError(res.status, `Discord rejected the guild list request (${res.status})`);
+    const seconds = Number(res.headers.get("retry-after"));
+    throw new DiscordApiError(
+      res.status,
+      `Discord rejected the guild list request (${res.status})`,
+      Number.isFinite(seconds) && seconds > 0 ? seconds * 1000 : undefined,
+    );
   }
   return (await res.json()) as DiscordUserGuild[];
 }

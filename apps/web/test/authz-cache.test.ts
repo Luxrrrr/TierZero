@@ -1,6 +1,7 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 import {
+  AUTHZ_BACKOFF_MAX_MS,
   AUTHZ_FAILURE_MS,
   AUTHZ_FRESH_MS,
   AUTHZ_STALE_MAX_MS,
@@ -85,5 +86,21 @@ describe("isTransientFailure", () => {
 
   test("treats a refusal as final, so a revoked grant cannot be kept alive", () => {
     for (const status of [400, 401, 403, 404]) assert.equal(isTransientFailure({ status }), false, String(status));
+  });
+});
+
+describe("recordAuthzFailure with a retry time", () => {
+  test("waits as long as Discord asked, up to a cap", () => {
+    const now = 1_000_000;
+    const asked = recordAuthzFailure(undefined, { retryAfterMs: 120_000 }, now);
+    assert.equal(asked.failure?.until, now + 120_000);
+    const huge = recordAuthzFailure(undefined, { retryAfterMs: 3_600_000 }, now);
+    assert.equal(huge.failure?.until, now + AUTHZ_BACKOFF_MAX_MS);
+  });
+
+  test("never waits less than the normal failure window", () => {
+    const now = 1_000_000;
+    const short = recordAuthzFailure(undefined, { retryAfterMs: 1000 }, now);
+    assert.equal(short.failure?.until, now + AUTHZ_FAILURE_MS);
   });
 });

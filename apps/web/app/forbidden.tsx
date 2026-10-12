@@ -7,9 +7,11 @@ export default function Forbidden() {
     <AuthCard mark={<AlertIcon />} alert>
       <h1 className="auth-title">You do not have access to this page</h1>
       <p className="auth-text">
-        Configuring a server needs the Manage Server permission on it, and the
-        moderation tools need the owner of this installation to have added you
-        as staff. The bot also has to be a member of the server.
+        Changing a server's settings needs the Manage Server permission on it.
+        That is a Discord permission, set on roles under Server Settings, and
+        the server's owner always has it. The moderation tools need the owner
+        of this installation to have added you as staff. The bot also has to be
+        a member of the server.
       </p>
       <p className="auth-text">
         If you moderate this server, open Moderation from your list of servers.

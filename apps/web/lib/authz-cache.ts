@@ -7,12 +7,16 @@
  * not send Discord a burst of requests it has already refused. While Discord
  * is failing, the last good answer keeps being used for at most 15 minutes;
  * after that the failure stands and access is denied, because a grant that
- * nobody can confirm should not last indefinitely.
+ * nobody can confirm should not last indefinitely. When Discord says how long
+ * to wait, the failure is remembered for that long instead, since asking again
+ * sooner only extends the limit.
  */
 
 export const AUTHZ_FRESH_MS = 60_000;
 export const AUTHZ_FAILURE_MS = 30_000;
 export const AUTHZ_STALE_MAX_MS = 15 * 60_000;
+/** Longest we will stay quiet because Discord asked us to, whatever it said. */
+export const AUTHZ_BACKOFF_MAX_MS = 5 * 60_000;
 
 export interface AuthzCacheEntry {
   good: { guildIds: Set<string>; at: number } | null;
@@ -50,7 +54,10 @@ export function recordAuthzSuccess(guildIds: Set<string>, now: number): AuthzCac
 }
 
 export function recordAuthzFailure(entry: AuthzCacheEntry | undefined, error: unknown, now: number): AuthzCacheEntry {
-  return { good: entry?.good ?? null, failure: { error, until: now + AUTHZ_FAILURE_MS } };
+  const asked = (error as { retryAfterMs?: unknown } | null)?.retryAfterMs;
+  const wait =
+    typeof asked === "number" ? Math.min(Math.max(asked, AUTHZ_FAILURE_MS), AUTHZ_BACKOFF_MAX_MS) : AUTHZ_FAILURE_MS;
+  return { good: entry?.good ?? null, failure: { error, until: now + wait } };
 }
 
 /** What a caller gets right after a failed fetch: the stale answer if one is young enough, else the error. */
