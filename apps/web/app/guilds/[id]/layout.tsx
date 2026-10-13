@@ -8,6 +8,7 @@ import { toModuleViews } from "../../../lib/module-view";
 import { AppShell } from "../../../components/AppShell";
 import { Sidebar } from "../../../components/Sidebar";
 import { BotOffline } from "../../../components/BotOffline";
+import { captureDashboardUrl } from "../../../lib/dashboard-url-sync";
 import { signOutAction } from "../actions";
 
 /**
@@ -37,6 +38,8 @@ export default async function GuildLayout({
       if (access.status === 401) redirect("/login");
       forbidden();
     }
+
+    await captureDashboardUrl(session?.user?.id);
 
     // The switcher lists only servers this user can open, never every server
     // the bot is in.

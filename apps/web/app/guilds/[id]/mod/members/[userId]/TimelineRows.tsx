@@ -13,7 +13,7 @@ import { CharacterCount } from "./CharacterCount";
 import { ActionDialog } from "./Dialog";
 import { EditCaseDialog } from "./EditCaseDialog";
 import { canRestoreOwnRemoval, infractionControls, noteControls } from "./permissions";
-import { diffSnapshots, expiryState, formatDate, formatDateTime, historyFor, type SnapshotDiff } from "./timeline";
+import { caseDomId, diffSnapshots, expiryState, formatDate, formatDateTime, historyFor, type SnapshotDiff } from "./timeline";
 import type { Run } from "./useModAction";
 
 const REASON_LIMIT = 500;
@@ -76,6 +76,8 @@ interface RowFrame {
   expanded: boolean;
   onToggle(): void;
   pending: boolean;
+  /** Set for a few seconds on the case a link pointed at. */
+  spotlight?: boolean;
 }
 
 /* History ------------------------------------------------------------------- */
@@ -207,6 +209,7 @@ export function InfractionRow({
   expanded,
   onToggle,
   pending,
+  spotlight,
 }: RowFrame & {
   guildId: string;
   infraction: InfractionDto;
@@ -233,8 +236,10 @@ export function InfractionRow({
 
   return (
     <li
+      id={caseDomId(infraction.caseNumber)}
       className="pf-event"
       data-kind="infraction"
+      data-spotlight={spotlight ? "true" : undefined}
       data-removed={removed ? "true" : undefined}
       data-pending={pending ? "true" : undefined}
       aria-busy={pending || undefined}

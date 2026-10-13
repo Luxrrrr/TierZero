@@ -608,3 +608,43 @@ export function applyPending(profile: MemberProfile, ops: PendingOp[]): MemberPr
   }
   return { ...profile, notes, infractions };
 }
+
+/* Case links ------------------------------------------------------------------ */
+
+/** The DOM id of a case row, so `#case-196` lands on it. */
+export function caseDomId(caseNumber: number): string {
+  return `case-${caseNumber}`;
+}
+
+/** A case number from `?case=`: digits only, so `12abc`, `-3`, `1e3` and `0` are all ignored. */
+export function parseCaseParam(raw: string | string[] | undefined): number | null {
+  const value = Array.isArray(raw) ? raw[0] : raw;
+  if (value === undefined || !/^\d{1,9}$/.test(value)) return null;
+  const parsed = Number(value);
+  return parsed > 0 ? parsed : null;
+}
+
+/** A case number from a `#case-196` fragment. */
+export function parseCaseHash(hash: string): number | null {
+  const match = /^#case-(\d{1,9})$/.exec(hash);
+  return match ? parseCaseParam(match[1]) : null;
+}
+
+/**
+ * The row a case link points at, or null when the viewer's timeline has no
+ * such case. The timeline is already limited to what this viewer may see, and
+ * it is never paged, so a case that is not in it is not on the record they
+ * can read. Audit rows and notes never match.
+ */
+export function findCaseItem(items: TimelineItem[], caseNumber: number | null): TimelineItem | null {
+  if (caseNumber === null) return null;
+  return items.find((item) => item.kind === "infraction" && item.infraction.caseNumber === caseNumber) ?? null;
+}
+
+/**
+ * The filter to use so a linked case is on screen: the current one if it
+ * already shows the case, otherwise All.
+ */
+export function filterShowing(items: TimelineItem[], filter: TimelineFilter, target: TimelineItem): TimelineFilter {
+  return filterTimeline(items, filter).some((item) => item.key === target.key) ? filter : "all";
+}

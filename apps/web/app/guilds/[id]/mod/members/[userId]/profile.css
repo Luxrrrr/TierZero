@@ -485,6 +485,25 @@ html:has(.pf) {
   border-color: var(--border-strong);
 }
 
+.pf-event[data-spotlight="true"] .pf-card {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.pf-case-notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin: 0;
+  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-4);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
 .pf-event[data-removed="true"] .pf-card {
   background: transparent;
   border-style: dashed;

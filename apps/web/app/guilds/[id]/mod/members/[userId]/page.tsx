@@ -11,6 +11,7 @@ import { redactProfile } from "../../../../../../lib/profile-redact";
 import { AlertIcon, UserIcon } from "../../../../../../components/Icons";
 import { displayName } from "../../../../../../components/mod/ModUi";
 import { ProfileView, RetryButton } from "./ProfileView";
+import { parseCaseParam } from "./timeline";
 import "../../../../../mod.css";
 import "./profile.css";
 
@@ -45,10 +46,13 @@ async function loadProfile(guildId: string, userId: string): Promise<{ profile: 
 
 export default async function MemberProfilePage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string; userId: string }>;
+  searchParams: Promise<{ case?: string | string[] }>;
 }) {
   const { id, userId } = await params;
+  const focusCase = parseCaseParam((await searchParams).case);
 
   const access = await requireStaff(id);
   if (!access.ok) {
@@ -98,6 +102,7 @@ export default async function MemberProfilePage({
       viewerId={access.discordUserId}
       viewerName={access.name}
       canConfigure={canConfigure}
+      focusCase={focusCase}
     />
   );
 }
