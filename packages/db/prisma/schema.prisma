@@ -79,6 +79,8 @@ model Instance {
   ownerId       String?
   setupAt       DateTime?
   schemaVersion Int       @default(1)
+  /// Whether the dashboard may ask GitHub for new releases and the roadmap. The owner can turn it off.
+  updateChecks  Boolean   @default(true)
 }
 
 /// Auth.js's own tables, laid out the way @auth/prisma-adapter expects them.

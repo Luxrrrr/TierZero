@@ -195,6 +195,10 @@ git pull
 docker compose up -d --build
 ```
 
+The dashboard's **Updates** page tells you which version you are on and whether a newer one is out, and lists what changed. It does not apply the update for you, since that needs a terminal on this machine. The sidebar shows a dot on Updates when a new version is available.
+
+The page asks GitHub for the latest releases and the roadmap, and sends nothing about your install. The owner can turn that off on the Updates page, and then the dashboard makes no request to GitHub at all.
+
 Database migrations run when the dashboard starts. They only go forward, so copy `data/tier0.db` before updating. To go back to an older version, restore the copy.
 
 ## Backups

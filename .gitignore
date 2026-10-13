@@ -12,5 +12,6 @@ apps/web/next-env.d.ts
 .env.local
 
 data/
+!apps/web/data/
 *.db
 *.db-journal

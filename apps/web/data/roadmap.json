@@ -1,0 +1,29 @@
+{
+  "items": [
+    {
+      "title": "Better tickets",
+      "description": "Improve the ticket system.",
+      "status": "planned"
+    },
+    {
+      "title": "Better leveling",
+      "description": "Improve the leveling system.",
+      "status": "planned"
+    },
+    {
+      "title": "Full customization everywhere",
+      "description": "Move the simpler, older systems onto the message editor, so any message or command response can be fully customized.",
+      "status": "planned"
+    },
+    {
+      "title": "Postgres support",
+      "description": "An option for larger installs that outgrow SQLite.",
+      "status": "planned"
+    },
+    {
+      "title": "Update from the dashboard",
+      "description": "Apply a new version without a terminal.",
+      "status": "planned"
+    }
+  ]
+}

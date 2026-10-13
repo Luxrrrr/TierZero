@@ -6783,3 +6783,339 @@ html:not([data-theme="light"]):not([data-theme="dark"]) .theme-toggle [data-them
 html[data-sidebar="collapsed"] .nav-more-body[hidden] {
   display: block;
 }
+
+/* Updates, changelog and Coming soon ------------------------------------------ */
+
+.nav-coming {
+  width: 100%;
+  border: 0;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+}
+
+.nav-count {
+  margin-left: auto;
+  padding: 0 6px;
+  border-radius: var(--radius-full);
+  background: var(--surface-hover);
+  font-size: var(--text-2xs);
+  color: var(--text-secondary);
+}
+
+.coming-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-6) var(--space-7, 1.75rem) var(--space-5);
+}
+
+.coming-title {
+  margin: 0;
+  font-size: var(--text-xl);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.coming-sub {
+  margin: var(--space-1) 0 0;
+  color: var(--text-secondary);
+}
+
+.coming-foot {
+  padding: var(--space-4) var(--space-7, 1.75rem);
+  border-top: 1px solid var(--border);
+  font-size: var(--text-sm);
+}
+
+.coming-foot a {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  color: var(--text-secondary);
+  text-decoration: none;
+}
+
+.coming-foot a:hover {
+  color: var(--accent-text);
+}
+
+.coming-foot svg {
+  width: 14px;
+  height: 14px;
+}
+
+.roadmap-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.roadmap-list li {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-3) 0;
+}
+
+.coming-sheet .roadmap-list li {
+  gap: var(--space-4);
+  padding: var(--space-5) var(--space-7, 1.75rem);
+  border-top: 1px solid var(--border);
+}
+
+.coming-sheet .roadmap-mark {
+  margin-top: 5px;
+}
+
+.coming-sheet .roadmap-title {
+  font-size: var(--text-md, 1rem);
+  font-weight: 600;
+}
+
+.coming-sheet .roadmap-desc {
+  margin-top: var(--space-1);
+  font-size: var(--text-sm);
+  line-height: 1.55;
+}
+
+.roadmap-mark {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  margin-top: 3px;
+  border: 1.5px solid var(--text-tertiary);
+  border-radius: 50%;
+  box-sizing: border-box;
+}
+
+.roadmap-mark[data-status="in-progress"] {
+  border-color: var(--accent);
+  background: conic-gradient(var(--accent) 0 50%, transparent 0);
+}
+
+.roadmap-mark[data-status="considering"] {
+  border-style: dashed;
+}
+
+.roadmap-text {
+  min-width: 0;
+}
+
+.roadmap-title {
+  margin: 0;
+  font-size: var(--text-sm);
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.roadmap-desc {
+  margin: 2px 0 0;
+  font-size: var(--text-xs);
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
+.roadmap-empty {
+  margin: var(--space-3) 0;
+  font-size: var(--text-sm);
+  color: var(--text-tertiary);
+}
+
+.update-card {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  padding: var(--space-5);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-raised);
+}
+
+.update-card[data-state="new"] {
+  border-color: var(--accent-ring);
+  background: var(--accent-soft);
+}
+
+.update-version {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+
+.update-title {
+  margin: var(--space-1) 0;
+  font-size: var(--text-xl, 1.4rem);
+}
+
+.update-sub {
+  margin: 0 0 var(--space-3);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+
+.update-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-3);
+  max-width: 22rem;
+}
+
+.update-toggle {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  width: 100%;
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--border);
+}
+
+.update-toggle-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.update-toggle-title {
+  font-size: var(--text-sm);
+  font-weight: 500;
+}
+
+.update-toggle-hint {
+  font-size: var(--text-xs);
+  line-height: 1.5;
+  color: var(--text-tertiary);
+}
+
+.update-section {
+  margin-top: var(--space-6);
+}
+
+.update-section h2 {
+  margin: 0 0 var(--space-3);
+  font-size: var(--text-lg, 1.125rem);
+}
+
+.update-text {
+  margin: var(--space-2) 0;
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+
+.copy-command {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin: var(--space-2) 0;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-2, var(--bg-raised));
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+}
+
+.release-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.release {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-raised);
+}
+
+.release[data-new="true"] {
+  border-color: var(--accent-ring);
+}
+
+.release summary {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  cursor: pointer;
+}
+
+.release-tag {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  color: var(--accent-text);
+}
+
+.release-name {
+  font-weight: 500;
+}
+
+.release-date {
+  margin-left: auto;
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+}
+
+.release-badge {
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-full);
+  background: var(--surface-hover);
+  font-size: var(--text-2xs);
+  color: var(--text-secondary);
+}
+
+.release-badge[data-kind="new"] {
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+
+.release-badge[data-kind="current"] {
+  background: var(--info-soft);
+  color: var(--info, var(--accent-text));
+}
+
+.release-notes {
+  padding: 0 var(--space-4) var(--space-3);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+
+.release-notes h4 {
+  margin: var(--space-4) 0 var(--space-1);
+  font-size: var(--text-sm);
+  color: var(--text);
+}
+
+.release-notes ul {
+  margin: var(--space-1) 0;
+  padding-left: var(--space-5);
+  list-style: disc;
+}
+
+.release-notes li {
+  margin: var(--space-1) 0;
+}
+
+.release-notes code {
+  padding: 0 4px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-hover);
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+}
+
+.release-link {
+  margin: 0;
+  padding: 0 var(--space-4) var(--space-3);
+  font-size: var(--text-xs);
+}

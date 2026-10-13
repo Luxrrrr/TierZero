@@ -64,3 +64,9 @@ DATABASE_URL=file:/absolute/path/to/data/tier0.db node packages/db/scripts/seed-
 ```
 
 You see the data as the install's owner. The fake staff can't be signed in as, and people show as "User" plus the last four digits of their ID, since Discord doesn't know them.
+
+## Releasing
+
+The dashboard's Updates page compares the root `package.json` version with the latest GitHub release, so bump `version` there in the commit that is released, then tag and publish the release with the same number. The release notes are what the Updates page shows as the changelog, so write them for the people who run the bot.
+
+The roadmap on that page is `apps/web/data/roadmap.json`. Installs read it from the `main` branch on GitHub, so editing it changes what everyone sees without a release. Each item needs a `title` and a `status` of `in-progress`, `planned` or `considering`, with an optional `description`.

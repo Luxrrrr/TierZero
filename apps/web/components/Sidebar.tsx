@@ -9,10 +9,13 @@ import { initialsOf } from "../lib/discord-cdn";
 import { GuildSwitcher } from "./GuildSwitcher";
 import { Logo } from "./Logo";
 import { NavLink } from "./NavLink";
+import { ComingSoon } from "./ComingSoon";
 import { NavMore } from "./NavMore";
+import { RoadmapList } from "./RoadmapList";
+import { peekUpdateStatus } from "../lib/updates";
 import { SidebarToggle } from "./SidebarToggle";
 import { ThemeToggle } from "./ThemeToggle";
-import { CommandsIcon, HelpIcon, MessagesIcon, OverviewIcon, SetupIcon, ShieldIcon, SignOutIcon } from "./Icons";
+import { CommandsIcon, DownloadIcon, HelpIcon, MessagesIcon, OverviewIcon, SetupIcon, ShieldIcon, SignOutIcon } from "./Icons";
 
 interface Props {
   user: { name: string | null | undefined; image: string | null | undefined };
@@ -27,7 +30,7 @@ interface Props {
   signOutAction(): Promise<void>;
 }
 
-export function Sidebar({
+export async function Sidebar({
   user,
   guilds,
   currentGuild,
@@ -37,6 +40,8 @@ export function Sidebar({
   signOutAction,
 }: Props) {
   const groups = canManage ? navGroups(modules) : [];
+  // Never waits for GitHub: a stale answer starts a refresh and the next page sees it.
+  const updates = await peekUpdateStatus();
 
   // Moderation is where hosted settings live, so a manager who is not listed
   // staff still gets the entry, pointing at the one tab they can open.
@@ -139,6 +144,19 @@ export function Sidebar({
         )}
 
         <div className="nav-group nav-group-end">
+          <NavLink href={currentGuild ? `/guilds/${currentGuild.id}/updates` : "/updates"} tip={updates.updateAvailable ? "Updates: a new version is out" : "Updates"}>
+            <DownloadIcon />
+            <span className="nav-link-text">Updates</span>
+            {updates.updateAvailable ? (
+              <>
+                <span className="dot nav-flag" data-status="attention" aria-hidden="true" />
+                <span className="visually-hidden">, a new version is available</span>
+              </>
+            ) : null}
+          </NavLink>
+          <ComingSoon count={updates.roadmap.length} changelogHref={currentGuild ? `/guilds/${currentGuild.id}/updates` : "/updates"}>
+            <RoadmapList items={updates.roadmap} />
+          </ComingSoon>
           <NavLink href="/help" tip="Help">
             <HelpIcon />
             <span className="nav-link-text">Help</span>

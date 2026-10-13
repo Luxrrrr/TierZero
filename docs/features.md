@@ -40,6 +40,7 @@ Every feature is a module, and a module that's off does nothing. Most settings a
 - [News and patch notes](#news-and-patch-notes)
 - [Leveling](#leveling)
 - [Utility](#utility)
+- [Updates, changelog and what's coming](#updates-changelog-and-whats-coming)
 
 ## Quick setup
 
@@ -362,6 +363,14 @@ Feed addresses are fetched from the public internet only. An address pointing at
 XP for taking part, levels, and roles at thresholds you choose. Each message is worth a random amount inside a range you set, so nobody can count to the next level, and a cooldown means a burst of one-word messages isn't worth more than a conversation. Role rewards either stack or replace. A role can carry an XP multiplier, and when a member has several, only the biggest applies. Rank and the leaderboard are plain embeds. There's no generated image card, since drawing one adds a native dependency that makes every install harder.
 
 ![Leveling settings](images/leveling-settings.png)
+
+## Updates, changelog and what's coming
+
+The **Updates** link in the sidebar opens a page with the version you are running, whether a newer release is out, the steps to update, and the changelog of every release with its notes. When a new version is out, the sidebar link gets a dot.
+
+**Coming soon**, just above Help, opens the roadmap in a window from any page: what is planned. It is the same list as on the Updates page.
+
+The dashboard does not apply updates itself, because that would give it the power to replace itself and run commands on your machine. The page shows the two commands to run instead. It reads releases and the roadmap from GitHub and sends nothing about your install. The owner can switch checking off on the Updates page, and then nothing is requested, and the roadmap shown is the one that came with your version.
 
 ## Utility
 
