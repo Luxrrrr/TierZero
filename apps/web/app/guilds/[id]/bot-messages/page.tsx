@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { forbidden, redirect } from "next/navigation";
 import type { Metadata } from "next";
 import { requireGuildAccess } from "../../../../lib/authz";
@@ -72,7 +71,6 @@ export default async function BotMessagesPage({
       })),
     }));
 
-    const system = modules.find((module) => module.alwaysOn);
 
     return (
       <>
@@ -81,16 +79,9 @@ export default async function BotMessagesPage({
             <p className="page-eyebrow">Server</p>
             <h1 className="page-title">Bot messages</h1>
             <p className="page-summary">
-              The messages the bot sends, in one place. Pick a feature, or search for a message.
+              The messages the bot sends, in one place. Pick a feature, or search for a message. Short text such as button labels and names is under Labels and text on each feature's settings page.
             </p>
           </div>
-          {system ? (
-            <div className="page-actions">
-              <Link className="btn btn-secondary btn-sm" href={moduleHref(id, system)}>
-                Labels and bot text
-              </Link>
-            </div>
-          ) : null}
         </div>
 
         <BotMessagesBrowser guildId={id} modules={browsable} initialFeature={typeof feature === "string" ? feature : null} />
