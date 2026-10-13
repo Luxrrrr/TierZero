@@ -1,11 +1,20 @@
-import type { EvidenceMessage, MessageVersion } from "@tier0/core";
+import type { DeletionSource, EvidenceMessage, MessageVersion } from "@tier0/core";
+import { deletedByLabel, deletedByTitle, noTextLabel } from "../../lib/deleted-by";
 import { When } from "./ModUi";
 
-/** The red label on a message that was deleted, with when if the bot saw it happen. */
-export function DeletedTag({ deletedAt }: { deletedAt?: string | null }) {
+/** The red label on a message that was deleted, saying who when the log could tell, and when if the bot saw it happen. */
+export function DeletedTag({
+  deletedAt,
+  deletedBy,
+  deletedByName,
+}: {
+  deletedAt?: string | null;
+  deletedBy?: DeletionSource | null;
+  deletedByName?: string | null;
+}) {
   return (
-    <span className="ev-tag" data-kind="deleted" title="The member, or someone else, deleted this message in Discord">
-      Message deleted
+    <span className="ev-tag" data-kind="deleted" title={deletedByTitle(deletedBy)}>
+      {deletedByLabel(deletedBy, deletedByName)}
       {deletedAt ? (
         <>
           {" "}
@@ -71,7 +80,7 @@ export function EvidenceList({ evidence, full = false }: { evidence: EvidenceMes
           <div className="ev-head">
             <span className="ev-channel">#{message.channelName || "unknown"}</span>
             <When iso={message.createdAt} />
-            {message.deleted ? <DeletedTag deletedAt={message.deletedAt} /> : null}
+            {message.deleted ? <DeletedTag deletedAt={message.deletedAt} deletedBy={message.deletedBy} deletedByName={message.deletedByName} /> : null}
             <a className="ev-open" href={message.url} target="_blank" rel="noreferrer">
               Open in Discord
             </a>
@@ -88,7 +97,7 @@ export function EvidenceList({ evidence, full = false }: { evidence: EvidenceMes
               {shown}
             </p>
           ) : (
-            <p className="ev-content ev-dim">No text.</p>
+            <p className="ev-content ev-dim">{noTextLabel(message.attachments.length, "")}</p>
           )}
           <Versions versions={message.versions} flagged={flagged} />
           {message.attachments.length > 0 ? (

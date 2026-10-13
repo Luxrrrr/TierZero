@@ -5,7 +5,7 @@ import Link from "next/link";
 import { forwardRef, useEffect, useId, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import type { AuditDto, InfractionDto, NoteDto, StaffRole, UserRef } from "@tier0/core";
-import { ROLE_LABEL } from "@tier0/core";
+import { actorRoleWord } from "@tier0/core";
 import { BanIcon, ChevronDownIcon, HistoryIcon, NoteIcon, PencilIcon, TrashIcon, UndoIcon } from "../../../../../../components/Icons";
 import { ActionBadge, Avatar, StateIcon, actionLabel, displayName, timeAgo } from "../../../../../../components/mod/ModUi";
 import { changeSubject, controlName, infractionSubject, noteSubject, toggleName } from "./a11y";
@@ -148,7 +148,7 @@ function History({ entries, timeZone }: { entries: AuditDto[]; timeZone: string 
           <li key={entry.id} className="pf-history-item">
             <p className="pf-history-line">
               <strong>{entry.actor.name}</strong>
-              <span className="pf-dim"> {ROLE_LABEL[entry.actor.role].toLowerCase()}</span>
+              {actorRoleWord(entry.actor.role) ? <span className="pf-dim"> {actorRoleWord(entry.actor.role)}</span> : null}
               <span> {entry.label.charAt(0).toLowerCase() + entry.label.slice(1)}</span>
               <span className="pf-dim"> · </span>
               <time dateTime={entry.at} suppressHydrationWarning>
@@ -851,7 +851,7 @@ export function AuditRow({
               Staff activity
             </span>{" "}
             <span className="pf-strong">{entry.actor.name}</span>
-            <span className="pf-dim"> {ROLE_LABEL[entry.actor.role].toLowerCase()} · </span>
+            <span className="pf-dim">{actorRoleWord(entry.actor.role) ? ` ${actorRoleWord(entry.actor.role)}` : ""} · </span>
             {text}
           </span>
           <span className="pf-card-end">
@@ -864,7 +864,8 @@ export function AuditRow({
             <dl className="pf-facts">
               <Detail label="When">{formatDateTime(entry.at, timeZone)}</Detail>
               <Detail label="By">
-                {entry.actor.name}, {ROLE_LABEL[entry.actor.role].toLowerCase()}
+                {entry.actor.name}
+                {actorRoleWord(entry.actor.role) ? `, ${actorRoleWord(entry.actor.role)}` : ""}
               </Detail>
             </dl>
             <DiffView diff={diff} timeZone={timeZone} />

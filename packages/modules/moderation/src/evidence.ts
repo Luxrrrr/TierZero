@@ -1,7 +1,7 @@
 import { PermissionFlagsBits, type Guild, type GuildMember, type Message } from "discord.js";
 import { EVIDENCE_LIMITS, type EvidenceMessage, type EvidenceRef, type MessageVersion } from "@tier0/core";
 import { ActionRefused } from "./action-rules.js";
-import { LOG_LIMITS, evidenceFromLogged, loadLogged, versionsOf, type LoggedRow } from "@tier0/module-serverlog";
+import { LOG_LIMITS, deletedByOf, evidenceFromLogged, loadLogged, versionsOf, type LoggedRow } from "@tier0/module-serverlog";
 import { recentMessages, type RecentMessage } from "./recent-messages.js";
 
 /** Who is attaching, which decides which channels' messages they may see. */
@@ -114,6 +114,7 @@ export function evidenceForTrip(input: TripEvidenceInput): EvidenceMessage {
     url: link(input.guildId, message.channelId, message.id),
     deleted: input.deleted,
     deletedAt: input.deleted ? (logged?.deletedAt ?? now).toISOString() : null,
+    ...(input.deleted && logged ? deletedByOf(logged) : {}),
     ...(kept.length > 1 ? { versions: kept, ...(input.isEdit ? { flagged: kept.length - 1 } : {}) } : {}),
   };
 }

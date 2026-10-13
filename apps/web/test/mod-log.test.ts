@@ -206,6 +206,16 @@ describe("parseAuditQuery", () => {
     assert.equal(parseAuditQuery({ kind: "bogus" }).kind, "");
   });
 
+  test("accepts automod as an actor, which is not a user id", () => {
+    assert.equal(parseAuditQuery({ actorId: "automod" }).actorId, "automod");
+    assert.equal(parseAuditQuery({ actorId: "moderator" }).actorId, "");
+  });
+
+  test("gives an automod case the colour of the plain action", () => {
+    assert.equal(auditVisual("action.take", null, { action: "automod-warn" }).tone, "warn");
+    assert.equal(auditVisual("action.take", null, { action: "ban" }).tone, "ban");
+  });
+
   test("accepts real calendar days only and puts a backwards range in order", () => {
     assert.equal(parseAuditQuery({ since: "2026-02-30" }).since, "");
     assert.equal(parseAuditQuery({ since: "yesterday" }).since, "");

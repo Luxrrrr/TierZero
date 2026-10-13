@@ -59,6 +59,10 @@ export {
   parseEvidenceRefs,
   readEvidence,
   AUDIT_KIND_LABEL,
+  AUTOMOD_ACTOR_NAME,
+  actorRoleWord,
+  auditActorRole,
+  isAutomodRole,
   ROLE_LABEL,
   STAFF_ROLES,
   can,
@@ -83,6 +87,7 @@ export type {
   MessageVersion,
   ActionRequest,
   ActionResult,
+  AuditActorRole,
   Actor,
   AuditDto,
   AuditKind,
@@ -183,3 +188,12 @@ export type {
   ServerLogEntryDto,
   ServerLogType,
 } from "./serverlog.js";
+
+export {
+  DELETION_NOTE_LIMIT,
+  DELETION_NOTE_TTL_MS,
+  clearDeletionNotes,
+  noteDeletion,
+  takeDeletionNote,
+} from "./deletion-notes.js";
+export type { DeletionNote, DeletionSource } from "./deletion-notes.js";

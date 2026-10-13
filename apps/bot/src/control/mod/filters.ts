@@ -156,7 +156,9 @@ export function auditWhere(guildId: string, query: URLSearchParams): Prisma.ModA
   const kind = query.get("kind");
   if (kind) where.kind = kind;
   const actorId = query.get("actorId");
-  if (actorId) where.actorId = actorId;
+  // "automod" stands for the bot, whose id the dashboard does not have to know.
+  if (actorId === "automod") where.actorRole = "automod";
+  else if (actorId) where.actorId = actorId;
   const targetUserId = query.get("targetUserId");
   if (targetUserId) where.targetUserId = targetUserId;
   // Everything staff did on one case: making it, editing it, removing and restoring it.

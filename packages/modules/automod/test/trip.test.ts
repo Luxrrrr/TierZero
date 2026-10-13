@@ -1,6 +1,6 @@
 import { test, describe, before, after } from "node:test";
 import assert from "node:assert/strict";
-import { readEvidence } from "@tier0/core";
+import { readEvidence, takeDeletionNote, clearDeletionNotes } from "@tier0/core";
 import { createTestDatabase } from "../../moderation/test/db-helper.ts";
 
 const db = createTestDatabase();
@@ -50,6 +50,7 @@ function setup(options: {
   const channel = { id: CHANNEL, name: "general", isTextBased: () => true, isDMBased: () => false, isThread: () => false };
   const member = {
     id: MEMBER,
+    displayName: "LuxTester",
     roles: { cache: new Map() },
     permissions: { has: () => false },
     moderatable: options.moderatable ?? true,
@@ -259,6 +260,100 @@ describe("a rule set to do several things", () => {
     const { row, sent } = await run({ actions: ["warn", "timeout"], timeoutFails: true });
     assert.equal(row.action, "automod-warn");
     assert.equal(NOTICE(sent)?.outcome, "that message tripped automod");
+  });
+});
+
+describe("the audit trail of an automod case", () => {
+  let next = 200;
+  const id = () => `1000000000000002${String(next++).padStart(2, "0")}`;
+
+  async function trip(options: Omit<Parameters<typeof setup>[0], "messageId">) {
+    const messageId = id();
+    const made = setup({ ...options, messageId });
+    await automod.events!.messageCreate!(made.message as never, made.ctx as never);
+    const row = await recordFor(messageId);
+    assert.ok(row);
+    const audit = await prisma.modAudit.findMany({ where: { infractionId: row.id } });
+    return { ...made, row, audit };
+  }
+
+  const cases: Array<[string, string[], string]> = [
+    ["warn", ["warn"], "Automod warned LuxTester (case #N): Used a banned word or phrase"],
+    ["delete", ["delete"], "Automod deleted a message from LuxTester (case #N): Used a banned word or phrase"],
+    ["timeout", ["timeout"], "Automod timed out LuxTester (case #N): Used a banned word or phrase"],
+    ["delete and warn", ["delete", "warn"], "Automod deleted a message from LuxTester and warned them (case #N): Used a banned word or phrase"],
+    ["delete and timeout", ["delete", "timeout"], "Automod deleted a message from LuxTester and timed them out (case #N): Used a banned word or phrase"],
+    ["warn and timeout", ["warn", "timeout"], "Automod warned LuxTester and timed them out (case #N): Used a banned word or phrase"],
+    ["all three", ["delete", "warn", "timeout"], "Automod deleted a message from LuxTester, warned them and timed them out (case #N): Used a banned word or phrase"],
+  ];
+
+  for (const [name, actions, expected] of cases) {
+    test(`${name} leaves one action entry on the case`, async () => {
+      const { row, audit } = await trip({ actions });
+      assert.equal(audit.length, 1);
+      const [entry] = audit;
+      assert.equal(entry!.kind, "action.take");
+      assert.equal(entry!.actorId, BOT);
+      assert.equal(entry!.actorName, "Automod");
+      assert.equal(entry!.actorRole, "automod");
+      assert.equal(entry!.targetUserId, MEMBER);
+      assert.equal(entry!.summary, expected.replace("#N", `#${row.caseNumber}`));
+      assert.deepEqual(JSON.parse(entry!.after!), {
+        action: row.action,
+        caseNumber: row.caseNumber,
+        reason: "Used a banned word or phrase",
+      });
+    });
+  }
+
+  test("never carries the matched words", async () => {
+    const { audit } = await trip({ actions: ["delete"] });
+    assert.ok(!audit[0]!.summary.includes("badword"));
+    assert.ok(!audit[0]!.after!.includes("badword"));
+  });
+
+  test("a refused delete is not claimed in the entry", async () => {
+    const original = console.error;
+    console.error = () => undefined;
+    try {
+      const { audit } = await trip({ actions: ["delete"], deleteFails: true });
+      assert.match(audit[0]!.summary, /^Automod warned LuxTester/);
+    } finally {
+      console.error = original;
+    }
+  });
+});
+
+describe("telling the server log about the delete", () => {
+  test("the deletion is noted before the delete call, and only for a delete that went through", async () => {
+    clearDeletionNotes();
+    const { ctx, message } = setup({ messageId: "100000000000000299", actions: ["delete"] });
+    let noteAtDelete: unknown = "not called";
+    message.delete = async () => {
+      noteAtDelete = takeDeletionNote("100000000000000299");
+    };
+    await automod.events!.messageCreate!(message as never, ctx as never);
+    assert.deepEqual(noteAtDelete, { by: "automod" });
+  });
+
+  test("a note is withdrawn when Discord refuses the delete", async () => {
+    clearDeletionNotes();
+    const { ctx, message } = setup({ messageId: "100000000000000298", actions: ["delete"], deleteFails: true });
+    const original = console.error;
+    console.error = () => undefined;
+    try {
+      await automod.events!.messageCreate!(message as never, ctx as never);
+    } finally {
+      console.error = original;
+    }
+    assert.equal(takeDeletionNote("100000000000000298"), null);
+  });
+
+  test("a rule that does not delete notes nothing", async () => {
+    clearDeletionNotes();
+    const { ctx, message } = setup({ messageId: "100000000000000297", actions: ["warn"] });
+    await automod.events!.messageCreate!(message as never, ctx as never);
+    assert.equal(takeDeletionNote("100000000000000297"), null);
   });
 });
 

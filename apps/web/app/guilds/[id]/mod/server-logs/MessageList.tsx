@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { EvidenceMessage, LoggedMessageDto } from "@tier0/core";
 import { EVIDENCE_LIMITS } from "@tier0/core";
+import { noTextLabel } from "../../../../../lib/deleted-by";
 import { saveAttach } from "../../../../../lib/attach-handoff";
 import { DeletedTag, Versions } from "../../../../../components/mod/Evidence";
 import { UserChip, When } from "../../../../../components/mod/ModUi";
@@ -18,6 +19,7 @@ const asEvidence = (message: LoggedMessageDto): EvidenceMessage => ({
   url: message.url,
   deleted: message.deletedAt !== null,
   deletedAt: message.deletedAt,
+  ...(message.deletedBy ? { deletedBy: message.deletedBy, deletedByName: message.deletedByName } : {}),
   ...(message.versions.length > 1 ? { versions: message.versions } : {}),
 });
 
@@ -86,7 +88,7 @@ export function MessageList({ guildId, items }: { guildId: string; items: Logged
                   <UserChip user={message.author} href={`/guilds/${guildId}/mod/members/${message.author.userId}`} />
                   <span className="ev-channel">#{message.channelName || "unknown"}</span>
                   <When iso={message.createdAt} />
-                  {deleted ? <DeletedTag deletedAt={message.deletedAt} /> : null}
+                  {deleted ? <DeletedTag deletedAt={message.deletedAt} deletedBy={message.deletedBy} deletedByName={message.deletedByName} /> : null}
                   {deleted ? null : (
                     <a className="ev-open" href={message.url} target="_blank" rel="noreferrer">
                       Open in Discord
@@ -96,7 +98,7 @@ export function MessageList({ guildId, items }: { guildId: string; items: Logged
                 {message.content !== "" ? (
                   <p className="ml-content">{message.content}</p>
                 ) : (
-                  <p className="ml-content ev-dim">{message.attachments.length > 0 ? "No text, only a file." : "No text."}</p>
+                  <p className="ml-content ev-dim">{noTextLabel(message.attachments.length, message.extras)}</p>
                 )}
                 {message.attachments.length > 0 ? (
                   <ul className="ev-files">

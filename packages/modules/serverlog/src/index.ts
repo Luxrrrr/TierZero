@@ -4,14 +4,18 @@ import { serverLogSettings } from "./settings.js";
 
 export {
   LOG_LIMITS,
+  deletedByOf,
   evidenceFromLogged,
   loadLogged,
   parseAttachments,
   purgeLog,
+  storedDecision,
   versionsOf,
   type LoggedRow,
 } from "./message-log.js";
 export { purgeEntries } from "./record.js";
+export { decideDeletion, deletedByPhrase, FRESH_MS, type AuditCandidate, type DeletionDecision } from "./deletion-source.js";
+export { extrasOf } from "./extras.js";
 export type { ServerLogSettings } from "./settings.js";
 
 export default defineModule({

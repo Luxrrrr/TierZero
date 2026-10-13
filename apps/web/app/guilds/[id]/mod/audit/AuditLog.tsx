@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Select } from "../../../../../components/form/Select";
 import { LogSwitch } from "../../../../../components/mod/LogSwitch";
-import type { AuditDto, Page, UserRef } from "@tier0/core";
+import { isAutomodRole, type AuditDto, type Page, type UserRef } from "@tier0/core";
 import { Avatar, Pager, RoleBadge, UserChip, When } from "../../../../../components/mod/ModUi";
 import { NoteIcon, PencilIcon, SearchIcon, TrashIcon, UndoIcon, UserIcon, HistoryIcon } from "../../../../../components/Icons";
 import { ExpandableRow } from "./ExpandableRow";
@@ -258,7 +258,7 @@ function AuditEntry({ guildId, entry }: { guildId: string; entry: AuditDto }) {
         <p className="audit-who">
           <Avatar user={actor} size={20} />
           <span className="audit-actor-name">{entry.actor.name}</span>
-          <RoleBadge role={entry.actor.role} />
+          {isAutomodRole(entry.actor.role) ? null : <RoleBadge role={entry.actor.role} />}
           <span className="audit-label">{entry.label.charAt(0).toLowerCase() + entry.label.slice(1)}</span>
         </p>
         {entry.summary ? <p className="audit-summary">{entry.summary}</p> : null}

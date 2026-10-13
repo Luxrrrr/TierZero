@@ -4,9 +4,9 @@ import {
   type Message,
   type PartialMessage,
 } from "discord.js";
-import { defineModule, type EvidenceMessage, type ModuleContext } from "@tier0/core";
+import { defineModule, noteDeletion, takeDeletionNote, type EvidenceMessage, type ModuleContext } from "@tier0/core";
 import { createInfraction } from "@tier0/db";
-import { evidenceForTrip, loggedCopyOf } from "@tier0/module-moderation";
+import { auditAutomodCase, evidenceForTrip, loggedCopyOf } from "@tier0/module-moderation";
 import { settings, type AutomodSettings } from "./settings.js";
 import type { EvaluationVerdict } from "./evaluator.js";
 import { carryOut, draftInfraction, judgeMessage, type Outcome } from "./handler.js";
@@ -102,7 +102,17 @@ async function applyVerdict(
   if (!rule || !actions) return;
 
   const outcome = await carryOut(actions, timeoutMs, {
-    deleteMessage: () => message.delete(),
+    deleteMessage: async () => {
+      // Said before the call, because the deletion event can reach the server log before the call returns.
+      noteDeletion(message.id, { by: "automod" });
+      try {
+        return await message.delete();
+      } catch (error) {
+        // Nothing was deleted by this, so the note must not be claimed by a later deletion.
+        takeDeletionNote(message.id);
+        throw error;
+      }
+    },
     timeoutMember: async (ms) => {
       // Discord would refuse an owner, an administrator or anyone above the bot
       // with the same error; asking first just saves the round trip.
@@ -150,6 +160,20 @@ async function recordInfraction(
       moderatorId: ctx.client.user?.id ?? "0",
       ...draft,
       evidence: JSON.stringify(evidence),
+    });
+    // Written here so every combination of actions leaves the same entry, and only when a case exists.
+    await auditAutomodCase({
+      guildId: ctx.guild.id,
+      botUserId: record.moderatorId,
+      targetUserId: member.id,
+      targetName: member.displayName,
+      infractionId: record.id,
+      caseNumber: record.caseNumber,
+      action: record.action,
+      deleted: outcome.deleted,
+      warned: outcome.warned,
+      timedOut: outcome.timedOut,
+      reason: verdict.reason ?? null,
     });
     return record.caseNumber;
   } catch (error) {

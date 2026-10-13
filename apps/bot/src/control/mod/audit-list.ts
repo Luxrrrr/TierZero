@@ -1,5 +1,5 @@
 import { prisma } from "@tier0/db";
-import { AUDIT_KIND_LABEL, isStaffRole, type AuditDto, type AuditKind, type Page, type UserRef } from "@tier0/core";
+import { AUDIT_KIND_LABEL, auditActorRole, type AuditDto, type AuditKind, type Page, type UserRef } from "@tier0/core";
 import { auditWhere } from "./filters.js";
 import { refOf, resolveUsers } from "./names.js";
 import { ok, pageOf, type ModCtx, type Reply } from "./types.js";
@@ -41,7 +41,7 @@ export async function toAuditDtos(
     actor: {
       userId: row.actorId,
       name: row.actorName,
-      role: isStaffRole(row.actorRole) ? row.actorRole : "mod",
+      role: auditActorRole(row.actorRole),
     },
     // An unknown kind (a row from a newer version) still renders, with its raw name as the label.
     kind: row.kind as AuditKind,

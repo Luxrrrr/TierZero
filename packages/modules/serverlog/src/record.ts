@@ -1,6 +1,7 @@
 import { AuditLogEvent, type Guild } from "discord.js";
 import { prisma } from "@tier0/db";
 import { serverLogCategoryOf, type ServerLogDetails } from "@tier0/core";
+import type { AuditCandidate } from "./deletion-source.js";
 import type { ServerLogSettings } from "./settings.js";
 
 /** Longest a summary or a before/after value is kept, so one huge message or topic cannot bloat the log. */
@@ -103,6 +104,36 @@ export async function executorOf(guild: Guild, type: AuditLogEvent, targetId: st
     return { id: found.executor.id, name: found.executor.displayName ?? found.executor.username };
   } catch {
     return null;
+  }
+}
+
+/**
+ * The server's recent message deletions, from its audit log, for working out who deleted a message.
+ * Without the View Audit Log permission, or when Discord fails, the answer is an empty list: the caller
+ * then falls back to the author, as Discord records nothing for someone deleting their own message.
+ */
+export async function recentMessageDeletions(guild: Guild): Promise<AuditCandidate[]> {
+  try {
+    await sleep(700);
+    const logs = await guild.fetchAuditLogs({ type: AuditLogEvent.MessageDelete, limit: 10 });
+    const now = Date.now();
+    return [...logs.entries.values()].flatMap((entry) => {
+      if (!entry.executor) return [];
+      const extra = entry.extra as { channel?: { id?: string } | null; count?: number } | null;
+      return [
+        {
+          id: entry.id,
+          executorId: entry.executor.id,
+          executorName: guild.members.cache.get(entry.executor.id)?.displayName ?? entry.executor.displayName ?? entry.executor.username,
+          targetId: entry.targetId,
+          channelId: extra?.channel?.id ?? null,
+          count: typeof extra?.count === "number" ? extra.count : 1,
+          ageMs: now - entry.createdTimestamp,
+        },
+      ];
+    });
+  } catch {
+    return [];
   }
 }
 

@@ -1,6 +1,6 @@
 import { forbidden, redirect } from "next/navigation";
 import type { Metadata } from "next";
-import { ROLE_LABEL, type AuditDto } from "@tier0/core";
+import { AUTOMOD_ACTOR_NAME, ROLE_LABEL, isAutomodRole, type AuditDto } from "@tier0/core";
 import { requireStaff } from "../../../../../lib/mod-access";
 import { ControlApiError } from "../../../../../lib/control-api";
 import { modAudit, modStaff } from "../../../../../lib/mod-api";
@@ -25,9 +25,12 @@ async function actorOptions(guildId: string, seen: AuditDto[]): Promise<ActorOpt
     if (!(error instanceof ControlApiError)) throw error;
   }
   for (const { actor } of seen) {
+    if (isAutomodRole(actor.role)) continue;
     if (!byId.has(actor.userId)) byId.set(actor.userId, { userId: actor.userId, name: actor.name, role: ROLE_LABEL[actor.role] });
   }
-  return [...byId.values()].sort((a, b) => (a.name ?? "").localeCompare(b.name ?? ""));
+  const people = [...byId.values()].sort((a, b) => (a.name ?? "").localeCompare(b.name ?? ""));
+  // The bot has no place in the staff list, so automod is offered under a fixed value the bot understands.
+  return [...people, { userId: "automod", name: AUTOMOD_ACTOR_NAME, role: "" }];
 }
 
 export default async function AuditPage({

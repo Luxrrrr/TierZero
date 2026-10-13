@@ -35,6 +35,13 @@ export {
 } from "./evidence.js";
 export { changeLength, type ChangeLengthInput } from "./edit-length.js";
 export { backfillEvidence, splitMessageLink } from "./backfill.js";
+export {
+  auditAutomodCase,
+  automodAuditSummary,
+  backfillAutomodAudit,
+  genericReasonOf,
+  type AutomodCaseFacts,
+} from "./automod-audit.js";
 export { RecentMessages, RECENT_LIMITS, recentMessages } from "./recent-messages.js";
 export type { InfractionRecord } from "./infractions.js";
 export type { ModerationSettings } from "./settings.js";

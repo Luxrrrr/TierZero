@@ -1,7 +1,9 @@
 import type { Message, PartialMessage } from "discord.js";
 import { prisma } from "@tier0/db";
 import type { Prisma } from "@tier0/db";
-import { EVIDENCE_LIMITS, type EvidenceAttachment, type EvidenceMessage, type MessageVersion } from "@tier0/core";
+import { EVIDENCE_LIMITS, type DeletionSource, type EvidenceAttachment, type EvidenceMessage, type MessageVersion } from "@tier0/core";
+import { extrasOf } from "./extras.js";
+import type { DeletionDecision } from "./deletion-source.js";
 import { guarded, pruneIfDue } from "./record.js";
 import type { ServerLogSettings } from "./settings.js";
 
@@ -47,6 +49,7 @@ export function logCreated(message: Message, settings: LogSettings): Promise<voi
         authorName: message.member?.displayName ?? message.author.username,
         content: clipText(message.content),
         attachments: JSON.stringify(attachmentsOf(message)),
+        extras: extrasOf(message),
         createdAt: new Date(message.createdTimestamp),
       },
       update: {},
@@ -109,6 +112,7 @@ export async function logEdited(before: Message | PartialMessage, after: Message
         authorName,
         content,
         attachments: JSON.stringify(attachmentsOf(after)),
+        extras: extrasOf(after),
         createdAt: sent,
         editedAt: now,
         ...(earlier !== null ? { edits: { create: { content: earlier, at: sent } } } : {}),
@@ -128,13 +132,19 @@ export interface SavedDeletion {
   attachments: EvidenceAttachment[];
   /** It was edited at least once before it was deleted. */
   edited: boolean;
+  /** Who deleted it, when that could be told. */
+  by: DeletionDecision | null;
 }
 
+/** Asked once for a message that is being marked deleted. Gets its author, or null when that is not known. */
+export type WhoDeleted = (author: { id: string; name: string } | null) => Promise<DeletionDecision | null>;
+
 /**
- * Marks the message deleted. One the log never saw is added only if Discord still had its text. Returns
- * what the message said, from the log or from Discord, or null when nothing is known about it.
+ * Marks the message deleted, with who deleted it when `whoDeleted` can say. One the log never saw is added
+ * only if Discord still had its text. Returns what the message said, from the log or from Discord, or null
+ * when nothing is known about it.
  */
-export async function logDeleted(message: Message | PartialMessage, settings: LogSettings): Promise<SavedDeletion | null> {
+export async function logDeleted(message: Message | PartialMessage, settings: LogSettings, whoDeleted?: WhoDeleted): Promise<SavedDeletion | null> {
   if (skipped(message, settings) || !message.guildId) return null;
   const guildId = message.guildId;
   let known: SavedDeletion | null = null;
@@ -142,7 +152,11 @@ export async function logDeleted(message: Message | PartialMessage, settings: Lo
     const now = new Date();
     const row = await prisma.loggedMessage.findUnique({ where: { guildId_messageId: { guildId, messageId: message.id } } });
     if (row) {
-      if (row.deletedAt === null) await prisma.loggedMessage.update({ where: { id: row.id }, data: { deletedAt: now } });
+      let by = storedDecision(row);
+      if (row.deletedAt === null) {
+        by = whoDeleted ? await whoDeleted({ id: row.authorId, name: row.authorName }) : null;
+        await prisma.loggedMessage.update({ where: { id: row.id }, data: { deletedAt: now, ...deletedColumns(by) } });
+      }
       known = {
         content: row.content,
         authorId: row.authorId,
@@ -150,21 +164,26 @@ export async function logDeleted(message: Message | PartialMessage, settings: Lo
         channelName: row.channelName,
         attachments: parseAttachments(row.attachments),
         edited: row.editedAt !== null,
+        by,
       };
       return;
     }
     if (message.content === null || !message.author || message.author.bot) return;
+    const authorName = message.author.username;
+    const by = whoDeleted ? await whoDeleted({ id: message.author.id, name: authorName }) : null;
     const created = {
       guildId,
       messageId: message.id,
       channelId: message.channelId,
       channelName: channelNameOf(message),
       authorId: message.author.id,
-      authorName: message.author.username,
+      authorName,
       content: clipText(message.content),
       attachments: JSON.stringify(attachmentsOf(message)),
+      extras: extrasOf(message),
       createdAt: new Date(message.createdTimestamp ?? now.getTime()),
       deletedAt: now,
+      ...deletedColumns(by),
     };
     await prisma.loggedMessage.upsert({ where: { guildId_messageId: { guildId, messageId: message.id } }, create: created, update: {} });
     known = {
@@ -174,9 +193,29 @@ export async function logDeleted(message: Message | PartialMessage, settings: Lo
       channelName: created.channelName,
       attachments: attachmentsOf(message),
       edited: false,
+      by,
     };
   });
   return known;
+}
+
+/** The columns that hold a deleter, empty when nobody could say. */
+export function deletedColumns(by: DeletionDecision | null): { deletedBy: string | null; deletedById: string | null; deletedByName: string | null } {
+  return { deletedBy: by?.by ?? null, deletedById: by?.byId ?? null, deletedByName: by?.byName ?? null };
+}
+
+const SOURCES = new Set(["author", "moderator", "automod", "bot"]);
+
+/** The deleter for an evidence copy, left out when the row has none. */
+export function deletedByOf(row: { deletedBy: string | null; deletedById: string | null; deletedByName: string | null }): { deletedBy?: DeletionSource; deletedByName?: string | null } {
+  const by = storedDecision(row);
+  return by ? { deletedBy: by.by, deletedByName: by.byName } : {};
+}
+
+/** The deleter a row already has, if it has one this version understands. */
+export function storedDecision(row: { deletedBy: string | null; deletedById: string | null; deletedByName: string | null }): DeletionDecision | null {
+  if (row.deletedBy === null || !SOURCES.has(row.deletedBy)) return null;
+  return { by: row.deletedBy as DeletionDecision["by"], byId: row.deletedById, byName: row.deletedByName };
 }
 
 /** Deletes every logged message of a server, and returns how many there were. */
@@ -234,6 +273,7 @@ export function evidenceFromLogged(row: LoggedRow, channelName: string, flagged?
     url: `https://discord.com/channels/${row.guildId}/${row.channelId}/${row.messageId}`,
     deleted: row.deletedAt !== null,
     deletedAt: row.deletedAt?.toISOString() ?? null,
+    ...deletedByOf(row),
     // Only an edited message has more than one. The latest is the default, so only another choice is recorded.
     ...(versions.length > 1
       ? {

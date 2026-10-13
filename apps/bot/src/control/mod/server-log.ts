@@ -12,7 +12,7 @@ import {
   type ServerLogEntryDto,
 } from "@tier0/core";
 import { fetchMemberOrNull, viewerCanRead } from "@tier0/module-moderation";
-import { loadLogged, parseAttachments, purgeEntries, versionsOf, type LoggedRow, type ServerLogSettings } from "@tier0/module-serverlog";
+import { loadLogged, parseAttachments, purgeEntries, storedDecision, versionsOf, type LoggedRow, type ServerLogSettings } from "@tier0/module-serverlog";
 import type { GuildState } from "../../runtime/guild-state.js";
 import { writeAudit } from "./audit.js";
 import { messageLogWhere } from "./message-filters.js";
@@ -179,6 +179,9 @@ function toMessageDto(row: LoggedRow, guildId: string, refs: Awaited<ReturnType<
     attachments: parseAttachments(row.attachments),
     createdAt: row.createdAt.toISOString(),
     deletedAt: row.deletedAt?.toISOString() ?? null,
+    deletedBy: storedDecision(row)?.by ?? null,
+    deletedByName: storedDecision(row)?.byName ?? null,
+    extras: row.extras,
     versions: versionsOf(row),
     url: `https://discord.com/channels/${guildId}/${row.channelId}/${row.messageId}`,
   };

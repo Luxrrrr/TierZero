@@ -1,6 +1,6 @@
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
-import { canEditInfraction, can, canDeleteNote, canEditNote, canTakeAction, canVoidAction, isInForce, isModActionKind, isStaffRole, permissionForAction } from "../dist/mod.js";
+import { actorRoleWord, auditActorRole, isAutomodRole, canEditInfraction, can, canDeleteNote, canEditNote, canTakeAction, canVoidAction, isInForce, isModActionKind, isStaffRole, permissionForAction } from "../dist/mod.js";
 
 describe("can", () => {
   test("lets every role look and add notes", () => {
@@ -237,5 +237,26 @@ describe("the server log catalog", () => {
     assert.equal(isServerLogType("member.join"), true);
     assert.equal(isServerLogType("member"), false);
     assert.equal(serverLogTypeLabel("custom.thing"), "custom.thing");
+  });
+});
+
+describe("audit actors", () => {
+  test("automod is a display role of its own and never a staff role", () => {
+    assert.equal(isStaffRole("automod"), false);
+    assert.equal(isAutomodRole("automod"), true);
+    assert.equal(isAutomodRole("admin"), false);
+  });
+
+  test("a stored role is read as itself, or as a moderator when unknown", () => {
+    assert.equal(auditActorRole("automod"), "automod");
+    assert.equal(auditActorRole("admin"), "admin");
+    assert.equal(auditActorRole("none"), "mod");
+    assert.equal(auditActorRole(""), "mod");
+  });
+
+  test("an actor's role word is empty for automod, which is its own name", () => {
+    assert.equal(actorRoleWord("mod"), "moderator");
+    assert.equal(actorRoleWord("owner"), "owner");
+    assert.equal(actorRoleWord("automod"), "");
   });
 });

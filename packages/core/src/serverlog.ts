@@ -1,3 +1,4 @@
+import type { DeletionSource } from "./deletion-notes.js";
 import type { UserRef } from "./mod.js";
 
 /**
@@ -131,6 +132,8 @@ export interface ServerLogDetails {
   messageId?: string;
   /** True when the message was edited before it was deleted, so there is more than one version to open. */
   edited?: boolean;
+  /** Who deleted the message, when that could be told. */
+  deletedBy?: DeletionSource;
 }
 
 export interface ServerLogEntryDto {

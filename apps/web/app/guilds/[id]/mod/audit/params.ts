@@ -67,7 +67,7 @@ export function parseAuditQuery(raw: RawParams): AuditQuery {
   if (since && until && since > until) [since, until] = [until, since];
   return {
     kind: AUDIT_KINDS.includes(kind as AuditKind) ? kind : "",
-    actorId: SNOWFLAKE.test(actorId) ? actorId : "",
+    actorId: SNOWFLAKE.test(actorId) || actorId === "automod" ? actorId : "",
     targetUserId: SNOWFLAKE.test(targetUserId) ? targetUserId : "",
     infractionId: /^\d{1,9}$/.test(first(raw.infractionId).trim()) ? Number(first(raw.infractionId).trim()) : 0,
     since,
@@ -184,7 +184,8 @@ export function auditVisual(kind: string, before: unknown, after: unknown): Audi
     const value = (snapshot as Record<string, unknown>).action;
     return typeof value === "string" ? value : null;
   };
-  const tone = actionOf(before) ?? actionOf(after) ?? "";
+  // Automod cases are filed as automod-warn and so on; they take the colour of the plain action.
+  const tone = (actionOf(before) ?? actionOf(after) ?? "").replace(/^automod-/, "");
   switch (kind) {
     case "note.add":
       return { icon: "note", tone: "note" };

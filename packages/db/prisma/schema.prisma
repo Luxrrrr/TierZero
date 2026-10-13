@@ -369,20 +369,27 @@ model MessageInteraction {
 /// pruned to the number of days that server chose. `content` is the current text;
 /// earlier text is in LoggedMessageEdit.
 model LoggedMessage {
-  id          Int       @id @default(autoincrement())
-  guildId     String
-  messageId   String
-  channelId   String
+  id            Int       @id @default(autoincrement())
+  guildId       String
+  messageId     String
+  channelId     String
   /// The channel's name when the message was sent, so the log still reads if it is renamed or deleted.
-  channelName String    @default("")
-  authorId    String
-  authorName  String    @default("")
-  content     String    @default("")
+  channelName   String    @default("")
+  authorId      String
+  authorName    String    @default("")
+  content       String    @default("")
   /// Names and links of attached files as JSON. The files themselves stay on Discord.
-  attachments String    @default("[]")
-  createdAt   DateTime
-  editedAt    DateTime?
-  deletedAt   DateTime?
+  attachments   String    @default("[]")
+  createdAt     DateTime
+  editedAt      DateTime?
+  deletedAt     DateTime?
+  /// "author", "moderator", "automod" or "bot". Null when nobody could say, or before this was recorded.
+  deletedBy     String?
+  deletedById   String?
+  /// The deleter's name when they deleted it, because a moderator may have left or renamed since.
+  deletedByName String?
+  /// What it carried besides text and files, such as "1 sticker", so a message without text can say what it was.
+  extras        String    @default("")
 
   guild Guild               @relation(fields: [guildId], references: [id], onDelete: Cascade)
   edits LoggedMessageEdit[]

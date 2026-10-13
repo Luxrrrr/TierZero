@@ -43,6 +43,10 @@ describe("auditWhere", () => {
     });
   });
 
+  test("the automod actor filter matches the role, not an id", () => {
+    assert.deepEqual(auditWhere(GUILD, params("actorId=automod")), { guildId: GUILD, actorRole: "automod" });
+  });
+
   test("until includes the whole of that day", () => {
     const where = auditWhere(GUILD, params("since=2026-10-01&until=2026-10-09"));
     assert.deepEqual(where.at, { gte: new Date("2026-10-01T00:00:00.000Z"), lt: new Date("2026-10-10T00:00:00.000Z") });

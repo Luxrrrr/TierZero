@@ -1,5 +1,6 @@
 import {
   ChannelType,
+  type Guild,
   type GuildChannel,
   type GuildMember,
   type PartialGuildMember,
@@ -7,12 +8,49 @@ import {
   type ThreadChannel,
   type User,
 } from "discord.js";
-import type { EventHandlers, ServerLogChange } from "@tier0/core";
-import { AuditLogEvent, clip, executorOf, record, type Who } from "./record.js";
+import { takeDeletionNote, type DeletionNote, type EventHandlers, type ServerLogChange } from "@tier0/core";
+import { AuditLogEvent, clip, executorOf, record, recentMessageDeletions, type Who } from "./record.js";
+import { decideDeletion, decisionFromNote, deletedByPhrase, recordClaim, type DeletionDecision } from "./deletion-source.js";
 import { logCreated, logDeleted, logEdited } from "./message-log.js";
 import type { ServerLogSettings } from "./settings.js";
 
 type Handlers = Partial<EventHandlers<ServerLogSettings>>;
+
+/** Messages a moderator deleted in one run are one line in Discord's audit log, so which deletions it has been given to is remembered. */
+const auditClaims = new Map<string, number>();
+
+async function whoDeleted(
+  guild: Guild,
+  input: { note: DeletionNote | null; author: { id: string; name: string } | null; channelId: string; botId: string; botName: string },
+): Promise<DeletionDecision | null> {
+  // The audit log is only read when no module said who it was, as it takes a moment and needs a permission.
+  const candidates = input.note || !input.author ? [] : await recentMessageDeletions(guild);
+  const decision = decideDeletion({
+    note: input.note,
+    candidates,
+    claims: auditClaims,
+    authorId: input.author?.id ?? null,
+    authorName: input.author?.name ?? "",
+    channelId: input.channelId,
+    botId: input.botId,
+    botName: input.botName,
+  });
+  if (decision.claimed) recordClaim(auditClaims, decision.claimed);
+  return decision.source;
+}
+
+function deletedByNote(by: DeletionDecision): string {
+  switch (by.by) {
+    case "author":
+      return "Deleted by its author";
+    case "automod":
+      return "Deleted by Automod";
+    case "bot":
+      return `Deleted by ${by.byName ?? "the bot"}`;
+    default:
+      return by.byName ? `Deleted by ${by.byName}, a moderator` : "Deleted by a moderator";
+  }
+}
 
 const whoUser = (user: Pick<User, "id" | "username" | "globalName">): Who => ({ id: user.id, name: user.globalName ?? user.username });
 const whoMember = (member: GuildMember | PartialGuildMember): Who => ({
@@ -165,19 +203,34 @@ export const serverLogEvents: Handlers = {
   },
 
   async messageDelete(message, ctx) {
-    const saved = await logDeleted(message, ctx.settings);
+    // Taken before anything is awaited, so the note cannot expire while the audit log is being read.
+    const note = takeDeletionNote(message.id);
+    const botId = ctx.client.user?.id ?? "";
+    const botName = ctx.guild.members.me?.displayName ?? ctx.client.user?.username ?? "the bot";
+    const saved = await logDeleted(message, ctx.settings, (author) =>
+      whoDeleted(ctx.guild, { note, author, channelId: message.channelId, botId, botName }),
+    );
+    // A message the log has no row for can still have been deleted by a module that said so.
+    const by = saved ? saved.by : note ? decisionFromNote(note, { botId, botName, authorId: null, authorName: "" }) : null;
+
     const channelName = saved?.channelName ?? ("name" in message.channel && typeof message.channel.name === "string" ? message.channel.name : "");
+    const phrase = deletedByPhrase(by);
     await record(ctx.guild, ctx.settings, {
       type: "message.delete",
+      actor: by && by.byId ? { id: by.byId, name: by.byName ?? "" } : null,
       target: saved ? { id: saved.authorId, name: saved.authorName } : null,
       channel: { id: message.channelId, name: channelName },
-      summary: saved ? `A message by ${saved.authorName} was deleted in #${channelName}` : `A message was deleted in #${channelName}`,
+      summary: saved ? `A message by ${saved.authorName} was deleted in #${channelName}${phrase}` : `A message was deleted in #${channelName}${phrase}`,
       details: {
         // Only a message the log has can be opened in the Messages view.
         messageId: saved?.edited ? message.id : undefined,
         edited: saved?.edited ? true : undefined,
+        deletedBy: by?.by,
         changes: saved ? [{ label: "Message", before: saved.content || "(no text)", after: null }] : [],
-        notes: saved && saved.attachments.length > 0 ? [`Files: ${saved.attachments.map((a) => a.name).join(", ")}`] : saved ? [] : ["What it said was not saved."],
+        notes: [
+          ...(by ? [deletedByNote(by)] : []),
+          ...(saved && saved.attachments.length > 0 ? [`Files: ${saved.attachments.map((a) => a.name).join(", ")}`] : saved ? [] : ["What it said was not saved."]),
+        ],
       },
     });
   },

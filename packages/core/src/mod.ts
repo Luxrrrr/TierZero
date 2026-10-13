@@ -5,6 +5,8 @@
  * use it and it can be tested on its own.
  */
 
+import type { DeletionSource } from "./deletion-notes.js";
+
 export type StaffRole = "owner" | "admin" | "mod";
 
 export const STAFF_ROLES: StaffRole[] = ["owner", "admin", "mod"];
@@ -150,6 +152,28 @@ export const ROLE_LABEL: Record<StaffRole, string> = {
   mod: "Moderator",
 };
 
+/**
+ * Who an audit entry is shown as. Automod is the bot acting on its own and is
+ * deliberately not a StaffRole: that type decides what a person may do, and
+ * the bot has no seat in it.
+ */
+export type AuditActorRole = StaffRole | "automod";
+
+/** The name stored on audit entries that automod writes. */
+export const AUTOMOD_ACTOR_NAME = "Automod";
+
+export const isAutomodRole = (role: AuditActorRole): role is "automod" => role === "automod";
+
+/** Narrows a stored role to what an entry can display, treating anything unknown as a moderator. */
+export function auditActorRole(stored: string): AuditActorRole {
+  return stored === "automod" || isStaffRole(stored) ? stored : "mod";
+}
+
+/** The word after an actor's name ("moderator"), or an empty string for automod, which is its own name. */
+export function actorRoleWord(role: AuditActorRole): string {
+  return isAutomodRole(role) ? "" : ROLE_LABEL[role].toLowerCase();
+}
+
 /** Who is doing something. The dashboard fills this in from the session, never from the browser. */
 export interface Actor {
   userId: string;
@@ -232,6 +256,9 @@ export interface EvidenceMessage {
   deleted: boolean;
   /** When it was deleted, if the bot saw that happen. */
   deletedAt?: string | null;
+  /** Who deleted it, when the server log could tell at the time. */
+  deletedBy?: DeletionSource;
+  deletedByName?: string | null;
   /** Every version of the text, oldest first, the last being the current one. Present only when it was edited. */
   versions?: MessageVersion[];
   /** Which of `versions` the moderator picked as the one that broke the rules. Left out when it is the latest. */
@@ -255,6 +282,12 @@ export interface LoggedMessageDto {
   createdAt: string;
   /** Null unless the bot saw the message being deleted. */
   deletedAt: string | null;
+  /** Who deleted it, as the log saw it. Null when it could not tell, and for messages deleted before this was recorded. */
+  deletedBy: DeletionSource | null;
+  /** The deleter's name when they did it. */
+  deletedByName: string | null;
+  /** What the message carried besides text and files, such as "1 sticker". Empty when nothing. */
+  extras: string;
   /** Oldest first, the last being what the message says now. One entry when it was never edited. */
   versions: MessageVersion[];
   url: string;
@@ -351,7 +384,7 @@ export interface NoteDto {
 export interface AuditDto {
   id: number;
   at: string;
-  actor: { userId: string; name: string; role: StaffRole };
+  actor: { userId: string; name: string; role: AuditActorRole };
   kind: AuditKind;
   label: string;
   summary: string;
