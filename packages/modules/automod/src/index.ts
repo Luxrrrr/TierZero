@@ -1,15 +1,17 @@
 import {
-  EmbedBuilder,
   PermissionFlagsBits,
   type GuildMember,
   type Message,
   type PartialMessage,
 } from "discord.js";
-import { defineModule, type ModuleContext } from "@tier0/core";
+import { defineModule, type EvidenceMessage, type ModuleContext } from "@tier0/core";
 import { createInfraction } from "@tier0/db";
+import { evidenceForTrip, loggedCopyOf } from "@tier0/module-moderation";
 import { settings, type AutomodSettings } from "./settings.js";
-import { evaluateMessage, type EvaluationVerdict, type RuleAction } from "./evaluator.js";
+import type { EvaluationVerdict } from "./evaluator.js";
+import { carryOut, draftInfraction, judgeMessage, type Outcome } from "./handler.js";
 import { AutomodState } from "./state.js";
+import { LOG_MESSAGES, NOTICE_MESSAGE, logValues, tripValues, type TripFacts } from "./messages.js";
 
 // One instance for the whole process, not per guild: it is its own map keyed
 // by guild id, and a module definition is only ever loaded once. See state.ts
@@ -26,13 +28,14 @@ export default defineModule({
 
   events: {
     async messageCreate(message, ctx) {
-      await handleMessage(message, ctx);
+      await handleMessage(message, ctx, false, null);
     },
-    async messageUpdate(_before, after, ctx) {
+    async messageUpdate(before, after, ctx) {
       // An edit is the obvious way to smuggle text past a filter that only
-      // reads a message once, so an edited message gets the same treatment
-      // as a new one.
-      await handleMessage(after, ctx);
+      // reads a message once, so an edited message is read again. Only when
+      // its text changed, though: Discord also sends an update for an embed
+      // finishing loading or a pin, and those are not new text.
+      await handleMessage(after, ctx, true, before.content);
     },
   },
 
@@ -46,6 +49,8 @@ export default defineModule({
 async function handleMessage(
   message: Message | PartialMessage,
   ctx: ModuleContext<AutomodSettings>,
+  isEdit: boolean,
+  previousContent: string | null,
 ): Promise<void> {
   // The gateway already keeps bot authors and DMs out of these events, but
   // that guarantee lives outside this module. It gets checked again here
@@ -57,26 +62,24 @@ async function handleMessage(
     message.member ?? (await message.guild.members.fetch(message.author.id).catch(() => null));
   if (!member) return;
 
-  const now = Date.now();
-  const history = state.recordAndGetHistory(ctx.guild.id, member.id, {
+  const channel = message.channel;
+  const verdict = judgeMessage(state, {
+    guildId: ctx.guild.id,
+    userId: member.id,
+    messageId: message.id,
     content: message.content,
-    timestamp: now,
-  });
-
-  const verdict = evaluateMessage({
-    content: message.content,
+    isEdit,
+    previousContent,
     authorRoles: [...member.roles.cache.keys()],
-    authorIsBot: member.user.bot,
     authorIsModerator: isModerator(member),
     channelId: message.channelId,
-    now,
-    history,
+    parentChannelId: channel.isThread() ? channel.parentId : null,
+    now: Date.now(),
     settings: ctx.settings,
   });
+  if (!verdict) return;
 
-  if (!verdict.triggered || !verdict.rule || !verdict.action) return;
-
-  await applyVerdict(message, member, verdict, ctx);
+  await applyVerdict(message, member, verdict, ctx, isEdit, previousContent);
 }
 
 function isModerator(member: GuildMember): boolean {
@@ -92,75 +95,120 @@ async function applyVerdict(
   member: GuildMember,
   verdict: EvaluationVerdict,
   ctx: ModuleContext<AutomodSettings>,
+  isEdit: boolean,
+  previousContent: string | null,
 ): Promise<void> {
-  const { rule, action, reason, timeoutMs } = verdict;
+  const { rule, action, timeoutMs } = verdict;
   if (!rule || !action) return;
 
-  if (action === "delete" || action === "timeout") {
-    // The message can already be gone - the author deleted it themselves, or
-    // another handler beat this one to it - and Discord's API returns a 404
-    // for that, which is not a failure worth surfacing.
-    await message.delete().catch(() => undefined);
-  }
+  const outcome = await carryOut(action, timeoutMs, {
+    deleteMessage: () => message.delete(),
+    timeoutMember: async (ms) => {
+      // Discord would refuse an owner, an administrator or anyone above the bot
+      // with the same error; asking first just saves the round trip.
+      if (!member.moderatable) throw { code: 50013 };
+      await member.timeout(ms, `Automod: ${rule}`);
+    },
+  });
 
-  if (action === "timeout" && timeoutMs) {
-    await member.timeout(timeoutMs, `Automod: ${rule}`).catch(() => undefined);
-  }
-
-  await recordInfraction(ctx, member, rule, action, reason, timeoutMs);
-  await notifyChannel(message, rule, action, reason);
-  await postLog(ctx, member, verdict);
+  // Taken whether or not the delete worked: staff need to see what tripped the rule either way.
+  const evidence = await evidenceOf(ctx, message, isEdit, previousContent, outcome.deleted);
+  const caseNumber = await recordInfraction(ctx, member, verdict, outcome, evidence);
+  const facts: TripFacts = {
+    userId: member.id,
+    rule,
+    action,
+    reason: verdict.reason,
+    detail: verdict.detail,
+    matches: verdict.matches,
+    timeoutMs,
+    deleted: outcome.deleted,
+    timedOut: outcome.timedOut,
+    problems: outcome.problems,
+    caseNumber,
+    guildId: ctx.guild.id,
+    dashboardBase: await ctx.dashboardUrl(),
+  };
+  await notifyChannel(ctx, message, facts);
+  await postLog(ctx, facts);
 }
 
 async function recordInfraction(
   ctx: ModuleContext<AutomodSettings>,
   member: GuildMember,
-  rule: string,
-  action: RuleAction,
-  reason: string | undefined,
-  timeoutMs: number | undefined,
-): Promise<void> {
+  verdict: EvaluationVerdict,
+  outcome: Outcome,
+  evidence: EvidenceMessage[],
+): Promise<number | undefined> {
+  const draft = draftInfraction(verdict, outcome, verdict.timeoutMs, Date.now());
   try {
-    await createInfraction({
+    const record = await createInfraction({
       guildId: ctx.guild.id,
       userId: member.id,
       moderatorId: ctx.client.user?.id ?? "0",
-      action: `automod-${action}`,
-      reason: reason ? `${rule}: ${reason}` : rule,
-      expiresAt: action === "timeout" && timeoutMs ? new Date(Date.now() + timeoutMs) : null,
-      active: action === "timeout",
+      ...draft,
+      evidence: JSON.stringify(evidence),
     });
+    return record.caseNumber;
   } catch (error) {
     console.error("[automod] failed to record infraction:", error);
+    return undefined;
   }
 }
 
-function describeAction(action: RuleAction): string {
-  switch (action) {
-    case "delete":
-      return "your message was removed";
-    case "timeout":
-      return "your message was removed and you were timed out";
-    case "warn":
-      return "that message tripped automod";
+/**
+ * A copy of the message that tripped the rule, kept with the case for staff to read
+ * on the dashboard. It is built the way a moderator's attachment is, from the server
+ * log's copy when there is one so an edited message keeps its earlier versions.
+ * Never throws: a failure to copy must not cost the case its record.
+ */
+async function evidenceOf(
+  ctx: ModuleContext<AutomodSettings>,
+  message: Message | PartialMessage,
+  isEdit: boolean,
+  previousContent: string | null,
+  deleted: boolean,
+): Promise<EvidenceMessage[]> {
+  try {
+    const channel = message.channel;
+    const logged = await loggedCopyOf(ctx.guild.id, message.id);
+    return [
+      evidenceForTrip({
+        guildId: ctx.guild.id,
+        message: {
+          id: message.id,
+          channelId: message.channelId,
+          channelName: "name" in channel && typeof channel.name === "string" ? channel.name : "",
+          content: message.content ?? "",
+          attachments: [...message.attachments.values()].map((a) => ({ name: a.name, url: a.url, contentType: a.contentType })),
+          createdAt: new Date(message.createdTimestamp ?? Date.now()),
+        },
+        logged,
+        previousContent,
+        isEdit,
+        deleted,
+        now: new Date(),
+      }),
+    ];
+  } catch (error) {
+    console.error("[automod] could not keep the message as evidence:", error);
+    return [];
   }
 }
 
 async function notifyChannel(
+  ctx: ModuleContext<AutomodSettings>,
   message: Message | PartialMessage,
-  rule: string,
-  action: RuleAction,
-  reason: string | undefined,
+  facts: TripFacts,
 ): Promise<void> {
   const channel = message.channel;
   if (!channel.isTextBased() || channel.isDMBased()) return;
 
-  const notice = await channel
-    .send({
-      content: `<@${message.author?.id}>, ${describeAction(action)} (${rule}${reason ? `: ${reason}` : ""}).`,
-      allowedMentions: { users: message.author ? [message.author.id] : [] },
-    })
-    .catch(() => null);
+  // Only the member it is about can be pinged, whatever the owner's text says.
+  const notice = await ctx.send(channel, ctx.settings.noticeMessage, tripValues(facts), {
+    fallback: NOTICE_MESSAGE,
+    mentions: { users: [facts.userId], roles: [] },
+  });
   if (!notice) return;
 
   setTimeout(() => {
@@ -168,31 +216,15 @@ async function notifyChannel(
   }, 8000);
 }
 
-const LOG_COLOR: Record<RuleAction, number> = {
-  warn: 0xf5a623,
-  delete: 0xed4245,
-  timeout: 0x992d22,
-};
-
-async function postLog(
-  ctx: ModuleContext<AutomodSettings>,
-  member: GuildMember,
-  verdict: EvaluationVerdict,
-): Promise<void> {
+async function postLog(ctx: ModuleContext<AutomodSettings>, facts: TripFacts): Promise<void> {
   const channelId = ctx.settings.logChannel;
-  if (!channelId || !verdict.rule || !verdict.action) return;
+  if (!channelId) return;
 
   const channel = ctx.guild.channels.cache.get(channelId);
   if (!channel?.isTextBased()) return;
 
-  const embed = new EmbedBuilder()
-    .setColor(LOG_COLOR[verdict.action])
-    .setDescription(`${member} tripped **${verdict.rule}**`)
-    .addFields(
-      { name: "Action", value: verdict.action, inline: true },
-      { name: "Reason", value: verdict.reason ?? "-", inline: true },
-    )
-    .setTimestamp();
-
-  await channel.send({ embeds: [embed] }).catch(() => undefined);
+  await ctx.send(channel, ctx.settings.logMessages[facts.action], logValues(facts), {
+    fallback: LOG_MESSAGES[facts.action],
+    mentions: { users: [], roles: [] },
+  });
 }

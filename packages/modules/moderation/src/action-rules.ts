@@ -6,9 +6,9 @@
  * the two from drifting apart.
  */
 
-import type { ActionContextDto, ModActionKind } from "@tier0/core";
+import { canTakeAction, type ActionContextDto, type ModActionKind, type StaffRole } from "@tier0/core";
 import { MAX_TIMEOUT_MS, validateBanDuration, validateTimeoutDuration } from "./duration.js";
-import type { ModerationAction } from "./modlog.js";
+import { actionLabel, type ModerationAction } from "./modlog.js";
 
 /** Where an action was asked for. Some refusals and wording only apply to one of them. */
 export type ActionOrigin = "command" | "dashboard";
@@ -160,14 +160,57 @@ export function checkDeleteDays(days: number | null, fallback: number): number {
   return value;
 }
 
-/** Nobody acts on themselves, and the bot does not act on itself. */
-export function checkTargetIdentity(targetId: string, actorId: string, botId: string | null): void {
+/** Nobody acts on themselves, the bot does not act on itself, and the server owner is out of reach. */
+export function checkTargetIdentity(
+  targetId: string,
+  actorId: string,
+  botId: string | null,
+  ownerId: string | null = null,
+): void {
   if (targetId === actorId) {
     throw new ActionRefused(403, "You cannot take a moderation action against yourself.");
   }
   if (botId !== null && targetId === botId) {
     throw new ActionRefused(403, "The bot cannot take a moderation action against itself.");
   }
+  if (ownerId !== null && targetId === ownerId) {
+    throw new ActionRefused(403, "The server owner cannot be actioned.");
+  }
+}
+
+const NEEDS: Record<ModActionKind, string> = {
+  warn: "warn members",
+  timeout: "time members out",
+  "timeout-clear": "clear timeouts",
+  kick: "kick members",
+  ban: "ban members",
+  unban: "lift bans",
+};
+
+export interface ActorStanding {
+  action: ModActionKind;
+  /** Whether the actor holds the Discord permission this action maps to, as a member of the server. */
+  hasDiscordPermission: boolean;
+  /** Their place on the server's moderation staff list, if any. */
+  staffRole: StaffRole | null;
+  /** The person running this install, who is trusted on every server. */
+  isInstanceOwner: boolean;
+}
+
+/**
+ * Whether the person asking may take this action at all. A slash command is
+ * only hidden from people by default; an operator can widen it in Discord's
+ * Integrations settings, so the permission has to be checked here too.
+ * Holding the Discord permission or a staff role that allows the action are
+ * the same two doors the right-click menu and the dashboard have always used.
+ */
+export function checkActorMayAct(actor: ActorStanding): void {
+  if (actor.isInstanceOwner || actor.hasDiscordPermission) return;
+  if (actor.staffRole !== null && canTakeAction(actor.staffRole, actor.action)) return;
+  throw new ActionRefused(
+    403,
+    `You are not allowed to ${NEEDS[actor.action]} here. You need the matching Discord permission, or a place on this server's staff list at a level that allows it.`,
+  );
 }
 
 /**
@@ -271,26 +314,50 @@ export function discordFailure(action: Exclude<ModerationAction, "warn">, origin
     : `The bot could not ${verb}. Check its permissions.`;
 }
 
+const CANNOT: Record<"timeout" | "kick" | "ban", string> = {
+  timeout: "time that member out",
+  kick: "kick that member",
+  ban: "ban that member",
+};
+
+/**
+ * Discord would refuse this call, and that is known before anyone is told
+ * about it: the member holds Administrator or sits above the bot, or the bot
+ * lacks the permission. Raised ahead of the direct message so nobody hears
+ * they were removed by an action that was never going to happen.
+ */
+export function cannotActOn(action: "timeout" | "kick" | "ban", origin: ActionOrigin): string {
+  const verb = CANNOT[action];
+  return origin === "command"
+    ? `I cannot ${verb}. They may be an administrator, my role may not be above theirs, or I may lack the permission.`
+    : `The bot cannot ${verb}. They may be an administrator, its role may not be above theirs, or it may lack the permission.`;
+}
+
+/** What a member is sent when the action they were told about did not go through. */
+export function correctionText(action: ModerationAction): string {
+  return `Correction: the message you were just sent about being ${actionLabel(action).toLowerCase()} was sent in error. Nothing happened to you.`;
+}
+
 export const BOT_RANK_DASHBOARD =
   "The bot's highest role is not above theirs, so Discord will not let it do that. Move the bot's role higher in the server's role settings.";
 
-/** `withheld`: the dashboard does not message someone who is not in the server. */
+/** `withheld`: the member is not in the server, so they are not messaged. */
 export type DmOutcome = "sent" | "failed" | "off" | "withheld";
 
 /**
- * Whether to send the direct message at all. From the dashboard, a target who
- * is not in the server could be any Discord account, and the message carries
- * free text, so the bot does not become a way to message strangers. An unban
- * is the exception: its target is confirmed as banned from this server.
+ * Whether to send the direct message at all. A target who is not in the
+ * server could be any Discord account, and the message carries free text, so
+ * the bot does not become a way to message strangers, whichever way the
+ * action was asked for. An unban is the exception: its target is confirmed as
+ * banned from this server.
  */
 export function shouldMessage(
   action: ModerationAction,
-  origin: ActionOrigin,
   targetInServer: boolean,
   dmOnAction: boolean,
 ): DmOutcome | "send" {
   if (!dmOnAction) return "off";
-  if (origin === "dashboard" && !targetInServer && action !== "unban") return "withheld";
+  if (!targetInServer && action !== "unban") return "withheld";
   return "send";
 }
 export type ModLogOutcome = "posted" | "unset" | "missing" | "failed";

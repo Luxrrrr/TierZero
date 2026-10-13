@@ -90,3 +90,14 @@ export async function historyFor(
     take: limit,
   });
 }
+
+/**
+ * Closes every open timeout on a member, automod's included: both put the same
+ * Discord timeout on them, so clearing it ends both.
+ */
+export async function deactivateOpenTimeouts(guildId: string, userId: string): Promise<void> {
+  await prisma.infraction.updateMany({
+    where: { guildId, userId, action: { in: ["timeout", "automod-timeout"] }, active: true },
+    data: { active: false },
+  });
+}

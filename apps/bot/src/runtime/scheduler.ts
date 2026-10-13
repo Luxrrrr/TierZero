@@ -5,6 +5,8 @@ import type { GuildState } from "./guild-state.js";
 import { parsePayload, splitKind } from "./task-payload.js";
 
 const TICK_MS = 15_000;
+const DEFER_MS = 60_000;
+const KEEP_UNRUNNABLE_MS = 7 * 24 * 60 * 60_000;
 
 /**
  * Runs work that was scheduled for later: lifting a temporary ban, closing an
@@ -18,6 +20,8 @@ const TICK_MS = 15_000;
 export class Scheduler {
   private timer: NodeJS.Timeout | undefined;
   private running = false;
+  /** When each stuck task was first found unable to run. Lost on restart, which only gives it another week. */
+  private readonly stuckSince = new Map<number, number>();
 
   constructor(
     private readonly client: Client,
@@ -54,10 +58,29 @@ export class Scheduler {
       });
 
       for (const task of due) {
+        const split = splitKind(task.kind);
+        const handler = split ? this.registry.get(split.moduleId)?.tasks?.[split.kind] : undefined;
+        if (!split || !handler) {
+          await prisma.scheduledTask.delete({ where: { id: task.id } }).catch(() => undefined);
+          continue;
+        }
+
+        const ctx = await this.contextFor(task.guildId, split.moduleId);
+        if (!ctx) {
+          await this.defer(task, now);
+          continue;
+        }
+
         // Delete first. A handler that throws must not leave the row behind to
-        // be retried forever on every tick.
+        // be retried forever on every tick. A handler that wants another go
+        // schedules it itself.
+        this.stuckSince.delete(task.id);
         await prisma.scheduledTask.delete({ where: { id: task.id } }).catch(() => undefined);
-        await this.run(task.guildId, task.kind, task.payload);
+        try {
+          await handler(parsePayload(task.payload), ctx);
+        } catch (error) {
+          console.error(`[${split.moduleId}] scheduled ${split.kind} failed:`, error);
+        }
       }
     } catch (error) {
       console.error("Scheduler tick failed:", error);
@@ -66,27 +89,33 @@ export class Scheduler {
     }
   }
 
-  private async run(guildId: string, namespacedKind: string, payload: string): Promise<void> {
-    const split = splitKind(namespacedKind);
-    if (!split) return;
-    const { moduleId, kind } = split;
-
-    const module = this.registry.get(moduleId);
-    const handler = module?.tasks?.[kind];
-    if (!handler) return;
-
-    if (!(await this.state.isEnabled(guildId, moduleId))) return;
-
+  /** The context to run a task in, or null when the module is off, the guild is not loaded yet or its settings are unreadable. */
+  private async contextFor(guildId: string, moduleId: string) {
+    if (!(await this.state.isEnabled(guildId, moduleId))) return null;
     const guild = this.client.guilds.cache.get(guildId);
-    if (!guild) return;
+    if (!guild) return null;
+    return this.state.context(guild, moduleId);
+  }
 
-    const ctx = await this.state.context(guild, moduleId);
-    if (!ctx) return;
-
-    try {
-      await handler(parsePayload(payload), ctx);
-    } catch (error) {
-      console.error(`[${moduleId}] scheduled ${kind} failed:`, error);
+  /**
+   * Work that cannot run right now is kept, not dropped: at startup the guilds
+   * are not cached for a moment, and a module switched off for an afternoon
+   * should still lift the ban it queued. It is pushed back a minute so a pile
+   * of such rows cannot crowd out work that can run, and dropped once it has
+   * been stuck for a week, which is a guild the bot has left or a module
+   * nobody is coming back to.
+   */
+  private async defer(task: { id: number; kind: string; guildId: string }, now: Date): Promise<void> {
+    const first = this.stuckSince.get(task.id) ?? now.getTime();
+    if (now.getTime() - first >= KEEP_UNRUNNABLE_MS) {
+      this.stuckSince.delete(task.id);
+      console.warn(`Scheduler dropped ${task.kind} for guild ${task.guildId}: it could not run for a week.`);
+      await prisma.scheduledTask.delete({ where: { id: task.id } }).catch(() => undefined);
+      return;
     }
+    this.stuckSince.set(task.id, first);
+    await prisma.scheduledTask
+      .update({ where: { id: task.id }, data: { runAt: new Date(now.getTime() + DEFER_MS) } })
+      .catch(() => undefined);
   }
 }

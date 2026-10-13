@@ -1,26 +1,34 @@
 import { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, MessageFlags } from "discord.js";
-import type { CommandDefinition } from "@tier0/core";
+import type { InteractionReplyOptions } from "discord.js";
+import type { CommandDefinition, ModuleContext } from "@tier0/core";
 import type { ModerationSettings } from "../settings.js";
 import { historyFor } from "../infractions.js";
-import { actionLabel } from "../modlog.js";
+import { historyList } from "../history-list.js";
+import { NOT_STAFF, staffRoleOf } from "../staff.js";
+import { HISTORY_REPLY } from "../messages.js";
 
-/** The embed /history and the right-click menu both show, or null when the member has no record. */
-export async function historyEmbed(guildId: string, userId: string, username: string): Promise<EmbedBuilder | null> {
-  const records = await historyFor(guildId, userId);
+/**
+ * What /history and the right-click menu both show, or null when the member has
+ * no record. The owner's reply is used when there is one.
+ */
+export async function historyReply(
+  ctx: ModuleContext<ModerationSettings>,
+  userId: string,
+  username: string,
+): Promise<InteractionReplyOptions | null> {
+  const records = await historyFor(ctx.guild.id, userId);
   if (records.length === 0) return null;
 
-  const lines = records.map((record) => {
-    const seconds = Math.floor(record.createdAt.getTime() / 1000);
-    const status = record.active ? "" : " (reversed)";
-    const reason = record.reason ?? "No reason given";
-    return `**#${record.caseNumber}** ${actionLabel(record.action)}${status} - ${reason} - <t:${seconds}:d>`;
-  });
+  const list = historyList(records);
 
-  return new EmbedBuilder().setTitle(`Moderation history for ${username}`).setDescription(lines.join("\n"));
+  const custom = ctx.customReply?.({ user: username, count: records.length, list });
+  if (custom) return custom;
+  return { embeds: [new EmbedBuilder().setTitle(`Moderation history for ${username}`).setDescription(list)] };
 }
 
 export const historyCommand: CommandDefinition<ModerationSettings> = {
   name: "history",
+  response: HISTORY_REPLY,
   description: "List a member's moderation history.",
   build: () =>
     new SlashCommandBuilder()
@@ -31,10 +39,14 @@ export const historyCommand: CommandDefinition<ModerationSettings> = {
         option.setName("member").setDescription("Who").setRequired(true),
       ),
   async run(interaction, ctx) {
+    if (!(await staffRoleOf(ctx.guild.id, interaction.user.id))) {
+      await interaction.reply({ content: NOT_STAFF, flags: MessageFlags.Ephemeral });
+      return;
+    }
     const target = interaction.options.getUser("member", true);
-    const embed = await historyEmbed(ctx.guild.id, target.id, target.username);
+    const reply = await historyReply(ctx, target.id, target.username);
 
-    if (!embed) {
+    if (!reply) {
       await interaction.reply({
         content: `${target.username} has no recorded history.`,
         flags: MessageFlags.Ephemeral,
@@ -42,6 +54,6 @@ export const historyCommand: CommandDefinition<ModerationSettings> = {
       return;
     }
 
-    await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
+    await interaction.reply({ ...reply, flags: MessageFlags.Ephemeral });
   },
 };

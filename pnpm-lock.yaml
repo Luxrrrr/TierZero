@@ -146,6 +146,9 @@ importers:
       '@tier0/db':
         specifier: workspace:*
         version: link:../../db
+      '@tier0/module-moderation':
+        specifier: workspace:*
+        version: link:../moderation
       discord.js:
         specifier: ^14.16.0
         version: 14.27.0

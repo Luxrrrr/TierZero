@@ -4,6 +4,7 @@
  * is in and has to stay cheap. A handler wires this up to actual Discord
  * calls; this file only ever answers "what, if anything, should happen".
  */
+import { createHash } from "node:crypto";
 import type { AutomodSettings } from "./settings.js";
 
 export type RuleAction = "delete" | "warn" | "timeout";
@@ -17,9 +18,23 @@ export type RuleName =
   | "bannedWords"
   | "rateLimit";
 
+/**
+ * What is remembered of an earlier message. Only equality matters for the
+ * repeated-text rule, so a short digest stands in for the text and a member
+ * who pastes long messages does not cost the process their full length.
+ */
 export interface RecentMessage {
-  content: string;
+  fingerprint: string;
   timestamp: number;
+}
+
+function normalizeForRepeat(content: string): string {
+  return content.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+/** Two messages repeat each other exactly when their fingerprints are equal. */
+export function fingerprintOf(content: string): string {
+  return createHash("sha1").update(normalizeForRepeat(content)).digest("base64").slice(0, 16);
 }
 
 export interface EvaluationInput {
@@ -28,6 +43,18 @@ export interface EvaluationInput {
   authorIsBot: boolean;
   authorIsModerator: boolean;
   channelId: string;
+  /**
+   * The channel a thread belongs to, when the message is in one. Threads have
+   * ids of their own, so without this a channel exempted in the settings would
+   * stop applying the moment someone opened a thread in it.
+   */
+  parentChannelId?: string | null;
+  /**
+   * True when the message was edited rather than just sent. An edit is read for
+   * what it now says but is not another message, so the rules that count
+   * messages leave it out.
+   */
+  isEdit?: boolean;
   /** Current time, in the same clock as `history` timestamps. */
   now: number;
   /**
@@ -43,7 +70,19 @@ export interface EvaluationVerdict {
   triggered: boolean;
   rule?: RuleName;
   action?: RuleAction;
+  /** What was wrong, in words that are safe to show anyone. Never quotes the message. */
   reason?: string;
+  /**
+   * The specific thing that matched, such as an invite code or a host. For
+   * staff only: it comes from the offending message, so it must not appear in
+   * anything the channel can read.
+   */
+  detail?: string;
+  /**
+   * For banned words, each entry of the owner's list that matched, as the owner
+   * wrote it. Staff only, like `detail`, which joins them.
+   */
+  matches?: string[];
   /** Present only when `action` is "timeout". */
   timeoutMs?: number;
   /** Every rule that tripped, even though only the most severe is acted on. */
@@ -54,6 +93,8 @@ interface RuleMatch {
   rule: RuleName;
   action: RuleAction;
   reason: string;
+  detail?: string;
+  matches?: string[];
   timeoutMs?: number;
 }
 
@@ -64,9 +105,10 @@ interface Exemptions {
 
 function isExempt(input: EvaluationInput, rule: Exemptions): boolean {
   if (input.authorIsModerator && input.settings.exemptModerators) return true;
-  if (input.settings.exemptChannels.includes(input.channelId)) return true;
+  const channels = input.parentChannelId ? [input.channelId, input.parentChannelId] : [input.channelId];
+  if (channels.some((id) => input.settings.exemptChannels.includes(id))) return true;
   if (input.settings.exemptRoles.some((role) => input.authorRoles.includes(role))) return true;
-  if (rule.exemptChannels.includes(input.channelId)) return true;
+  if (channels.some((id) => rule.exemptChannels.includes(id))) return true;
   if (rule.exemptRoles.some((role) => input.authorRoles.includes(role))) return true;
   return false;
 }
@@ -75,12 +117,14 @@ function toMatch(
   rule: RuleName,
   ruleSettings: { action: string; timeoutDuration: number },
   reason: string,
+  detail?: string,
 ): RuleMatch {
   const action = ruleSettings.action as RuleAction;
   return {
     rule,
     action,
     reason,
+    ...(detail ? { detail } : {}),
     timeoutMs: action === "timeout" ? ruleSettings.timeoutDuration : undefined,
   };
 }
@@ -99,9 +143,9 @@ function extractInviteCodes(content: string): string[] {
 }
 
 // An operator pastes a link, a bare code, or their own invite with a trailing
-// slash; all three should match the same allowlist entry.
-function normalizeInviteEntry(entry: string): string {
-  const trimmed = entry.trim().toLowerCase().replace(/\/+$/, "");
+// slash or a tracking query; all of them should match the same allowlist entry.
+export function normalizeInviteEntry(entry: string): string {
+  const trimmed = (entry.trim().toLowerCase().split(/[?#]/)[0] ?? "").replace(/\/+$/, "");
   const slash = trimmed.lastIndexOf("/");
   return slash === -1 ? trimmed : trimmed.slice(slash + 1);
 }
@@ -117,24 +161,49 @@ function checkInvites(input: EvaluationInput): RuleMatch | null {
   const disallowed = codes.find((code) => !allowlist.has(code));
   if (!disallowed) return null;
 
-  return toMatch("invites", rule, `Posted a Discord invite link (${disallowed})`);
+  return toMatch("invites", rule, "Posted a Discord invite link", disallowed);
 }
 
 // -- links ---------------------------------------------------------------
 
 const URL_PATTERN = /https?:\/\/([^\s/?#]+)/gi;
 
-function extractHosts(content: string): string[] {
-  const hosts: string[] = [];
+// Letters and digits in any script, joined by single dots or hyphens, with an
+// optional port. Anything else in the address part of a link is not a host a
+// browser would visit; it is usually someone trying to smuggle markup or a
+// mention into text that gets repeated later.
+const LABEL = "[\\p{L}\\p{N}](?:[\\p{L}\\p{N}-]*[\\p{L}\\p{N}])?";
+const HOSTNAME = new RegExp(`^${LABEL}(?:\\.${LABEL})*(?::\\d{1,5})?$`, "u");
+const TRAILING_PUNCTUATION = /[.,;:!?)\]}>'"*_~|`]+$/;
+
+/** The host of every link in `content`, or null for an address that is not a valid host. */
+function extractHosts(content: string): Array<string | null> {
+  const hosts: Array<string | null> = [];
   for (const match of content.matchAll(URL_PATTERN)) {
-    const host = match[1];
-    if (host) hosts.push(host.toLowerCase());
+    const raw = match[1];
+    if (!raw) continue;
+    // A link wrapped in <>, () or ** arrives with that punctuation attached.
+    const host = raw.replace(TRAILING_PUNCTUATION, "").toLowerCase();
+    hosts.push(host.length > 0 && host.length <= 255 && HOSTNAME.test(host) ? host : null);
   }
   return hosts;
 }
 
-function normalizeDomainEntry(entry: string): string {
-  return entry.trim().toLowerCase().replace(/^www\./, "");
+// An operator pastes whatever they copied: https://youtube.com/,
+// youtube.com/watch?v=1, www.youtube.com:443. Only the host is meaningful.
+export function normalizeDomainEntry(entry: string): string {
+  const host =
+    entry
+      .trim()
+      .toLowerCase()
+      .replace(/^[a-z][a-z0-9+.-]*:\/\//, "")
+      .split(/[/?#]/)[0] ?? "";
+  return host
+    .replace(/^.*@/, "")
+    .replace(/:\d*$/, "")
+    .replace(/^\*\./, "")
+    .replace(/^www\./, "")
+    .replace(/\.+$/, "");
 }
 
 function domainAllowed(host: string, allowlist: string[]): boolean {
@@ -149,11 +218,11 @@ function checkLinks(input: EvaluationInput): RuleMatch | null {
   const hosts = extractHosts(input.content);
   if (hosts.length === 0) return null;
 
-  const allowlist = rule.allowlist.map(normalizeDomainEntry);
-  const disallowed = hosts.find((host) => !domainAllowed(host, allowlist));
-  if (!disallowed) return null;
+  const allowlist = rule.allowlist.map(normalizeDomainEntry).filter((entry) => entry !== "");
+  const disallowed = hosts.find((host) => host === null || !domainAllowed(host, allowlist));
+  if (disallowed === undefined) return null;
 
-  return toMatch("links", rule, `Posted a link to ${disallowed}`);
+  return toMatch("links", rule, "Posted a link to a site that isn't allowed", disallowed ?? "an invalid address");
 }
 
 // -- capitals --------------------------------------------------------------
@@ -176,10 +245,6 @@ function checkCapitals(input: EvaluationInput): RuleMatch | null {
 
 // -- repeated text -----------------------------------------------------
 
-function normalizeForRepeat(content: string): string {
-  return content.trim().toLowerCase().replace(/\s+/g, " ");
-}
-
 function checkRepeatedText(input: EvaluationInput): RuleMatch | null {
   const rule = input.settings.repeatedText;
   if (!rule.enabled || isExempt(input, rule)) return null;
@@ -194,13 +259,14 @@ function checkRepeatedText(input: EvaluationInput): RuleMatch | null {
     );
   }
 
-  const normalized = normalizeForRepeat(input.content);
-  if (normalized.length === 0) return null;
+  // An edit is not another copy, and the message it replaced is in the history.
+  if (input.isEdit) return null;
+  if (normalizeForRepeat(input.content).length === 0) return null;
 
+  const fingerprint = fingerprintOf(input.content);
   const windowStart = input.now - rule.repeatWindow;
   const priorCopies = input.history.filter(
-    (message) =>
-      message.timestamp >= windowStart && normalizeForRepeat(message.content) === normalized,
+    (message) => message.timestamp >= windowStart && message.fingerprint === fingerprint,
   ).length;
   const totalCopies = priorCopies + 1;
   if (totalCopies < rule.repeatMessageCount) return null;
@@ -237,15 +303,17 @@ function checkMentions(input: EvaluationInput): RuleMatch | null {
 
 // Obfuscation handling is kept shallow by design: fold common leetspeak
 // substitutions and collapse a letter stretched three or more times
-// ("fuuuuck" -> "fuck"), then match with \b on both sides. \b is what keeps
-// "assassin" out of a filter for "ass" - it only fires at a transition
-// between a word character and a non-word one, and "ass" sits in the middle
-// of a run of letters there, not at an edge. This does not try to catch
-// spaced-out or punctuated evasion ("a s s", "a-s-s") either: closing that gap
-// means either stripping whitespace (which glues unrelated words together and
-// reintroduces the "assassin" problem from the other direction) or maintaining
-// a much heavier tokenizer, and a false positive that deletes a real message
-// is worse than a determined user getting one slur past the filter.
+// ("fuuuuck" -> "fuck"). A word only counts when it is not part of a longer
+// run of letters or digits, which is what keeps "assassin" out of a filter for
+// "ass". That test uses Unicode classes rather than \b because \b only knows
+// ASCII word characters: it never fires at the edge of a Cyrillic or accented
+// word, so a filter for one would match nothing at all.
+// This does not try to catch spaced-out or punctuated evasion ("a s s",
+// "a-s-s") either: closing that gap means either stripping whitespace (which
+// glues unrelated words together and reintroduces the "assassin" problem from
+// the other direction) or maintaining a much heavier tokenizer, and a false
+// positive that deletes a real message is worse than a determined user getting
+// one slur past the filter.
 const LEET_MAP: Record<string, string> = {
   "0": "o",
   "1": "i",
@@ -260,34 +328,50 @@ const LEET_MAP: Record<string, string> = {
 };
 
 export function normalizeForBannedWords(content: string): string {
-  const substituted = [...content.toLowerCase()].map((ch) => LEET_MAP[ch] ?? ch).join("");
-  return substituted.replace(/([a-z])\1{2,}/g, "$1");
+  const substituted = [...content.toLowerCase().normalize("NFC")].map((ch) => LEET_MAP[ch] ?? ch).join("");
+  return substituted.replace(/(\p{L})\1{2,}/gu, "$1");
 }
 
 function escapeRegExp(text: string): string {
   return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+function containsWord(text: string, word: string): boolean {
+  if (!word) return false;
+  const pattern = new RegExp(
+    `(?<![\\p{L}\\p{N}\\p{M}])${escapeRegExp(word)}(?![\\p{L}\\p{N}\\p{M}])`,
+    "u",
+  );
+  return pattern.test(text);
+}
+
 function checkBannedWords(input: EvaluationInput): RuleMatch | null {
   const rule = input.settings.bannedWords;
   if (!rule.enabled || isExempt(input, rule) || rule.words.length === 0) return null;
 
-  const normalized = normalizeForBannedWords(input.content);
-  const hit = rule.words.find((word) => {
-    const target = normalizeForBannedWords(word).trim();
-    if (!target) return false;
-    return new RegExp(`\\b${escapeRegExp(target)}\\b`, "u").test(normalized);
+  // Folding turns "!" and "@" into letters, so "damn!" becomes "damni" and
+  // would slip through. The plain text is tried as well, which is what lets
+  // trailing punctuation sit next to a word without hiding it.
+  const plain = input.content.toLowerCase().normalize("NFC");
+  const folded = normalizeForBannedWords(input.content);
+  const hits = rule.words.filter((word) => {
+    const plainWord = word.toLowerCase().normalize("NFC").trim();
+    const foldedWord = normalizeForBannedWords(word).trim();
+    return containsWord(plain, plainWord) || containsWord(folded, foldedWord);
   });
-  if (!hit) return null;
+  if (hits.length === 0) return null;
 
-  return toMatch("bannedWords", rule, "Used a banned word or phrase");
+  // The list's own entries are reported, never the member's text around them.
+  const matches = [...new Set(hits.map((word) => word.trim()))];
+  return { ...toMatch("bannedWords", rule, "Used a banned word or phrase", matches.join(", ")), matches };
 }
 
 // -- rate limit ----------------------------------------------------------
 
 function checkRateLimit(input: EvaluationInput): RuleMatch | null {
   const rule = input.settings.rateLimit;
-  if (!rule.enabled || isExempt(input, rule)) return null;
+  // An edit was already counted when it was first sent.
+  if (!rule.enabled || isExempt(input, rule) || input.isEdit) return null;
 
   const windowStart = input.now - rule.window;
   const count = input.history.filter((message) => message.timestamp >= windowStart).length + 1;
@@ -340,6 +424,8 @@ export function evaluateMessage(input: EvaluationInput): EvaluationVerdict {
     rule: top.rule,
     action: top.action,
     reason: top.reason,
+    ...(top.detail ? { detail: top.detail } : {}),
+    ...(top.matches ? { matches: top.matches } : {}),
     timeoutMs: top.timeoutMs,
     matchedRules: matches.map((match) => match.rule),
   };

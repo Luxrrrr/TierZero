@@ -15,3 +15,6 @@ export async function staffRoleOf(guildId: string, userId: string): Promise<Staf
   const row = await prisma.staffMember.findUnique({ where: { guildId_userId: { guildId, userId } } });
   return row && (row.role === "admin" || row.role === "mod") ? row.role : null;
 }
+
+export const NOT_STAFF =
+  "Only moderators on this server's staff list can use this. Ask the server owner to add you on the Access tab of the dashboard.";

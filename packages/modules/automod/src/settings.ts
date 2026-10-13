@@ -1,4 +1,12 @@
 import { s, type Infer } from "@tier0/core";
+import {
+  LOG_MESSAGES,
+  LOG_NOTE,
+  LOG_VARIABLES,
+  NOTICE_MESSAGE,
+  NOTICE_NOTE,
+  NOTICE_VARIABLES,
+} from "./messages.js";
 
 /**
  * Fields every rule shares: whether it runs, what it does when it trips, and
@@ -49,13 +57,42 @@ export const settings = s.object({
     guided: true,
     label: "Post automod actions in",
   }),
+  noticeMessage: s.message({
+    label: "Notice in the channel",
+    starting: NOTICE_MESSAGE,
+    variables: NOTICE_VARIABLES,
+    note: NOTICE_NOTE,
+  }),
+  logMessages: s.object(
+    {
+      delete: s.message({
+        label: "When a message is deleted",
+        starting: LOG_MESSAGES.delete,
+        variables: LOG_VARIABLES,
+        note: LOG_NOTE,
+      }),
+      warn: s.message({
+        label: "When a member is warned",
+        starting: LOG_MESSAGES.warn,
+        variables: LOG_VARIABLES,
+        note: LOG_NOTE,
+      }),
+      timeout: s.message({
+        label: "When a member is timed out",
+        starting: LOG_MESSAGES.timeout,
+        variables: LOG_VARIABLES,
+        note: LOG_NOTE,
+      }),
+    },
+    { label: "Log posts", when: { field: "logChannel" } },
+  ),
 
   invites: s.object(
     {
       ...ruleFields("delete", "10m"),
       allowlist: s.array(s.string(), {
         label: "Allowed invite links",
-        help: "Invite codes or links that are ignored, such as this server's own invite.",
+        help: "Invite codes or links that are ignored, such as this server's own invite. Paste the code or the whole link.",
       }),
     },
     { label: "Invite links" },
@@ -66,7 +103,7 @@ export const settings = s.object({
       ...ruleFields("delete", "10m"),
       allowlist: s.array(s.string(), {
         label: "Allowed domains",
-        help: "Domains that are ignored, such as youtube.com.",
+        help: "Domains that are ignored, such as youtube.com. A pasted link works too, and a domain also covers its subdomains.",
       }),
     },
     { label: "Links" },

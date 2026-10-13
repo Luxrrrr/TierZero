@@ -9,11 +9,7 @@ import { caseCommand } from "./commands/case.js";
 import { historyCommand } from "./commands/history.js";
 import { purgeCommand } from "./commands/purge.js";
 import { contextCommands, submitContextAction } from "./commands/context.js";
-import { deactivateOpen, latestOpenBan, recordInfraction } from "./infractions.js";
-import { banOutlivesTask } from "./action-rules.js";
-import { formatDirectMessage } from "./modlog.js";
-import { tryDirectMessage } from "./dm.js";
-import { postModLog } from "./reply.js";
+import { liftTemporaryBan } from "./unban-task.js";
 import { recentMessages } from "./recent-messages.js";
 
 export { performAction, type PerformInput, type PerformOutcome } from "./perform.js";
@@ -27,7 +23,16 @@ export {
   type ActionOrigin,
 } from "./action-rules.js";
 export { fetchMemberOrNull } from "./lookups.js";
-export { recentFor, resolveEvidence, viewerCanRead, type EvidenceViewer } from "./evidence.js";
+export {
+  evidenceForTrip,
+  loggedCopyOf,
+  recentFor,
+  resolveEvidence,
+  viewerCanRead,
+  type EvidenceViewer,
+  type TripEvidenceInput,
+  type TrippingMessage,
+} from "./evidence.js";
 export { changeLength, type ChangeLengthInput } from "./edit-length.js";
 export { backfillEvidence, splitMessageLink } from "./backfill.js";
 export { RecentMessages, RECENT_LIMITS, recentMessages } from "./recent-messages.js";
@@ -90,47 +95,8 @@ export default defineModule({
   tasks: {
     // Lifts a temporary ban. This runs from the scheduled task table, not a
     // timer, so a ban issued just before a restart still gets lifted on time.
-    async unban(payload, ctx) {
-      const userId = payload.userId;
-      if (typeof userId !== "string") return;
-
-      const stillBanned = await ctx.guild.bans.fetch(userId).catch(() => null);
-      if (!stillBanned) return;
-      if (banOutlivesTask(await latestOpenBan(ctx.guild.id, userId), new Date())) return;
-
-      await ctx.guild.members.unban(userId, "Temporary ban expired").catch(() => undefined);
-      await deactivateOpen(ctx.guild.id, userId, "ban");
-
-      const moderatorId = ctx.client.user?.id ?? userId;
-      const record = await recordInfraction({
-        guildId: ctx.guild.id,
-        userId,
-        moderatorId,
-        action: "unban",
-        reason: "Temporary ban expired",
-      });
-
-      if (ctx.settings.dmOnAction) {
-        await tryDirectMessage(
-          ctx.client,
-          userId,
-          formatDirectMessage(ctx.guild.name, {
-            action: "unban",
-            reason: "Temporary ban expired",
-            expiresAt: null,
-          }),
-        );
-      }
-
-      await postModLog(ctx, {
-        caseNumber: record.caseNumber,
-        action: "unban",
-        targetId: userId,
-        moderatorId,
-        reason: "Temporary ban expired",
-        expiresAt: null,
-      });
-    },
+    // A failed attempt schedules its own retry; see liftTemporaryBan.
+    unban: liftTemporaryBan,
   },
 
   requires: ["ModerateMembers", "KickMembers", "BanMembers", "ManageMessages"],

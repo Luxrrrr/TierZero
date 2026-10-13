@@ -27,8 +27,9 @@ import { parseDuration } from "../duration.js";
 import { resolveEvidence } from "../evidence.js";
 import { fetchMemberOrNull } from "../lookups.js";
 import { performAction } from "../perform.js";
-import { staffRoleOf } from "../staff.js";
-import { historyEmbed } from "./history.js";
+import { NOT_STAFF, staffRoleOf } from "../staff.js";
+import { historyReply } from "./history.js";
+import { HISTORY_REPLY } from "../messages.js";
 
 /**
  * The right-click menu on a member or a message. Discord decides who is shown
@@ -65,8 +66,7 @@ const DISCORD_PERMISSION: Record<MenuAction, bigint> = {
   ban: PermissionFlagsBits.BanMembers,
 };
 
-export const NOT_STAFF =
-  "Only moderators on this server's staff list can use this. Ask the server owner to add you on the Access tab of the dashboard.";
+export { NOT_STAFF };
 const needsAdmin = (action: MenuAction) => `You need to be an admin to ${NEEDS[action]}. A moderator can warn and time members out.`;
 const NOT_A_MEMBER_MESSAGE = "That message was not sent by a server member, so there is nobody to act on.";
 const REASON_ROOM = 400;
@@ -81,9 +81,11 @@ function menuEntry(
   kind: "user" | "message",
   permission: bigint,
   run: ContextCommandDefinition<ModerationSettings>["run"],
+  response?: ContextCommandDefinition<ModerationSettings>["response"],
 ): ContextCommandDefinition<ModerationSettings> {
   return {
     name,
+    ...(response ? { response } : {}),
     description,
     kind,
     build: () =>
@@ -167,10 +169,11 @@ const historyEntry = menuEntry(
     const target = targetOf(interaction);
     if (!target) return refuse(interaction, NOT_A_MEMBER_MESSAGE);
 
-    const embed = await historyEmbed(ctx.guild.id, target.user.id, target.user.username);
-    if (!embed) return refuse(interaction, `${target.user.username} has no recorded history.`);
-    await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
+    const reply = await historyReply(ctx, target.user.id, target.user.username);
+    if (!reply) return refuse(interaction, `${target.user.username} has no recorded history.`);
+    await interaction.reply({ ...reply, flags: MessageFlags.Ephemeral });
   },
+  HISTORY_REPLY,
 );
 
 export const contextCommands: ContextCommandDefinition<ModerationSettings>[] = [

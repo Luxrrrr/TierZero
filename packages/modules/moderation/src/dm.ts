@@ -1,4 +1,7 @@
-import type { Client } from "discord.js";
+import { plainReply, type ModuleContext } from "@tier0/core";
+import type { ModerationSettings } from "./settings.js";
+import { DM_MESSAGE } from "./messages.js";
+import { noticeValues, type ActionNotice } from "./modlog.js";
 
 /**
  * Best-effort direct message. A member with DMs closed, or who has left
@@ -7,14 +10,29 @@ import type { Client } from "discord.js";
  * no call site has to remember to do it itself.
  */
 export async function tryDirectMessage(
-  client: Client,
+  ctx: ModuleContext<ModerationSettings>,
   userId: string,
-  content: string,
+  notice: ActionNotice,
 ): Promise<boolean> {
   try {
-    const user = await client.users.fetch(userId);
-    await user.send(content);
-    return true;
+    const user = await ctx.client.users.fetch(userId);
+    const sent = await ctx.send(user, ctx.settings.dmMessage, noticeValues(notice), { fallback: DM_MESSAGE });
+    return sent !== null;
+  } catch {
+    return false;
+  }
+}
+
+/** A plain note to a member, outside the owner's editable message, for a correction. Best effort like the rest. */
+export async function tryPlainDirectMessage(
+  ctx: ModuleContext<ModerationSettings>,
+  userId: string,
+  text: string,
+): Promise<boolean> {
+  try {
+    const user = await ctx.client.users.fetch(userId);
+    const body = plainReply(text);
+    return (await ctx.send(user, body, {}, { fallback: body })) !== null;
   } catch {
     return false;
   }

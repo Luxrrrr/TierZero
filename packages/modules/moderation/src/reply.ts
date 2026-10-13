@@ -1,8 +1,9 @@
-import { EmbedBuilder, MessageFlags } from "discord.js";
+import { MessageFlags } from "discord.js";
 import type { ChatInputCommandInteraction } from "discord.js";
 import type { ModuleContext } from "@tier0/core";
 import type { ModerationSettings } from "./settings.js";
-import { formatModLogEntry, type ModLogEntry } from "./modlog.js";
+import { noticeValues, type ModLogEntry } from "./modlog.js";
+import { MODLOG_MESSAGE } from "./messages.js";
 import type { ModLogOutcome } from "./action-rules.js";
 
 /** A user-facing failure. Always ephemeral, and always sent before any reply. */
@@ -24,14 +25,8 @@ export async function postModLog(
   const channel = ctx.guild.channels.cache.get(channelId);
   if (!channel?.isTextBased()) return "missing";
 
-  const view = formatModLogEntry(entry);
-  const embed = new EmbedBuilder().setTitle(view.title).addFields(view.fields).setTimestamp();
-
-  try {
-    await channel.send({ embeds: [embed] });
-    return "posted";
-  } catch (error) {
-    console.error("moderation: failed to post to the mod log channel:", error);
-    return "failed";
-  }
+  // A failed send is logged by ctx.send, which also falls back to the stock post if the owner's no longer fits.
+  const links = { guildId: ctx.guild.id, dashboardBase: await ctx.dashboardUrl() };
+  const sent = await ctx.send(channel, ctx.settings.modLogMessage, noticeValues({ ...entry, links }), { fallback: MODLOG_MESSAGE });
+  return sent ? "posted" : "failed";
 }

@@ -26,9 +26,8 @@ export async function runFromCommand(
   request: CommandAction,
 ): Promise<InfractionRecord | null> {
   try {
-    // An unban weighs nobody's roles, so it has never needed the moderator's member.
-    const actorMember =
-      request.action === "unban" ? null : await fetchMemberOrNull(ctx.guild, interaction.user.id);
+    // Needed for every action: their Discord permissions are checked, and for most their roles are weighed.
+    const actorMember = await fetchMemberOrNull(ctx.guild, interaction.user.id);
     const { record } = await performAction(ctx, {
       action: request.action,
       targetId: request.target.id,

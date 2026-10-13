@@ -1,6 +1,6 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { formatModLogEntry, formatDirectMessage, actionLabel } from "../dist/modlog.js";
+import { formatModLogEntry, actionLabel, describeLength, lengthBetween, noticeValues } from "../dist/modlog.js";
 
 const TARGET = "111111111111111111";
 const MODERATOR = "222222222222222222";
@@ -102,50 +102,61 @@ describe("formatModLogEntry", () => {
   });
 });
 
-describe("formatDirectMessage", () => {
-  test("uses the lowercased action label in a sentence", () => {
-    const message = formatDirectMessage("Test Server", {
-      action: "warn",
-      reason: null,
-      expiresAt: null,
-    });
-    assert.equal(message, "You were warned in Test Server.");
+describe("describeLength", () => {
+  test("uses the largest unit that divides the length exactly", () => {
+    assert.equal(describeLength(10 * 60_000), "10 minutes");
+    assert.equal(describeLength(60_000), "1 minute");
+    assert.equal(describeLength(2 * 3_600_000), "2 hours");
+    assert.equal(describeLength(90 * 60_000), "90 minutes");
+    assert.equal(describeLength(7 * 86_400_000), "7 days");
+    assert.equal(describeLength(30_000), "30 seconds");
+  });
+});
+
+describe("lengthBetween", () => {
+  test("rounds a stored length over a minute to the minute, so it reads as it was typed", () => {
+    const from = new Date("2030-01-01T00:00:00.400Z");
+    const to = new Date("2030-01-01T00:10:00.000Z");
+    assert.equal(describeLength(lengthBetween(from, to)), "10 minutes");
   });
 
-  test("appends the reason when one was given", () => {
-    const message = formatDirectMessage("Test Server", {
-      action: "kick",
-      reason: "Broke rule 4",
-      expiresAt: null,
-    });
-    assert.equal(message, "You were kicked in Test Server. Reason: Broke rule 4");
+  test("keeps a short length to the second", () => {
+    const from = new Date("2030-01-01T00:00:00.000Z");
+    assert.equal(lengthBetween(from, new Date("2030-01-01T00:00:30.000Z")), 30_000);
+  });
+});
+
+describe("noticeValues", () => {
+  const expiresAt = new Date("2030-01-01T00:00:00.000Z");
+  const seconds = Math.floor(expiresAt.getTime() / 1000);
+
+  test("leaves the optional parts empty when there is no reason and nothing expires", () => {
+    const values = noticeValues({ action: "kick", reason: null, expiresAt: null });
+    assert.equal(values.action, "kicked");
+    assert.equal(values.actionTitle, "Kicked");
+    assert.equal(values.reason, "No reason given");
+    assert.equal(values.reasonNote, "");
+    assert.equal(values.expires, "");
+    assert.equal(values.expiryNote, "");
+    assert.equal(values.duration, "");
   });
 
-  test("appends an expiry note when there is one", () => {
-    const expiresAt = new Date("2030-01-01T00:00:00.000Z");
-    const message = formatDirectMessage("Test Server", {
-      action: "timeout",
-      reason: null,
-      expiresAt,
-    });
-    const seconds = Math.floor(expiresAt.getTime() / 1000);
-    assert.equal(
-      message,
-      `You were timed out in Test Server. This expires <t:${seconds}:R>.`,
-    );
+  test("words the reason and the expiry so they follow a sentence", () => {
+    const values = noticeValues({ action: "ban", reason: "Repeated spam", expiresAt, durationMs: 3 * 86_400_000 });
+    assert.equal(values.reasonNote, " Reason: Repeated spam");
+    assert.equal(values.expiryNote, ` This expires <t:${seconds}:R>.`);
+    assert.equal(values.expires, `<t:${seconds}:f> (<t:${seconds}:R>)`);
+    assert.equal(values.expiresRelative, `<t:${seconds}:R>`);
+    assert.equal(values.duration, "3 days");
   });
 
-  test("combines a reason and an expiry note", () => {
-    const expiresAt = new Date("2030-01-01T00:00:00.000Z");
-    const message = formatDirectMessage("Test Server", {
-      action: "ban",
-      reason: "Repeated spam",
-      expiresAt,
-    });
-    const seconds = Math.floor(expiresAt.getTime() / 1000);
-    assert.equal(
-      message,
-      `You were banned in Test Server. Reason: Repeated spam This expires <t:${seconds}:R>.`,
-    );
+  test("names the moderator and the member only when it is told who they are", () => {
+    const bare = noticeValues({ action: "warn", reason: null, expiresAt: null });
+    assert.equal("moderator" in bare, false);
+    assert.equal("case" in bare, false);
+    const full = noticeValues({ action: "warn", reason: null, expiresAt: null, moderatorId: MODERATOR, targetId: TARGET, caseNumber: 9 });
+    assert.equal(full.moderator, `<@${MODERATOR}>`);
+    assert.equal(full.member, `<@${TARGET}>`);
+    assert.equal(full.case, 9);
   });
 });

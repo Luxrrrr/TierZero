@@ -23,6 +23,9 @@ import {
   disabledActions,
   shouldMessage,
   banOutlivesTask,
+  checkActorMayAct,
+  cannotActOn,
+  correctionText,
 } from "../dist/action-rules.js";
 
 const DAY = 86_400_000;
@@ -266,24 +269,74 @@ describe("Commands page switches", () => {
 
 describe("shouldMessage", () => {
   test("sends nothing when the setting is off", () => {
-    assert.equal(shouldMessage("warn", "dashboard", true, false), "off");
+    assert.equal(shouldMessage("warn", true, false), "off");
   });
 
-  test("withholds a dashboard message to someone not in the server", () => {
+  test("withholds a message to someone not in the server, however the action was asked for", () => {
     for (const action of ["warn", "timeout", "timeout-clear", "kick", "ban"] as const) {
-      assert.equal(shouldMessage(action, "dashboard", false, true), "withheld");
+      assert.equal(shouldMessage(action, false, true), "withheld");
     }
   });
 
-  test("still messages a confirmed ban on unban, and anyone a slash command names", () => {
-    assert.equal(shouldMessage("unban", "dashboard", false, true), "send");
-    assert.equal(shouldMessage("ban", "command", false, true), "send");
-    assert.equal(shouldMessage("warn", "dashboard", true, true), "send");
+  test("still messages a confirmed ban on unban, and members who are here", () => {
+    assert.equal(shouldMessage("unban", false, true), "send");
+    assert.equal(shouldMessage("ban", true, true), "send");
+    assert.equal(shouldMessage("warn", true, true), "send");
   });
 
   test("a withheld message becomes a note", () => {
     const notes = outcomeNotes({ action: "ban", dm: "withheld", modLog: "posted", targetInServer: false });
     assert.ok(notes.includes("They are not in the server, so they were not sent a direct message."));
+  });
+});
+
+describe("checkTargetIdentity and the server owner", () => {
+  test("refuses the owner as a target", () => {
+    assert.match(refusal(() => checkTargetIdentity("5", "1", "9", "5")).message, /owner cannot be actioned/);
+  });
+
+  test("lets anyone else through when an owner is named", () => {
+    checkTargetIdentity("2", "1", "9", "5");
+  });
+});
+
+describe("checkActorMayAct", () => {
+  const base = { action: "ban" as const, hasDiscordPermission: false, staffRole: null, isInstanceOwner: false };
+
+  test("refuses a member with neither the permission nor a staff role", () => {
+    for (const action of ["warn", "timeout", "timeout-clear", "kick", "ban", "unban"] as const) {
+      assert.equal(refusal(() => checkActorMayAct({ ...base, action })).status, 403);
+    }
+  });
+
+  test("allows the Discord permission on its own", () => {
+    checkActorMayAct({ ...base, hasDiscordPermission: true });
+  });
+
+  test("allows a staff role at a level that covers the action, and no further", () => {
+    checkActorMayAct({ ...base, action: "warn", staffRole: "mod" });
+    checkActorMayAct({ ...base, action: "timeout-clear", staffRole: "mod" });
+    checkActorMayAct({ ...base, action: "ban", staffRole: "admin" });
+    assert.equal(refusal(() => checkActorMayAct({ ...base, action: "ban", staffRole: "mod" })).status, 403);
+    assert.equal(refusal(() => checkActorMayAct({ ...base, action: "kick", staffRole: "mod" })).status, 403);
+  });
+
+  test("trusts the person running the install", () => {
+    checkActorMayAct({ ...base, isInstanceOwner: true });
+  });
+});
+
+describe("cannotActOn", () => {
+  test("is worded for where it is shown", () => {
+    assert.match(cannotActOn("ban", "command"), /^I cannot ban that member/);
+    assert.match(cannotActOn("timeout", "dashboard"), /^The bot cannot time that member out/);
+  });
+});
+
+describe("correctionText", () => {
+  test("says nothing happened and names what they were told", () => {
+    assert.match(correctionText("ban"), /about being banned/);
+    assert.match(correctionText("timeout"), /Nothing happened to you/);
   });
 });
 

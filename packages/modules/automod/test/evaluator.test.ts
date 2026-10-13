@@ -1,7 +1,12 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { evaluateMessage, normalizeForBannedWords } from "../dist/evaluator.js";
+import { evaluateMessage, fingerprintOf, normalizeDomainEntry, normalizeForBannedWords, normalizeInviteEntry } from "../dist/evaluator.js";
 import { settings } from "../dist/settings.js";
+
+// An earlier message as the state keeps it: a digest and a time.
+function past(content, timestamp) {
+  return { fingerprint: fingerprintOf(content), timestamp };
+}
 
 function defaultSettings() {
   const parsed = settings.parse({});
@@ -284,8 +289,8 @@ describe("repeatedText", () => {
   test("repeating the same message enough times within the window trips", () => {
     const settingsValue = withRule("repeatedText", { repeatMessageCount: 3, repeatWindow: 30_000 });
     const history = [
-      { content: "buy my stuff", timestamp: 990_000 },
-      { content: "buy my stuff", timestamp: 995_000 },
+      past("buy my stuff", 990_000),
+      past("buy my stuff", 995_000),
     ];
     const verdict = evaluateMessage(
       input({ content: "buy my stuff", now: 1_000_000, history, settings: settingsValue }),
@@ -297,8 +302,8 @@ describe("repeatedText", () => {
   test("copies outside the window are not counted", () => {
     const settingsValue = withRule("repeatedText", { repeatMessageCount: 3, repeatWindow: 10_000 });
     const history = [
-      { content: "buy my stuff", timestamp: 500_000 },
-      { content: "buy my stuff", timestamp: 995_000 },
+      past("buy my stuff", 500_000),
+      past("buy my stuff", 995_000),
     ];
     const verdict = evaluateMessage(
       input({ content: "buy my stuff", now: 1_000_000, history, settings: settingsValue }),
@@ -308,7 +313,7 @@ describe("repeatedText", () => {
 
   test("distinct messages never count as repeats of each other", () => {
     const settingsValue = withRule("repeatedText", { repeatMessageCount: 2 });
-    const history = [{ content: "good morning", timestamp: 999_000 }];
+    const history = [past("good morning", 999_000)];
     const verdict = evaluateMessage(
       input({ content: "good evening", now: 1_000_000, history, settings: settingsValue }),
     );
@@ -317,7 +322,7 @@ describe("repeatedText", () => {
 
   test("comparison ignores case and surrounding whitespace", () => {
     const settingsValue = withRule("repeatedText", { repeatMessageCount: 2 });
-    const history = [{ content: "  Buy My Stuff  ", timestamp: 999_000 }];
+    const history = [past("  Buy My Stuff  ", 999_000)];
     const verdict = evaluateMessage(
       input({ content: "buy my stuff", now: 1_000_000, history, settings: settingsValue }),
     );
@@ -415,9 +420,9 @@ describe("rateLimit", () => {
   test("trips once the count in the window exceeds the limit", () => {
     const settingsValue = withRule("rateLimit", { limit: 3, window: 10_000 });
     const history = [
-      { content: "a", timestamp: 998_000 },
-      { content: "b", timestamp: 998_500 },
-      { content: "c", timestamp: 999_000 },
+      past("a", 998_000),
+      past("b", 998_500),
+      past("c", 999_000),
     ];
     const verdict = evaluateMessage(input({ now: 1_000_000, history, settings: settingsValue }));
     assert.equal(verdict.triggered, true);
@@ -427,8 +432,8 @@ describe("rateLimit", () => {
   test("exactly at the limit does not trip", () => {
     const settingsValue = withRule("rateLimit", { limit: 3, window: 10_000 });
     const history = [
-      { content: "a", timestamp: 998_500 },
-      { content: "b", timestamp: 999_000 },
+      past("a", 998_500),
+      past("b", 999_000),
     ];
     const verdict = evaluateMessage(input({ now: 1_000_000, history, settings: settingsValue }));
     assert.equal(verdict.triggered, false);
@@ -437,8 +442,8 @@ describe("rateLimit", () => {
   test("messages outside the window are not counted", () => {
     const settingsValue = withRule("rateLimit", { limit: 2, window: 5_000 });
     const history = [
-      { content: "a", timestamp: 100_000 },
-      { content: "b", timestamp: 200_000 },
+      past("a", 100_000),
+      past("b", 200_000),
     ];
     const verdict = evaluateMessage(input({ now: 1_000_000, history, settings: settingsValue }));
     assert.equal(verdict.triggered, false);
@@ -452,7 +457,7 @@ describe("combining rules", () => {
       ...base,
       rateLimit: { ...base.rateLimit, enabled: true, limit: 1, window: 10_000, action: "timeout" },
     };
-    const history = [{ content: "prior message", timestamp: 999_000 }];
+    const history = [past("prior message", 999_000)];
     const verdict = evaluateMessage(
       input({ content: "badword", now: 1_000_000, history, settings: settingsValue }),
     );
@@ -492,5 +497,186 @@ describe("combining rules", () => {
     const verdict = evaluateMessage(input({ content, settings: settingsValue }));
     assert.equal(verdict.action, "warn");
     assert.equal(verdict.timeoutMs, undefined);
+  });
+});
+
+describe("reasons never quote the message", () => {
+  test("an invite names no code in the reason and keeps it as detail", () => {
+    const verdict = evaluateMessage(input({ content: "discord.gg/randomcode", settings: withRule("invites") }));
+    assert.equal(verdict.reason, "Posted a Discord invite link");
+    assert.equal(verdict.detail, "randomcode");
+  });
+
+  test("a link names no host in the reason and keeps it as detail", () => {
+    const verdict = evaluateMessage(input({ content: "see https://sketchy.example/deal", settings: withRule("links") }));
+    assert.equal(verdict.reason, "Posted a link to a site that isn't allowed");
+    assert.equal(verdict.detail, "sketchy.example");
+  });
+
+  test("rules that match nothing specific carry no detail", () => {
+    const verdict = evaluateMessage(input({ content: "SHOUTING IN CAPS ALL THE TIME", settings: withRule("capitals", { minLength: 5 }) }));
+    assert.equal(verdict.rule, "capitals");
+    assert.equal(verdict.detail, undefined);
+    assert.equal(verdict.matches, undefined);
+  });
+
+  test("banned words report the entries of the list that matched, not the member's message", () => {
+    const verdict = evaluateMessage(
+      input({
+        content: "well Badword and some other words, plus a b4dw0rd evasion",
+        settings: withRule("bannedWords", { words: ["badword", "  not here ", "other words", "nope"] }),
+      }),
+    );
+    assert.equal(verdict.reason, "Used a banned word or phrase");
+    assert.deepEqual(verdict.matches, ["badword", "other words"]);
+    assert.equal(verdict.detail, "badword, other words");
+    assert.ok(!verdict.detail?.includes("well"));
+  });
+
+  test("a word that matched both plain and folded is listed once", () => {
+    const verdict = evaluateMessage(input({ content: "badword", settings: withRule("bannedWords", { words: ["badword", "badword"] }) }));
+    assert.deepEqual(verdict.matches, ["badword"]);
+  });
+});
+
+describe("links with hostile addresses", () => {
+  const hostile = "https://x<@&123456789012345678>";
+
+  test("a role mention smuggled into the host is an invalid address, not echoed", () => {
+    const verdict = evaluateMessage(input({ content: hostile, settings: withRule("links") }));
+    assert.equal(verdict.triggered, true);
+    assert.equal(verdict.detail, "an invalid address");
+    assert.ok(!verdict.reason?.includes("<@"));
+    assert.ok(!verdict.reason?.includes("123456789012345678"));
+  });
+
+  test("an allowlisted name in front of an @ does not pass for that site", () => {
+    const settingsValue = withRule("links", { allowlist: ["youtube.com"] });
+    const verdict = evaluateMessage(input({ content: "https://youtube.com@evil.example/x", settings: settingsValue }));
+    assert.equal(verdict.triggered, true);
+  });
+
+  test("a link wrapped in brackets or emphasis is still read as the site it points to", () => {
+    const settingsValue = withRule("links", { allowlist: ["youtube.com"] });
+    for (const content of ["<https://youtube.com/x>", "(https://youtube.com)", "**https://youtube.com**", "[a](https://youtube.com/x)", "https://youtube.com."]) {
+      assert.equal(evaluateMessage(input({ content, settings: settingsValue })).triggered, false, content);
+    }
+  });
+
+  test("a port and an international name are valid hosts", () => {
+    const settingsValue = withRule("links", { allowlist: ["münchen.de"] });
+    assert.equal(evaluateMessage(input({ content: "https://münchen.de:8080/a", settings: settingsValue })).triggered, false);
+  });
+});
+
+describe("allowlist entries pasted as whatever was copied", () => {
+  test("a domain entry is reduced to its host", () => {
+    for (const entry of ["https://youtube.com/", "http://www.youtube.com/watch?v=1", "youtube.com:443/x#top", "YouTube.com", " *.youtube.com ", "www.youtube.com."]) {
+      assert.equal(normalizeDomainEntry(entry), "youtube.com", entry);
+    }
+  });
+
+  test("a pasted URL entry allows the site", () => {
+    const settingsValue = withRule("links", { allowlist: ["https://youtube.com/"] });
+    assert.equal(evaluateMessage(input({ content: "https://youtube.com/watch?v=1", settings: settingsValue })).triggered, false);
+    assert.equal(evaluateMessage(input({ content: "https://music.youtube.com/a", settings: settingsValue })).triggered, false);
+    assert.equal(evaluateMessage(input({ content: "https://notyoutube.com/a", settings: settingsValue })).triggered, true);
+  });
+
+  test("an entry with nothing usable in it allows nothing", () => {
+    const settingsValue = withRule("links", { allowlist: ["", "https://"] });
+    assert.equal(evaluateMessage(input({ content: "https://a.example", settings: settingsValue })).triggered, true);
+  });
+
+  test("an invite entry drops a query string and fragment", () => {
+    assert.equal(normalizeInviteEntry("https://discord.gg/Abc123?event=1"), "abc123");
+    assert.equal(normalizeInviteEntry("discord.gg/abc123/#top"), "abc123");
+    const settingsValue = withRule("invites", { allowlist: ["https://discord.gg/abc123?event=1"] });
+    assert.equal(evaluateMessage(input({ content: "discord.gg/abc123", settings: settingsValue })).triggered, false);
+  });
+});
+
+describe("banned words and punctuation, scripts and substrings", () => {
+  const trips = (content, words) =>
+    evaluateMessage(input({ content, settings: withRule("bannedWords", { words }) })).triggered;
+
+  test("trailing punctuation does not hide a word", () => {
+    assert.equal(trips("well damn!", ["damn"]), true);
+    assert.equal(trips("what the ass!", ["ass"]), true);
+    assert.equal(trips("DAMN!!!", ["damn"]), true);
+  });
+
+  test("a leetspeak spelling is still folded", () => {
+    assert.equal(trips("d@mn it", ["damn"]), true);
+    assert.equal(trips("you a55", ["ass"]), true);
+  });
+
+  test("words in other scripts match at their edges", () => {
+    assert.equal(trips("ты блять", ["блять"]), true);
+    assert.equal(trips("Это БЛЯТЬ!", ["блять"]), true);
+    assert.equal(trips("проблятьство", ["блять"]), false);
+  });
+
+  test("accented words match, composed or not", () => {
+    assert.equal(trips("quel connard!", ["connard"]), true);
+    assert.equal(trips("café is closed", ["café"]), true);
+    assert.equal(trips("the CAFÉ", ["café"]), true);
+  });
+
+  test("a word inside a longer word does not match", () => {
+    assert.equal(trips("the assassin waited", ["ass"]), false);
+    assert.equal(trips("Scunthorpe is a town", ["cunt"]), false);
+    assert.equal(trips("classic", ["ass"]), false);
+    assert.equal(trips("assess9", ["ass"]), false);
+    assert.equal(trips("no-ass-here", ["ass"]), true, "a hyphen is an edge");
+  });
+
+  test("a phrase with regex characters is matched literally", () => {
+    assert.equal(trips("what (the) heck", ["(the)"]), true);
+    assert.equal(trips("a.b", ["a.b"]), true);
+    assert.equal(trips("axb", ["a.b"]), false);
+  });
+});
+
+describe("threads", () => {
+  test("a thread in an exempt channel is exempt too", () => {
+    const settingsValue = { ...withRule("invites"), exemptChannels: ["channel-1"] };
+    const content = "discord.gg/randomcode";
+    assert.equal(evaluateMessage(input({ content, channelId: "thread-9", settings: settingsValue })).triggered, true);
+    assert.equal(evaluateMessage(input({ content, channelId: "thread-9", parentChannelId: "channel-1", settings: settingsValue })).triggered, false);
+  });
+
+  test("a rule's own exempt channel covers its threads", () => {
+    const settingsValue = withRule("invites", { exemptChannels: ["channel-1"] });
+    const verdict = evaluateMessage(input({ content: "discord.gg/randomcode", channelId: "thread-9", parentChannelId: "channel-1", settings: settingsValue }));
+    assert.equal(verdict.triggered, false);
+  });
+});
+
+describe("edits", () => {
+  test("an edit is not counted toward the rate limit", () => {
+    const settingsValue = withRule("rateLimit", { limit: 2, window: 5_000, action: "delete" });
+    const history = [past("a", 998_000), past("b", 998_500), past("c", 999_000)];
+    assert.equal(evaluateMessage(input({ now: 1_000_000, history, settings: settingsValue })).triggered, true);
+    assert.equal(evaluateMessage(input({ now: 1_000_000, history, isEdit: true, settings: settingsValue })).triggered, false);
+  });
+
+  test("an edit is not another copy for repeated text, but a character wall still counts", () => {
+    const settingsValue = withRule("repeatedText", { repeatMessageCount: 2, repeatWindow: 60_000 });
+    const history = [past("buy my stuff", 999_000)];
+    assert.equal(evaluateMessage(input({ content: "buy my stuff", now: 1_000_000, history, settings: settingsValue })).triggered, true);
+    assert.equal(evaluateMessage(input({ content: "buy my stuff", now: 1_000_000, history, isEdit: true, settings: settingsValue })).triggered, false);
+    assert.equal(evaluateMessage(input({ content: "aaaaaaaaaaaaaaaa", isEdit: true, settings: settingsValue })).triggered, true);
+  });
+});
+
+describe("fingerprintOf", () => {
+  test("is the same for text that differs only in case and spacing", () => {
+    assert.equal(fingerprintOf("  Buy   My Stuff "), fingerprintOf("buy my stuff"));
+    assert.notEqual(fingerprintOf("buy my stuff"), fingerprintOf("buy my stuf"));
+  });
+
+  test("stays short however long the message is", () => {
+    assert.ok(fingerprintOf("x".repeat(100_000)).length <= 16);
   });
 });

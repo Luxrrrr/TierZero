@@ -1,7 +1,7 @@
 import { PermissionFlagsBits, type Guild, type GuildMember, type Message } from "discord.js";
-import { EVIDENCE_LIMITS, type EvidenceMessage, type EvidenceRef } from "@tier0/core";
+import { EVIDENCE_LIMITS, type EvidenceMessage, type EvidenceRef, type MessageVersion } from "@tier0/core";
 import { ActionRefused } from "./action-rules.js";
-import { evidenceFromLogged, loadLogged } from "@tier0/module-serverlog";
+import { LOG_LIMITS, evidenceFromLogged, loadLogged, versionsOf, type LoggedRow } from "@tier0/module-serverlog";
 import { recentMessages, type RecentMessage } from "./recent-messages.js";
 
 /** Who is attaching, which decides which channels' messages they may see. */
@@ -57,6 +57,76 @@ export function copyOfFetched(guildId: string, channelName: string, message: Mes
     url: link(guildId, message.channelId, message.id),
     deleted: false,
   };
+}
+
+/** The message that tripped an automod rule, as plain values so the copy can be built without discord.js. */
+export interface TrippingMessage {
+  id: string;
+  channelId: string;
+  channelName: string;
+  content: string;
+  attachments: readonly { name: string; url: string; contentType: string | null }[];
+  createdAt: Date;
+}
+
+export interface TripEvidenceInput {
+  guildId: string;
+  message: TrippingMessage;
+  /** The server log's copy of the message, when it has one. It may not have recorded this edit yet. */
+  logged: LoggedRow | null;
+  /** What the message said before the edit, when Discord still had it. */
+  previousContent: string | null;
+  /** The rule tripped on an edit rather than on the message as first sent. */
+  isEdit: boolean;
+  /** The message is gone, whether automod removed it or someone beat it to it. */
+  deleted: boolean;
+  now: Date;
+}
+
+/**
+ * The copy automod keeps of a message that tripped a rule, in the shape a
+ * moderator's attachment has, so the dashboard shows both the same way. When
+ * the message was edited into breaking the rule, its earlier versions are kept
+ * and the latest is flagged as the one that did. It is kept even when the
+ * message could not be deleted.
+ */
+export function evidenceForTrip(input: TripEvidenceInput): EvidenceMessage {
+  const { message, logged, now } = input;
+  let versions: MessageVersion[] = [];
+  if (logged) versions = versionsOf(logged);
+  else if (input.isEdit && input.previousContent !== null && input.previousContent !== message.content) {
+    versions = [{ content: input.previousContent.slice(0, LOG_LIMITS.content), at: message.createdAt.toISOString() }];
+  }
+  // The log keeps text clipped to its own limit, so compare like with like.
+  const current = message.content.slice(0, LOG_LIMITS.content);
+  if (versions.length > 0 && versions[versions.length - 1]?.content !== current) {
+    versions = [...versions, { content: current, at: now.toISOString() }];
+  }
+
+  const kept = versions.slice(-EVIDENCE_LIMITS.versions).map((v) => ({ content: clip(v.content), at: v.at }));
+  return {
+    id: message.id,
+    channelId: message.channelId,
+    channelName: message.channelName || logged?.channelName || "",
+    content: clip(message.content),
+    attachments: trimAttachments(message.attachments),
+    createdAt: message.createdAt.toISOString(),
+    url: link(input.guildId, message.channelId, message.id),
+    deleted: input.deleted,
+    deletedAt: input.deleted ? (logged?.deletedAt ?? now).toISOString() : null,
+    ...(kept.length > 1 ? { versions: kept, ...(input.isEdit ? { flagged: kept.length - 1 } : {}) } : {}),
+  };
+}
+
+/** The server log's row for a message, or null when there is none or the log cannot be read. */
+export async function loggedCopyOf(guildId: string, messageId: string): Promise<LoggedRow | null> {
+  try {
+    const [row] = await loadLogged({ guildId, messageId }, 1);
+    return row ?? null;
+  } catch (error) {
+    console.error("[automod] could not read the message log:", error);
+    return null;
+  }
 }
 
 /**
