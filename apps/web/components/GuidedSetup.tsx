@@ -192,6 +192,7 @@ export function GuidedSetup({ guildId, serverName, title, blurb, steps }: Props)
               errors={errors}
               disabled={saving}
               generalLabel="Basics"
+              collapse={false}
               onChange={(next) =>
                 setDrafts((current) => ({ ...current, [step.moduleId]: next }))
               }

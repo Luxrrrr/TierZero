@@ -2,6 +2,8 @@ import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 import {
   blockMessage,
+  chipCaption,
+  choiceLayout,
   normalizeSelection,
   sameSelection,
   toggleChoice,
@@ -82,5 +84,67 @@ describe("blockMessage", () => {
   test("says why nothing more can be added", () => {
     assert.equal(blockMessage("max", { max: 2 }), "Only 2 can be picked.");
     assert.equal(blockMessage("max", { max: 1 }), "Only one can be picked.");
+  });
+});
+
+describe("choiceLayout", () => {
+  test("four options or fewer are chips", () => {
+    assert.equal(choiceLayout(3), "chips");
+    assert.equal(choiceLayout(4), "chips");
+  });
+
+  test("more than four are rows", () => {
+    assert.equal(choiceLayout(5), "rows");
+  });
+
+  test("the schema's own choice wins", () => {
+    assert.equal(choiceLayout(3, "rows"), "rows");
+    assert.equal(choiceLayout(9, "chips"), "chips");
+  });
+
+  test("ignores a value it does not know", () => {
+    assert.equal(choiceLayout(3, "grid"), "chips");
+  });
+});
+
+describe("chipCaption", () => {
+  const options = [
+    { value: "delete", description: "Removes the message." },
+    { value: "warn", description: "Adds a warning to their record." },
+    { value: "timeout" },
+  ];
+
+  test("describes the selection in option order when nothing is hovered or focused", () => {
+    assert.equal(chipCaption(options, ["warn", "delete"]), "Removes the message. Adds a warning to their record.");
+  });
+
+  test("skips an option that has no description", () => {
+    assert.equal(chipCaption(options, ["timeout", "delete"]), "Removes the message.");
+  });
+
+  test("says what the hovered or focused option does, hover first", () => {
+    assert.equal(chipCaption(options, ["delete"], undefined, "warn"), "Adds a warning to their record.");
+    assert.equal(chipCaption(options, ["delete"], "delete", "warn"), "Removes the message.");
+  });
+
+  test("falls back to the selection for an option with nothing to say", () => {
+    assert.equal(chipCaption(options, ["delete"], "timeout"), "Removes the message.");
+  });
+
+  test("is empty when nothing is selected", () => {
+    assert.equal(chipCaption(options, []), "");
+  });
+});
+
+describe("chip selection", () => {
+  test("refuses to turn off the last chip when a minimum is set", () => {
+    const result = toggleChoice(["delete"], "delete", ORDER, { min: 1 });
+    assert.equal(result.blocked, "min");
+    assert.deepEqual(result.next, ["delete"]);
+  });
+
+  test("selections compare equal whatever the order, which decides if Reset shows", () => {
+    assert.equal(sameSelection(["delete"], ["delete", "warn"]), false);
+    assert.equal(sameSelection(["warn", "delete"], ["delete", "warn"]), true);
   });
 });

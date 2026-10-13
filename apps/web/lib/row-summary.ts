@@ -148,6 +148,7 @@ export function summarizeChoices(
   values: readonly unknown[],
   options: readonly Option[],
   longest: number = LONGEST_TEXT_DETAIL,
+  separator = ", ",
 ): string | undefined {
   const picked = new Set(values.filter((entry): entry is string => typeof entry === "string"));
   const known = new Set(options.map((option) => option.value));
@@ -157,19 +158,81 @@ export function summarizeChoices(
   ];
   if (labels.length === 0) return undefined;
 
-  const all = labels.join(", ");
+  const all = labels.join(separator);
   if (all.length <= longest) return all;
 
   const shown: string[] = [];
   for (const label of labels) {
     const rest = labels.length - shown.length - 1;
-    const candidate = [...shown, label].join(", ") + (rest > 0 ? ` +${rest}` : "");
+    const candidate = [...shown, label].join(separator) + (rest > 0 ? ` +${rest}` : "");
     if (candidate.length > longest && shown.length > 0) break;
     shown.push(label);
   }
   const hidden = labels.length - shown.length;
-  const text = shown.join(", ") + (hidden > 0 ? ` +${hidden}` : "");
+  const text = shown.join(separator) + (hidden > 0 ? ` +${hidden}` : "");
   return text.length > longest ? truncate(text) : text;
+}
+
+/**
+ * The one line a collapsed group shows beside its title, built from the
+ * children its schema names in `summary`. Choices read as their labels, a
+ * duration as a short length, a switch as its label and only while it is on;
+ * anything else reads the way it does in a list row.
+ *
+ * `relevant` says whether a child is in play right now (its `when` is met), so
+ * a timeout length is left out while no timeout is picked. Channels and roles
+ * are skipped: their names are only known to the pickers, and a header that
+ * showed an ID would be worse than none.
+ */
+export function summarizeGroup(
+  fields: Fields,
+  values: Record<string, unknown>,
+  keys: readonly string[],
+  labels: Pick<RowLabels, "duration">,
+  relevant: (key: string) => boolean = () => true,
+): string {
+  const rowLabels: RowLabels = { channel: () => "", role: () => "", ...labels };
+  const parts: string[] = [];
+
+  for (const key of keys) {
+    const field = fields[key];
+    if (!field || !relevant(key)) continue;
+    const value = values[key] ?? field.default;
+    const label = (field.label as string | undefined) ?? humanize(key);
+
+    let part: string | undefined;
+    switch (field.kind) {
+      case "boolean":
+        part = value === true ? label : undefined;
+        break;
+      case "duration":
+        part = value === undefined || value === null || value === "" ? undefined : labels.duration(value);
+        break;
+      case "channel":
+      case "role":
+      case "object":
+        part = undefined;
+        break;
+      case "array": {
+        const of = field.of as FieldDescriptor | undefined;
+        part =
+          of?.kind === "choice"
+            ? summarizeChoices(
+                Array.isArray(value) ? value : [],
+                (of.options ?? []) as Option[],
+                Number.POSITIVE_INFINITY,
+                DETAIL_SEPARATOR,
+              )
+            : detailFor(field, key, value, rowLabels);
+        break;
+      }
+      default:
+        part = detailFor(field, key, value, rowLabels);
+    }
+    if (part) parts.push(part);
+  }
+
+  return parts.join(DETAIL_SEPARATOR);
 }
 
 function truncate(text: string): string {

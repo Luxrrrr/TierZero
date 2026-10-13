@@ -80,9 +80,9 @@ describe("the actions setting", () => {
       of: {
         kind: "choice",
         options: [
-          { value: "delete", label: "Delete the message", description: "Removes the message from the channel.", recommended: true },
-          { value: "warn", label: "Warn the member", description: "Adds a warning to the member's record.", recommended: false },
-          { value: "timeout", label: "Time the member out", description: "Mutes the member for the timeout length below.", recommended: false },
+          { value: "delete", label: "Delete", description: "Removes the message.", recommended: true },
+          { value: "warn", label: "Warn", description: "Adds a warning to their record.", recommended: false },
+          { value: "timeout", label: "Time out", description: "Mutes them for the timeout length.", recommended: false },
         ],
       },
     });
@@ -165,5 +165,38 @@ describe("upgradeRule", () => {
     const stored = { enabled: true, action: "warn" };
     upgrade(stored);
     assert.deepEqual(stored, { enabled: true, action: "warn" });
+  });
+});
+
+describe("how the rules are laid out on the dashboard", () => {
+  const fields = settings.describe().fields as Record<string, Record<string, unknown>>;
+  const ruleFields = (rule: string) => Object.keys(fields[rule]?.fields as Record<string, unknown>);
+
+  test("every rule is a collapsible section summarised by its actions", () => {
+    for (const rule of RULES) {
+      assert.equal(fields[rule]?.collapsible, true, rule);
+      assert.deepEqual(fields[rule]?.summary, ["actions", "timeoutDuration"], rule);
+    }
+  });
+
+  test("the common fields come first and the exemptions last", () => {
+    for (const rule of RULES) {
+      const keys = ruleFields(rule);
+      assert.deepEqual(keys.slice(0, 3), ["enabled", "actions", "timeoutDuration"], rule);
+      assert.deepEqual(keys.slice(-2), ["exemptRoles", "exemptChannels"], rule);
+    }
+  });
+
+  test("the timeout length still waits for the timeout action", () => {
+    for (const rule of RULES) {
+      const length = (fields[rule]?.fields as Record<string, Record<string, unknown>>).timeoutDuration;
+      assert.deepEqual(length?.when, { field: "actions", includes: "timeout" }, rule);
+    }
+  });
+
+  test("the three log posts are compact rows", () => {
+    const messages = (fields.logMessages?.fields ?? {}) as Record<string, Record<string, unknown>>;
+    assert.deepEqual(Object.keys(messages), ["delete", "warn", "timeout"]);
+    for (const message of Object.values(messages)) assert.equal(message.compact, true);
   });
 });

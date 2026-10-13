@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { parseMessage, plainReply, type MessageBody } from "@tier0/core";
 import { MessageEditorDialog, previewContextFor, type EditorVariable } from "../messages/MessageEditorDialog";
 import { MessagePreview } from "../messages/MessagePreview";
+import { messageSummary } from "../../lib/message-summary";
 
 interface Props {
   id: string;
@@ -22,6 +23,8 @@ interface Props {
   /** Called with undefined to go back to the default. */
   onChange(next: MessageBody | undefined): void;
   disabled?: boolean;
+  /** One line of text instead of a preview, for a list of minor messages. */
+  compact?: boolean;
   "aria-describedby"?: string;
 }
 
@@ -54,6 +57,7 @@ export function MessageControl({
   value,
   onChange,
   disabled = false,
+  compact = false,
   "aria-describedby": describedBy,
 }: Props) {
   const [open, setOpen] = useState(false);
@@ -64,6 +68,70 @@ export function MessageControl({
 
   const direct = delivery === "dm";
   const componentMode = !components ? "none" : direct ? "direct" : "all";
+
+  const dialog = open ? (
+    <MessageEditorDialog
+      guildId={guildId}
+      title={label}
+      hint={customized ? "This is the message the bot sends instead of the usual one." : "This starts from what the bot sends now."}
+      current={customized ? stored : null}
+      starting={starting}
+      variables={variables}
+      sharedWording={FEATURE_WORDING}
+      hideShared={direct ? DM_HIDDEN : undefined}
+      showReactions={!direct}
+      components={componentMode}
+      note={note}
+      footnote={
+        direct
+          ? "The preview fills the variables with examples. A direct message mentions nobody."
+          : "The preview fills the variables with examples. Mentions of @everyone and @here never ping from here."
+      }
+      textLabel="Message text"
+      saveLabel="Use this message"
+      resetLabel="Go back to the default"
+      onSave={(message) => {
+        // Saving what the default already says stores nothing, so a later change to the default still reaches this server.
+        onChange(JSON.stringify(message) === JSON.stringify(starting) ? undefined : message);
+        setOpen(false);
+      }}
+      onReset={() => {
+        onChange(undefined);
+        setOpen(false);
+      }}
+      onClose={() => setOpen(false)}
+    />
+  ) : null;
+
+  if (compact) {
+    const summary = messageSummary(shown);
+    return (
+      <div className="message-compact">
+        <p className="message-compact-text" title={summary} data-default={customized ? undefined : "true"}>
+          {summary}
+        </p>
+        <div className="message-compact-actions">
+          <button
+            id={id}
+            type="button"
+            className="btn btn-secondary btn-sm"
+            disabled={disabled}
+            aria-describedby={describedBy}
+            onClick={() => setOpen(true)}
+          >
+            Edit message
+            <span className="visually-hidden"> {label}</span>
+          </button>
+          {customized ? (
+            <button type="button" className="link-button" disabled={disabled} onClick={() => onChange(undefined)}>
+              Go back to the default
+            </button>
+          ) : null}
+        </div>
+        {dialog}
+      </div>
+    );
+  }
 
   return (
     <div className="message-control">
@@ -97,40 +165,7 @@ export function MessageControl({
           <span className="field-hint">Using the default message.</span>
         )}
       </div>
-
-      {open ? (
-        <MessageEditorDialog
-          guildId={guildId}
-          title={label}
-          hint={customized ? "This is the message the bot sends instead of the usual one." : "This starts from what the bot sends now."}
-          current={customized ? stored : null}
-          starting={starting}
-          variables={variables}
-          sharedWording={FEATURE_WORDING}
-          hideShared={direct ? DM_HIDDEN : undefined}
-          showReactions={!direct}
-          components={componentMode}
-          note={note}
-          footnote={
-            direct
-              ? "The preview fills the variables with examples. A direct message mentions nobody."
-              : "The preview fills the variables with examples. Mentions of @everyone and @here never ping from here."
-          }
-          textLabel="Message text"
-          saveLabel="Use this message"
-          resetLabel="Go back to the default"
-          onSave={(message) => {
-            // Saving what the default already says stores nothing, so a later change to the default still reaches this server.
-            onChange(JSON.stringify(message) === JSON.stringify(starting) ? undefined : message);
-            setOpen(false);
-          }}
-          onReset={() => {
-            onChange(undefined);
-            setOpen(false);
-          }}
-          onClose={() => setOpen(false)}
-        />
-      ) : null}
+      {dialog}
     </div>
   );
 }

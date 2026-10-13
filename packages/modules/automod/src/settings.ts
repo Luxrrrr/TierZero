@@ -72,17 +72,19 @@ export function upgradeRule(rule: RuleName) {
 }
 
 const ACTION_OPTIONS: Array<{ value: RuleAction; label: string; description: string }> = [
-  { value: "delete", label: "Delete the message", description: "Removes the message from the channel." },
-  { value: "warn", label: "Warn the member", description: "Adds a warning to the member's record." },
-  { value: "timeout", label: "Time the member out", description: "Mutes the member for the timeout length below." },
+  { value: "delete", label: "Delete", description: "Removes the message." },
+  { value: "warn", label: "Warn", description: "Adds a warning to their record." },
+  { value: "timeout", label: "Time out", description: "Mutes them for the timeout length." },
 ];
 
 /**
- * Fields every rule shares: whether it runs, what it does when it trips, and
- * who it leaves alone. Pulled into a function instead of written out seven
- * times, so the rules cannot quietly drift from each other.
+ * Fields every rule starts with: whether it runs and what it does when it
+ * trips. Pulled into a function instead of written out seven times, so the
+ * rules cannot quietly drift from each other. The rule's own tuning follows,
+ * then `ruleExemptions`, so the page reads from the common settings to the
+ * rare ones.
  */
-function ruleFields(rule: RuleName, defaultTimeout: string) {
+function ruleHead(rule: RuleName, defaultTimeout: string) {
   const recommended = RECOMMENDED_ACTIONS[rule];
   return {
     enabled: s.boolean({ label: "On", default: false, guided: true }),
@@ -104,11 +106,25 @@ function ruleFields(rule: RuleName, defaultTimeout: string) {
       max: "28d",
       when: { field: "actions", includes: "timeout" },
     }),
+  };
+}
+
+/** Who a rule leaves alone, last because most servers never touch it. */
+function ruleExemptions() {
+  return {
     exemptRoles: s.array(s.role(), { label: "Roles exempt from this rule" }),
     exemptChannels: s.array(s.channel({ types: ["text"] }), {
       label: "Channels exempt from this rule",
     }),
   };
+}
+
+/**
+ * Every rule is a collapsed section whose header shows what it does, so the
+ * page can be scanned without opening seven cards.
+ */
+function ruleOptions(label: string, rule: RuleName) {
+  return { label, collapsible: true, summary: ["actions", "timeoutDuration"], upgrade: upgradeRule(rule) };
 }
 
 export const settings = s.object({
@@ -143,18 +159,21 @@ export const settings = s.object({
         starting: LOG_MESSAGES.delete,
         variables: LOG_VARIABLES,
         note: LOG_NOTE,
+        compact: true,
       }),
       warn: s.message({
         label: "When a member is warned",
         starting: LOG_MESSAGES.warn,
         variables: LOG_VARIABLES,
         note: LOG_NOTE,
+        compact: true,
       }),
       timeout: s.message({
         label: "When a member is timed out",
         starting: LOG_MESSAGES.timeout,
         variables: LOG_VARIABLES,
         note: LOG_NOTE,
+        compact: true,
       }),
     },
     { label: "Log posts", when: { field: "logChannel" } },
@@ -162,29 +181,31 @@ export const settings = s.object({
 
   invites: s.object(
     {
-      ...ruleFields("invites", "10m"),
+      ...ruleHead("invites", "10m"),
       allowlist: s.array(s.string(), {
         label: "Allowed invite links",
         help: "Invite codes or links that are ignored, such as this server's own invite. Paste the code or the whole link.",
       }),
+      ...ruleExemptions(),
     },
-    { label: "Invite links", upgrade: upgradeRule("invites") },
+    ruleOptions("Invite links", "invites"),
   ),
 
   links: s.object(
     {
-      ...ruleFields("links", "10m"),
+      ...ruleHead("links", "10m"),
       allowlist: s.array(s.string(), {
         label: "Allowed domains",
         help: "Domains that are ignored, such as youtube.com. A pasted link works too, and a domain also covers its subdomains.",
       }),
+      ...ruleExemptions(),
     },
-    { label: "Links", upgrade: upgradeRule("links") },
+    ruleOptions("Links", "links"),
   ),
 
   capitals: s.object(
     {
-      ...ruleFields("capitals", "10m"),
+      ...ruleHead("capitals", "10m"),
       thresholdPercent: s.integer({
         label: "Percentage of capital letters that trips this rule",
         min: 1,
@@ -197,13 +218,14 @@ export const settings = s.object({
         max: 2000,
         default: 10,
       }),
+      ...ruleExemptions(),
     },
-    { label: "Excessive capitals", upgrade: upgradeRule("capitals") },
+    ruleOptions("Excessive capitals", "capitals"),
   ),
 
   repeatedText: s.object(
     {
-      ...ruleFields("repeatedText", "10m"),
+      ...ruleHead("repeatedText", "10m"),
       maxCharacterRepeat: s.integer({
         label: "Longest run of one repeated character allowed",
         min: 3,
@@ -221,34 +243,37 @@ export const settings = s.object({
         default: "30s",
         max: "1h",
       }),
+      ...ruleExemptions(),
     },
-    { label: "Repeated text", upgrade: upgradeRule("repeatedText") },
+    ruleOptions("Repeated text", "repeatedText"),
   ),
 
   mentions: s.object(
     {
-      ...ruleFields("mentions", "10m"),
+      ...ruleHead("mentions", "10m"),
       limit: s.integer({
         label: "User and role mentions allowed in one message",
         min: 1,
         max: 100,
         default: 5,
       }),
+      ...ruleExemptions(),
     },
-    { label: "Mass mentions", upgrade: upgradeRule("mentions") },
+    ruleOptions("Mass mentions", "mentions"),
   ),
 
   bannedWords: s.object(
     {
-      ...ruleFields("bannedWords", "10m"),
+      ...ruleHead("bannedWords", "10m"),
       words: s.array(s.string(), { label: "Banned words or phrases" }),
+      ...ruleExemptions(),
     },
-    { label: "Banned words", upgrade: upgradeRule("bannedWords") },
+    ruleOptions("Banned words", "bannedWords"),
   ),
 
   rateLimit: s.object(
     {
-      ...ruleFields("rateLimit", "5m"),
+      ...ruleHead("rateLimit", "5m"),
       limit: s.integer({
         label: "Messages allowed in the window",
         min: 1,
@@ -260,8 +285,9 @@ export const settings = s.object({
         default: "10s",
         max: "5m",
       }),
+      ...ruleExemptions(),
     },
-    { label: "Rate limit", upgrade: upgradeRule("rateLimit") },
+    ruleOptions("Rate limit", "rateLimit"),
   ),
 });
 

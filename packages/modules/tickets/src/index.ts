@@ -120,6 +120,7 @@ const settingsSchema = s.object({
         starting: OPENED_MESSAGE,
         variables: OPENED_VARIABLES,
         components: false,
+        compact: true,
       }),
       created: s.message({
         label: "Reply to the member who opened a ticket",
@@ -128,6 +129,7 @@ const settingsSchema = s.object({
         variables: CREATED_VARIABLES,
         delivery: "dm",
         components: false,
+        compact: true,
       }),
       closing: s.message({
         label: "When a ticket is being closed",
@@ -135,18 +137,21 @@ const settingsSchema = s.object({
         starting: CLOSING_MESSAGE,
         variables: CLOSING_VARIABLES,
         components: false,
+        compact: true,
       }),
       added: s.message({
         label: "When a member is added with /ticket add",
         starting: ADDED_MESSAGE,
         variables: MEMBER_VARIABLES,
         components: false,
+        compact: true,
       }),
       removed: s.message({
         label: "When a member is removed with /ticket remove",
         starting: REMOVED_MESSAGE,
         variables: MEMBER_VARIABLES,
         components: false,
+        compact: true,
       }),
       panelPosted: s.message({
         label: "After /ticket panel posts the panel",
@@ -155,6 +160,7 @@ const settingsSchema = s.object({
         variables: PANEL_POSTED_VARIABLES,
         delivery: "dm",
         components: false,
+        compact: true,
       }),
     },
     { label: "Other messages" },

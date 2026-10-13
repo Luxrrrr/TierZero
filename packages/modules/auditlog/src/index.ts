@@ -24,6 +24,7 @@ const entry = (event: AuditEvent) =>
     starting: STARTING[event],
     variables: ENTRIES[event].variables,
     components: false,
+    compact: true,
   });
 
 const settingsSchema = s.object({

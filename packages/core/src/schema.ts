@@ -61,6 +61,12 @@ export interface FieldMeta {
   guided?: boolean;
   /** Dashboard-only. The field is still parsed and stored either way. */
   when?: FieldCondition;
+  /**
+   * Dashboard-only. A top-level object group that draws as an accordion section,
+   * closed until opened, so a page of many similar groups can be scanned.
+   * It has no effect on any other field.
+   */
+  collapsible?: boolean;
 }
 
 export type ParseResult<T> =
@@ -382,6 +388,12 @@ export interface MessageFieldOptions extends FieldMeta {
   components?: boolean;
   /** A caveat shown in the editor, for when this covers more than one situation. */
   note?: string;
+  /**
+   * Dashboard-only. Draws the setting as one line (label, a short text summary
+   * and the edit button) instead of a preview of the message. For a group of
+   * minor messages; a message that is the point of its page keeps the preview.
+   */
+  compact?: boolean;
 }
 
 /**
@@ -435,6 +447,13 @@ interface ArrayOptions<T> extends FieldMeta {
   unique?: boolean;
   /** What an absent list becomes. Without one it is empty. */
   default?: T[];
+  /**
+   * Dashboard-only, for a list of choices. `chips` draws the options as a
+   * wrapping row of toggles with their descriptions underneath; `rows` draws
+   * one tall row per option with its description beside it. Without this, four
+   * options or fewer are chips and more are rows.
+   */
+  layout?: "chips" | "rows";
 }
 
 function array<T>(inner: Field<T>, options: ArrayOptions<T> = {}): Field<T[]> {
@@ -492,6 +511,12 @@ export interface ObjectField<S extends Shape> extends Field<ShapeValues<S>> {
 }
 
 interface ObjectOptions extends FieldMeta {
+  /**
+   * Dashboard-only. Keys of this group's own fields whose current values are
+   * shown on the header of a collapsed `collapsible` group, in this order. A
+   * field whose `when` condition is not met is left out.
+   */
+  summary?: string[];
   /**
    * Rewrites what was stored before it is read, for a group whose settings were
    * reshaped. Settings are validated on read and unknown keys are dropped, so

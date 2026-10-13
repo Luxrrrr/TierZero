@@ -25,8 +25,12 @@ interface Props {
   error?: string;
   optional?: boolean;
   disabled?: boolean;
-  /** Booleans read better with the label on the left and the switch on the right. */
-  layout?: "stacked" | "row";
+  /**
+   * Booleans read better with the label on the left and the switch on the right.
+   * `compact` is the same with a wide control that takes the rest of the row,
+   * for a list of single-line settings.
+   */
+  layout?: "stacked" | "row" | "compact";
   /** Makes the field take a whole row of a `.form-grid`. */
   span?: boolean;
   /**
@@ -86,9 +90,9 @@ export function Field({
     </p>
   ) : null;
 
-  if (layout === "row") {
+  if (layout === "row" || layout === "compact") {
     return (
-      <div className="field-row" data-disabled={disabled ? "true" : undefined}>
+      <div className={layout === "compact" ? "field-row field-row-compact" : "field-row"} data-disabled={disabled ? "true" : undefined}>
         <div className="field-row-text">
           {labelElement}
           {help ? (

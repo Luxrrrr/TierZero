@@ -130,6 +130,34 @@ describe("every registered module", () => {
       });
     });
 
+    test(`${module.id} uses the layout metadata only where the dashboard reads it`, () => {
+      const top = module.schema.fields as Record<string, FieldDescriptor>;
+      walk(module.schema, "", (field, path) => {
+        const where = `${module.id}.${path}`;
+        if (field.collapsible !== undefined) {
+          assert.ok(
+            field.kind === "object" && top[path] === field,
+            `${where} is collapsible but is not a top-level group, so the dashboard ignores it`,
+          );
+        }
+        if (field.summary !== undefined) {
+          assert.equal(field.collapsible, true, `${where} has a summary but is not collapsible`);
+          const children = (field.fields ?? {}) as Record<string, FieldDescriptor>;
+          for (const key of field.summary as string[]) {
+            assert.ok(key in children, `${where} summarises ${key}, which is not one of its fields`);
+          }
+        }
+        if (field.compact !== undefined) {
+          assert.equal(field.kind, "message", `${where} is compact but is not a message`);
+        }
+        if (field.layout !== undefined) {
+          const item = field.kind === "array" ? (field.of as FieldDescriptor) : undefined;
+          assert.equal(item?.kind, "choice", `${where} sets a layout but is not a list of choices`);
+          assert.ok(["chips", "rows"].includes(String(field.layout)), `${where} has an unknown layout`);
+        }
+      });
+    });
+
     test(`${module.id} settings resolve from an empty stored value`, () => {
       const resolved = registry.resolveSettings(module.id, {});
       assert.ok(

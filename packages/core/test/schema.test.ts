@@ -503,3 +503,39 @@ describe("object upgrade", () => {
     assert.equal("upgrade" in field.describe(), false);
   });
 });
+
+describe("dashboard layout metadata", () => {
+  test("a group passes its collapsible flag and summary keys through", () => {
+    const field = s.object(
+      { enabled: s.boolean({ default: false }), actions: s.array(s.string()) },
+      { label: "Rule", collapsible: true, summary: ["actions"] },
+    );
+    const described = field.describe();
+    assert.equal(described.collapsible, true);
+    assert.deepEqual(described.summary, ["actions"]);
+  });
+
+  test("a group that does not ask for it carries neither", () => {
+    const described = s.object({ on: s.boolean() }).describe();
+    assert.equal("collapsible" in described, false);
+    assert.equal("summary" in described, false);
+  });
+
+  test("the flags do not change what a group accepts", () => {
+    const field = s.object({ on: s.boolean({ default: true }) }, { collapsible: true, summary: ["on"] });
+    const result = field.parse({});
+    assert.deepEqual(result.ok && result.value, { on: true });
+  });
+
+  test("a message passes its compact flag through", () => {
+    const starting = { content: "Hi", embeds: [], buttons: [], selects: [], reactions: [] };
+    assert.equal(s.message({ starting, compact: true }).describe().compact, true);
+    assert.equal(s.message({ starting }).describe().compact, undefined);
+  });
+
+  test("a list of choices passes its layout through", () => {
+    const options = [{ value: "a", label: "A" }];
+    assert.equal(s.array(s.choice({ options }), { layout: "rows" }).describe().layout, "rows");
+    assert.equal(s.array(s.choice({ options })).describe().layout, undefined);
+  });
+});

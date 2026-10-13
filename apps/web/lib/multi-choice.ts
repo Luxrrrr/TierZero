@@ -66,3 +66,47 @@ export function blockMessage(block: ToggleBlock, limits: ChoiceLimits): string {
   const max = limits.max ?? 1;
   return max === 1 ? "Only one can be picked." : `Only ${max} can be picked.`;
 }
+
+export type ChoiceLayout = "chips" | "rows";
+
+/** The most options that still read well as a single wrapping row of chips. */
+export const MAX_CHIP_OPTIONS = 4;
+
+/**
+ * Short lists are chips and long ones are rows, unless the schema says which.
+ * Rows stay available because an option that needs a sentence of explanation
+ * is easier to read with the sentence beside it than behind a tooltip.
+ */
+export function choiceLayout(optionCount: number, requested?: unknown): ChoiceLayout {
+  if (requested === "chips" || requested === "rows") return requested;
+  return optionCount <= MAX_CHIP_OPTIONS ? "chips" : "rows";
+}
+
+interface Described {
+  value: string;
+  description?: string;
+}
+
+/**
+ * The muted line under a row of chips. While a chip is hovered or has focus it
+ * says what that option does; otherwise it describes the whole selection by
+ * putting the picked options' descriptions together in option order. Empty when
+ * there is nothing to say.
+ */
+export function chipCaption(
+  options: readonly Described[],
+  selected: readonly string[],
+  hovered?: string,
+  focused?: string,
+): string {
+  const active = hovered ?? focused;
+  if (active !== undefined) {
+    const text = options.find((option) => option.value === active)?.description;
+    if (text) return text;
+  }
+  const chosen = new Set(selected);
+  return options
+    .filter((option) => chosen.has(option.value) && option.description)
+    .map((option) => option.description)
+    .join(" ");
+}

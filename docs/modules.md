@@ -70,8 +70,8 @@ channel: s.channel({ types: ["text"], optional: true, essential: true, label: "L
 actions: s.array(
   s.choice({
     options: [
-      { value: "delete", label: "Delete the message", description: "Removes it from the channel.", recommended: true },
-      { value: "timeout", label: "Time the member out", description: "Mutes them for the length below." },
+      { value: "delete", label: "Delete", description: "Removes the message.", recommended: true },
+      { value: "timeout", label: "Time out", description: "Mutes them for the timeout length." },
     ],
   }),
   { label: "What to do when it trips", min: 1, unique: true, default: ["delete"] },
@@ -84,6 +84,17 @@ timeoutDuration: s.duration({
 ```
 
 The `actions` field above is a multi-select. Each choice option may carry a `description`, shown under its label, and `recommended: true`, which only marks it as the suggested pick; the `default` is what is actually selected. `unique: true` makes the list refuse the same value twice, and `default` on an array is what an absent list becomes (without it, an empty list).
+
+A multi-select with four options or fewer is drawn as a row of toggle chips, with the description of the focused or hovered chip, or else of everything selected, on one line underneath. A longer list is drawn as one tall row per option, with each description beside its label. Set `layout: "rows"` or `layout: "chips"` on the array to override the choice, for example to keep the rows for options whose descriptions need a full sentence.
+
+`collapsible: true` on a top-level `s.object` draws it as a section that is closed until opened, for a page of many similar groups. `summary` on the same object lists the keys of its own fields to show on the closed header, in order: a list of choices reads as its labels, a duration as a short length ("10 min"), a switch as its label while it is on. A field whose `when` isn't met is left out, so a timeout length only shows while a timeout is picked. A group opens by itself when it holds a validation error or the page is opened at `#<group key>`. The quick setup always draws a collapsible group open.
+
+```ts
+invites: s.object(
+  { enabled: s.boolean({ default: false }), actions: s.array(/* ... */), timeoutDuration: s.duration(/* ... */) },
+  { label: "Invite links", collapsible: true, summary: ["actions", "timeoutDuration"] },
+),
+```
 
 `guided: true` includes a setting in the quick setup. The quick setup shows the fields tagged `guided` plus every `essential` one, through the normal form renderer. Tag only what someone has to decide before the feature works. A module that tags nothing has no quick setup. Settings it doesn't show keep their values, and a tagged field's `when` sibling is pulled in too.
 
@@ -119,6 +130,7 @@ message: s.message({
 | `delivery` | `"channel"` | `"dm"` hides reactions and the role, channel, user and mentionable menus, which Discord does not fill in outside a server. Buttons and text menus stay and work. A direct message also mentions nobody. |
 | `components` | `true` | `false` hides buttons and menus entirely. |
 | `note` | none | A caveat shown beside the preview, for a setting that covers more than one situation. |
+| `compact` | `false` | `true` draws the setting as one row: the label, a one-line summary of the text, and the Edit message button, with no preview. Consecutive compact messages form one divided list. Use it for a group of minor messages, and leave the message a page is about with its preview. |
 
 The parsed value is a `MessageBody`. A value stored while the setting was still an `s.template` string is accepted and read as a message that is only that text, so changing a setting from `s.template` to `s.message` loses nothing. Anything that is missing or blank falls back to `starting`, and a message that fails Discord's limits is a validation error like any other.
 

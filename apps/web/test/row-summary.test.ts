@@ -7,6 +7,7 @@ import {
   expandedWithout,
   stripIndices,
   summarizeChoices,
+  summarizeGroup,
   summarizeRow,
   type RowLabels,
 } from "../lib/row-summary.ts";
@@ -245,5 +246,60 @@ describe("summarizeChoices", () => {
     });
     const result = summarizeRow({ actions: ["delete", "warn"] }, shape, labels);
     assert.equal(result.detail, "Delete the message, Warn");
+  });
+});
+
+describe("summarizeGroup", () => {
+  const options = [
+    { value: "delete", label: "Delete" },
+    { value: "warn", label: "Warn" },
+    { value: "timeout", label: "Time out" },
+  ];
+  const shape = fields({
+    enabled: { kind: "boolean", label: "On" },
+    actions: { kind: "array", label: "Actions", of: { kind: "choice", options } },
+    timeoutDuration: { kind: "duration", label: "Timeout length", default: "10m", when: { field: "actions", includes: "timeout" } },
+    limit: { kind: "integer", label: "Limit" },
+    logChannel: { kind: "channel", label: "Channel" },
+    mode: { kind: "choice", label: "Mode", options: [{ value: "strict", label: "Strict" }] },
+  });
+  const duration = { duration: (value: unknown) => `d:${String(value)}` };
+
+  test("joins the picked choices with a dot, in option order", () => {
+    assert.equal(summarizeGroup(shape, { actions: ["warn", "delete"] }, ["actions"], duration), "Delete · Warn");
+  });
+
+  test("adds a duration beside the choices", () => {
+    const text = summarizeGroup(shape, { actions: ["timeout"], timeoutDuration: 600000 }, ["actions", "timeoutDuration"], duration);
+    assert.equal(text, "Time out · d:600000");
+  });
+
+  test("falls back to the default of a duration with no value", () => {
+    assert.equal(summarizeGroup(shape, { actions: ["timeout"] }, ["timeoutDuration"], duration), "d:10m");
+  });
+
+  test("leaves out a child that is not in play", () => {
+    const relevant = (key: string) => key !== "timeoutDuration";
+    assert.equal(summarizeGroup(shape, { actions: ["delete"], timeoutDuration: 600000 }, ["actions", "timeoutDuration"], duration, relevant), "Delete");
+  });
+
+  test("shows a switch by its label only while it is on", () => {
+    assert.equal(summarizeGroup(shape, { enabled: true }, ["enabled"], duration), "On");
+    assert.equal(summarizeGroup(shape, { enabled: false }, ["enabled"], duration), "");
+  });
+
+  test("reads a choice or a number the way a list row does", () => {
+    assert.equal(summarizeGroup(shape, { mode: "strict", limit: 5 }, ["mode", "limit"], duration), "Strict · Limit 5");
+  });
+
+  test("skips channels, unknown keys and empty values", () => {
+    assert.equal(summarizeGroup(shape, { logChannel: "c1", actions: [] }, ["logChannel", "missing", "actions"], duration), "");
+  });
+
+  test("does not cut a long list of choices", () => {
+    const wide = fields({
+      actions: { kind: "array", label: "Actions", of: { kind: "choice", options: [{ value: "a", label: "A".repeat(30) }, { value: "b", label: "B".repeat(30) }] } },
+    });
+    assert.equal(summarizeGroup(wide, { actions: ["a", "b"] }, ["actions"], duration), `${"A".repeat(30)} · ${"B".repeat(30)}`);
   });
 });

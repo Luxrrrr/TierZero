@@ -77,6 +77,13 @@ export function describeDuration(value: unknown): string {
   return `${amount} ${name}${amount === 1 ? "" : "s"}`;
 }
 
+/** "10m" becomes "10 min", for a header that has room for a few characters only. */
+export function shortDuration(value: unknown): string {
+  const { amount, unit } = formatDuration(value);
+  const name = unit === "s" ? "sec" : unit === "m" ? "min" : unit === "h" ? "hr" : amount === 1 ? "day" : "days";
+  return `${amount} ${name}`;
+}
+
 /** How many milliseconds one of a unit is, for turning a ceiling into a bound. */
 export function unitMilliseconds(unit: DurationUnit): number {
   return UNIT_MS[unit];

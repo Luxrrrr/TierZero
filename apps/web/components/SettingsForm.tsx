@@ -1,10 +1,20 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import type { FieldDescriptor, MessageBody, RowDescription } from "@tier0/core";
-import { describeDuration } from "../lib/duration";
+import { describeDuration, shortDuration } from "../lib/duration";
 import { conditionMet, type Condition } from "../lib/field-condition";
-import { humanize } from "../lib/row-summary";
+import {
+  collapsibleRuns,
+  groupsWithErrors,
+  hashTarget,
+  opensOnEnable,
+  runIsOpen,
+  toggled,
+  toggleRun,
+  withOpen,
+} from "../lib/group-open";
+import { humanize, summarizeGroup } from "../lib/row-summary";
 import { arrayItemPath, objectChildPath } from "../lib/schema-paths";
 // Imported one file at a time rather than through the barrel, which re-exports
 // this module in turn.
@@ -13,6 +23,7 @@ import { DurationInput } from "./form/DurationInput";
 import { Field, type FieldChrome } from "./form/Field";
 import { MessageControl } from "./form/MessageControl";
 import { MultiChoice } from "./form/MultiChoice";
+import { ChevronRightIcon } from "./Icons";
 import { ObjectArray, type RowsContext } from "./form/ObjectArray";
 import { MultiRolePicker, RolePicker } from "./form/RolePicker";
 import { Select, type SelectOption } from "./form/Select";
@@ -48,6 +59,11 @@ interface Props {
   dirty?: boolean;
   /** Bumped by the page each time a save lands, so lists ask the bot again. */
   savedRevision?: number;
+  /**
+   * Whether groups the schema marks `collapsible` fold up. The quick setup
+   * turns it off: it shows a few fields and wants all of them in view.
+   */
+  collapse?: boolean;
 }
 
 interface RenderContext {
@@ -81,9 +97,37 @@ export function SettingsForm({
   actionsLocked = null,
   dirty = false,
   savedRevision = 0,
+  collapse = true,
 }: Props) {
   const fields = (schema.fields ?? {}) as Fields;
   const entries = Object.entries(fields);
+  const collapsibleKeys = collapse
+    ? entries.filter(([, field]) => field.kind === "object" && field.collapsible === true).map(([key]) => key)
+    : [];
+  const keySignature = collapsibleKeys.join("|");
+  const [open, setOpen] = useState<Set<string>>(
+    () => new Set(groupsWithErrors(errors, collapsibleKeys)),
+  );
+
+  // A save that comes back refused must not leave the reason folded away.
+  const failing = groupsWithErrors(errors, collapsibleKeys).join("|");
+  useEffect(() => {
+    if (failing !== "") setOpen((current) => withOpen(current, failing.split("|")));
+  }, [failing]);
+
+  // Read after mount: the server render has no URL to read it from.
+  useEffect(() => {
+    const keys = keySignature === "" ? [] : keySignature.split("|");
+    function followHash() {
+      const target = hashTarget(window.location.hash, keys);
+      if (target === undefined) return;
+      setOpen((current) => withOpen(current, [target]));
+      requestAnimationFrame(() => document.getElementById(`group-${target}`)?.scrollIntoView({ block: "start" }));
+    }
+    followHash();
+    window.addEventListener("hashchange", followHash);
+    return () => window.removeEventListener("hashchange", followHash);
+  }, [keySignature]);
   const ctx: RenderContext = {
     guildId,
     errors,
@@ -97,6 +141,16 @@ export function SettingsForm({
 
   const loose = entries.filter(([, field]) => field.kind !== "object");
   const firstLooseKey = loose[0]?.[0];
+
+  const sequence: { key: string; collapsible: boolean }[] = [];
+  for (const [key, field] of entries) {
+    if (field.kind !== "object") {
+      if (key === firstLooseKey) sequence.push({ key: "group-general", collapsible: false });
+      continue;
+    }
+    sequence.push({ key, collapsible: collapsibleKeys.includes(key) });
+  }
+  const runStarts = new Map(collapsibleRuns(sequence).map((run) => [run[0], run] as const));
 
   const cards: ReactNode[] = [];
   for (const [key, field] of entries) {
@@ -114,13 +168,26 @@ export function SettingsForm({
             </div>
           </div>
           <div className="settings-group-body">
-            {loose.map(([looseKey, looseField]) =>
-              renderChild(looseKey, looseField, fields, value, "", ctx, onChange),
-            )}
+            {renderFieldList(loose, fields, value, "", ctx, onChange)}
           </div>
         </section>,
       );
       continue;
+    }
+
+    const run = runStarts.get(key);
+    if (run) {
+      cards.push(
+        <div className="group-tools" key={`tools-${key}`}>
+          <button
+            type="button"
+            className="link-button"
+            onClick={() => setOpen((current) => toggleRun(current, run))}
+          >
+            {runIsOpen(open, run) ? "Collapse all" : "Expand all"}
+          </button>
+        </div>,
+      );
     }
 
     cards.push(
@@ -131,6 +198,15 @@ export function SettingsForm({
         value={asRecord(value[key])}
         ctx={ctx}
         onChange={(next) => onChange({ ...value, [key]: next })}
+        fold={
+          collapsibleKeys.includes(key)
+            ? {
+                open: open.has(key),
+                onToggle: () => setOpen((current) => toggled(current, key)),
+                onOpen: () => setOpen((current) => withOpen(current, [key])),
+              }
+            : undefined
+        }
       />,
     );
   }
@@ -144,6 +220,8 @@ interface GroupProps {
   value: Record<string, unknown>;
   ctx: RenderContext;
   onChange(next: Record<string, unknown>): void;
+  /** Present when the group folds up; absent for a plain card. */
+  fold?: { open: boolean; onToggle(): void; onOpen(): void };
 }
 
 /**
@@ -151,8 +229,13 @@ interface GroupProps {
  * `enabled`, that switch belongs in the header rather than the body: it governs
  * everything below it, and reading it as one more setting in the list makes the
  * group look off when it is on.
+ *
+ * A group the schema marks collapsible keeps the same card, but its header
+ * becomes the button that opens the body, with the switch beside the button
+ * rather than inside it: a switch nested in a button is not valid markup, and
+ * pressing it must not fold the section.
  */
-function Group({ groupKey, field, value, ctx, onChange }: GroupProps) {
+function Group({ groupKey, field, value, ctx, onChange, fold }: GroupProps) {
   const fields = (field.fields ?? {}) as Fields;
   const entries = Object.entries(fields);
   const [first] = entries;
@@ -168,37 +251,151 @@ function Group({ groupKey, field, value, ctx, onChange }: GroupProps) {
       : switchField.default === true
     : true;
   const titleId = `group-${groupKey}-title`;
+  const title = field.label ?? humanize(groupKey);
+  const flush = body.length > 0 && body.every(([, child]) => isCompactMessage(child));
+
+  const switchControl = switchField ? (
+    <span className="switch-labelled">
+      <span className="switch-text">{enabled ? "On" : "Off"}</span>
+      <Switch
+        checked={enabled}
+        disabled={ctx.disabled}
+        aria-labelledby={titleId}
+        onChange={(next) => {
+          if (fold && opensOnEnable(next, fields, value)) fold.onOpen();
+          onChange({ ...value, enabled: next });
+        }}
+      />
+    </span>
+  ) : null;
+
+  const bodyNode = (extra: { id?: string; hidden?: boolean }) => (
+    <div
+      className="settings-group-body"
+      id={extra.id}
+      hidden={extra.hidden}
+      data-off={enabled ? undefined : "true"}
+      data-flush={flush ? "true" : undefined}
+    >
+      {renderFieldList(body, fields, value, groupKey, ctx, onChange)}
+    </div>
+  );
+
+  if (!fold) {
+    return (
+      <section className="card settings-group" id={`group-${groupKey}`}>
+        <div className="card-header">
+          <div className="card-header-text">
+            <h2 className="card-title" id={titleId}>
+              {title}
+            </h2>
+            {field.help ? <p className="card-help">{field.help}</p> : null}
+          </div>
+          {switchControl ? <div className="card-header-actions">{switchControl}</div> : null}
+        </div>
+        {bodyNode({})}
+      </section>
+    );
+  }
+
+  const effective: Record<string, unknown> = {};
+  for (const [key, child] of entries) effective[key] = value[key] ?? child.default;
+  const summary = summarizeGroup(
+    fields,
+    effective,
+    (field.summary as string[] | undefined) ?? [],
+    { duration: shortDuration },
+    (key) => conditionMet(fields[key]?.when as Condition | undefined, effective),
+  );
+  const bodyId = `group-${groupKey}-body`;
+  const helpId = field.help ? `group-${groupKey}-help` : undefined;
+  const summaryId = summary ? `group-${groupKey}-summary` : undefined;
 
   return (
-    <section className="card settings-group" id={`group-${groupKey}`}>
-      <div className="card-header">
-        <div className="card-header-text">
-          <h2 className="card-title" id={titleId}>
-            {field.label ?? humanize(groupKey)}
-          </h2>
-          {field.help ? <p className="card-help">{field.help}</p> : null}
-        </div>
-        {switchField ? (
-          <div className="card-header-actions">
-            <span className="switch-labelled">
-              <span className="switch-text">{enabled ? "On" : "Off"}</span>
-              <Switch
-                checked={enabled}
-                disabled={ctx.disabled}
-                aria-labelledby={titleId}
-                onChange={(next) => onChange({ ...value, enabled: next })}
-              />
+    <section
+      className="card settings-group"
+      id={`group-${groupKey}`}
+      data-collapsible="true"
+      data-open={fold.open ? "true" : "false"}
+    >
+      <div className="card-header group-header">
+        <h2 className="group-heading">
+          <button
+            type="button"
+            className="group-toggle"
+            aria-expanded={fold.open}
+            aria-controls={bodyId}
+            aria-labelledby={titleId}
+            aria-describedby={[helpId, summaryId].filter(Boolean).join(" ") || undefined}
+            onClick={fold.onToggle}
+          >
+            <ChevronRightIcon className="group-chevron" />
+            <span className="group-toggle-text">
+              <span className="group-toggle-top">
+                <span className="card-title" id={titleId}>
+                  {title}
+                </span>
+                {field.help ? (
+                  <span className="group-toggle-help" id={helpId} title={field.help}>
+                    {field.help}
+                  </span>
+                ) : null}
+              </span>
+              {summary ? (
+                <span className="group-toggle-summary" id={summaryId} data-off={enabled ? undefined : "true"}>
+                  {summary}
+                </span>
+              ) : null}
             </span>
-          </div>
-        ) : null}
+          </button>
+        </h2>
+        {switchControl ? <div className="card-header-actions">{switchControl}</div> : null}
       </div>
-      <div className="settings-group-body" data-off={enabled ? undefined : "true"}>
-        {body.map(([key, child]) =>
-          renderChild(key, child, fields, value, groupKey, ctx, onChange),
-        )}
-      </div>
+      {bodyNode({ id: bodyId, hidden: !fold.open })}
     </section>
   );
+}
+
+function isCompactMessage(field: FieldDescriptor): boolean {
+  return field.kind === "message" && field.compact === true;
+}
+
+/**
+ * The fields of a group in order. Compact messages that sit together are drawn
+ * as one divided list, so a group of several reads as a table of rows rather
+ * than a stack of separate fields.
+ */
+function renderFieldList(
+  entries: [string, FieldDescriptor][],
+  siblings: Fields,
+  values: Record<string, unknown>,
+  parentPath: string,
+  ctx: RenderContext,
+  onChange: (next: Record<string, unknown>) => void,
+): ReactNode[] {
+  const nodes: ReactNode[] = [];
+  let run: ReactNode[] = [];
+  const endRun = () => {
+    if (run.length === 0) return;
+    nodes.push(
+      <div className="compact-list" key={`compact-${nodes.length}`}>
+        {run}
+      </div>,
+    );
+    run = [];
+  };
+
+  for (const [key, child] of entries) {
+    const node = renderChild(key, child, siblings, values, parentPath, ctx, onChange);
+    if (isCompactMessage(child)) {
+      run.push(node);
+    } else {
+      endRun();
+      nodes.push(node);
+    }
+  }
+  endRun();
+  return nodes;
 }
 
 /** One field of an object: either a nested group, or a labelled control. */
@@ -226,16 +423,13 @@ function renderChild(
         {field.help ? <p className="field-help">{field.help}</p> : null}
         {dependency ? <p className="field-dependency">{dependency}</p> : null}
         <div className="form-grid">
-          {Object.entries(childFields).map(([childKey, childField]) =>
-            renderChild(
-              childKey,
-              childField,
-              childFields,
-              childValues,
-              path,
-              met ? ctx : { ...ctx, disabled: true },
-              (next) => setValue(next),
-            ),
+          {renderFieldList(
+            Object.entries(childFields),
+            childFields,
+            childValues,
+            path,
+            met ? ctx : { ...ctx, disabled: true },
+            (next) => setValue(next),
           )}
         </div>
       </div>
@@ -307,6 +501,14 @@ function ControlField({
             onChange={onChange}
           />
         )}
+      </Field>
+    );
+  }
+
+  if (isCompactMessage(field)) {
+    return (
+      <Field {...shared} layout="compact">
+        {(chrome) => control(chrome, { name, path, field, value, ctx, onChange })}
       </Field>
     );
   }
@@ -437,6 +639,7 @@ function control(chrome: FieldChrome, props: ControlProps): ReactNode {
           delivery={field.delivery === "dm" ? "dm" : "channel"}
           components={field.components !== false}
           note={field.note as string | undefined}
+          compact={field.compact === true}
           value={value}
           onChange={onChange}
         />
@@ -520,6 +723,7 @@ function arrayControl(chrome: FieldChrome, props: ControlProps): ReactNode {
         defaults={Array.isArray(field.default) ? field.default.filter(isString) : undefined}
         min={min}
         max={max}
+        layout={field.layout}
         disabled={chrome.disabled}
         aria-labelledby={chrome.labelId}
         aria-describedby={chrome.describedBy}

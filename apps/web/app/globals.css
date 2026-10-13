@@ -1698,6 +1698,129 @@ html:not([data-theme="light"]):not([data-theme="dark"]) .theme-toggle [data-them
   opacity: 0.55;
 }
 
+.settings-group-body[hidden] {
+  display: none;
+}
+
+/* A group made only of compact message rows: the list runs to the card's edges. */
+.settings-group-body[data-flush="true"] {
+  padding: 0;
+  gap: 0;
+}
+
+.settings-group-body[data-flush="true"] .compact-list {
+  border: 0;
+  border-radius: 0;
+}
+
+/* A collapsible group: the header is the control. The chevron, title and
+   summary are one button; the switch sits beside it, never inside. */
+
+.group-header {
+  align-items: center;
+  padding: 0;
+  gap: 0;
+}
+
+.settings-group[data-collapsible="true"][data-open="false"] .group-header {
+  border-bottom: 0;
+}
+
+.group-heading {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  font: inherit;
+}
+
+.group-toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  min-height: 3.5rem;
+  padding: var(--space-3) var(--space-5);
+  border: 0;
+  border-radius: var(--radius-lg) 0 0 var(--radius-lg);
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color var(--duration-fast) var(--ease-out);
+}
+
+.settings-group[data-open="true"] .group-toggle {
+  border-bottom-left-radius: 0;
+}
+
+.group-toggle:hover {
+  background: var(--surface-hover);
+}
+
+.group-toggle:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
+}
+
+.group-chevron {
+  flex: none;
+  color: var(--text-tertiary);
+  transition: transform var(--duration-fast) var(--ease-out);
+}
+
+.settings-group[data-open="true"] .group-chevron {
+  transform: rotate(90deg);
+}
+
+.group-toggle-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.group-toggle-top {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.group-toggle-top .card-title {
+  flex: none;
+}
+
+.group-toggle-help,
+.group-toggle-summary {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--text-xs);
+  font-weight: 400;
+  color: var(--text-secondary);
+}
+
+.group-toggle-summary {
+  color: var(--text-tertiary);
+}
+
+.group-toggle-summary[data-off="true"] {
+  opacity: 0.6;
+}
+
+.group-header > .card-header-actions {
+  padding: var(--space-3) var(--space-5) var(--space-3) var(--space-3);
+}
+
+.group-tools {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: calc(var(--space-3) * -1);
+}
+
 .subgroup {
   padding: var(--space-4);
   border-radius: var(--radius-md);
@@ -2458,6 +2581,113 @@ html:not([data-theme="light"]):not([data-theme="dark"]) .theme-toggle [data-them
   margin: 0;
   min-height: 1em;
   color: var(--accent-text);
+}
+
+.multi-choice-lines {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+/* The compact form: options as a wrapping row of toggles. */
+
+.multi-choice[data-layout="chips"] .multi-choice-list {
+  flex-direction: row;
+  flex-wrap: wrap;
+}
+
+.multi-choice[data-layout="chips"] .multi-choice-notice {
+  min-height: 0;
+}
+
+.multi-choice-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 2.25rem;
+  padding: var(--space-1) var(--space-3) var(--space-1) var(--space-2);
+  border-radius: var(--radius-full);
+  border: 1px solid var(--border-strong);
+  background: var(--surface-2);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color var(--duration-fast) var(--ease-out),
+    background-color var(--duration-fast) var(--ease-out),
+    box-shadow var(--duration-fast) var(--ease-out);
+}
+
+.multi-choice-chip:hover:not(:disabled) {
+  border-color: var(--text-tertiary);
+  background: var(--surface-hover);
+}
+
+.multi-choice-chip:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-ring);
+}
+
+.multi-choice-chip[aria-checked="true"] {
+  border-color: var(--accent-ring);
+  background: var(--accent-soft);
+}
+
+.multi-choice-chip[aria-checked="true"]:hover:not(:disabled) {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.multi-choice-chip[aria-disabled="true"]:not([aria-checked="true"]) {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.multi-choice-chip[data-locked="true"] {
+  cursor: default;
+}
+
+.multi-choice-chip:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.multi-choice-chip .multi-choice-box {
+  margin-top: 0;
+  border-radius: var(--radius-full);
+}
+
+.multi-choice-chip[aria-checked="true"] .multi-choice-box {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--text-inverse);
+}
+
+/* The word is what says "suggested"; the dot only repeats it. */
+.chip-recommended {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--text-2xs);
+  font-weight: 600;
+  color: var(--accent-text);
+  white-space: nowrap;
+}
+
+.chip-recommended::before {
+  content: "";
+  width: 0.375rem;
+  height: 0.375rem;
+  border-radius: var(--radius-full);
+  background: var(--accent);
+}
+
+.multi-choice-caption {
+  margin: 0;
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
 }
 
 .channel-icon {
@@ -7328,4 +7558,102 @@ html[data-sidebar="collapsed"] .nav-more-body[hidden] {
   flex-wrap: wrap;
   align-items: center;
   gap: var(--space-4);
+}
+
+/* A compact message: label on the left, one line of its text, the buttons. */
+
+.compact-list {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+
+.compact-list > * + * {
+  border-top: 1px solid var(--border);
+}
+
+.compact-list > .field-row {
+  padding: var(--space-3) var(--space-4);
+}
+
+.field-row-compact {
+  align-items: center;
+  gap: var(--space-5);
+}
+
+.field-row-compact .field-row-text {
+  flex: 0 1 17rem;
+}
+
+.field-row-compact .field-row-control {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.message-compact {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: var(--space-4);
+  min-width: 0;
+  width: 100%;
+}
+
+.message-compact-text {
+  flex: 1 1 0;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+
+.message-compact-text[data-default="true"] {
+  color: var(--text-tertiary);
+}
+
+.message-compact-actions {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+@media (max-width: 720px) {
+  .field-row-compact {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--space-2);
+  }
+
+  .field-row-compact .field-row-text {
+    flex: none;
+  }
+
+  .message-compact {
+    flex-wrap: wrap;
+    gap: var(--space-2) var(--space-3);
+  }
+
+  .message-compact-text {
+    flex: 1 1 100%;
+  }
+}
+
+@media (max-width: 600px) {
+  .group-toggle {
+    padding-left: var(--space-4);
+    padding-right: var(--space-2);
+  }
+
+  .group-header > .card-header-actions {
+    padding-right: var(--space-4);
+  }
+
+  /* The sentence of help does not fit beside the title; the summary matters more. */
+  .group-toggle-help {
+    display: none;
+  }
 }

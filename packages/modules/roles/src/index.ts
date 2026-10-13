@@ -156,6 +156,7 @@ export default defineModule({
           variables: TOGGLE_VARIABLES,
           delivery: "dm",
           components: false,
+          compact: true,
           note: "Only the member who pressed the button sees this.",
         }),
         removed: s.message({
@@ -164,6 +165,7 @@ export default defineModule({
           variables: TOGGLE_VARIABLES,
           delivery: "dm",
           components: false,
+          compact: true,
           note: "Only the member who pressed the button sees this.",
         }),
         published: s.message({
@@ -172,6 +174,7 @@ export default defineModule({
           variables: PUBLISHED_VARIABLES,
           delivery: "dm",
           components: false,
+          compact: true,
           note: "Only the moderator who ran the command sees this.",
         }),
       },

@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   describeDuration,
   formatDuration,
+  shortDuration,
   toDurationString,
   toMilliseconds,
 } from "../lib/duration.ts";
@@ -70,5 +71,19 @@ describe("describeDuration", () => {
   test("drops the plural for a single unit", () => {
     assert.equal(describeDuration("1h"), "1 hour");
     assert.equal(describeDuration(1000), "1 second");
+  });
+});
+
+describe("shortDuration", () => {
+  test("abbreviates each unit", () => {
+    assert.equal(shortDuration("30s"), "30 sec");
+    assert.equal(shortDuration(10 * MINUTE), "10 min");
+    assert.equal(shortDuration("2h"), "2 hr");
+    assert.equal(shortDuration(DAY), "1 day");
+    assert.equal(shortDuration("7d"), "7 days");
+  });
+
+  test("keeps an amount that does not divide evenly in the smaller unit", () => {
+    assert.equal(shortDuration(90 * MINUTE), "90 min");
   });
 });
