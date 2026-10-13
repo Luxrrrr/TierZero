@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { InfractionDto, StatsDto } from "@tier0/core";
-import { ActionBadge, UserChip, actionLabel, displayName, fmtDateTime, timeAgo } from "../../../../components/mod/ModUi";
+import { ActionBadge, UserChip, actionLabel, displayName, fmtDateTime, moderatorOf, timeAgo } from "../../../../components/mod/ModUi";
 import {
   actionBars,
   actionVerb,
@@ -117,7 +117,7 @@ export function ModeratorLeaderboard({
                   <div className="stats-mod">
                     <UserChip user={moderator.user} href={moderatorLogHref(guildId, moderator.user.userId)} />
                     <span className="stats-sub">
-                      {mix.length > 0 ? mixSummary(moderator) : "No actions in this range"}
+                      {mix.length > 0 ? mixSummary(moderator, !!moderator.user.automod) : "No actions in this range"}
                     </span>
                   </div>
                 </td>
@@ -129,7 +129,7 @@ export function ModeratorLeaderboard({
                     <div
                       className="stats-mix"
                       role="img"
-                      aria-label={`${formatPercent(share)} of all actions: ${mixSummary(moderator) || "none"}`}
+                      aria-label={`${formatPercent(share)} of all actions: ${mixSummary(moderator, !!moderator.user.automod) || "none"}`}
                     >
                       <div className="stats-mix-fill" style={{ width: `${sharePercent(moderator.total, top)}%` }}>
                         {mix.map((segment) => (
@@ -196,7 +196,7 @@ export function RecentFeed({ guildId, items }: { guildId: string; items: Infract
           <ActionBadge action={item.action} voided={item.voided !== null} />
           <div className="stats-feed-text">
             <p>
-              <strong>{displayName(item.moderator)}</strong> {actionVerb(item.action)}{" "}
+              <strong>{displayName(moderatorOf(item))}</strong> {actionVerb(item.action)}{" "}
               <Link href={`/guilds/${guildId}/mod/members/${encodeURIComponent(item.user.userId)}`}>
                 {displayName(item.user)}
               </Link>

@@ -18,7 +18,7 @@ const names = new Map([
   [HUMAN, "Tamsin"],
 ]);
 const ctx = {
-  client: { users: { cache: new Map(), fetch: async () => null } },
+  client: { user: { id: BOT }, users: { cache: new Map(), fetch: async () => null } },
   guild: {
     id: GUILD,
     members: {
@@ -29,6 +29,7 @@ const ctx = {
 } as never;
 
 let automodCase: number;
+let manualCase: number;
 
 before(async () => {
   await prisma.guild.create({ data: { id: GUILD, name: "Audit list test guild" } });
@@ -49,6 +50,7 @@ before(async () => {
   const manual = await prisma.infraction.create({
     data: { guildId: GUILD, userId: MEMBER, moderatorId: HUMAN, action: "warn", caseNumber: 5 },
   });
+  manualCase = manual.id;
   await writeAudit({
     guildId: GUILD,
     actor: { userId: HUMAN, name: "Tamsin", role: "admin" },
@@ -104,3 +106,80 @@ describe("the staff activity list", () => {
     assert.equal(items[0]!.actor.role, "mod");
   });
 });
+
+describe("what a staff activity entry needs to open the member's record", () => {
+  type Item = { id: number; kind: string; actor: { name: string; role: string }; targetUser: { userId: string } | null; infractionId: number | null; caseNumber: number | null; noteId: number | null };
+  const all = async (query = "") => ((await list(query)).items as unknown as Item[]);
+
+  test("carries the member, the case number and the note id", async () => {
+    const note = await prisma.modNote.create({ data: { guildId: GUILD, userId: MEMBER, authorId: HUMAN, content: "watch this one" } });
+    await writeAudit({
+      guildId: GUILD,
+      actor: { userId: HUMAN, name: "Tamsin", role: "admin" },
+      kind: "note.edit",
+      summary: "Edited a note",
+      targetUserId: MEMBER,
+      noteId: note.id,
+    });
+    const items = await all("");
+    const byInfraction = (id: number) => items.find((item) => item.infractionId === id)!;
+
+    assert.equal(byInfraction(automodCase).caseNumber, 4);
+    assert.equal(byInfraction(manualCase).caseNumber, 5);
+    assert.equal(byInfraction(manualCase).targetUser?.userId, MEMBER);
+    const edited = items.find((item) => item.kind === "note.edit")!;
+    assert.equal(edited.noteId, note.id);
+    assert.equal(edited.caseNumber, null);
+  });
+
+  test("looks the case numbers up in one query for the whole page", async () => {
+    const original = prisma.infraction.findMany;
+    let calls = 0;
+    (prisma.infraction as { findMany: unknown }).findMany = (...args: Parameters<typeof original>) => {
+      calls += 1;
+      return original.apply(prisma.infraction, args);
+    };
+    try {
+      const items = await all("");
+      assert.ok(items.filter((item) => item.infractionId !== null).length >= 2);
+      assert.equal(calls, 1);
+    } finally {
+      (prisma.infraction as { findMany: unknown }).findMany = original;
+    }
+  });
+
+  test("a case that was deleted for good keeps the number its snapshot recorded", async () => {
+    await writeAudit({
+      guildId: GUILD,
+      actor: { userId: HUMAN, name: "Tamsin", role: "admin" },
+      kind: "infraction.void",
+      summary: "Removed case #77",
+      targetUserId: MEMBER,
+      infractionId: 987654,
+      before: { caseNumber: 77, action: "warn" },
+    });
+    const gone = (await all("kind=infraction.void")).find((item) => item.infractionId === 987654)!;
+    assert.equal(gone.caseNumber, 77);
+  });
+
+  test("an entry that is not about a case has no number", async () => {
+    await writeAudit({
+      guildId: GUILD,
+      actor: { userId: HUMAN, name: "Tamsin", role: "admin" },
+      kind: "staff.add",
+      summary: "Added Sam as a moderator",
+    });
+    const entry = (await all("kind=staff.add"))[0]!;
+    assert.equal(entry.caseNumber, null);
+    assert.equal(entry.targetUser, null);
+  });
+
+  test("shows the bot's entries as Automod whatever name an old row stored", async () => {
+    await prisma.modAudit.create({
+      data: { guildId: GUILD, actorId: BOT, actorName: "TierZero", actorRole: "mod", kind: "action.take", summary: "old row" },
+    });
+    const old = (await all("kind=action.take")).find((item) => item.actor.name === "Automod" && item.id > 0 && item.infractionId === null)!;
+    assert.deepEqual(old.actor, { userId: BOT, name: "Automod", role: "automod" });
+  });
+});
+

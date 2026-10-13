@@ -1,6 +1,7 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 import {
+  automodUser,
   describeLoadError,
   displayName,
   fmtDateTimeUtc,
@@ -9,6 +10,7 @@ import {
   hueFor,
   infractionStatus,
   initialsFor,
+  moderatorOf,
   timeAgo,
 } from "../components/mod/format.ts";
 
@@ -125,5 +127,23 @@ describe("describeLoadError", () => {
 
   test("no status is treated as unreachable", () => {
     assert.equal(describeLoadError(undefined).title, "The bot is unreachable");
+  });
+});
+
+describe("one identity for automod", () => {
+  const bot = { userId: "42", name: "TierZero", avatarUrl: "https://cdn.example/bot.png", inServer: false };
+
+  test("is named Automod with no Discord avatar", () => {
+    assert.deepEqual(automodUser(bot), { userId: "42", name: "Automod", avatarUrl: null, inServer: true, automod: true });
+  });
+
+  test("a case by the bot reads as Automod, flagged or not", () => {
+    assert.equal(moderatorOf({ action: "automod-warn", moderator: bot }).name, "Automod");
+    assert.equal(moderatorOf({ action: "warn", moderator: { ...bot, automod: true } }).automod, true);
+  });
+
+  test("a person's case is left as it is", () => {
+    const person = { userId: "7", name: "Tamsin", avatarUrl: null, inServer: true };
+    assert.equal(moderatorOf({ action: "warn", moderator: person }), person);
   });
 });

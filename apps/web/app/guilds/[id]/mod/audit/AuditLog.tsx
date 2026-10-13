@@ -3,12 +3,13 @@ import { Select } from "../../../../../components/form/Select";
 import { LogSwitch } from "../../../../../components/mod/LogSwitch";
 import { isAutomodRole, type AuditDto, type Page, type UserRef } from "@tier0/core";
 import { Avatar, Pager, RoleBadge, UserChip, When } from "../../../../../components/mod/ModUi";
-import { NoteIcon, PencilIcon, SearchIcon, TrashIcon, UndoIcon, UserIcon, HistoryIcon } from "../../../../../components/Icons";
+import { ArrowRightIcon, NoteIcon, PencilIcon, SearchIcon, TrashIcon, UndoIcon, UserIcon, HistoryIcon } from "../../../../../components/Icons";
 import { ExpandableRow } from "./ExpandableRow";
 import { SnapshotDiff } from "./SnapshotDiff";
 import {
   AUDIT_KINDS,
   AUDIT_KIND_SHORT,
+  auditEntryLink,
   auditHref,
   auditVisual,
   groupByDay,
@@ -247,9 +248,16 @@ function PurgeNote() {
 function AuditEntry({ guildId, entry }: { guildId: string; entry: AuditDto }) {
   const hasSnapshot = entry.before != null || entry.after != null;
   const visual = auditVisual(entry.kind, entry.before, entry.after);
-  const actor: UserRef = { userId: entry.actor.userId, name: entry.actor.name, avatarUrl: null, inServer: true };
+  const actor: UserRef = {
+    userId: entry.actor.userId,
+    name: entry.actor.name,
+    avatarUrl: null,
+    inServer: true,
+    automod: isAutomodRole(entry.actor.role),
+  };
+  const link = auditEntryLink(guildId, entry);
 
-  const summary = (
+  const body = (
     <>
       <span className="mod-actionicon audit-icon" data-action={visual.tone || undefined}>
         <IconFor icon={visual.icon} />
@@ -264,19 +272,30 @@ function AuditEntry({ guildId, entry }: { guildId: string; entry: AuditDto }) {
         {entry.summary ? <p className="audit-summary">{entry.summary}</p> : null}
       </div>
       <div className="audit-about">
-        {entry.targetUser ? (
-          <UserChip
-            user={entry.targetUser}
-            href={`/guilds/${guildId}/mod/members/${encodeURIComponent(entry.targetUser.userId)}`}
-          />
-        ) : (
-          <span className="audit-none">Not about a member</span>
-        )}
+        {entry.targetUser ? <UserChip user={entry.targetUser} /> : <span className="audit-none">Not about a member</span>}
       </div>
       <span className="audit-time">
         <When iso={entry.at} />
       </span>
+      <span className="audit-open" aria-hidden="true">
+        {link ? (
+          <>
+            <span className="audit-open-text">Open on profile</span>
+            <ArrowRightIcon />
+          </>
+        ) : null}
+      </span>
     </>
+  );
+
+  // The link and the Changes button are siblings: a button inside an anchor
+  // cannot be reached or announced reliably.
+  const summary = link ? (
+    <Link className="audit-body" href={link.href} aria-label={link.label}>
+      {body}
+    </Link>
+  ) : (
+    <div className="audit-body">{body}</div>
   );
 
   if (!hasSnapshot) {

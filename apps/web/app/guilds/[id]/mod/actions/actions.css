@@ -120,22 +120,6 @@
   white-space: nowrap;
 }
 
-.actions-automod-mark {
-  display: inline-grid;
-  place-items: center;
-  flex: none;
-  width: 1.5rem;
-  height: 1.5rem;
-  border-radius: 999px;
-  border: 1px solid var(--border-strong);
-  color: var(--text-secondary);
-}
-
-.actions-automod-mark svg {
-  width: 0.9rem;
-  height: 0.9rem;
-}
-
 .actions-none {
   color: var(--text-tertiary);
   font-style: italic;

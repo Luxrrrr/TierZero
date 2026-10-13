@@ -17,13 +17,19 @@ export interface AutomodCaseFacts {
   deleted?: boolean;
   warned?: boolean;
   timedOut?: boolean;
-  /** The fixed wording for what the member did. Never the text that matched. */
+  /**
+   * What the member did, with what matched, as `staffReasonOf` writes it. Staff
+   * only: this goes into the audit summary and nowhere a member or a channel can read it.
+   */
   reason: string | null;
   /** Defaults to now. A backfilled entry is dated to its case. */
   at?: Date;
 }
 
-const clip = (text: string): string => (text.length > 120 ? `${text.slice(0, 117)}...` : text);
+const CLIP = 200;
+/** How long a reason could be before the match was added to it. */
+const legacyClip = (text: string): string => (text.length > 120 ? `${text.slice(0, 117)}...` : text);
+const clip = (text: string): string => (text.length > CLIP ? `${text.slice(0, CLIP - 3)}...` : text);
 
 /** What the case's action says automod did, for when nothing finer is known. */
 function flagsFromAction(action: string): { deleted: boolean; warned: boolean; timedOut: boolean } {
@@ -36,8 +42,8 @@ function flagsFromAction(action: string): { deleted: boolean; warned: boolean; t
 
 /**
  * One line for Staff activity, in the wording of the entries staff write for
- * their own actions. It names what automod did, not what the member typed:
- * the dashboard shows the message on the case itself.
+ * their own actions. The trail is staff-only, so the reason carries what
+ * matched, such as the invite code or the banned words.
  */
 export function automodAuditSummary(facts: AutomodCaseFacts): string {
   const known = facts.deleted || facts.warned || facts.timedOut;
@@ -76,7 +82,8 @@ export async function auditAutomodCase(facts: AutomodCaseFacts): Promise<boolean
         targetUserId: facts.targetUserId,
         infractionId: facts.infractionId,
         summary: automodAuditSummary(facts),
-        after: JSON.stringify({ action: facts.action, caseNumber: facts.caseNumber, reason: facts.reason }),
+        // The snapshot keeps only the fixed wording: what matched is in the summary and on the case.
+        after: JSON.stringify({ action: facts.action, caseNumber: facts.caseNumber, reason: facts.reason?.split(" (matched ")[0] ?? null }),
       },
     });
     return true;
@@ -87,20 +94,38 @@ export async function auditAutomodCase(facts: AutomodCaseFacts): Promise<boolean
 }
 
 /**
- * The fixed wording out of a stored automod reason, which reads
- * "rule: wording", then maybe " (matched ...)" and " (problems)". The match
- * is dropped because it is the member's own text and the case already shows it.
+ * The reason as the audit summary shows it, out of a stored automod reason
+ * that reads "rule: wording", then maybe " (matched `x`)" and " (problems)".
+ * The rule name is dropped because the case shows it, and so are the problems
+ * because the line already says what automod managed to do. The match stays,
+ * without the code-span backticks, which only make sense on the case itself.
  */
-export function genericReasonOf(stored: string | null): string | null {
+export function staffReasonOf(stored: string | null): string | null {
   if (!stored) return null;
   let text = stored;
-  for (const marker of [" (matched ", " (Could not "]) {
-    const at = text.indexOf(marker);
-    if (at >= 0) text = text.slice(0, at);
-  }
+  const problems = text.indexOf(" (Could not ");
+  if (problems >= 0) text = text.slice(0, problems);
   const colon = text.indexOf(": ");
-  const wording = colon >= 0 ? text.slice(colon + 2).trim() : "";
+  let wording = colon >= 0 ? text.slice(colon + 2).trim() : "";
+  const matched = wording.indexOf(" (matched ");
+  if (matched >= 0) wording = wording.slice(0, matched) + wording.slice(matched).replace(/`/g, "");
   return wording || null;
+}
+
+/**
+ * A member's name for an old entry, from what the library holds and then one
+ * lookup. Best effort: a member who left and whose account Discord no longer
+ * knows stays null, and the entry keeps their id.
+ */
+async function nameFromClient(client: Client, guildId: string, userId: string): Promise<string | null> {
+  const cached = client.guilds.cache.get(guildId)?.members.cache.get(userId)?.displayName ?? client.users.cache.get(userId)?.displayName;
+  if (cached) return cached;
+  try {
+    const user = await client.users.fetch(userId);
+    return user?.displayName ?? null;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -127,10 +152,16 @@ export async function backfillAutomodAudit(client: Client): Promise<number> {
     ).map((row) => row.infractionId),
   );
 
+  const names = new Map<string, string | null>();
+  const nameOf = async (guildId: string, userId: string): Promise<string | null> => {
+    if (!names.has(userId)) names.set(userId, await nameFromClient(client, guildId, userId));
+    return names.get(userId) ?? null;
+  };
+
   let written = 0;
   for (const row of cases) {
     if (have.has(row.id)) continue;
-    const name = client.guilds.cache.get(row.guildId)?.members.cache.get(row.userId)?.displayName ?? client.users.cache.get(row.userId)?.displayName ?? null;
+    const name = await nameOf(row.guildId, row.userId);
     const done = await auditAutomodCase({
       guildId: row.guildId,
       botUserId,
@@ -139,10 +170,67 @@ export async function backfillAutomodAudit(client: Client): Promise<number> {
       infractionId: row.id,
       caseNumber: row.caseNumber,
       action: row.action,
-      reason: genericReasonOf(row.reason),
+      reason: staffReasonOf(row.reason),
       at: row.createdAt,
     });
     if (done) written += 1;
   }
   return written;
+}
+
+const HEAD = /^(Automod .+? \(case #(\d+)\))(?:: (.*))?$/s;
+
+/**
+ * Rewrites automod entries written before the summary carried names and the
+ * match: a raw member id becomes the member's name when it can be found, and a
+ * reason that lost its match is rebuilt from the case. Only entries in the
+ * shape this module writes are touched, and one that already reads right is
+ * left alone, so every start after the first writes nothing. Returns how many
+ * entries were rewritten.
+ */
+export async function repairAutomodAudit(client: Client): Promise<number> {
+  const rows = await prisma.modAudit.findMany({
+    where: { actorRole: "automod", kind: "action.take", infractionId: { not: null }, targetUserId: { not: null } },
+    select: { id: true, guildId: true, targetUserId: true, infractionId: true, summary: true },
+  });
+  if (rows.length === 0) return 0;
+
+  const cases = new Map(
+    (
+      await prisma.infraction.findMany({
+        where: { id: { in: rows.map((row) => row.infractionId!) } },
+        select: { id: true, caseNumber: true, reason: true },
+      })
+    ).map((row) => [row.id, row]),
+  );
+
+  const names = new Map<string, string | null>();
+  let rewritten = 0;
+  for (const row of rows) {
+    const found = cases.get(row.infractionId!);
+    const parts = HEAD.exec(row.summary);
+    if (!found || !parts || Number(parts[2]) !== found.caseNumber) continue;
+
+    let head = parts[1]!;
+    const userId = row.targetUserId!;
+    if (head.includes(userId)) {
+      if (!names.has(userId)) names.set(userId, await nameFromClient(client, row.guildId, userId));
+      const name = names.get(userId);
+      if (name) head = head.split(userId).join(name);
+    }
+
+    // The tail is only replaced when it is what this module wrote before, the
+    // wording without its match. A case whose reason staff have since edited
+    // no longer matches that, and the entry keeps what it said.
+    const reason = staffReasonOf(found.reason);
+    const old = parts[3];
+    const wording = reason?.split(" (matched ")[0] ?? null;
+    const written = old !== undefined && wording !== null && (old === wording || old === legacyClip(wording));
+    const tail = reason && written ? clip(reason) : old;
+    const next = `${head}${tail !== undefined ? `: ${tail}` : ""}`;
+    if (next === row.summary) continue;
+    await prisma.modAudit.update({ where: { id: row.id }, data: { summary: next } });
+    rewritten += 1;
+  }
+  return rewritten;
 }

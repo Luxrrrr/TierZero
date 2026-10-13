@@ -7,13 +7,13 @@ import type { ReactNode } from "react";
 import type { AuditDto, InfractionDto, NoteDto, StaffRole, UserRef } from "@tier0/core";
 import { actorRoleWord } from "@tier0/core";
 import { BanIcon, ChevronDownIcon, HistoryIcon, NoteIcon, PencilIcon, TrashIcon, UndoIcon } from "../../../../../../components/Icons";
-import { ActionBadge, Avatar, StateIcon, actionLabel, displayName, timeAgo } from "../../../../../../components/mod/ModUi";
+import { ActionBadge, Avatar, StateIcon, actionLabel, displayName, moderatorOf, timeAgo } from "../../../../../../components/mod/ModUi";
 import { changeSubject, controlName, infractionSubject, noteSubject, toggleName } from "./a11y";
 import { CharacterCount } from "./CharacterCount";
 import { ActionDialog } from "./Dialog";
 import { EditCaseDialog } from "./EditCaseDialog";
 import { canRestoreOwnRemoval, infractionControls, noteControls } from "./permissions";
-import { caseDomId, diffSnapshots, expiryState, formatDate, formatDateTime, historyFor, type SnapshotDiff } from "./timeline";
+import { caseDomId, noteDomId, diffSnapshots, expiryState, formatDate, formatDateTime, historyFor, type SnapshotDiff } from "./timeline";
 import type { Run } from "./useModAction";
 
 const REASON_LIMIT = 500;
@@ -286,9 +286,9 @@ export function InfractionRow({
           ) : null}
           <EvidenceList evidence={infraction.evidence} full={expanded} />
           <p className="pf-byline">
-            <Avatar user={infraction.moderator} size="sm" />
+            <Avatar user={moderatorOf(infraction)} size="sm" />
             <span>
-              by <span className="pf-strong">{displayName(infraction.moderator)}</span>
+              by <span className="pf-strong">{displayName(moderatorOf(infraction))}</span>
             </span>
           </p>
         </div>
@@ -306,7 +306,7 @@ export function InfractionRow({
           <div className="pf-details" id={panelId}>
             <dl className="pf-facts">
               <Detail label="Issued">{formatDateTime(infraction.createdAt, timeZone)}</Detail>
-              <Detail label="Moderator">{displayName(infraction.moderator)}</Detail>
+              <Detail label="Moderator">{displayName(moderatorOf(infraction))}</Detail>
               {infraction.expiresAt ? (
                 <Detail label={Date.parse(infraction.expiresAt) > now.getTime() ? "Ends" : "Ended"}>
                   {formatDateTime(infraction.expiresAt, timeZone)}
@@ -491,6 +491,7 @@ export function NoteRow({
   expanded,
   onToggle,
   pending,
+  spotlight,
 }: RowFrame & {
   note: NoteDto;
   role: StaffRole;
@@ -569,8 +570,10 @@ export function NoteRow({
 
   return (
     <li
+      id={temporary ? undefined : noteDomId(note.id)}
       className="pf-event"
       data-kind="note"
+      data-spotlight={spotlight ? "true" : undefined}
       data-removed={deleted ? "true" : undefined}
       data-pending={pending ? "true" : undefined}
       aria-busy={pending || undefined}

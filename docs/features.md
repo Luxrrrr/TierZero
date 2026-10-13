@@ -14,7 +14,7 @@
 | Leveling | XP, role rewards and a leaderboard. No image cards. |
 | News and patch notes | RSS feeds and Steam patch notes, posted as embeds. |
 | Messages | Build a message or embed, save it as a template, sort templates into folders and send it to any channel. |
-| Bot messages | Every message the bot sends, from every feature, in one searchable list, each one editable. |
+| Bot messages | Every message the bot sends, found by feature or by search, each one editable. |
 | Utility | Server and member info. |
 
 Good to know:
@@ -53,17 +53,17 @@ Nothing is locked in. Settings it doesn't ask about keep their values, skipping 
 
 ## Commands
 
-The Commands page lists every command on the server, including the right-click entries. Each one can be switched off, limited to certain roles and channels, or hidden from members without a chosen permission. You can also decide whether its reply is private or public, and for /ping, /serverinfo, /userinfo, /rank, /leaderboard, /warn, /kick, /ban, /unban and /timeout, write the reply yourself with the same editor as the [Messages](#messages) page: text, embeds, buttons, menus and variables, plus reactions on a public reply. The editor starts from what the command says now, and each command has its own variables, such as `{user}` and `{case}` for /warn. Discord can't hide a command by role, so the role list blocks use but doesn't hide it.
+The Commands page lists every command on the server, including the right-click entries. Each one can be switched off, limited to certain roles and channels, or hidden from members without a chosen permission. You can also decide whether its reply is private or public, and for /ping, /serverinfo, /userinfo, /rank, /leaderboard, /warn, /kick, /ban, /unban and /timeout, write the reply yourself with the same editor as the [Message creator](#message-creator): text, embeds, buttons, menus and variables, plus reactions on a public reply. The editor starts from what the command says now, and each command has its own variables, such as `{user}` and `{case}` for /warn. Discord can't hide a command by role, so the role list blocks use but doesn't hide it.
 
 ![The Commands page with a hidden command and role limits](images/commands.png)
 
 ![A command's settings sheet: who can use it, where, and its reply](images/command-sheet.png)
 
-## Messages
+## Message creator
 
-The Messages page builds messages and embeds for the bot to post, such as rules, announcements or event notices. You edit on the left and see the message drawn the way Discord shows it on the right.
+The Message creator page builds messages and embeds for the bot to post, such as rules, announcements or event notices. You edit on the left and see the message drawn the way Discord shows it on the right.
 
-![The Messages page with a saved template, its live preview and the editor](images/messages.png)
+![The Message creator page with a saved template, its live preview and the editor](images/messages.png)
 
 What you can set:
 
@@ -94,7 +94,7 @@ A sent message can mention people and roles. @everyone and @here only ping when 
 
 ### Messages the bot sends by itself
 
-Where a feature has a message that is a setting, it shows a small preview of the message and an **Edit message** button instead of a text box. The button opens the editor from the Messages page: text, embeds, buttons, menus, reactions and variables, with a preview beside it. The editor starts from what the bot sends now, so you can change one word without rebuilding anything. Nothing is kept until you press **Use this message** and then Save on the settings page.
+Where a feature has a message that is a setting, it shows a small preview of the message and an **Edit message** button instead of a text box. The button opens the editor from the Message creator: text, embeds, buttons, menus, reactions and variables, with a preview beside it. The editor starts from what the bot sends now, so you can change one word without rebuilding anything. Nothing is kept until you press **Use this message** and then Save on the settings page.
 
 A variable is a name in braces that the bot fills in when it sends, like `{user}` or `{level}`. The Variables tool lists the ones that message understands first, then the ones every message has. **Go back to the default** puts the original wording back.
 
@@ -106,13 +106,15 @@ Messages written before the editor existed are kept and show up as plain text in
 
 The Bot messages page lists every message the bot sends, from every feature, in one place. Use it to find a message without knowing which feature it belongs to, or to see all the wording on a server at a glance. It's in the sidebar under Messages.
 
-Each row has the message's name, a line saying when the bot sends it, the first line of what it says now, and an **Edit message** button. The button opens the same editor as the settings pages, and the message is saved the moment you confirm it, with no separate Save. A message you've changed has an **Edited** tag. **Go back to the default** puts the original wording back.
+The page opens on a card for each feature, with how many messages it has and how many you've changed. A short **Most changed** row above the cards goes straight to the messages people reword most, such as the welcome greeting, the automod notice and the ticket panel. Click a card to see that feature's messages, grouped the way its settings page groups them. A feature with more than twelve messages opens with its groups closed. **Expand all** opens them. Use **All features** to go back. The feature is in the address, so the browser's back button and a reload keep your place.
 
-- **Search** looks at a message's name, when it is sent, the feature it belongs to and the words it says now. Every word you type has to match, in any order. Press `/` to jump to it.
-- The feature list narrows the page to one feature, and **Edited only** shows just what you've changed.
+Each message is one row: a dot for the kind of message, its name, the first line of what it says now, and an **Edit** button. The dot is red for a refusal or error, green for something that went through, amber for a warning and gold for a notice. Its name is also in the row for screen readers. The **i** button on a row says when the bot sends it, and the same line is at the top of the editor. Edit opens the same editor as the settings pages, and the message is saved the moment you confirm it, with no separate Save. A message you've changed has an **Edited** tag. **Reset** puts the original wording back.
+
+- **Search** looks at a message's name, when it is sent, the feature it belongs to and the words it says now. Every word you type has to match, in any order. Press `/` to jump to it. While there's something in the box, the page lists the matches from every feature in one plain list. Clear it to go back to where you were.
+- **Edited only** shows just what you've changed, on the cards, in a feature and in search.
 - A feature that's switched off still lists its messages, dimmed, so you can write them before you turn it on.
-- Command replies are listed too, under **Command replies**. They open the same editor as the Commands page.
-- **Open in settings** on a row goes to the message on its feature's page. Short pieces of text that aren't messages, such as a channel name, a button label or the reason in the audit log, aren't on this page. They are under **Labels and text** on the feature's page.
+- Command replies are listed too, under **Command replies** in the feature the command belongs to. They open the same editor as the Commands page.
+- **Open settings** at the top of a feature goes to that feature's own page. Short pieces of text that aren't messages, such as a channel name, a button label or the reason in the audit log, aren't on this page. They are under **Labels and text** on the feature's page.
 
 The first group, **Bot replies**, belongs to the bot itself rather than to a feature. It has no switch and is always on. Under **Replies and errors** it holds what members are told when a command's feature is switched off, when a command is turned off in a channel or limited to roles they don't have (`{roles}` lists the allowed ones), and when a command fails. It also holds what a role button or menu says when the role no longer exists, sits above the bot's own, can't be changed, or was given or taken away, when a message's buttons are no longer active, and when a button, menu or form stops with an error. A button's own confirmation, if you wrote one, is used instead of the server's usual one. Each is shown only to the person it answers.
 
@@ -313,7 +315,9 @@ A server that already had the message log on keeps it, now as the Messages part 
 
 ### Staff activity
 
-The Mod logs tab has two pages with a switch at the top: Member actions and Staff activity. Staff activity is for admins and the owner and lists every change made through the dashboard: actions taken on a member (warn, timeout, kick, ban and so on), notes added, edited, deleted or restored, actions removed or restored, and staff added, changed or removed. The owner's changes are included. Actions taken from Discord, with a slash command or the right-click menu, are on the member's record and in the Actions tab but not here, and actions taken before this was added aren't listed. Automod's cases are listed too, as Automod, with what it did and the case number; the message it acted on stays on the case. Choose Automod in the staff member filter to see only those. Purges are listed as well. Entries show who did it and at what level, and edits and removals expand to show before and after. You can filter by type, staff member, member ID, date range and words. The same entries appear on a member's timeline as staff activity.
+The Mod logs tab has two pages with a switch at the top: Member actions and Staff activity. Staff activity is for admins and the owner and lists every change made through the dashboard: actions taken on a member (warn, timeout, kick, ban and so on), notes added, edited, deleted or restored, actions removed or restored, and staff added, changed or removed. The owner's changes are included. Actions taken from Discord, with a slash command or the right-click menu, are on the member's record and in the Actions tab but not here, and actions taken before this was added aren't listed. Automod's cases are listed too, always under the name Automod. The line says what it did, the case number and what matched, such as the invite code or the banned words. This page is staff only, so the match is safe here. It never goes in the channel notice or the DM. The message it acted on stays on the case. Choose Automod in the staff member filter to see only those. Purges are listed as well. Entries show who did it and at what level, and edits and removals expand to show before and after. You can filter by type, staff member, member ID, date range and words. The same entries appear on a member's timeline as staff activity.
+
+Click an entry to open it on the member's record. Entries about a case open that case, and entries about a note open that note, scrolled to and highlighted. A removed case still opens, struck through. Entries that aren't about a member, such as staff changes and purges, aren't links. The **Changes** button on an entry is separate and still shows the before and after.
 
 Cases made by commands and automod are the actions themselves, under Member actions.
 
@@ -328,6 +332,7 @@ Below the tiles:
 - **Right now:** timeouts and bans in force, and members with anything on record. Not limited to the range.
 - **Repeat actions:** the share of members actioned again within 30 days of an earlier action. It appears once at least five members were actioned. Automod, unbans and cleared timeouts don't count.
 - **Automod:** what automod's rules did in the range, which rules fired most, and a link to Member actions filtered to automod.
+- **Moderators:** who did what. Automod is one of the rows, always called Automod and shown with a shield instead of the bot's Discord name and picture. It looks the same in the action log, on a member's timeline and in the CSV export.
 - **Busiest hours:** actions by hour of the day, in UTC.
 - **Moderators:** who acted, how much, and when they last did. Selecting a name opens Member actions for them.
 - **Most actioned members:** the ten with the most actions.
@@ -400,7 +405,7 @@ Automod only reports what it managed to do. If the bot can't delete a message, o
 
 Messages never repeat what the member wrote. The reason in the notice, the log and the record is fixed wording such as "Posted a Discord invite link". The specific invite code, domain or banned word that matched goes only to staff, in the **Matched** field of the log post and in the record on the dashboard.
 
-Each trip also keeps the message itself on the case, as a moderator's attached message is kept: its text, channel, attachments and a note of whether it was deleted. If the member edited it into breaking the rule, the earlier versions are kept as well, from Server logs when that is on, and the version that tripped the rule is marked. It is kept even when the bot couldn't delete the message. This is staff-only and shows on the member's record in the dashboard, never in Discord. The log post carries the **View in dashboard** button, which opens the case. Automod's cases have case numbers like any other, and each one has a line in [Staff activity](#staff-activity) saying what automod did. Cases from before this was added get their line the next time the bot starts. The notice can only mention the member it is about, and the log post mentions no one.
+Each trip also keeps the message itself on the case, as a moderator's attached message is kept: its text, channel, attachments and a note of whether it was deleted. If the member edited it into breaking the rule, the earlier versions are kept as well, from Server logs when that is on, and the version that tripped the rule is marked. It is kept even when the bot couldn't delete the message. This is staff-only and shows on the member's record in the dashboard, never in Discord. The log post carries the **View in dashboard** button, which opens the case. Automod's cases have case numbers like any other, and each one has a line in [Staff activity](#staff-activity) saying what automod did and what matched. Cases from before this was added get their line the next time the bot starts. The notice can only mention the member it is about, and the log post mentions no one.
 
 ### Wording you can change
 
@@ -502,6 +507,6 @@ The dashboard does not apply updates itself, because that would give it the powe
 
 ## Utility
 
-Server and member info commands. It's small, and it mostly shows the module runtime works end to end.
+Server and member info commands: `/ping`, `/serverinfo` and `/userinfo`.
 
-`/ping`, `/serverinfo` and `/userinfo` are reworded from the Commands page like any other reply. Until you write one, `/ping` answers in an embed and the other two keep their embeds: **Embed color** sets the colour of the standard `/serverinfo` and `/userinfo` replies, and **Show join dates on /userinfo** adds or removes the "Joined server" line in the standard `/userinfo` reply. A reply you wrote sets its own colour and decides for itself which lines it has, so those two settings no longer apply to it. Under **Labels and text**, **When a join date is not known** is what `{joined}` says in a `/userinfo` reply you wrote, for someone who isn't in the server. It starts as "Unknown". The standard reply leaves the line out for that person instead.
+There is nothing to configure on a page of its own. Switch the feature on or off from the overview, and change any of the three replies from the Commands page like any other reply. To drop the "Joined server" line from `/userinfo`, edit its reply and delete that field. For someone who is not in the server, `{joined}` reads "Unknown" in a reply you wrote, and the standard reply leaves the line out.

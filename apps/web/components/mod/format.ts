@@ -1,9 +1,24 @@
-import { isInForce, type InfractionDto, type UserRef } from "@tier0/core";
+import { AUTOMOD_NAME, isInForce, type InfractionDto, type UserRef } from "@tier0/core";
 
 /**
  * The plain logic behind the mod dashboard's shared pieces. No React here, so
  * it can be tested with the node runner and used from server and client code.
  */
+
+/** The one way automod is shown: named Automod, with the shield in place of an avatar. */
+export function automodUser(user: UserRef): UserRef {
+  return { ...user, name: AUTOMOD_NAME, avatarUrl: null, inServer: true, automod: true };
+}
+
+/**
+ * Who made a case. The bot marks its own account already, so the action is
+ * only a second opinion for a reply from a bot that does not.
+ */
+export function moderatorOf(infraction: Pick<InfractionDto, "action" | "moderator">): UserRef {
+  return infraction.moderator.automod || infraction.action.startsWith("automod-")
+    ? automodUser(infraction.moderator)
+    : infraction.moderator;
+}
 
 /** "Name" when Discord knows it, otherwise the id tail, so a deleted account is still identifiable. */
 export function displayName(user: UserRef): string {

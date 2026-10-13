@@ -319,6 +319,15 @@ export function ArrowUpIcon(props: { className?: string }) {
   );
 }
 
+export function ArrowRightIcon(props: { className?: string }) {
+  return (
+    <Stroke className={props.className}>
+      <line x1="5" y1="12" x2="19" y2="12" />
+      <polyline points="13 6 19 12 13 18" />
+    </Stroke>
+  );
+}
+
 export function ArrowDownIcon(props: { className?: string }) {
   return (
     <Stroke className={props.className}>

@@ -159,8 +159,12 @@ export const ROLE_LABEL: Record<StaffRole, string> = {
  */
 export type AuditActorRole = StaffRole | "automod";
 
-/** The name stored on audit entries that automod writes. */
+/**
+ * The one name automod is shown under, wherever an actor, moderator or author
+ * of an action is displayed. The bot's own Discord username is never shown for it.
+ */
 export const AUTOMOD_ACTOR_NAME = "Automod";
+export const AUTOMOD_NAME = AUTOMOD_ACTOR_NAME;
 
 export const isAutomodRole = (role: AuditActorRole): role is "automod" => role === "automod";
 
@@ -222,6 +226,18 @@ export interface UserRef {
   avatarUrl: string | null;
   /** Whether they are in the server right now. */
   inServer: boolean;
+  /** Set on the bot's own account: it is shown as Automod, with an icon in place of an avatar. */
+  automod?: boolean;
+}
+
+/** Whether an id, or an audit actor's role, means the bot acting on its own through automod. */
+export function isAutomodActor(actor: { userId: string; role?: string | null }, botUserId?: string | null): boolean {
+  return actor.role === "automod" || (!!botUserId && actor.userId === botUserId);
+}
+
+/** How the bot's own account appears in every place a person would: named Automod, with no Discord avatar. */
+export function automodRef(botUserId: string): UserRef {
+  return { userId: botUserId, name: AUTOMOD_NAME, avatarUrl: null, inServer: true, automod: true };
 }
 
 export interface Page<T> {
@@ -390,6 +406,8 @@ export interface AuditDto {
   summary: string;
   targetUser: UserRef | null;
   infractionId: number | null;
+  /** The case's number on the member's record, for linking to it. Absent from an older bot, and null when the entry is not about a case. */
+  caseNumber?: number | null;
   noteId: number | null;
   /** Parsed snapshots, present for edits and removals. */
   before: unknown;

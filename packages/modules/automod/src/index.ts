@@ -6,7 +6,7 @@ import {
 } from "discord.js";
 import { defineModule, noteDeletion, takeDeletionNote, type EvidenceMessage, type ModuleContext } from "@tier0/core";
 import { createInfraction } from "@tier0/db";
-import { auditAutomodCase, evidenceForTrip, loggedCopyOf } from "@tier0/module-moderation";
+import { auditAutomodCase, evidenceForTrip, loggedCopyOf, staffReasonOf } from "@tier0/module-moderation";
 import { settings, type AutomodSettings } from "./settings.js";
 import type { EvaluationVerdict } from "./evaluator.js";
 import { carryOut, draftInfraction, judgeMessage, noticeLifetimeMs, type Outcome } from "./handler.js";
@@ -181,7 +181,7 @@ async function recordInfraction(
       deleted: outcome.deleted,
       warned: outcome.warned,
       timedOut: outcome.timedOut,
-      reason: verdict.reason ?? null,
+      reason: staffReasonOf(record.reason),
     });
     return record.caseNumber;
   } catch (error) {

@@ -155,7 +155,7 @@ export async function listLoggedMessages(ctx: ModCtx, state: GuildState, query: 
   const where = messageLogWhere(ctx.guild.id, query, access.readable);
   const [total, rows] = await Promise.all([prisma.loggedMessage.count({ where }), loadLogged(where, pageSize, (page - 1) * pageSize)]);
 
-  const refs = await resolveUsers(ctx.client, ctx.guild, rows.map((row) => row.authorId));
+  const refs = await resolveUsers(ctx.client, ctx.guild, rows.map((row) => row.authorId), { keepBotAccount: true });
   const body: MessageLogPage = {
     items: rows.map((row) => toMessageDto(row, ctx.guild.id, refs, ctx.guild.channels.cache.get(row.channelId)?.name)),
     total,

@@ -453,8 +453,13 @@ const SERIES_SINGULAR: Record<Series, string> = {
   other: "other",
 };
 
-/** "9 warns, 3 timeouts, 1 ban", for the line under a moderator name. */
-export function mixSummary(moderator: ModeratorCounts): string {
+/**
+ * "9 warns, 3 timeouts, 1 ban", for the line under a moderator name. Automod
+ * does not warn, time out or ban the way a person's counts do, so its line
+ * counts what its rules did instead of calling all of it "other".
+ */
+export function mixSummary(moderator: ModeratorCounts, automod = false): string {
+  if (automod) return moderator.total > 0 ? plural(moderator.total, "rule action") : "";
   return moderatorMix(moderator)
     .map((segment) =>
       segment.series === "other" ? `${segment.count} other` : plural(segment.count, SERIES_SINGULAR[segment.series]),

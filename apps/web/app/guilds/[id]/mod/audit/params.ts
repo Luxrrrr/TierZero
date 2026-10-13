@@ -169,6 +169,52 @@ export function groupByDay<T extends { at: string }>(items: T[], timeZone = "UTC
   return groups;
 }
 
+/**
+ * A member's record, opened at one entry when `focus` names it. A case wins
+ * over a note when both are given, since a case is what the record is about.
+ */
+export function memberRecordHref(
+  guildId: string,
+  userId: string,
+  focus: { caseNumber?: number | null; noteId?: number | null } = {},
+): string {
+  const base = `/guilds/${guildId}/mod/members/${encodeURIComponent(userId)}`;
+  if (focus.caseNumber) return `${base}?case=${focus.caseNumber}`;
+  if (focus.noteId) return `${base}?note=${focus.noteId}`;
+  return base;
+}
+
+export interface AuditLink {
+  href: string;
+  /** The accessible name, such as "Open case #4 for LuxTester". */
+  label: string;
+}
+
+const noteKind = (kind: string): boolean => kind.startsWith("note.");
+
+/**
+ * Where an entry opens on the member's record: the case for an action or a
+ * change to one, the note for a change to a note, or the record itself when
+ * the entry names a member but no longer a case or note it can point at.
+ * Entries that are not about a member, such as staff changes and purges, have
+ * no link. A removed case still has one: the timeline keeps showing it.
+ */
+export function auditEntryLink(guildId: string, entry: AuditDto): AuditLink | null {
+  const user = entry.targetUser;
+  if (!user) return null;
+  const who = user.name ?? `User ${user.userId.slice(-4)}`;
+  if (noteKind(entry.kind) && entry.noteId) {
+    return { href: memberRecordHref(guildId, user.userId, { noteId: entry.noteId }), label: `Open a note for ${who}` };
+  }
+  if (!noteKind(entry.kind) && entry.caseNumber) {
+    return {
+      href: memberRecordHref(guildId, user.userId, { caseNumber: entry.caseNumber }),
+      label: `Open case #${entry.caseNumber} for ${who}`,
+    };
+  }
+  return { href: memberRecordHref(guildId, user.userId), label: `Open ${who}'s record` };
+}
+
 export type AuditIcon = "note" | "pencil" | "trash" | "undo" | "user";
 
 interface AuditVisual {

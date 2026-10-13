@@ -41,7 +41,8 @@ export {
   auditAutomodCase,
   automodAuditSummary,
   backfillAutomodAudit,
-  genericReasonOf,
+  repairAutomodAudit,
+  staffReasonOf,
   type AutomodCaseFacts,
 } from "./automod-audit.js";
 export { RecentMessages, RECENT_LIMITS, recentMessages } from "./recent-messages.js";

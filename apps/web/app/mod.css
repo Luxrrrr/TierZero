@@ -903,6 +903,17 @@ a.mod-chip:hover {
   --mod-avatar-size: 4rem;
 }
 
+.mod-avatar[data-automod="true"] {
+  background: var(--surface-2);
+  border: 1px solid var(--border-strong);
+  color: var(--text-secondary);
+}
+
+.mod-avatar[data-automod="true"] svg {
+  width: 58%;
+  height: 58%;
+}
+
 .mod-avatar img {
   display: block;
   width: 100%;

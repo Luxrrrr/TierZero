@@ -630,6 +630,56 @@ export function parseCaseHash(hash: string): number | null {
   return match ? parseCaseParam(match[1]) : null;
 }
 
+/** The DOM id of a note row, so `#note-7` lands on it. */
+export function noteDomId(noteId: number): string {
+  return `note-${noteId}`;
+}
+
+/** A note id from `?note=`, read as strictly as a case number. */
+export function parseNoteParam(raw: string | string[] | undefined): number | null {
+  return parseCaseParam(raw);
+}
+
+/** A note id from a `#note-7` fragment. */
+export function parseNoteHash(hash: string): number | null {
+  const match = /^#note-(\d{1,9})$/.exec(hash);
+  return match ? parseNoteParam(match[1]) : null;
+}
+
+/**
+ * The row a note link points at, or null when the viewer's timeline has no
+ * such note. A note staff deleted is still a row, shown as deleted, so it
+ * opens. One the viewer may not see is absent, and the page says so.
+ */
+export function findNoteItem(items: TimelineItem[], noteId: number | null): TimelineItem | null {
+  if (noteId === null) return null;
+  return items.find((item) => item.kind === "note" && item.note.id === noteId) ?? null;
+}
+
+/** The one entry a link asks the page to open. */
+export type FocusRequest = { kind: "case" | "note"; number: number };
+
+/** A case wins over a note when a link names both. */
+export function focusRequest(caseNumber: number | null, noteId: number | null): FocusRequest | null {
+  if (caseNumber !== null) return { kind: "case", number: caseNumber };
+  if (noteId !== null) return { kind: "note", number: noteId };
+  return null;
+}
+
+export function findFocusItem(items: TimelineItem[], request: FocusRequest | null): TimelineItem | null {
+  if (!request) return null;
+  return request.kind === "case" ? findCaseItem(items, request.number) : findNoteItem(items, request.number);
+}
+
+export function focusDomId(request: FocusRequest): string {
+  return request.kind === "case" ? caseDomId(request.number) : noteDomId(request.number);
+}
+
+/** How the page names the entry to a reader, such as "Case 196" or "Note 7". */
+export function focusLabel(request: FocusRequest): string {
+  return `${request.kind === "case" ? "Case" : "Note"} ${request.number}`;
+}
+
 /**
  * The row a case link points at, or null when the viewer's timeline has no
  * such case. The timeline is already limited to what this viewer may see, and

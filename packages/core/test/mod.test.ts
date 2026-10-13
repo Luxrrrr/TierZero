@@ -1,6 +1,6 @@
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
-import { actorRoleWord, auditActorRole, isAutomodRole, canEditInfraction, can, canDeleteNote, canEditNote, canTakeAction, canVoidAction, isInForce, isModActionKind, isStaffRole, permissionForAction } from "../dist/mod.js";
+import { AUTOMOD_NAME, automodRef, isAutomodActor, actorRoleWord, auditActorRole, isAutomodRole, canEditInfraction, can, canDeleteNote, canEditNote, canTakeAction, canVoidAction, isInForce, isModActionKind, isStaffRole, permissionForAction } from "../dist/mod.js";
 
 describe("can", () => {
   test("lets every role look and add notes", () => {
@@ -258,5 +258,21 @@ describe("audit actors", () => {
     assert.equal(actorRoleWord("mod"), "moderator");
     assert.equal(actorRoleWord("owner"), "owner");
     assert.equal(actorRoleWord("automod"), "");
+  });
+});
+
+describe("the automod identity", () => {
+  test("is one name with no Discord avatar", () => {
+    assert.deepEqual(automodRef("42"), { userId: "42", name: AUTOMOD_NAME, avatarUrl: null, inServer: true, automod: true });
+    assert.equal(AUTOMOD_NAME, "Automod");
+  });
+
+  test("an actor is automod by role or by being the bot", () => {
+    assert.equal(isAutomodActor({ userId: "1", role: "automod" }), true);
+    assert.equal(isAutomodActor({ userId: "42", role: "mod" }, "42"), true);
+    assert.equal(isAutomodActor({ userId: "42" }, "42"), true);
+    assert.equal(isAutomodActor({ userId: "1", role: "admin" }, "42"), false);
+    assert.equal(isAutomodActor({ userId: "42" }), false);
+    assert.equal(isAutomodActor({ userId: "42" }, null), false);
   });
 });

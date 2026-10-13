@@ -29,7 +29,9 @@ import {
 } from "./format";
 
 export {
+  automodUser,
   displayName,
+  moderatorOf,
   fmtDate,
   fmtDateTime,
   fmtDateUtc,
@@ -147,6 +149,7 @@ const SIZE_CLASS: Record<AvatarSize, string> = {
 
 /**
  * A user's Discord avatar, or their initials on a colour drawn from their id.
+ * Automod has neither: it shows a shield, the same one everywhere.
  * `size` takes a named size or, for older callers, a pixel width.
  */
 export function Avatar({ user, size = "md" }: { user: UserRef; size?: AvatarSize | number }) {
@@ -155,8 +158,8 @@ export function Avatar({ user, size = "md" }: { user: UserRef; size?: AvatarSize
   if (typeof size === "number") style["--mod-avatar-size"] = `${size}px`;
   const className = `mod-avatar${typeof size === "number" ? "" : SIZE_CLASS[size]}`;
   return (
-    <span className={className} data-hue={hue} style={style} aria-hidden="true">
-      {user.avatarUrl ? <img src={user.avatarUrl} alt="" loading="lazy" decoding="async" /> : initialsFor(user)}
+    <span className={className} data-hue={hue} data-automod={user.automod ? "true" : undefined} style={style} aria-hidden="true">
+      {user.automod ? <ShieldIcon /> : user.avatarUrl ? <img src={user.avatarUrl} alt="" loading="lazy" decoding="async" /> : initialsFor(user)}
     </span>
   );
 }

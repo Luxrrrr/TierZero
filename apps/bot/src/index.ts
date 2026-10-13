@@ -6,7 +6,7 @@ import welcome from "@tier0/module-welcome";
 import roles from "@tier0/module-roles";
 import automod from "@tier0/module-automod";
 import leveling from "@tier0/module-leveling";
-import moderation, { backfillAutomodAudit, backfillEvidence } from "@tier0/module-moderation";
+import moderation, { backfillAutomodAudit, backfillEvidence, repairAutomodAudit } from "@tier0/module-moderation";
 import serverlog from "@tier0/module-serverlog";
 import tickets from "@tier0/module-tickets";
 import auditlog from "@tier0/module-auditlog";
@@ -78,10 +78,13 @@ client.once(Events.ClientReady, async (ready) => {
     (error) => console.error("Could not attach messages to older cases", error),
   );
 
-  void backfillAutomodAudit(client).then(
-    (count) => count > 0 && console.log(`Added ${count} older automod cases to Staff activity`),
-    (error) => console.error("Could not add older automod cases to Staff activity", error),
-  );
+  void backfillAutomodAudit(client)
+    .then((count) => count > 0 && console.log(`Added ${count} older automod cases to Staff activity`))
+    .then(() => repairAutomodAudit(client))
+    .then(
+      (count) => count > 0 && console.log(`Rewrote ${count} older automod entries in Staff activity`),
+      (error) => console.error("Could not update older automod entries in Staff activity", error),
+    );
 
   scheduler.start();
   startControlApi({ client, registry, state, commands });

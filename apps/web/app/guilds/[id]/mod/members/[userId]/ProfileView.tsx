@@ -13,10 +13,14 @@ import {
   activitySeries,
   applyPending,
   buildTimeline,
-  caseDomId,
   filterShowing,
-  findCaseItem,
+  findFocusItem,
+  focusDomId,
+  focusLabel,
+  focusRequest,
   parseCaseHash,
+  parseNoteHash,
+  type FocusRequest,
   countByFilter,
   filterTimeline,
   formatDate,
@@ -60,6 +64,8 @@ interface Props {
   canConfigure?: boolean;
   /** A case number from `?case=`, to open and scroll to. */
   focusCase?: number | null;
+  /** A note id from `?note=`, opened the same way. */
+  focusNote?: number | null;
 }
 
 const FILTERS: { id: TimelineFilter; label: string }[] = [
@@ -86,17 +92,17 @@ interface Tracked {
 /** A confirmed change whose refresh never arrives is dropped after this long rather than shown forever. */
 const SETTLED_TIMEOUT_MS = 10_000;
 
-export function ProfileView({ guildId, profile, role, viewerId, viewerName, renderedAt, canConfigure = false, focusCase = null }: Props) {
+export function ProfileView({ guildId, profile, role, viewerId, viewerName, renderedAt, canConfigure = false, focusCase = null, focusNote = null }: Props) {
   const send = useModAction(guildId);
   const [filter, setFilter] = useState<TimelineFilter>("all");
   // A linked case starts open, so the first paint already matches what the
   // scroll effect below lands on and the page does not jump afterwards.
   const [expanded, setExpanded] = useState<Set<string>>(() => {
-    const target = findCaseItem(buildTimeline(profile, seesAudit(role)), focusCase);
+    const target = findFocusItem(buildTimeline(profile, seesAudit(role)), focusRequest(focusCase, focusNote));
     return new Set(target ? [target.key] : []);
   });
-  const [spotlight, setSpotlight] = useState<{ key: string; caseNumber: number } | null>(null);
-  const [missingCase, setMissingCase] = useState<number | null>(null);
+  const [spotlight, setSpotlight] = useState<{ key: string; request: FocusRequest } | null>(null);
+  const [missing, setMissing] = useState<FocusRequest | null>(null);
   const [tracked, setTracked] = useState<Tracked[]>([]);
   const [now, setNow] = useState(() => (renderedAt ? new Date(renderedAt) : new Date()));
   // The server renders in UTC; the browser switches to its own zone once mounted,
@@ -161,22 +167,23 @@ export function ProfileView({ guildId, profile, role, viewerId, viewerName, rend
   // Runs when the link changes, not on every edit to the record, so a refresh
   // after saving a note does not pull the page back to the linked case.
   useEffect(() => {
-    const caseNumber = focusCase ?? parseCaseHash(window.location.hash);
-    if (caseNumber === null) return;
-    const target = findCaseItem(allRef.current, caseNumber);
+    const hash = window.location.hash;
+    const request = focusRequest(focusCase ?? parseCaseHash(hash), focusNote ?? (focusCase === null ? parseNoteHash(hash) : null));
+    if (!request) return;
+    const target = findFocusItem(allRef.current, request);
     if (!target) {
-      setMissingCase(caseNumber);
+      setMissing(request);
       return;
     }
-    setMissingCase(null);
+    setMissing(null);
     setFilter((current) => filterShowing(allRef.current, current, target));
     setExpanded((current) => (current.has(target.key) ? current : new Set(current).add(target.key)));
-    setSpotlight({ key: target.key, caseNumber });
-  }, [focusCase]);
+    setSpotlight({ key: target.key, request });
+  }, [focusCase, focusNote]);
 
   useEffect(() => {
     if (!spotlight) return;
-    const row = document.getElementById(caseDomId(spotlight.caseNumber));
+    const row = document.getElementById(focusDomId(spotlight.request));
     if (row) {
       const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
       row.scrollIntoView({ block: "center", behavior: reduced ? "auto" : "smooth" });
@@ -258,6 +265,7 @@ export function ProfileView({ guildId, profile, role, viewerId, viewerName, rend
         <NoteRow
           key={item.key}
           {...frame}
+          spotlight={spotlight?.key === item.key}
           note={item.note}
           role={role}
           viewer={viewer}
@@ -312,16 +320,16 @@ export function ProfileView({ guildId, profile, role, viewerId, viewerName, rend
           <h2 className="pf-main-title" id="pf-timeline-title" tabIndex={-1}>
             Timeline
           </h2>
-          {missingCase !== null ? (
+          {missing !== null ? (
             <p className="pf-case-notice" role="status">
-              <span>Case {missingCase} isn&apos;t on this member&apos;s record.</span>
-              <button type="button" className="btn btn-ghost btn-sm" onClick={() => setMissingCase(null)}>
+              <span>{focusLabel(missing)} isn&apos;t on this member&apos;s record, or you can&apos;t see it.</span>
+              <button type="button" className="btn btn-ghost btn-sm" onClick={() => setMissing(null)}>
                 Dismiss
               </button>
             </p>
           ) : null}
           <p className="pf-sr" role="status">
-            {spotlight ? `Case ${spotlight.caseNumber} is open in the timeline.` : ""}
+            {spotlight ? `${focusLabel(spotlight.request)} is open in the timeline.` : ""}
           </p>
           <div className="pf-toolbar">
             <div className="mod-toolbar-group pf-filters" role="group" aria-label="Show in the timeline">

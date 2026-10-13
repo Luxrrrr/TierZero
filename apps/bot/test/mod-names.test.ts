@@ -55,6 +55,30 @@ describe("resolveUsers", () => {
   });
 });
 
+describe("the bot's own account", () => {
+  const BOT = "130000000000000001";
+  const withBot = () => {
+    const { guild, client, calls } = stubs(async (id) => member(id));
+    client.user = { id: BOT };
+    return { guild, client, calls };
+  };
+
+  test("is Automod, with no avatar, and costs no lookup", async () => {
+    const { guild, client, calls } = withBot();
+    const refs = await resolveUsers(client, guild, [BOT, "130000000000000002"]);
+    assert.deepEqual(refs.get(BOT), { userId: BOT, name: "Automod", avatarUrl: null, inServer: true, automod: true });
+    assert.deepEqual(calls, ["130000000000000002"]);
+    assert.equal(refs.get("130000000000000002")?.automod, undefined);
+  });
+
+  test("stays itself when the question is who wrote a message", async () => {
+    const { guild, client } = withBot();
+    const refs = await resolveUsers(client, guild, [BOT], { keepBotAccount: true });
+    assert.equal(refs.get(BOT)?.name, `n${BOT}`);
+    assert.equal(refs.get(BOT)?.automod, undefined);
+  });
+});
+
 describe("withinBudget", () => {
   test("returns the work when it is quick", async () => {
     assert.equal(await withinBudget(Promise.resolve(5), 0), 5);

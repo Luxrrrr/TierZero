@@ -13,10 +13,11 @@ import {
   actionLabel,
   displayName,
   isAutomodAction,
+  moderatorOf,
   parseAutomodReason,
   ruleLabel,
 } from "../../../../../components/mod/ModUi";
-import { DownloadIcon, HistoryIcon, SearchIcon, ShieldIcon, UserIcon } from "../../../../../components/Icons";
+import { DownloadIcon, HistoryIcon, SearchIcon, UserIcon } from "../../../../../components/Icons";
 import {
   ACTION_CHIPS,
   SOURCE_CHIPS,
@@ -43,7 +44,7 @@ interface Props {
 export function ActionLog({ guildId, query, data, staff, canExport }: Props) {
   const moderators = moderatorOptions(
     staff,
-    data.items.map((item) => item.moderator),
+    data.items.map(moderatorOf),
     query.moderatorId,
   );
   const filtered = hasActionFilters(query);
@@ -274,7 +275,7 @@ function ActionRow({ guildId, item, now, canSeeStaffActivity }: { guildId: strin
         ) : null}
       </td>
       <td data-label="Moderator">
-        {isAutomodAction(item.action) ? <AutomodActor /> : <UserChip user={item.moderator} muted />}
+        <UserChip user={moderatorOf(item)} muted />
       </td>
       <td data-label="When" className="actions-when">
         <RelativeTime iso={item.createdAt} />
@@ -296,18 +297,6 @@ function ActionRow({ guildId, item, now, canSeeStaffActivity }: { guildId: strin
         ) : null}
       </td>
     </tr>
-  );
-}
-
-/** The bot's own account made these entries; showing its name and avatar would only say "TierZero" on every row. */
-function AutomodActor() {
-  return (
-    <span className="mod-user" data-muted="true">
-      <span className="actions-automod-mark" aria-hidden="true">
-        <ShieldIcon />
-      </span>
-      <span className="mod-user-name">Automod</span>
-    </span>
   );
 }
 

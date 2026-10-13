@@ -1,5 +1,5 @@
 import type { Client, Guild } from "discord.js";
-import type { UserRef } from "@tier0/core";
+import { automodRef, type UserRef } from "@tier0/core";
 
 /**
  * Resolves Discord ids to something a person can read. Members come from the
@@ -95,6 +95,11 @@ export interface ResolveOptions {
    * not count, because they need no request.
    */
   maxFetches?: number;
+  /**
+   * Leave the bot's own account as the account it is. Only for a person-shaped
+   * question such as who wrote a logged message, where "Automod" would be wrong.
+   */
+  keepBotAccount?: boolean;
 }
 
 export async function resolveUsers(
@@ -112,8 +117,14 @@ export async function resolveUsers(
     timer = setTimeout(() => resolve("late"), BATCH_BUDGET_MS);
   });
 
+  const botId = client.user?.id;
   const waiting: Promise<void>[] = [];
   for (const id of unique) {
+    // The bot's own account is automod, which is shown by that name and never looked up.
+    if (id === botId && !options.keepBotAccount) {
+      refs.set(id, automodRef(id));
+      continue;
+    }
     const key = keyOf(guild.id, id);
     const hit = remembered.get(key);
     if (hit && hit.until > Date.now()) {

@@ -6,8 +6,16 @@ import {
   caseDomId,
   filterShowing,
   findCaseItem,
+  findFocusItem,
+  findNoteItem,
+  focusDomId,
+  focusLabel,
+  focusRequest,
+  noteDomId,
   parseCaseHash,
   parseCaseParam,
+  parseNoteHash,
+  parseNoteParam,
 } from "../app/guilds/[id]/mod/members/[userId]/timeline.ts";
 
 const user = (userId: string): UserRef => ({ userId, name: userId, avatarUrl: null, inServer: true });
@@ -115,5 +123,65 @@ describe("filterShowing", () => {
   test("lifts a filter that would hide it", () => {
     assert.equal(filterShowing(items, "notes", target), "all");
     assert.equal(filterShowing(items, "staff", target), "all");
+  });
+});
+
+describe("note links", () => {
+  test("?note= is read as strictly as ?case=", () => {
+    assert.equal(parseNoteParam("7"), 7);
+    for (const bad of ["", "0", "-1", "7x", "1e3", undefined, []]) {
+      assert.equal(parseNoteParam(bad as string | string[] | undefined), null, String(bad));
+    }
+  });
+
+  test("#note-N matches the id the rows are given", () => {
+    assert.equal(parseNoteHash("#note-7"), 7);
+    assert.equal(parseNoteHash(`#${noteDomId(12)}`), 12);
+    assert.equal(parseNoteHash("#case-7"), null);
+    assert.equal(parseNoteHash("#note-"), null);
+  });
+
+  test("finds the row for a note id, and never a case that shares the number", () => {
+    assert.equal(findNoteItem(items, 7)?.key, "n7");
+    assert.equal(findNoteItem(items, 3), null);
+    assert.equal(findNoteItem(items, null), null);
+  });
+
+  test("finds a deleted note, which the timeline still shows", () => {
+    const deleted = buildTimeline(
+      { infractions: [], notes: [{ ...note, deleted: { at: "2026-10-05T00:00:00Z", by: user("200") } }], audit: [] },
+      false,
+    );
+    assert.equal(findNoteItem(deleted, 7)?.key, "n7");
+  });
+
+  test("a note absent from the viewer's timeline stays absent", () => {
+    assert.equal(findNoteItem(items.filter((item) => item.kind !== "note"), 7), null);
+  });
+
+  test("a filter that would hide the note is lifted", () => {
+    const target = findNoteItem(items, 7)!;
+    assert.equal(filterShowing(items, "notes", target), "notes");
+    assert.equal(filterShowing(items, "actions", target), "all");
+  });
+});
+
+describe("the entry a link opens", () => {
+  test("a case wins over a note, and neither gives nothing", () => {
+    assert.deepEqual(focusRequest(3, 7), { kind: "case", number: 3 });
+    assert.deepEqual(focusRequest(null, 7), { kind: "note", number: 7 });
+    assert.equal(focusRequest(null, null), null);
+  });
+
+  test("finds, names and anchors each kind", () => {
+    const caseRequest = focusRequest(3, null)!;
+    const noteRequest = focusRequest(null, 7)!;
+    assert.equal(findFocusItem(items, caseRequest)?.key, "i1003");
+    assert.equal(findFocusItem(items, noteRequest)?.key, "n7");
+    assert.equal(findFocusItem(items, null), null);
+    assert.equal(focusDomId(caseRequest), "case-3");
+    assert.equal(focusDomId(noteRequest), "note-7");
+    assert.equal(focusLabel(caseRequest), "Case 3");
+    assert.equal(focusLabel(noteRequest), "Note 7");
   });
 });

@@ -286,13 +286,13 @@ describe("the audit trail of an automod case", () => {
   }
 
   const cases: Array<[string, string[], string]> = [
-    ["warn", ["warn"], "Automod warned LuxTester (case #N): Used a banned word or phrase"],
-    ["delete", ["delete"], "Automod deleted a message from LuxTester (case #N): Used a banned word or phrase"],
-    ["timeout", ["timeout"], "Automod timed out LuxTester (case #N): Used a banned word or phrase"],
-    ["delete and warn", ["delete", "warn"], "Automod deleted a message from LuxTester and warned them (case #N): Used a banned word or phrase"],
-    ["delete and timeout", ["delete", "timeout"], "Automod deleted a message from LuxTester and timed them out (case #N): Used a banned word or phrase"],
-    ["warn and timeout", ["warn", "timeout"], "Automod warned LuxTester and timed them out (case #N): Used a banned word or phrase"],
-    ["all three", ["delete", "warn", "timeout"], "Automod deleted a message from LuxTester, warned them and timed them out (case #N): Used a banned word or phrase"],
+    ["warn", ["warn"], "Automod warned LuxTester (case #N): Used a banned word or phrase (matched badword, other thing)"],
+    ["delete", ["delete"], "Automod deleted a message from LuxTester (case #N): Used a banned word or phrase (matched badword, other thing)"],
+    ["timeout", ["timeout"], "Automod timed out LuxTester (case #N): Used a banned word or phrase (matched badword, other thing)"],
+    ["delete and warn", ["delete", "warn"], "Automod deleted a message from LuxTester and warned them (case #N): Used a banned word or phrase (matched badword, other thing)"],
+    ["delete and timeout", ["delete", "timeout"], "Automod deleted a message from LuxTester and timed them out (case #N): Used a banned word or phrase (matched badword, other thing)"],
+    ["warn and timeout", ["warn", "timeout"], "Automod warned LuxTester and timed them out (case #N): Used a banned word or phrase (matched badword, other thing)"],
+    ["all three", ["delete", "warn", "timeout"], "Automod deleted a message from LuxTester, warned them and timed them out (case #N): Used a banned word or phrase (matched badword, other thing)"],
   ];
 
   for (const [name, actions, expected] of cases) {
@@ -314,9 +314,10 @@ describe("the audit trail of an automod case", () => {
     });
   }
 
-  test("never carries the matched words", async () => {
+  test("carries the matched words in the summary, which only staff read, as plain text", async () => {
     const { audit } = await trip({ actions: ["delete"] });
-    assert.ok(!audit[0]!.summary.includes("badword"));
+    assert.ok(audit[0]!.summary.endsWith("(matched badword, other thing)"));
+    assert.ok(!audit[0]!.summary.includes("`"));
     assert.ok(!audit[0]!.after!.includes("badword"));
   });
 

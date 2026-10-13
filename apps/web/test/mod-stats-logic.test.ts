@@ -381,6 +381,13 @@ describe("moderator mix", () => {
     assert.equal(mixSummary({ total: 4, warn: 3, timeout: 0, kick: 0, ban: 1 }), "3 warns, 1 ban");
   });
 
+  test("automod's line counts rule actions rather than calling them all other", () => {
+    assert.equal(mixSummary({ total: 2, warn: 0, timeout: 0, kick: 0, ban: 0 }), "2 other");
+    assert.equal(mixSummary({ total: 2, warn: 0, timeout: 0, kick: 0, ban: 0 }, true), "2 rule actions");
+    assert.equal(mixSummary({ total: 1, warn: 0, timeout: 0, kick: 0, ban: 0 }, true), "1 rule action");
+    assert.equal(mixSummary({ total: 0, warn: 0, timeout: 0, kick: 0, ban: 0 }, true), "");
+  });
+
   test("the log link carries the moderator id, encoded", () => {
     assert.equal(moderatorLogHref("123", "456"), "/guilds/123/mod/actions?moderatorId=456");
     assert.equal(moderatorLogHref("1", "a b"), "/guilds/1/mod/actions?moderatorId=a%20b");

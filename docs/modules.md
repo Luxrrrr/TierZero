@@ -106,7 +106,7 @@ Which modules the quick setup groups, and in what order, is in `apps/web/lib/gui
 
 ### Messages the owner can edit
 
-Use `s.message` for anything the module sends, in place of `s.template`. The owner edits it with the same builder as the Messages page: text, embeds, buttons, menus, reactions and variables.
+Use `s.message` for anything the module sends, in place of `s.template`. The owner edits it with the same builder as the Message creator: text, embeds, buttons, menus, reactions and variables.
 
 ```ts
 import { embedReply, s } from "@tier0/core";
