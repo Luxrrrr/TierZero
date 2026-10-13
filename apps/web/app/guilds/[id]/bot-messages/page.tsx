@@ -30,8 +30,15 @@ export async function generateMetadata({
  * settings schemas the feature pages are drawn from, so a feature that adds a
  * message setting shows up here without a line of dashboard code.
  */
-export default async function BotMessagesPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function BotMessagesPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const { id } = await params;
+  const { feature } = await searchParams;
 
   try {
     const access = await requireGuildAccess(id);
@@ -49,6 +56,7 @@ export default async function BotMessagesPage({ params }: { params: Promise<{ id
     const browsable: BrowserModule[] = ordered.map((module) => ({
       id: module.id,
       name: module.name,
+      summary: module.summary,
       enabled: module.enabled,
       alwaysOn: module.alwaysOn,
       schema: module.schema,
@@ -73,8 +81,7 @@ export default async function BotMessagesPage({ params }: { params: Promise<{ id
             <p className="page-eyebrow">Server</p>
             <h1 className="page-title">Bot messages</h1>
             <p className="page-summary">
-              Everything the bot says, in one list: replies, refusals, errors and the messages each feature
-              sends. Change any of them here or on the feature&apos;s own page.
+              The messages the bot sends, in one place. Pick a feature, or search for a message.
             </p>
           </div>
           {system ? (
@@ -86,7 +93,7 @@ export default async function BotMessagesPage({ params }: { params: Promise<{ id
           ) : null}
         </div>
 
-        <BotMessagesBrowser guildId={id} modules={browsable} />
+        <BotMessagesBrowser guildId={id} modules={browsable} initialFeature={typeof feature === "string" ? feature : null} />
       </>
     );
   } catch (error) {

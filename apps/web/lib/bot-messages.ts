@@ -1,4 +1,4 @@
-import { parseMessage, plainReply, type FieldDescriptor, type MessageBody, type ResponseTemplate } from "@tier0/core";
+import { parseMessage, plainReply, REPLY_COLOR, type FieldDescriptor, type MessageBody, type ResponseTemplate } from "@tier0/core";
 
 /**
  * The logic behind the Bot messages page: finding every message a server's
@@ -19,6 +19,8 @@ export interface MessageVariableInfo {
 export interface ModuleInput {
   id: string;
   name: string;
+  /** One line on what the feature does, for its card. */
+  summary?: string;
   enabled: boolean;
   alwaysOn?: boolean;
   schema: Record<string, unknown>;
@@ -43,6 +45,10 @@ export interface BotMessageRow {
   help: string;
   /** The groups between the feature and the message, such as "Replies and errors". */
   trail: string[];
+  /** The group the message is listed under: its trail, with a list entry folded into the list's name. */
+  section: string;
+  /** For a message inside a list, which entry it belongs to, such as the name of a role menu. */
+  entry: string | null;
   /** The id of the group on the feature's settings page that holds it. */
   anchor: string;
   /** Where the message sits in the feature's settings. Empty for a command reply. */
@@ -59,6 +65,10 @@ export interface BotMessageRow {
 }
 
 type Fields = Record<string, FieldDescriptor>;
+
+/** The section for messages that sit directly under a feature's settings. */
+export const GENERAL_SECTION = "General";
+export const REPLIES_SECTION = "Command replies";
 
 function titleOf(key: string): string {
   const spaced = key.replace(/([a-z0-9])([A-Z])/g, "$1 $2");
@@ -83,6 +93,12 @@ function entryName(entry: unknown, fields: Fields, index: number): string {
   return `#${index + 1}`;
 }
 
+/** Entries of a list share one section, so a server with many role menus gets one group rather than one each. */
+function sectionOf(trail: readonly string[], listed: { list: string; name: string } | null): string {
+  const steps = listed ? trail.map((step) => (step === `${listed.list}: ${listed.name}` ? listed.list : step)) : trail;
+  return steps.length === 0 ? GENERAL_SECTION : steps.join(" › ");
+}
+
 /**
  * Every message in a feature's settings, at any depth. A list of groups yields
  * one message for each entry the server has, since each is its own wording.
@@ -91,7 +107,15 @@ function settingRows(module: ModuleInput, settings: Record<string, unknown>): Bo
   const rows: BotMessageRow[] = [];
   const top = (module.schema.fields ?? {}) as Fields;
 
-  const visit = (field: FieldDescriptor, key: string, segments: Segment[], trail: string[], anchorKey: string, value: unknown) => {
+  const visit = (
+    field: FieldDescriptor,
+    key: string,
+    segments: Segment[],
+    trail: string[],
+    anchorKey: string,
+    value: unknown,
+    listed: { list: string; name: string } | null = null,
+  ) => {
     if (field.kind === "message") {
       rows.push({
         key: `${module.id}/${pathOf(segments)}`,
@@ -102,6 +126,8 @@ function settingRows(module: ModuleInput, settings: Record<string, unknown>): Bo
         label: field.label ?? titleOf(key),
         help: field.help ?? "",
         trail,
+        section: sectionOf(trail, listed),
+        entry: listed?.name ?? null,
         anchor: `group-${anchorKey}`,
         segments,
         command: null,
@@ -118,7 +144,7 @@ function settingRows(module: ModuleInput, settings: Record<string, unknown>): Bo
       const children = (field.fields ?? {}) as Fields;
       const record = typeof value === "object" && value !== null && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
       const next = segments.length === 0 ? trail : [...trail, field.label ?? titleOf(key)];
-      for (const [childKey, child] of Object.entries(children)) visit(child, childKey, [...segments, childKey], next, anchorKey, record[childKey]);
+      for (const [childKey, child] of Object.entries(children)) visit(child, childKey, [...segments, childKey], next, anchorKey, record[childKey], listed);
       return;
     }
     if (field.kind === "array") {
@@ -126,10 +152,12 @@ function settingRows(module: ModuleInput, settings: Record<string, unknown>): Bo
       if (item.kind !== "object" || !Array.isArray(value)) return;
       const itemFields = (item.fields ?? {}) as Fields;
       value.forEach((entry, index) => {
-        const name = `${field.label ?? titleOf(key)}: ${entryName(entry, itemFields, index)}`;
+        const list = field.label ?? titleOf(key);
+        const entryLabel = entryName(entry, itemFields, index);
+        const name = `${list}: ${entryLabel}`;
         const record = typeof entry === "object" && entry !== null ? (entry as Record<string, unknown>) : {};
         for (const [childKey, child] of Object.entries(itemFields)) {
-          visit(child, childKey, [...segments, index, childKey], [...trail, name], anchorKey, record[childKey]);
+          visit(child, childKey, [...segments, index, childKey], [...trail, name], anchorKey, record[childKey], { list, name: entryLabel });
         }
       });
     }
@@ -156,7 +184,9 @@ function replyRows(module: ModuleInput): BotMessageRow[] {
         moduleOff: !module.enabled && module.alwaysOn !== true,
         label,
         help: `Sent when ${command.kind === "slash" ? "someone uses" : "someone uses the right-click entry"} ${label}.`,
-        trail: ["Command replies"],
+        trail: [REPLIES_SECTION],
+        section: REPLIES_SECTION,
+        entry: null,
         anchor: "",
         segments: [],
         command: command.name,
@@ -277,27 +307,163 @@ export function filterRows(rows: readonly BotMessageRow[], views: ReadonlyMap<st
   });
 }
 
-export interface ModuleRows {
-  moduleId: string;
-  moduleName: string;
-  off: boolean;
-  rows: BotMessageRow[];
-}
-
-/** The rows under their feature, in the order the features were given. */
-export function groupByModule(rows: readonly BotMessageRow[]): ModuleRows[] {
-  const groups = new Map<string, ModuleRows>();
-  for (const row of rows) {
-    const group = groups.get(row.moduleId) ?? { moduleId: row.moduleId, moduleName: row.moduleName, off: row.moduleOff, rows: [] };
-    group.rows.push(row);
-    groups.set(row.moduleId, group);
-  }
-  return [...groups.values()];
-}
-
-/** How many messages each feature has, for the filter and for the count beside it. */
+/** How many messages each feature has. */
 export function countByModule(rows: readonly BotMessageRow[]): Map<string, number> {
   const counts = new Map<string, number>();
   for (const row of rows) counts.set(row.moduleId, (counts.get(row.moduleId) ?? 0) + 1);
   return counts;
+}
+
+/** What a message is for, read from the colour of the embed the bot sends by default. */
+export type MessageKind = "error" | "success" | "warning" | "info";
+
+export const KIND_LABEL: Record<MessageKind, string> = {
+  error: "Error",
+  success: "Confirmation",
+  warning: "Warning",
+  info: "Notice",
+};
+
+/** Null for a message with no embed or one coloured by hand, which gets a neutral dot. */
+export function kindOf(starting: MessageBody): MessageKind | null {
+  const colour = starting.embeds[0]?.color?.toLowerCase();
+  if (!colour) return null;
+  for (const kind of Object.keys(REPLY_COLOR) as MessageKind[]) if (REPLY_COLOR[kind].toLowerCase() === colour) return kind;
+  return null;
+}
+
+/**
+ * Features in the order owners reach for them: what moderators and members see
+ * most comes first. A feature not listed follows, by name.
+ */
+export const FEATURE_ORDER = ["moderation", "automod", "tickets", "welcome", "roles", "leveling", "feeds", "utility", "auditlog", "serverlog", "system"];
+
+function featureRank(id: string): number {
+  const index = FEATURE_ORDER.indexOf(id);
+  return index === -1 ? FEATURE_ORDER.length : index;
+}
+
+export interface FeatureSummary {
+  id: string;
+  name: string;
+  summary: string;
+  off: boolean;
+  total: number;
+  edited: number;
+}
+
+/** One entry per feature that has a message, in the order owners reach for them. `views` decides what counts as edited. */
+export function featureSummaries(rows: readonly BotMessageRow[], views: ReadonlyMap<string, RowView>, modules: readonly ModuleInput[]): FeatureSummary[] {
+  const found = new Map<string, FeatureSummary>();
+  for (const module of modules) {
+    found.set(module.id, {
+      id: module.id,
+      name: module.name,
+      summary: module.summary ?? "",
+      off: !module.enabled && module.alwaysOn !== true,
+      total: 0,
+      edited: 0,
+    });
+  }
+  for (const row of rows) {
+    const entry = found.get(row.moduleId);
+    if (!entry) continue;
+    entry.total += 1;
+    if (views.get(row.key)?.edited) entry.edited += 1;
+  }
+  return [...found.values()]
+    .filter((entry) => entry.total > 0)
+    .sort((a, b) => featureRank(a.id) - featureRank(b.id) || a.name.localeCompare(b.name));
+}
+
+export interface Section {
+  title: string;
+  rows: BotMessageRow[];
+  edited: number;
+}
+
+/** A feature's messages under their group, in the order the groups first appear. */
+export function groupBySection(rows: readonly BotMessageRow[], views: ReadonlyMap<string, RowView>): Section[] {
+  const sections = new Map<string, Section>();
+  for (const row of rows) {
+    const section = sections.get(row.section) ?? { title: row.section, rows: [], edited: 0 };
+    section.rows.push(row);
+    if (views.get(row.key)?.edited) section.edited += 1;
+    sections.set(row.section, section);
+  }
+  return dropSharedPrefix([...sections.values()]);
+}
+
+/**
+ * When every nested group of a feature sits under the same parent, such as
+ * "Replies and errors", repeating it on each title is noise. It is taken off
+ * once there are two or more such groups, and left alone otherwise.
+ */
+function dropSharedPrefix(sections: Section[]): Section[] {
+  const nested = sections.filter((section) => section.title.includes(" › "));
+  const first = nested[0]?.title.split(" › ")[0];
+  if (nested.length < 2 || first === undefined) return sections;
+  if (!nested.every((section) => section.title.split(" › ")[0] === first)) return sections;
+  return sections.map((section) => (section.title.includes(" › ") ? { ...section, title: section.title.split(" › ").slice(1).join(" › ") } : section));
+}
+
+/** Past this many messages a feature's sections start closed, so the page opens on a short list. */
+export const OPEN_LIMIT = 12;
+
+export function sectionsStartOpen(messageCount: number): boolean {
+  return messageCount <= OPEN_LIMIT;
+}
+
+/**
+ * Whether a section is open. What the owner toggled wins, except that while only
+ * edited messages are shown every section is open: what is left is what was asked for.
+ */
+export function isSectionOpen(toggled: boolean | undefined, startOpen: boolean, editedOnly: boolean): boolean {
+  return editedOnly ? true : (toggled ?? startOpen);
+}
+
+/**
+ * The messages owners most often want to change, so the first thing on the page
+ * is a way straight to them. Chosen as the ones members see first or that carry
+ * the server's tone: the greeting, what automod and moderation say, the ticket
+ * panel, level-ups. The path is where the message sits in the feature's settings.
+ */
+export const MOST_CHANGED: readonly { moduleId: string; path: string; label: string }[] = [
+  { moduleId: "welcome", path: "join.message", label: "Welcome greeting" },
+  { moduleId: "automod", path: "noticeMessage", label: "Automod notice" },
+  { moduleId: "moderation", path: "modLogMessage", label: "Mod log post" },
+  { moduleId: "tickets", path: "panel.message", label: "Ticket panel" },
+  { moduleId: "leveling", path: "announce.message", label: "Level-up announcement" },
+  { moduleId: "moderation", path: "dmMessage", label: "Punishment DM" },
+];
+
+export interface MostChangedItem {
+  label: string;
+  row: BotMessageRow;
+}
+
+/** The entries that exist and are worth showing: a message of a feature that is off and untouched is left out. */
+export function resolveMostChanged(rows: readonly BotMessageRow[], views: ReadonlyMap<string, RowView>, editedOnly = false): MostChangedItem[] {
+  const byKey = new Map(rows.map((row) => [row.key, row]));
+  const items: MostChangedItem[] = [];
+  for (const entry of MOST_CHANGED) {
+    const row = byKey.get(`${entry.moduleId}/${entry.path}`);
+    if (!row) continue;
+    const edited = views.get(row.key)?.edited === true;
+    if (row.moduleOff && !edited) continue;
+    if (editedOnly && !edited) continue;
+    items.push({ label: entry.label, row });
+  }
+  return items.slice(0, 6);
+}
+
+/** The feature named in the address, if it is one the page has; anything else shows the cards. */
+export function parseFeatureParam(value: string | string[] | null | undefined, known: readonly string[]): string | null {
+  const first = Array.isArray(value) ? value[0] : value;
+  return first !== undefined && first !== null && known.includes(first) ? first : null;
+}
+
+/** The query string for a view: a feature, or nothing for the cards. */
+export function featureSearch(featureId: string | null): string {
+  return featureId === null ? "" : `?feature=${encodeURIComponent(featureId)}`;
 }

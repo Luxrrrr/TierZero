@@ -1,15 +1,23 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { plainReply, s, type MessageBody } from "@tier0/core";
+import { embedReply, plainReply, s, type MessageBody } from "@tier0/core";
 import {
   collectMessageRows,
   countByModule,
+  featureSearch,
+  featureSummaries,
   filterRows,
   getAt,
-  groupByModule,
+  groupBySection,
   isCustomized,
+  isSectionOpen,
+  kindOf,
   messageText,
+  MOST_CHANGED,
+  parseFeatureParam,
   pathOf,
+  resolveMostChanged,
+  sectionsStartOpen,
   setAt,
   storedMessage,
   viewOf,
@@ -318,16 +326,8 @@ describe("filterRows", () => {
   });
 });
 
-describe("grouping", () => {
+describe("counting", () => {
   const rows = collectMessageRows([welcome, roles, system], { welcome: {}, roles: { menus: [{ name: "a" }] }, system: {} });
-
-  test("puts rows under their feature in the order the features were given", () => {
-    const groups = groupByModule(rows);
-    assert.deepEqual(groups.map((group) => group.moduleId), ["welcome", "roles", "system"]);
-    assert.equal(groups[0]?.rows.length, 3);
-    assert.equal(groups[1]?.off, true);
-    assert.equal(groups[2]?.off, false);
-  });
 
   test("counts messages per feature", () => {
     const counts = countByModule(rows);
@@ -335,9 +335,172 @@ describe("grouping", () => {
     assert.equal(counts.get("roles"), 2);
     assert.equal(counts.get("system"), 1);
   });
+});
 
-  test("has no group for a feature with no row left", () => {
-    assert.deepEqual(groupByModule([]), []);
+describe("sections", () => {
+  test("a message directly under the settings is in General, and a group is named by its path", () => {
+    const rows = collectMessageRows([welcome], { welcome: {} });
+    assert.deepEqual(rows.map((row) => row.section), ["General", "Replies and errors › Errors", "Replies and errors"]);
+  });
+
+  test("the entries of a list share one section and keep their own name", () => {
+    const rows = collectMessageRows([roles], { roles: { menus: [{ name: "Colours" }, { name: "Games" }] } });
+    const menus = rows.filter((row) => row.label === "Menu message");
+    assert.deepEqual(menus.map((row) => row.section), ["Role menus", "Role menus"]);
+    assert.deepEqual(menus.map((row) => row.entry), ["Colours", "Games"]);
+    assert.equal(rows.find((row) => row.label === "When a role is given")?.entry, null);
+  });
+
+  test("a command reply sits under Command replies", () => {
+    const utility = moduleFrom("utility", "Utility", s.object({}), {
+      commands: [{ name: "ping", kind: "slash", privateByDefault: true, response: { starting: say("Pong"), placeholders: [] } }],
+    });
+    assert.equal(collectMessageRows([utility], { utility: {} })[0]?.section, "Command replies");
+  });
+
+  test("groups rows in the order the sections first appear, with how many are edited", () => {
+    const settings = { welcome: { replies: { done: say("All good") } } };
+    const rows = collectMessageRows([welcome], settings);
+    const views = new Map(rows.map((row) => [row.key, viewOf(row, settings, {})]));
+    const sections = groupBySection(rows, views);
+    assert.deepEqual(sections.map((section) => [section.title, section.rows.length, section.edited]), [
+      ["General", 1, 0],
+      ["Replies and errors › Errors", 1, 0],
+      ["Replies and errors", 1, 1],
+    ]);
+    assert.deepEqual(groupBySection([], views), []);
+  });
+
+  test("a parent shared by every nested group is left off their titles", () => {
+    const row = (section: string, key: string) => ({ section, key }) as unknown as Parameters<typeof groupBySection>[0][number];
+    const views = new Map() as Parameters<typeof groupBySection>[1];
+    const titles = (rows: ReturnType<typeof row>[]) => groupBySection(rows, views).map((section) => section.title);
+    assert.deepEqual(titles([row("General", "a"), row("Replies and errors › Refusals", "b"), row("Replies and errors › Confirmations", "c")]), ["General", "Refusals", "Confirmations"]);
+    assert.deepEqual(titles([row("Replies and errors › Refusals", "b"), row("Labels › Words", "c")]), ["Replies and errors › Refusals", "Labels › Words"]);
+    assert.deepEqual(titles([row("Replies and errors › Refusals", "b")]), ["Replies and errors › Refusals"]);
+  });
+
+  test("sections start open for a feature of twelve messages or fewer", () => {
+    assert.equal(sectionsStartOpen(12), true);
+    assert.equal(sectionsStartOpen(13), false);
+  });
+
+  test("a section the owner toggled stays as set, except that edited only opens them all", () => {
+    assert.equal(isSectionOpen(undefined, false, false), false);
+    assert.equal(isSectionOpen(undefined, true, false), true);
+    assert.equal(isSectionOpen(true, false, false), true);
+    assert.equal(isSectionOpen(false, true, false), false);
+    assert.equal(isSectionOpen(false, false, true), true);
+  });
+});
+
+describe("feature cards", () => {
+  const plain = moduleFrom("plain", "Plain", s.object({ on: s.boolean({ default: true }) }));
+  const moderation = moduleFrom("moderation", "Moderation", s.object({ dmMessage: sample("Direct message to the member", "You were warned.") }), {
+    summary: "Warnings and bans.",
+  });
+  const tail = moduleFrom("zeta", "Zeta", s.object({ note: sample("Note", "n") }));
+  const alpha = moduleFrom("alpha", "Alpha", s.object({ note: sample("Note", "n") }));
+  const modules = [system, tail, plain, roles, alpha, welcome, moderation];
+  const settings = { welcome: { greeting: say("Hi") }, roles: { menus: [{ name: "a" }] } };
+  const rows = collectMessageRows(modules, settings);
+  const views = new Map<string, RowView>(rows.map((row) => [row.key, viewOf(row, settings, {})]));
+  const cards = featureSummaries(rows, views, modules);
+
+  test("lists features with messages, the usual ones first, then the rest by name", () => {
+    assert.deepEqual(cards.map((card) => card.id), ["moderation", "welcome", "roles", "system", "alpha", "zeta"]);
+  });
+
+  test("leaves out a feature with no messages", () => {
+    assert.equal(cards.some((card) => card.id === "plain"), false);
+  });
+
+  test("counts messages and edited ones, and carries the summary and the off flag", () => {
+    const welcomeCard = cards.find((card) => card.id === "welcome");
+    assert.deepEqual([welcomeCard?.total, welcomeCard?.edited], [3, 1]);
+    assert.equal(cards.find((card) => card.id === "moderation")?.summary, "Warnings and bans.");
+    assert.equal(cards.find((card) => card.id === "roles")?.off, true);
+    assert.equal(cards.find((card) => card.id === "system")?.off, false);
+  });
+});
+
+describe("what a message is", () => {
+  test("is read from the first embed's colour in the default", () => {
+    assert.equal(kindOf(embedReply("No", "error")), "error");
+    assert.equal(kindOf(embedReply("Yes", "success")), "success");
+    assert.equal(kindOf(embedReply("Careful", "warning")), "warning");
+    assert.equal(kindOf(embedReply("Note", "info")), "info");
+  });
+
+  test("is nothing for plain text or a colour chosen by hand", () => {
+    assert.equal(kindOf(say("Hello")), null);
+    const custom = embedReply("No", "error");
+    assert.equal(kindOf({ ...custom, embeds: [{ ...custom.embeds[0]!, color: "#123456" }] }), null);
+  });
+});
+
+describe("most changed", () => {
+  const welcomeLike = moduleFrom("welcome", "Welcome", s.object({ join: s.object({ message: sample("Greeting message", "Hi") }) }));
+  const automod = moduleFrom("automod", "Automod", s.object({ noticeMessage: sample("Notice", "Careful") }));
+  const levelingOff = moduleFrom("leveling", "Leveling", s.object({ announce: s.object({ message: sample("Level-up", "Up") }) }), { enabled: false });
+
+  const run = (modules: ModuleInput[], settings: Record<string, Record<string, unknown>>, editedOnly = false) => {
+    const rows = collectMessageRows(modules, settings);
+    const views = new Map<string, RowView>(rows.map((row) => [row.key, viewOf(row, settings, {})]));
+    return resolveMostChanged(rows, views, editedOnly).map((item) => item.label);
+  };
+
+  test("lists at most six entries", () => {
+    assert.ok(MOST_CHANGED.length <= 6);
+  });
+
+  test("skips entries whose feature or message does not exist", () => {
+    assert.deepEqual(run([welcomeLike, automod], {}), ["Welcome greeting", "Automod notice"]);
+    assert.deepEqual(run([], {}), []);
+  });
+
+  test("skips a message of a feature that is off and untouched, but not once it is edited", () => {
+    assert.deepEqual(run([welcomeLike, levelingOff], {}), ["Welcome greeting"]);
+    assert.deepEqual(run([welcomeLike, levelingOff], { leveling: { announce: { message: say("Level {level}") } } }), ["Welcome greeting", "Level-up announcement"]);
+  });
+
+  test("shows only edited ones when asked", () => {
+    assert.deepEqual(run([welcomeLike, automod], { automod: { noticeMessage: say("Stop") } }, true), ["Automod notice"]);
+  });
+});
+
+describe("the feature in the address", () => {
+  test("is read when it names a feature the page has", () => {
+    assert.equal(parseFeatureParam("welcome", ["welcome", "roles"]), "welcome");
+    assert.equal(parseFeatureParam(["roles", "welcome"], ["welcome", "roles"]), "roles");
+  });
+
+  test("falls back to the cards for anything else", () => {
+    assert.equal(parseFeatureParam("nope", ["welcome"]), null);
+    assert.equal(parseFeatureParam(undefined, ["welcome"]), null);
+    assert.equal(parseFeatureParam(null, ["welcome"]), null);
+    assert.equal(parseFeatureParam([], ["welcome"]), null);
+  });
+
+  test("is written back as a query string, and nothing for the cards", () => {
+    assert.equal(featureSearch("welcome"), "?feature=welcome");
+    assert.equal(featureSearch(null), "");
+  });
+});
+
+describe("searching across features", () => {
+  const settings = { welcome: { greeting: say("Welcome aboard") }, roles: { menus: [{ name: "Colours" }] }, system: {} };
+  const rows = collectMessageRows([welcome, roles, system], settings);
+  const views = new Map<string, RowView>(rows.map((row) => [row.key, viewOf(row, settings, {})]));
+
+  test("returns matches from every feature in one list", () => {
+    const found = filterRows(rows, views, { query: "when", moduleId: null, editedOnly: false });
+    assert.deepEqual([...new Set(found.map((row) => row.moduleId))].sort(), ["roles", "welcome"]);
+  });
+
+  test("narrows to edited messages across features", () => {
+    const found = filterRows(rows, views, { query: "", moduleId: null, editedOnly: true });
+    assert.deepEqual(found.map((row) => row.moduleId), ["welcome"]);
   });
 });
 

@@ -42,6 +42,8 @@ interface DialogProps {
   delivery: "channel" | "dm";
   components: boolean;
   note?: string | undefined;
+  /** When the bot sends it, shown under the title. */
+  help?: string | undefined;
   /** What the owner has saved, or null while the default is in use. */
   customized: MessageBody | null;
   /** Called with undefined to go back to the default. */
@@ -55,14 +57,14 @@ interface DialogProps {
  * Saving what the default already says stores nothing, so a later change to the
  * default still reaches this server.
  */
-export function SettingMessageDialog({ guildId, label, starting, variables, delivery, components, note, customized, onChange, onClose }: DialogProps) {
+export function SettingMessageDialog({ guildId, label, starting, variables, delivery, components, note, help, customized, onChange, onClose }: DialogProps) {
   const direct = delivery === "dm";
   const componentMode = !components ? "none" : direct ? "direct" : "all";
   return (
     <MessageEditorDialog
       guildId={guildId}
       title={label}
-      hint={customized ? "This is the message the bot sends instead of the usual one." : "This starts from what the bot sends now."}
+      hint={[help, customized ? "This is the message the bot sends instead of the usual one." : "This starts from what the bot sends now."].filter(Boolean).join(" ")}
       current={customized}
       starting={starting}
       variables={variables}

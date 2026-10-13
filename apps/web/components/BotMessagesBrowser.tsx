@@ -1,25 +1,32 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type MouseEvent } from "react";
 import Link from "next/link";
 import type { MessageBody, ResponseTemplate } from "@tier0/core";
 import {
   collectMessageRows,
-  countByModule,
+  featureSearch,
+  featureSummaries,
   filterRows,
   getAt,
-  groupByModule,
+  groupBySection,
+  isSectionOpen,
+  kindOf,
+  KIND_LABEL,
+  parseFeatureParam,
+  resolveMostChanged,
+  sectionsStartOpen,
   setAt,
   storedMessage,
   viewOf,
   type BotMessageRow,
+  type FeatureSummary,
   type ModuleInput,
   type RowView,
 } from "../lib/bot-messages";
 import { messageSummary } from "../lib/message-summary";
-import { Select } from "./form";
 import { SettingMessageDialog } from "./form/MessageControl";
-import { MessagesIcon, SearchIcon } from "./Icons";
+import { ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon, InfoIcon, MessagesIcon, SearchIcon } from "./Icons";
 import { ReplyEditor } from "./messages/ReplyEditor";
 import { useToast } from "./Toaster";
 
@@ -43,22 +50,104 @@ export interface BrowserModule extends Omit<ModuleInput, "commands"> {
 interface Props {
   guildId: string;
   modules: BrowserModule[];
+  /** The `feature` in the address, so a reload or a shared link lands in the same view. */
+  initialFeature: string | null;
 }
-
-const ALL = "all";
 
 interface FieldError {
   path: string;
   message: string;
 }
 
+interface RowItemProps {
+  row: BotMessageRow;
+  view: RowView;
+  busy: boolean;
+  /** Set where rows from several features are mixed, so each says whose it is. */
+  featureName?: string;
+  onEdit(row: BotMessageRow, trigger: HTMLElement): void;
+  onReset(row: BotMessageRow): void;
+}
+
+/** One message on one line: what it is, what it says now, and the buttons. When it is sent is a click away. */
+function MessageRowItem({ row, view, busy, featureName, onEdit, onReset }: RowItemProps) {
+  const [showWhen, setShowWhen] = useState(false);
+  const infoRef = useRef<HTMLButtonElement>(null);
+  const whenId = useId();
+  const kind = kindOf(row.starting);
+  const kindLabel = kind ? KIND_LABEL[kind] : null;
+  const summary = messageSummary(view.body);
+
+  return (
+    <li
+      className="bm-item"
+      data-edited={view.edited ? "true" : undefined}
+      data-off={row.moduleOff ? "true" : undefined}
+      onKeyDown={(event) => {
+        if (event.key !== "Escape" || !showWhen) return;
+        event.stopPropagation();
+        setShowWhen(false);
+        infoRef.current?.focus();
+      }}
+    >
+      <div className="bm-row">
+        <span className="bm-dot" data-kind={kind ?? "none"} role={kindLabel ? "img" : undefined} aria-label={kindLabel ?? undefined} title={kindLabel ?? undefined} />
+        <div className="bm-name">
+          {featureName ? <span className="bm-prefix">{featureName}</span> : null}
+          <span className="bm-label">{row.label}</span>
+          {row.entry ? <span className="bm-entry">{row.entry}</span> : null}
+          {view.edited ? <span className="bm-tag">Edited</span> : null}
+        </div>
+        <p className="bm-text" title={summary} data-default={view.edited ? undefined : "true"}>
+          {summary}
+        </p>
+        <div className="bm-actions">
+          {busy ? <span className="bm-saving">Saving…</span> : null}
+          {row.help ? (
+            <button
+              ref={infoRef}
+              type="button"
+              className="bm-info"
+              aria-label="When this is sent"
+              aria-expanded={showWhen}
+              aria-controls={whenId}
+              onClick={() => setShowWhen(!showWhen)}
+            >
+              <InfoIcon />
+            </button>
+          ) : null}
+          {view.edited ? (
+            <button type="button" className="link-button" disabled={busy} onClick={() => onReset(row)}>
+              Reset<span className="visually-hidden"> {row.label} to the default</span>
+            </button>
+          ) : null}
+          <button type="button" className="btn btn-secondary btn-sm" onClick={(event) => onEdit(row, event.currentTarget)}>
+            Edit<span className="visually-hidden"> {row.label}</span>
+          </button>
+        </div>
+      </div>
+      {showWhen && row.help ? (
+        <p className="bm-when" id={whenId}>
+          {row.help}
+        </p>
+      ) : null}
+    </li>
+  );
+}
+
+function plural(count: number, one: string, many: string): string {
+  return `${count} ${count === 1 ? one : many}`;
+}
+
 /**
- * Every message the bot can send on a server, in one searchable list. A message
- * is edited here with the same editor as on its feature's page, and saved the
- * same way: the feature's whole settings go back with the one message replaced,
- * so the bot is using the new wording as soon as the save is acknowledged.
+ * Every message the bot can send on a server. It opens on a card for each
+ * feature, a feature opens as its messages in groups, and a search lists matches
+ * from all features at once. A message is edited here with the same editor as on
+ * its feature's page, and saved the same way: the feature's whole settings go
+ * back with the one message replaced, so the bot is using the new wording as
+ * soon as the save is acknowledged.
  */
-export function BotMessagesBrowser({ guildId, modules }: Props) {
+export function BotMessagesBrowser({ guildId, modules, initialFeature }: Props) {
   const { push } = useToast();
   const [settings, setSettings] = useState<Record<string, Record<string, unknown>>>(() =>
     Object.fromEntries(modules.map((module) => [module.id, module.settings])),
@@ -67,14 +156,18 @@ export function BotMessagesBrowser({ guildId, modules }: Props) {
     Object.fromEntries(modules.flatMap((module) => module.commands).map((command) => [command.name, command.customReply])),
   );
   const [query, setQuery] = useState("");
-  const [moduleId, setModuleId] = useState(ALL);
+  const [featureParam, setFeatureParam] = useState<string | null>(initialFeature);
   const [editedOnly, setEditedOnly] = useState(false);
   const [editing, setEditing] = useState<string | null>(null);
   const [saving, setSaving] = useState<ReadonlySet<string>>(new Set());
+  // Sections the owner opened or closed by hand, by feature and group.
+  const [toggled, setToggled] = useState<Record<string, boolean>>({});
 
   const searchRef = useRef<HTMLInputElement>(null);
   // Where focus goes back to when the editor closes, so keyboard use is not left at the top of the page.
   const returnFocus = useRef<HTMLElement | null>(null);
+  // Where focus goes after moving between the cards and a feature.
+  const focusAfterMove = useRef<string | null>(null);
   // Edits are applied to the latest copy, and saved one after another per feature, so two quick edits cannot overwrite each other.
   const latest = useRef(settings);
   const queues = useRef(new Map<string, Promise<void>>());
@@ -92,20 +185,28 @@ export function BotMessagesBrowser({ guildId, modules }: Props) {
     return map;
   }, [rows, settings, replies]);
 
-  const shown = useMemo(
-    () => filterRows(rows, views, { query, moduleId: moduleId === ALL ? null : moduleId, editedOnly }),
-    [rows, views, query, moduleId, editedOnly],
-  );
-  const groups = useMemo(() => groupByModule(shown), [shown]);
+  const features = useMemo(() => featureSummaries(rows, views, modules), [rows, views, modules]);
+  const featureIds = useMemo(() => features.map((feature) => feature.id), [features]);
+  const featureId = parseFeatureParam(featureParam, featureIds);
+  const feature = features.find((entry) => entry.id === featureId);
   const editedCount = useMemo(() => rows.filter((row) => views.get(row.key)?.edited).length, [rows, views]);
 
-  const moduleOptions = useMemo(() => {
-    const counts = countByModule(rows);
-    return [
-      { value: ALL, label: `All features (${rows.length})` },
-      ...modules.filter((module) => counts.has(module.id)).map((module) => ({ value: module.id, label: `${module.name} (${counts.get(module.id)})` })),
-    ];
-  }, [modules, rows]);
+  const searching = query.trim() !== "";
+  const matches = useMemo(() => {
+    if (!searching) return [];
+    const rank = new Map(featureIds.map((id, index) => [id, index]));
+    return filterRows(rows, views, { query, moduleId: null, editedOnly }).sort((a, b) => (rank.get(a.moduleId) ?? 0) - (rank.get(b.moduleId) ?? 0));
+  }, [searching, rows, views, query, editedOnly, featureIds]);
+
+  const featureRows = useMemo(
+    () => (featureId === null ? [] : filterRows(rows, views, { query: "", moduleId: featureId, editedOnly })),
+    [rows, views, featureId, editedOnly],
+  );
+  const sections = useMemo(() => groupBySection(featureRows, views), [featureRows, views]);
+  const startOpen = feature ? sectionsStartOpen(feature.total) : true;
+
+  const cards = useMemo(() => (editedOnly ? features.filter((entry) => entry.edited > 0) : features), [features, editedOnly]);
+  const quick = useMemo(() => resolveMostChanged(rows, views, editedOnly), [rows, views, editedOnly]);
 
   // "/" jumps to the search, the way it does on the Commands page.
   useEffect(() => {
@@ -119,6 +220,31 @@ export function BotMessagesBrowser({ guildId, modules }: Props) {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
+
+  // The back and forward buttons move between the cards and a feature.
+  useEffect(() => {
+    function onPop() {
+      setFeatureParam(new URLSearchParams(window.location.search).get("feature"));
+    }
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
+
+  useEffect(() => {
+    const target = focusAfterMove.current;
+    if (target === null) return;
+    focusAfterMove.current = null;
+    document.getElementById(target)?.focus();
+  }, [featureId]);
+
+  function go(next: string | null, event?: MouseEvent) {
+    if (event && (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0)) return;
+    event?.preventDefault();
+    focusAfterMove.current = next === null ? (featureId === null ? null : `bm-card-${featureId}`) : "bm-feature-title";
+    window.history.pushState(null, "", `${window.location.pathname}${featureSearch(next)}`);
+    setFeatureParam(next);
+    window.scrollTo({ top: 0 });
+  }
 
   const mark = useCallback((key: string, on: boolean) => {
     setSaving((current) => {
@@ -219,15 +345,151 @@ export function BotMessagesBrowser({ guildId, modules }: Props) {
     else saveSetting(row, undefined);
   }
 
-  function clearFilters() {
-    setQuery("");
-    setModuleId(ALL);
-    setEditedOnly(false);
-  }
-
-  const filtering = query.trim() !== "" || moduleId !== ALL || editedOnly;
   const editingRow = editing === null ? undefined : rows.find((row) => row.key === editing);
   const editingView = editingRow ? views.get(editingRow.key) : undefined;
+
+  function rowItem(row: BotMessageRow, withFeature: boolean) {
+    const view = views.get(row.key);
+    if (!view) return null;
+    return (
+      <MessageRowItem
+        key={row.key}
+        row={row}
+        view={view}
+        busy={saving.has(row.key)}
+        {...(withFeature ? { featureName: row.moduleName } : {})}
+        onEdit={open}
+        onReset={reset}
+      />
+    );
+  }
+
+  function emptyState(title: string, text: string, action?: { label: string; run(): void }) {
+    return (
+      <div className="empty">
+        <MessagesIcon className="empty-icon" />
+        <p className="empty-title">{title}</p>
+        <p className="empty-text">{text}</p>
+        {action ? (
+          <div className="empty-actions">
+            <button type="button" className="btn btn-secondary" onClick={action.run}>
+              {action.label}
+            </button>
+          </div>
+        ) : null}
+      </div>
+    );
+  }
+
+  const noneEdited = () => emptyState("Nothing changed yet", "You haven't changed any messages yet. Everything is using the default wording.", { label: "Show all messages", run: () => setEditedOnly(false) });
+
+  function renderCard(entry: FeatureSummary) {
+    return (
+      <li key={entry.id}>
+        <a
+          id={`bm-card-${entry.id}`}
+          className="card bm-card"
+          href={featureSearch(entry.id)}
+          data-off={entry.off ? "true" : undefined}
+          onClick={(event) => go(entry.id, event)}
+        >
+          <span className="bm-card-head">
+            <span className="bm-card-name">{entry.name}</span>
+            {entry.off ? <span className="badge badge-off">Off</span> : null}
+            <ChevronRightIcon className="bm-card-arrow" />
+          </span>
+          {entry.summary ? <span className="bm-card-summary">{entry.summary}</span> : null}
+          <span className="bm-card-meta">
+            {plural(entry.total, "message", "messages")}
+            {entry.edited > 0 ? <span className="bm-edited">{` · ${entry.edited} edited`}</span> : null}
+          </span>
+        </a>
+      </li>
+    );
+  }
+
+  function renderFeature(current: FeatureSummary) {
+    const module = byModule.get(current.id);
+    const allClosed = sections.every((section) => !isSectionOpen(toggled[`${current.id}/${section.title}`], startOpen, editedOnly));
+    return (
+      <>
+        <div className="bm-feature-head">
+          <a className="bm-back" href={featureSearch(null) || "?"} onClick={(event) => go(null, event)}>
+            <ChevronLeftIcon />
+            All features
+          </a>
+          <div className="bm-feature-main">
+            <div className="bm-feature-text">
+              <h2 className="bm-feature-title" id="bm-feature-title" tabIndex={-1}>
+                {current.name}
+              </h2>
+              <p className="bm-feature-meta">
+                {plural(current.total, "message", "messages")}
+                {current.edited > 0 ? <span className="bm-edited">{` · ${current.edited} edited`}</span> : null}
+                {current.off ? <span className="badge badge-off">Off</span> : null}
+              </p>
+            </div>
+            <div className="bm-feature-actions">
+              {sections.length > 1 ? (
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => setToggled((state) => ({ ...state, ...Object.fromEntries(sections.map((section) => [`${current.id}/${section.title}`, allClosed])) }))}
+                >
+                  {allClosed ? "Expand all" : "Collapse all"}
+                </button>
+              ) : null}
+              {module ? (
+                <Link className="btn btn-secondary btn-sm" href={module.href}>
+                  Open {current.name} settings
+                </Link>
+              ) : null}
+            </div>
+          </div>
+        </div>
+        {current.off ? <p className="bm-note">This feature is off. You can edit its messages now, and they are used once you turn it on.</p> : null}
+
+        {sections.length === 0 ? (
+          editedOnly ? (
+            noneEdited()
+          ) : (
+            emptyState("No messages here", "This feature has no messages to edit.")
+          )
+        ) : (
+          <div className="bm-sections" data-off={current.off ? "true" : undefined}>
+            {sections.map((section) => {
+              const key = `${current.id}/${section.title}`;
+              const isOpen = isSectionOpen(toggled[key], startOpen, editedOnly);
+              const listId = `bm-sec-${current.id}-${sections.indexOf(section)}`;
+              return (
+                <section key={key} className="card bm-section">
+                  <h3 className="bm-section-heading">
+                    <button
+                      type="button"
+                      className="bm-section-toggle"
+                      aria-expanded={isOpen}
+                      aria-controls={listId}
+                      onClick={() => setToggled((state) => ({ ...state, [key]: !isOpen }))}
+                    >
+                      <ChevronDownIcon className="bm-chevron" />
+                      <span className="bm-section-title">{section.title}</span>
+                      <span className="bm-count-pill">{section.rows.length}</span>
+                      {section.edited > 0 ? <span className="bm-edited">{`· ${section.edited} edited`}</span> : null}
+                    </button>
+                  </h3>
+                  {isOpen ? (
+                    <ul className="bm-rows" id={listId}>
+                      {section.rows.map((row) => rowItem(row, false))}
+                    </ul>
+                  ) : null}
+                </section>
+              );
+            })}
+          </div>
+        )}
+      </>
+    );
+  }
 
   return (
     <>
@@ -248,14 +510,6 @@ export function BotMessagesBrowser({ guildId, modules }: Props) {
           </kbd>
         </div>
         <div className="bm-filters">
-          <Select
-            className="bm-select"
-            size="sm"
-            options={moduleOptions}
-            value={moduleId}
-            onChange={setModuleId}
-            aria-label="Show messages from"
-          />
           <button type="button" className="cmd-chip" aria-pressed={editedOnly} onClick={() => setEditedOnly(!editedOnly)}>
             Edited only
             <span className="cmd-chip-count">{editedCount}</span>
@@ -263,96 +517,65 @@ export function BotMessagesBrowser({ guildId, modules }: Props) {
         </div>
       </div>
 
-      <p className="bm-count" role="status">
-        {shown.length === rows.length
-          ? `${rows.length} ${rows.length === 1 ? "message" : "messages"}`
-          : `${shown.length} of ${rows.length} messages`}
-      </p>
-
-      {shown.length === 0 ? (
-        <div className="empty">
-          <MessagesIcon className="empty-icon" />
-          <p className="empty-title">{editedOnly && query.trim() === "" && moduleId === ALL ? "You have not edited any message yet" : "No message matches that"}</p>
-          <p className="empty-text">
-            {editedOnly && query.trim() === "" && moduleId === ALL
-              ? "Every message here still says what the bot says out of the box. Turn off Edited only to see them all."
-              : "Search looks at a message's name, when it is sent, its feature and the words it says now. Try a shorter word, or clear the search and the filters."}
+      {searching ? (
+        <>
+          <p className="bm-count" role="status">
+            {plural(matches.length, "match", "matches")}
           </p>
-          {filtering ? (
-            <div className="empty-actions">
-              <button type="button" className="btn btn-secondary" onClick={clearFilters}>
-                Show everything
-              </button>
+          {matches.length === 0 ? (
+            emptyState(
+              "No message matches that",
+              "Search looks at a message's name, when it is sent, its feature and the words it says now. Try a shorter word, or clear the search.",
+              { label: "Clear search", run: () => setQuery("") },
+            )
+          ) : (
+            <div className="card bm-section">
+              <ul className="bm-rows">{matches.map((row) => rowItem(row, true))}</ul>
             </div>
-          ) : null}
-        </div>
+          )}
+        </>
+      ) : feature ? (
+        renderFeature(feature)
       ) : (
-        <div className="bm-list">
-          {groups.map((group) => {
-            const module = byModule.get(group.moduleId);
-            return (
-              <section key={group.moduleId} className="card bm-group" aria-labelledby={`bm-${group.moduleId}`} data-off={group.off ? "true" : undefined}>
-                <div className="bm-group-head">
-                  <h2 className="bm-group-title" id={`bm-${group.moduleId}`}>
-                    {group.moduleName}
-                  </h2>
-                  <span className="bm-group-count">{group.rows.length}</span>
-                  {group.off ? <span className="badge badge-off">Off</span> : null}
-                  {module ? (
-                    <Link className="bm-group-link" href={module.href}>
-                      Open settings<span className="visually-hidden"> for {group.moduleName}</span>
-                    </Link>
-                  ) : null}
-                </div>
-                {group.off ? (
-                  <p className="bm-group-note">This feature is off. You can edit its messages now; they are used once you turn it on.</p>
-                ) : null}
-                <ul className="bm-rows">
-                  {group.rows.map((row) => {
-                    const view = views.get(row.key);
-                    if (!view) return null;
-                    const summary = messageSummary(view.body);
-                    const busy = saving.has(row.key);
-                    const settingsHref = row.kind === "reply" ? `/guilds/${guildId}/commands` : `${module?.href ?? ""}${row.anchor ? `#${row.anchor}` : ""}`;
-                    const where = row.kind === "reply" ? "Commands" : `${group.moduleName} settings`;
-                    return (
-                      <li key={row.key} className="bm-row" data-edited={view.edited ? "true" : undefined}>
-                        <div className="bm-main">
-                          <div className="bm-title">
-                            <h3 className="bm-label">{row.label}</h3>
-                            {view.edited ? <span className="bm-tag">Edited</span> : null}
-                            {busy ? <span className="bm-saving">Saving…</span> : null}
-                          </div>
-                          {row.trail.length > 0 ? <p className="bm-trail">{row.trail.join(" › ")}</p> : null}
-                          {row.help ? <p className="bm-help">{row.help}</p> : null}
-                        </div>
-                        <p className="bm-text" title={summary} data-default={view.edited ? undefined : "true"}>
-                          {summary}
-                        </p>
-                        <div className="bm-actions">
-                          <button type="button" className="btn btn-secondary btn-sm" onClick={(event) => open(row, event.currentTarget)}>
-                            Edit message
-                            <span className="visually-hidden"> {row.label}</span>
-                          </button>
-                          {view.edited ? (
-                            <button type="button" className="link-button" disabled={busy} onClick={() => reset(row)}>
-                              Go back to the default
-                              <span className="visually-hidden"> for {row.label}</span>
-                            </button>
-                          ) : null}
-                          <Link className="bm-link" href={settingsHref}>
-                            Open in {where}
-                            <span className="visually-hidden"> for {row.label}</span>
-                          </Link>
-                        </div>
-                      </li>
-                    );
-                  })}
-                </ul>
-              </section>
-            );
-          })}
-        </div>
+        <>
+          {quick.length > 0 ? (
+            <section className="bm-quick" aria-labelledby="bm-quick-title">
+              <h2 className="bm-heading" id="bm-quick-title">
+                Most changed
+              </h2>
+              <ul className="bm-chips">
+                {quick.map((item) => (
+                  <li key={item.row.key}>
+                    <button
+                      type="button"
+                      className="bm-chip"
+                      data-edited={views.get(item.row.key)?.edited ? "true" : undefined}
+                      onClick={(event) => open(item.row, event.currentTarget)}
+                    >
+                      <span className="bm-chip-label">{item.label}</span>
+                      <span className="bm-chip-feature">{item.row.moduleName}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
+
+          <h2 className="bm-heading" id="bm-features-title">
+            Features
+          </h2>
+          {cards.length === 0 ? (
+            editedOnly ? (
+              noneEdited()
+            ) : (
+              emptyState("No messages", "None of the features on this server has a message to edit.")
+            )
+          ) : (
+            <ul className="bm-cards" aria-labelledby="bm-features-title">
+              {cards.map(renderCard)}
+            </ul>
+          )}
+        </>
       )}
 
       {editingRow && editingView
@@ -368,6 +591,7 @@ export function BotMessagesBrowser({ guildId, modules }: Props) {
                   template={command.response}
                   current={current}
                   isPrivate={command.ephemeral ?? command.privateByDefault}
+                  help={editingRow.help}
                   onSave={(message) => {
                     void saveReply(editingRow, message);
                     close();
@@ -389,6 +613,7 @@ export function BotMessagesBrowser({ guildId, modules }: Props) {
                 delivery={editingRow.delivery}
                 components={editingRow.components}
                 note={editingRow.note}
+                help={editingRow.help}
                 customized={editingView.edited ? storedMessage(getAt(settings[editingRow.moduleId], editingRow.segments)) : null}
                 onChange={(next) => saveSetting(editingRow, next)}
                 onClose={close}
