@@ -1,6 +1,7 @@
 import { s } from "@tier0/core";
 import type { Infer } from "@tier0/core";
 import { DM_MESSAGE, DM_NOTE, DM_VARIABLES, MODLOG_MESSAGE, MODLOG_NOTE, MODLOG_VARIABLES } from "./messages.js";
+import { labelsShape, repliesShape } from "./texts.js";
 
 export const moderationSettings = s.object({
   modLogChannel: s.channel({
@@ -54,6 +55,16 @@ export const moderationSettings = s.object({
     max: 7,
     default: 0,
     label: "Days of the banned member's messages to delete",
+  }),
+  replies: s.object(repliesShape(), {
+    label: "Replies and errors",
+    help: "What the bot says back to moderators in Discord: refusals, confirmations and empty states. The replies to /warn, /timeout set, /kick, /ban, /unban, /case, /history and /purge are on the Commands page.",
+    collapsible: true,
+  }),
+  labels: s.object(labelsShape(), {
+    label: "Labels and text",
+    help: "The short pieces other text is built from: the names of actions, lengths of time, and the titles and boxes of the right-click forms.",
+    collapsible: true,
   }),
 });
 

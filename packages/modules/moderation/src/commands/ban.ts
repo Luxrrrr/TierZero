@@ -1,19 +1,23 @@
-import { SlashCommandBuilder, PermissionFlagsBits, MessageFlags } from "discord.js";
-import { plainReply, type CommandDefinition } from "@tier0/core";
+import { SlashCommandBuilder, PermissionFlagsBits } from "discord.js";
+import { plainReply, type CommandDefinition, type ResponseTemplate } from "@tier0/core";
 import type { ModerationSettings } from "../settings.js";
 import { parseDuration } from "../duration.js";
+import { fillLabel } from "../texts.js";
+import { answer } from "./answer.js";
 import { runFromCommand } from "./run-action.js";
+
+const BAN_REPLY: ResponseTemplate = {
+  starting: plainReply("Banned {user}. Case #{case}.{expiry}"),
+  placeholders: [
+    { name: "user", description: "The member's username", sample: "spamlord_42" },
+    { name: "case", description: "The case number", sample: "118" },
+    { name: "expiry", description: "A note when the ban is temporary, otherwise empty", sample: " It expires in 7 days." },
+  ],
+};
 
 export const banCommand: CommandDefinition<ModerationSettings> = {
   name: "ban",
-  response: {
-    starting: plainReply("Banned {user}. Case #{case}.{expiry}"),
-    placeholders: [
-      { name: "user", description: "The member's username", sample: "spamlord_42" },
-      { name: "case", description: "The case number", sample: "118" },
-      { name: "expiry", description: "A note when the ban is temporary, otherwise empty", sample: " It expires in 7 days." },
-    ],
-  },
+  response: BAN_REPLY,
   description: "Ban a member, permanently or for a fixed duration.",
   build: () =>
     new SlashCommandBuilder()
@@ -40,18 +44,13 @@ export const banCommand: CommandDefinition<ModerationSettings> = {
       action: "ban",
       target,
       durationMs,
-      unreadableDuration:
-        durationInput !== null && durationMs === null ? "Duration must look like 1d or 7d." : undefined,
+      unreadableDuration: durationInput !== null && durationMs === null,
     });
     if (!record) return;
 
-    const durationNote = record.expiresAt
-      ? ` It expires <t:${Math.floor(record.expiresAt.getTime() / 1000)}:R>.`
+    const expiry = record.expiresAt
+      ? ` ${fillLabel(ctx.settings.labels.notes.banExpires, { when: `<t:${Math.floor(record.expiresAt.getTime() / 1000)}:R>` })}`
       : "";
-    const custom = ctx.customReply?.({ user: target.username, case: record.caseNumber, expiry: durationNote });
-    await interaction.reply({
-      ...(custom ?? { content: `Banned ${target.username}. Case #${record.caseNumber}.${durationNote}` }),
-      flags: MessageFlags.Ephemeral,
-    });
+    await answer(interaction, ctx, BAN_REPLY, { user: target.username, case: record.caseNumber, expiry });
   },
 };

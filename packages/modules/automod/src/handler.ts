@@ -13,6 +13,7 @@ import {
 } from "./evaluator.js";
 import { matchText } from "./messages.js";
 import type { AutomodState } from "./state.js";
+import { DEFAULT_AUTOMOD_WORDING, type AutomodWording } from "./texts.js";
 
 export interface IncomingMessage {
   guildId: string;
@@ -105,6 +106,7 @@ export async function carryOut(
   actions: readonly RuleAction[],
   timeoutMs: number | undefined,
   steps: Steps,
+  problems: AutomodWording["problems"] = DEFAULT_AUTOMOD_WORDING.problems,
 ): Promise<Outcome> {
   const outcome: Outcome = { deleted: false, warned: actions.includes("warn"), timedOut: false, problems: [] };
 
@@ -118,8 +120,7 @@ export async function carryOut(
       if (codeOf(error) === UNKNOWN_MESSAGE) {
         outcome.deleted = true;
       } else {
-        const why = codeOf(error) === MISSING_PERMISSIONS ? "missing permission" : "Discord refused the request";
-        outcome.problems.push(`Could not delete the message: ${why}`);
+        outcome.problems.push(codeOf(error) === MISSING_PERMISSIONS ? problems.deleteMissingPermission : problems.deleteRefused);
       }
     }
   }
@@ -129,11 +130,7 @@ export async function carryOut(
       await steps.timeoutMember(timeoutMs);
       outcome.timedOut = true;
     } catch (error) {
-      const why =
-        codeOf(error) === MISSING_PERMISSIONS
-          ? "missing permission, or the member outranks the bot"
-          : "Discord refused the request";
-      outcome.problems.push(`Could not time out: ${why}`);
+      outcome.problems.push(codeOf(error) === MISSING_PERMISSIONS ? problems.timeoutMissingPermission : problems.timeoutRefused);
     }
   }
 
@@ -168,11 +165,12 @@ export function draftInfraction(
   outcome: Outcome,
   timeoutMs: number | undefined,
   now: number,
+  wording: AutomodWording = DEFAULT_AUTOMOD_WORDING,
 ): InfractionDraft {
   const action = strongestDone(outcome);
   const rule = verdict.rule ?? "automod";
   let reason = verdict.reason ? `${rule}: ${verdict.reason}` : rule;
-  const matched = matchText(verdict);
+  const matched = matchText(verdict, wording);
   if (matched) reason += ` (matched ${matched})`;
   if (outcome.problems.length > 0) reason += ` (${outcome.problems.join("; ")})`;
 
@@ -182,4 +180,14 @@ export function draftInfraction(
     expiresAt: outcome.timedOut && timeoutMs ? new Date(now + timeoutMs) : null,
     active: outcome.timedOut,
   };
+}
+
+// -- the notice ----------------------------------------------------------------
+
+/** The least a notice can be left up. The setting has no minimum of its own, so this keeps a typed 1s from flashing past unread. */
+export const MIN_NOTICE_MS = 2_000;
+
+/** How long to leave the notice in the channel, or null to leave it for good (a setting of zero). */
+export function noticeLifetimeMs(setting: number): number | null {
+  return setting <= 0 ? null : Math.max(MIN_NOTICE_MS, setting);
 }

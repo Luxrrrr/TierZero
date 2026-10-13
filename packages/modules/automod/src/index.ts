@@ -9,9 +9,10 @@ import { createInfraction } from "@tier0/db";
 import { auditAutomodCase, evidenceForTrip, loggedCopyOf } from "@tier0/module-moderation";
 import { settings, type AutomodSettings } from "./settings.js";
 import type { EvaluationVerdict } from "./evaluator.js";
-import { carryOut, draftInfraction, judgeMessage, type Outcome } from "./handler.js";
+import { carryOut, draftInfraction, judgeMessage, noticeLifetimeMs, type Outcome } from "./handler.js";
 import { AutomodState } from "./state.js";
-import { LOG_MESSAGES, NOTICE_MESSAGE, loggedAs, logValues, tripValues, type TripFacts } from "./messages.js";
+import { DM_MESSAGE, LOG_MESSAGES, NOTICE_MESSAGE, loggedAs, logValues, ruleName, tripValues, type TripFacts } from "./messages.js";
+import { fill } from "./fill.js";
 
 // One instance for the whole process, not per guild: it is its own map keyed
 // by guild id, and a module definition is only ever loaded once. See state.ts
@@ -101,25 +102,31 @@ async function applyVerdict(
   const { rule, actions, timeoutMs } = verdict;
   if (!rule || !actions) return;
 
-  const outcome = await carryOut(actions, timeoutMs, {
-    deleteMessage: async () => {
-      // Said before the call, because the deletion event can reach the server log before the call returns.
-      noteDeletion(message.id, { by: "automod" });
-      try {
-        return await message.delete();
-      } catch (error) {
-        // Nothing was deleted by this, so the note must not be claimed by a later deletion.
-        takeDeletionNote(message.id);
-        throw error;
-      }
+  const { labels } = ctx.settings;
+  const outcome = await carryOut(
+    actions,
+    timeoutMs,
+    {
+      deleteMessage: async () => {
+        // Said before the call, because the deletion event can reach the server log before the call returns.
+        noteDeletion(message.id, { by: "automod" });
+        try {
+          return await message.delete();
+        } catch (error) {
+          // Nothing was deleted by this, so the note must not be claimed by a later deletion.
+          takeDeletionNote(message.id);
+          throw error;
+        }
+      },
+      timeoutMember: async (ms) => {
+        // Discord would refuse an owner, an administrator or anyone above the bot
+        // with the same error; asking first just saves the round trip.
+        if (!member.moderatable) throw { code: 50013 };
+        await member.timeout(ms, fill(labels.audit.timeoutReason, { rule: ruleName(rule, labels), ruleKey: rule }).slice(0, 512));
+      },
     },
-    timeoutMember: async (ms) => {
-      // Discord would refuse an owner, an administrator or anyone above the bot
-      // with the same error; asking first just saves the round trip.
-      if (!member.moderatable) throw { code: 50013 };
-      await member.timeout(ms, `Automod: ${rule}`);
-    },
-  });
+    labels.problems,
+  );
 
   // Taken whether or not the delete worked: staff need to see what tripped the rule either way.
   const evidence = await evidenceOf(ctx, message, isEdit, previousContent, outcome.deleted);
@@ -142,6 +149,7 @@ async function applyVerdict(
     dashboardBase: await ctx.dashboardUrl(),
   };
   await notifyChannel(ctx, message, facts);
+  await messageMember(ctx, message, facts);
   await postLog(ctx, facts);
 }
 
@@ -152,7 +160,7 @@ async function recordInfraction(
   outcome: Outcome,
   evidence: EvidenceMessage[],
 ): Promise<number | undefined> {
-  const draft = draftInfraction(verdict, outcome, verdict.timeoutMs, Date.now());
+  const draft = draftInfraction(verdict, outcome, verdict.timeoutMs, Date.now(), ctx.settings.labels);
   try {
     const record = await createInfraction({
       guildId: ctx.guild.id,
@@ -231,15 +239,35 @@ async function notifyChannel(
   if (!channel.isTextBased() || channel.isDMBased()) return;
 
   // Only the member it is about can be pinged, whatever the owner's text says.
-  const notice = await ctx.send(channel, ctx.settings.noticeMessage, tripValues(facts), {
+  const notice = await ctx.send(channel, ctx.settings.noticeMessage, tripValues(facts, ctx.settings.labels), {
     fallback: NOTICE_MESSAGE,
     mentions: { users: [facts.userId], roles: [] },
   });
   if (!notice) return;
 
+  const lifetime = noticeLifetimeMs(ctx.settings.noticeLifetime);
+  if (lifetime === null) return;
   setTimeout(() => {
     notice.delete().catch(() => undefined);
-  }, 8000);
+  }, lifetime);
+}
+
+/**
+ * The private message to the member, when it is switched on. It carries the
+ * same fixed wording as the notice and nothing the member wrote. A member with
+ * direct messages closed is skipped, which ctx.send already treats as routine.
+ */
+async function messageMember(
+  ctx: ModuleContext<AutomodSettings>,
+  message: Message | PartialMessage,
+  facts: TripFacts,
+): Promise<void> {
+  if (!ctx.settings.dmOnAction || !message.author) return;
+  try {
+    await ctx.send(message.author, ctx.settings.dmMessage, tripValues(facts, ctx.settings.labels), { fallback: DM_MESSAGE });
+  } catch (error) {
+    console.error("[automod] could not message the member:", error);
+  }
 }
 
 async function postLog(ctx: ModuleContext<AutomodSettings>, facts: TripFacts): Promise<void> {
@@ -250,7 +278,7 @@ async function postLog(ctx: ModuleContext<AutomodSettings>, facts: TripFacts): P
   if (!channel?.isTextBased()) return;
 
   const preset = loggedAs(facts);
-  await ctx.send(channel, ctx.settings.logMessages[preset], logValues(facts), {
+  await ctx.send(channel, ctx.settings.logMessages[preset], logValues(facts, ctx.settings.labels), {
     fallback: LOG_MESSAGES[preset],
     mentions: { users: [], roles: [] },
   });

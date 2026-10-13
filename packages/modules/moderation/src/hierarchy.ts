@@ -8,6 +8,8 @@
  * position, so equal footing gets refused, never allowed.
  */
 
+import { refusalSentence, type RefusalCode } from "./texts.js";
+
 export interface HierarchyCheck {
   /** Position of the acting moderator's highest role. Ignored when actorIsOwner. */
   actorTopRole: number;
@@ -33,29 +35,23 @@ export type HierarchyRule = "server-owner" | "actor-rank" | "bot-rank";
 
 export type HierarchyResult =
   | { allowed: true }
-  | { allowed: false; reason: string; rule: HierarchyRule };
+  | { allowed: false; reason: string; rule: HierarchyRule; code: RefusalCode };
+
+const refused = (rule: HierarchyRule, code: RefusalCode): HierarchyResult => ({ allowed: false, reason: refusalSentence(code, {}), rule, code });
 
 export function checkHierarchy(check: HierarchyCheck): HierarchyResult {
   if (check.targetIsOwner) {
-    return { allowed: false, reason: "The server owner cannot be actioned.", rule: "server-owner" };
+    return refused("server-owner", "targetOwner");
   }
 
   if (!check.actorIsOwner && check.targetTopRole >= check.actorTopRole) {
-    return {
-      allowed: false,
-      reason: "You cannot action someone with a role equal to or higher than your own.",
-      rule: "actor-rank",
-    };
+    return refused("actor-rank", "actorRank");
   }
 
   // Applies even when the owner asked, because Discord enforces it against the
   // bot's roles regardless of who requested the action.
   if (check.requiresDiscordAction && check.targetTopRole >= check.botTopRole) {
-    return {
-      allowed: false,
-      reason: "My highest role is not above theirs, so Discord won't let me do that.",
-      rule: "bot-rank",
-    };
+    return refused("bot-rank", "botRank");
   }
 
   return { allowed: true };
@@ -75,8 +71,7 @@ export interface StandingCheck {
   requiresDiscordAction: boolean;
 }
 
-export const NOT_IN_SERVER =
-  "You need to be a member of this server to take moderation actions here, because the bot compares your roles with theirs.";
+export const NOT_IN_SERVER = refusalSentence("notInServer", {});
 
 /**
  * The hierarchy rule for an action taken from the dashboard, where the person
@@ -87,7 +82,7 @@ export const NOT_IN_SERVER =
  */
 export function checkStanding(check: StandingCheck): HierarchyResult {
   if (!check.actor && !check.actorIsInstanceOwner) {
-    return { allowed: false, reason: NOT_IN_SERVER, rule: "actor-rank" };
+    return refused("actor-rank", "notInServer");
   }
   return checkHierarchy({
     actorTopRole: check.actor?.topRole ?? 0,

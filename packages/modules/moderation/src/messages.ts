@@ -95,10 +95,19 @@ export const MODLOG_NOTE =
 export const CASE_REPLY: ResponseTemplate = {
   starting: {
     ...MODLOG_MESSAGE,
-    embeds: MODLOG_MESSAGE.embeds.map((embed) => ({ ...embed, footerText: "{reversedNote}" })),
+    embeds: MODLOG_MESSAGE.embeds.map((embed) => ({
+      ...embed,
+      footerText: "{reversedNote}",
+      fields: embed.fields.map((field) => (field.name === "Moderator" ? { ...field, value: "{moderatorLine}" } : field)),
+    })),
   },
   placeholders: [
     ...MODLOG_VARIABLES,
+    {
+      name: "moderatorLine",
+      description: "The moderator and their ID, or just \"Automod\" for a case a rule made",
+      sample: "@Ada (234567890123456789)",
+    },
     { name: "reversedNote", description: "\"This action has since been reversed.\" for a case that has been undone. Empty otherwise", sample: "This action has since been reversed." },
   ],
   note: "Shown to the moderator who looks a case up. Looking up a case that does not exist keeps its own reply.",

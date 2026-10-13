@@ -6,9 +6,10 @@
  * the two from drifting apart.
  */
 
-import { canTakeAction, type ActionContextDto, type ModActionKind, type StaffRole } from "@tier0/core";
+import { canTakeAction, type ActionContextDto, type ModActionKind, type ReplyValues, type StaffRole } from "@tier0/core";
 import { MAX_TIMEOUT_MS, validateBanDuration, validateTimeoutDuration } from "./duration.js";
-import { actionLabel, type ModerationAction } from "./modlog.js";
+import type { ModerationAction } from "./modlog.js";
+import { DEFAULT_WORDING, refusalSentence, type RefusalCode, type Wording } from "./texts.js";
 
 /** Where an action was asked for. Some refusals and wording only apply to one of them. */
 export type ActionOrigin = "command" | "dashboard";
@@ -22,13 +23,25 @@ export type RefusalStatus = 400 | 403 | 404 | 409 | 502;
  * member already in the requested state, 502 when Discord refused the call.
  */
 export class ActionRefused extends Error {
+  /**
+   * `code` and `values` are set when the sentence is one an owner can reword.
+   * `message` is always the default sentence, which is what the dashboard shows;
+   * the place that answers in Discord looks the code up in the server's settings.
+   */
   constructor(
     readonly status: RefusalStatus,
     message: string,
+    readonly code?: RefusalCode,
+    readonly values: ReplyValues = {},
   ) {
     super(message);
     this.name = "ActionRefused";
   }
+}
+
+/** A refusal whose wording comes from the table in texts.ts, in the dashboard's version when it was asked for there. */
+export function refusal(status: RefusalStatus, code: RefusalCode, values: ReplyValues = {}, origin: ActionOrigin = "command"): ActionRefused {
+  return new ActionRefused(status, refusalSentence(code, values, origin), code, values);
 }
 
 export const REASON_MAX = 500;
@@ -42,10 +55,10 @@ export const MAX_BAN_DAYS = 3650;
 const DAY_MS = 86_400_000;
 export const MAX_BAN_MS = MAX_BAN_DAYS * DAY_MS;
 
-export const REASON_REQUIRED = "This server requires a reason for moderation actions.";
-export const NOT_A_MEMBER = "That user is not a member of this server.";
-export const LOOKUP_FAILED = "Could not check that member. Try again.";
-export const ACTION_IN_PROGRESS = "Another action on this member is in progress. Try again in a moment.";
+export const REASON_REQUIRED = refusalSentence("reasonRequired", {});
+export const NOT_A_MEMBER = refusalSentence("notAMember", {});
+export const LOOKUP_FAILED = refusalSentence("lookupFailed", {});
+export const ACTION_IN_PROGRESS = refusalSentence("actionInProgress", {});
 
 /** Discord's error codes for an id that is not a member, not a user at all, or not banned. */
 const UNKNOWN_MEMBER = 10007;
@@ -111,9 +124,9 @@ export interface ReasonSettings {
 export function checkReason(raw: string | null, settings: ReasonSettings): string | null {
   const reason = raw === null ? null : raw.trim() || null;
   if (reason !== null && reason.length > REASON_MAX) {
-    throw new ActionRefused(400, `A reason can be at most ${REASON_MAX} characters.`);
+    throw refusal(400, "reasonTooLong", { max: REASON_MAX });
   }
-  if (settings.requireReason && reason === null) throw new ActionRefused(400, REASON_REQUIRED);
+  if (settings.requireReason && reason === null) throw refusal(400, "reasonRequired");
   return reason;
 }
 
@@ -128,7 +141,7 @@ export function checkTimeoutDuration(ms: number | null): number {
   if (ms === null) throw new ActionRefused(400, "Choose how long the timeout lasts.");
   wholeMs(ms);
   const check = validateTimeoutDuration(ms);
-  if (!check.ok) throw new ActionRefused(400, check.reason);
+  if (!check.ok) throw new ActionRefused(400, check.reason, check.code);
   if (check.ms < MIN_DURATION_MS) throw new ActionRefused(400, "A timeout must last at least one second.");
   return check.ms;
 }
@@ -138,15 +151,12 @@ export function checkBanDuration(ms: number | null): number | null {
   if (ms === null) return null;
   wholeMs(ms);
   const check = validateBanDuration(ms);
-  if (!check.ok) throw new ActionRefused(400, check.reason);
+  if (!check.ok) throw new ActionRefused(400, check.reason, check.code);
   if (check.ms < MIN_DURATION_MS) {
     throw new ActionRefused(400, "A temporary ban must last at least one second.");
   }
   if (check.ms > MAX_BAN_MS) {
-    throw new ActionRefused(
-      400,
-      `A temporary ban can last at most ${MAX_BAN_DAYS} days. Leave the duration unset for a permanent ban.`,
-    );
+    throw refusal(400, "banTooLong", { maxDays: MAX_BAN_DAYS });
   }
   return check.ms;
 }
@@ -168,24 +178,20 @@ export function checkTargetIdentity(
   ownerId: string | null = null,
 ): void {
   if (targetId === actorId) {
-    throw new ActionRefused(403, "You cannot take a moderation action against yourself.");
+    throw refusal(403, "targetSelf");
   }
   if (botId !== null && targetId === botId) {
-    throw new ActionRefused(403, "The bot cannot take a moderation action against itself.");
+    throw refusal(403, "targetBot");
   }
   if (ownerId !== null && targetId === ownerId) {
-    throw new ActionRefused(403, "The server owner cannot be actioned.");
+    throw refusal(403, "targetOwner");
   }
 }
 
-const NEEDS: Record<ModActionKind, string> = {
-  warn: "warn members",
-  timeout: "time members out",
-  "timeout-clear": "clear timeouts",
-  kick: "kick members",
-  ban: "ban members",
-  unban: "lift bans",
-};
+/** The key of an action in the label groups that name it by what it does. */
+export function wordKey(kind: ModActionKind): keyof Wording["abilities"] {
+  return kind === "timeout-clear" ? "timeoutClear" : kind;
+}
 
 export interface ActorStanding {
   action: ModActionKind;
@@ -204,13 +210,10 @@ export interface ActorStanding {
  * Holding the Discord permission or a staff role that allows the action are
  * the same two doors the right-click menu and the dashboard have always used.
  */
-export function checkActorMayAct(actor: ActorStanding): void {
+export function checkActorMayAct(actor: ActorStanding, abilities: Wording["abilities"] = DEFAULT_WORDING.abilities): void {
   if (actor.isInstanceOwner || actor.hasDiscordPermission) return;
   if (actor.staffRole !== null && canTakeAction(actor.staffRole, actor.action)) return;
-  throw new ActionRefused(
-    403,
-    `You are not allowed to ${NEEDS[actor.action]} here. You need the matching Discord permission, or a place on this server's staff list at a level that allows it.`,
-  );
+  throw refusal(403, "noPermission", { action: abilities[wordKey(actor.action)] });
 }
 
 /**
@@ -283,42 +286,39 @@ export function actionContext(
 }
 
 export function alreadyBanned(name: string, origin: ActionOrigin): string {
-  return origin === "command"
-    ? `${name} is already banned. Use /unban first to change it.`
-    : `${name} is already banned. Lift the ban first to change it.`;
+  return refusalSentence("alreadyBanned", { name }, origin);
 }
 
-export const notBanned = (name: string): string => `${name} is not banned.`;
+export const notBanned = (name: string): string => refusalSentence("notBanned", { name });
 
+/** Only the dashboard can ask to clear a timeout that is not there, so this has no wording an owner can change. */
 export const notTimedOut = (name: string): string =>
   `${name} is not timed out, so there is no timeout to clear.`;
 
-const FAILED_VERB: Record<Exclude<ModerationAction, "warn">, { verb: string; check: "rank" | "permissions" }> = {
-  timeout: { verb: "time that member out", check: "rank" },
-  "timeout-clear": { verb: "clear that timeout", check: "permissions" },
-  kick: { verb: "kick that member", check: "rank" },
-  ban: { verb: "ban that member", check: "rank" },
-  unban: { verb: "lift that ban", check: "permissions" },
+type FailableAction = Exclude<ModerationAction, "warn">;
+
+const FAILED_CHECK: Record<FailableAction, "rank" | "permissions"> = {
+  timeout: "rank",
+  "timeout-clear": "permissions",
+  kick: "rank",
+  ban: "rank",
+  unban: "permissions",
 };
 
-/** Discord refused the call itself. The command speaks as the bot; the dashboard speaks about it. */
-export function discordFailure(action: Exclude<ModerationAction, "warn">, origin: ActionOrigin): string {
-  const { verb, check } = FAILED_VERB[action];
-  if (origin === "command") {
-    return check === "rank"
-      ? `I could not ${verb}. Check that my role is above theirs.`
-      : `I could not ${verb}. Check my permissions.`;
-  }
-  return check === "rank"
-    ? `The bot could not ${verb}. Check that its role is above theirs.`
-    : `The bot could not ${verb}. Check its permissions.`;
+/** The refusal code for Discord turning an action down, and the values it needs. */
+export function discordFailureCode(
+  action: FailableAction,
+  verbs: Wording["verbs"] = DEFAULT_WORDING.verbs,
+): { code: RefusalCode; values: ReplyValues } {
+  const code = FAILED_CHECK[action] === "rank" ? "discordFailedRank" : "discordFailedPermission";
+  return { code, values: { verb: verbs[action === "timeout-clear" ? "timeoutClear" : action] } };
 }
 
-const CANNOT: Record<"timeout" | "kick" | "ban", string> = {
-  timeout: "time that member out",
-  kick: "kick that member",
-  ban: "ban that member",
-};
+/** Discord refused the call itself. The command speaks as the bot; the dashboard speaks about it. */
+export function discordFailure(action: FailableAction, origin: ActionOrigin): string {
+  const { code, values } = discordFailureCode(action);
+  return refusalSentence(code, { ...values, correctionNote: "" }, origin);
+}
 
 /**
  * Discord would refuse this call, and that is known before anyone is told
@@ -327,19 +327,10 @@ const CANNOT: Record<"timeout" | "kick" | "ban", string> = {
  * they were removed by an action that was never going to happen.
  */
 export function cannotActOn(action: "timeout" | "kick" | "ban", origin: ActionOrigin): string {
-  const verb = CANNOT[action];
-  return origin === "command"
-    ? `I cannot ${verb}. They may be an administrator, my role may not be above theirs, or I may lack the permission.`
-    : `The bot cannot ${verb}. They may be an administrator, its role may not be above theirs, or it may lack the permission.`;
+  return refusalSentence("cannotActOn", { verb: DEFAULT_WORDING.verbs[action] }, origin);
 }
 
-/** What a member is sent when the action they were told about did not go through. */
-export function correctionText(action: ModerationAction): string {
-  return `Correction: the message you were just sent about being ${actionLabel(action).toLowerCase()} was sent in error. Nothing happened to you.`;
-}
-
-export const BOT_RANK_DASHBOARD =
-  "The bot's highest role is not above theirs, so Discord will not let it do that. Move the bot's role higher in the server's role settings.";
+export const BOT_RANK_DASHBOARD = refusalSentence("botRank", {}, "dashboard");
 
 /** `withheld`: the member is not in the server, so they are not messaged. */
 export type DmOutcome = "sent" | "failed" | "off" | "withheld";
@@ -370,29 +361,24 @@ export interface OutcomeFacts {
   targetInServer: boolean;
 }
 
+export type OutcomeNote = "warnNotInServer" | "banNotInServer" | "dmWithheld" | "dmFailed" | "modLogMissing" | "modLogFailed";
+
 /**
- * Side notes for the person who acted. Only what they could not otherwise
- * know: a setting they chose, such as having no mod log channel, is not news.
+ * Side notes for the person who acted, as the labels that word them. Only what
+ * they could not otherwise know: a setting they chose, such as having no mod
+ * log channel, is not news.
  */
-export function outcomeNotes(facts: OutcomeFacts): string[] {
-  const notes: string[] = [];
-  if (!facts.targetInServer && facts.action === "warn") {
-    notes.push("They are not in the server, so the warning is on their record only.");
-  }
-  if (!facts.targetInServer && facts.action === "ban") {
-    notes.push("They are not in the server, so the ban stops them from joining again.");
-  }
-  if (facts.dm === "withheld") {
-    notes.push("They are not in the server, so they were not sent a direct message.");
-  }
-  if (facts.dm === "failed") {
-    notes.push("They could not be sent a direct message, most likely because they do not accept messages from the bot.");
-  }
-  if (facts.modLog === "missing") {
-    notes.push("The mod log channel no longer exists, so nothing was posted. Choose another in the Moderation settings.");
-  }
-  if (facts.modLog === "failed") {
-    notes.push("The mod log post failed. Check that the bot can send messages in the mod log channel.");
-  }
+export function outcomeNoteKeys(facts: OutcomeFacts): OutcomeNote[] {
+  const notes: OutcomeNote[] = [];
+  if (!facts.targetInServer && facts.action === "warn") notes.push("warnNotInServer");
+  if (!facts.targetInServer && facts.action === "ban") notes.push("banNotInServer");
+  if (facts.dm === "withheld") notes.push("dmWithheld");
+  if (facts.dm === "failed") notes.push("dmFailed");
+  if (facts.modLog === "missing") notes.push("modLogMissing");
+  if (facts.modLog === "failed") notes.push("modLogFailed");
   return notes;
+}
+
+export function outcomeNotes(facts: OutcomeFacts, wording: Wording["notes"] = DEFAULT_WORDING.notes): string[] {
+  return outcomeNoteKeys(facts).map((key) => wording[key]);
 }

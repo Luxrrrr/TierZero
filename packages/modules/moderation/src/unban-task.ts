@@ -4,6 +4,7 @@ import { banOutlivesTask, describeDiscordError, isAbsentBan } from "./action-rul
 import { deactivateOpen, latestOpenBan, recordInfraction } from "./infractions.js";
 import { tryDirectMessage } from "./dm.js";
 import { postModLog } from "./reply.js";
+import { DEFAULT_WORDING } from "./texts.js";
 
 type Ctx = ModuleContext<ModerationSettings>;
 
@@ -15,7 +16,8 @@ export const UNBAN_RETRY_DELAYS_MS = [1 * MINUTE, 5 * MINUTE, 15 * MINUTE, 60 * 
 /** A ban that still cannot be lifted this long after it should have been is left, and logged. */
 export const UNBAN_GIVE_UP_AFTER_MS = 24 * 60 * MINUTE;
 
-export const TEMP_BAN_EXPIRED = "Temporary ban expired";
+/** The reason when no wording has been chosen. A server's own is in its Labels and text settings. */
+export const TEMP_BAN_EXPIRED = DEFAULT_WORDING.reasons.tempBanExpired;
 
 /**
  * When to try again after a failed attempt, or null once a day has passed
@@ -64,6 +66,7 @@ export async function liftTemporaryBan(
   const open = await latestOpenBan(ctx.guild.id, userId);
   if (banOutlivesTask(open, new Date(now()))) return;
 
+  const why = ctx.settings.labels.reasons.tempBanExpired;
   let alreadyLifted = false;
   try {
     await ctx.guild.bans.fetch(userId);
@@ -76,7 +79,7 @@ export async function liftTemporaryBan(
 
   if (!alreadyLifted) {
     try {
-      await ctx.guild.members.unban(userId, TEMP_BAN_EXPIRED);
+      await ctx.guild.members.unban(userId, why);
     } catch (error) {
       if (!isAbsentBan(error)) return retry(error);
       alreadyLifted = true;
@@ -93,14 +96,14 @@ export async function liftTemporaryBan(
     userId,
     moderatorId,
     action: "unban",
-    reason: TEMP_BAN_EXPIRED,
+    reason: why,
   });
   if (alreadyLifted) return;
 
   if (ctx.settings.dmOnAction) {
     await tryDirectMessage(ctx, userId, {
       action: "unban",
-      reason: TEMP_BAN_EXPIRED,
+      reason: why,
       expiresAt: null,
       moderatorId,
     });
@@ -111,7 +114,7 @@ export async function liftTemporaryBan(
     action: "unban",
     targetId: userId,
     moderatorId,
-    reason: TEMP_BAN_EXPIRED,
+    reason: why,
     expiresAt: null,
   });
 }

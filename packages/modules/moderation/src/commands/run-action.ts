@@ -6,13 +6,13 @@ import type { InfractionRecord } from "../infractions.js";
 import type { ModerationAction } from "../modlog.js";
 import { fetchMemberOrNull } from "../lookups.js";
 import { performAction } from "../perform.js";
-import { replyError } from "../reply.js";
+import { replyRefusal } from "../reply.js";
 
 export interface CommandAction {
   action: ModerationAction;
   target: User;
   durationMs?: number | null;
-  unreadableDuration?: string;
+  unreadableDuration?: boolean;
 }
 
 /**
@@ -44,7 +44,7 @@ export async function runFromCommand(
     return record;
   } catch (error) {
     if (!(error instanceof ActionRefused)) throw error;
-    await replyError(interaction, error.message);
+    await replyRefusal(ctx, interaction, error);
     return null;
   }
 }

@@ -2,6 +2,7 @@ import { test, describe, before, after, beforeEach } from "node:test";
 import assert from "node:assert/strict";
 import { PermissionFlagsBits } from "discord.js";
 import { createTestDatabase } from "./db-helper.ts";
+import { moderationSettingsWith } from "./settings-helper.ts";
 
 const GUILD = "100000000000000020";
 const OWNER = "100000000000000021";
@@ -51,7 +52,7 @@ function member(
 
 const discordError = (code: number) => Object.assign(new Error("Discord said no"), { code });
 
-function context() {
+function context(stored: Record<string, unknown> = {}) {
   const guild = {
     id: GUILD,
     ownerId: OWNER,
@@ -82,6 +83,7 @@ function context() {
     client: { user: { id: BOT }, users: { fetch: async (id: string) => ({ id }) } },
     guild,
     settings: {
+      ...moderationSettingsWith(stored),
       dmOnAction: true,
       modLogChannel: null,
       requireReason: false,
@@ -120,12 +122,12 @@ function input(overrides: Record<string, unknown> = {}) {
   } as never;
 }
 
-async function refused(promise: Promise<unknown>): Promise<{ status: number; message: string }> {
+async function refused(promise: Promise<unknown>): Promise<{ status: number; message: string; code: string | undefined; values: Record<string, unknown> }> {
   try {
     await promise;
   } catch (error) {
     assert.ok(error instanceof ActionRefused, `expected a refusal, got ${String(error)}`);
-    return { status: error.status, message: error.message };
+    return { status: error.status, message: error.message, code: error.code, values: error.values };
   }
   return assert.fail("expected the action to be refused");
 }
@@ -263,5 +265,81 @@ describe("clearing a timeout", () => {
     assert.equal(active["automod-timeout"], false);
     assert.equal(active["timeout"], false);
     assert.equal(active["automod-warn"], true, "only timeouts are closed");
+  });
+});
+
+describe("refusals carry what an owner needs to reword them", () => {
+  const nobody = () => member(ACTOR, { top: 5 });
+  const wording = { labels: { abilities: { ban: "verbannen" }, verbs: { ban: "den Bann setzen" } } };
+
+  test("a command refusal names the action in the owner's words, and the dashboard keeps the plain ones", async () => {
+    const fromCommand = await refused(performAction(context(wording), input({ action: "ban", actorMember: nobody() })));
+    assert.equal(fromCommand.code, "noPermission");
+    assert.deepEqual(fromCommand.values, { action: "verbannen" });
+
+    const fromDashboard = await refused(performAction(context(wording), input({ action: "ban", actorMember: nobody(), origin: "dashboard" })));
+    assert.equal(fromDashboard.code, "noPermission");
+    assert.deepEqual(fromDashboard.values, { action: "ban members" });
+    assert.match(fromDashboard.message, /You are not allowed to ban members here\./);
+  });
+
+  test("an existing ban is refused with the member's name, worded for where it was asked", async () => {
+    world.banned = true;
+    const fromCommand = await refused(performAction(context(), input({ action: "ban" })));
+    assert.deepEqual([fromCommand.status, fromCommand.code, fromCommand.values], [409, "alreadyBanned", { name: "target" }]);
+    assert.equal(fromCommand.message, "target is already banned. Use /unban first to change it.");
+
+    const fromDashboard = await refused(performAction(context(), input({ action: "ban", origin: "dashboard" })));
+    assert.equal(fromDashboard.message, "target is already banned. Lift the ban first to change it.");
+
+    world.banned = false;
+    const notBanned = await refused(performAction(context(), input({ action: "unban" })));
+    assert.deepEqual([notBanned.code, notBanned.message], ["notBanned", "target is not banned."]);
+  });
+
+  test("a length that could not be read is a coded refusal, for a timeout and for a ban", async () => {
+    const timeout = await refused(performAction(context(), input({ action: "timeout", durationMs: null, unreadableDuration: true })));
+    assert.deepEqual([timeout.status, timeout.code, timeout.message], [400, "durationUnreadableTimeout", "Duration must look like 10m, 2h or 7d."]);
+    const ban = await refused(performAction(context(), input({ action: "ban", unreadableDuration: true })));
+    assert.deepEqual([ban.code, ban.message], ["durationUnreadableBan", "Duration must look like 1d or 7d."]);
+  });
+
+  test("a member Discord would refuse is named with the owner's verb", async () => {
+    world.members.set(TARGET, member(TARGET, { bannable: false }));
+    const result = await refused(performAction(context(wording), input({ action: "ban" })));
+    assert.deepEqual([result.code, result.values], ["cannotActOn", { verb: "den Bann setzen" }]);
+    assert.match(result.message, /^I cannot den Bann setzen\./);
+  });
+
+  test("a failed call after the member was messaged hands over the owner's correction wording and sends their correction", async () => {
+    world.failBan = true;
+    const stored = {
+      labels: { verbs: { ban: "den Bann setzen" }, notes: { correctionSent: "Sie wurden korrigiert." } },
+      replies: { direct: { correction: "Irrtum: {action}." } },
+    };
+    const result = await refused(performAction(context(stored), input({ action: "ban" })));
+    assert.equal(result.code, "discordFailedRank");
+    assert.deepEqual(result.values, { verb: "den Bann setzen", correctionNote: " Sie wurden korrigiert." });
+    assert.equal(
+      result.message,
+      "I could not ban that member. Check that my role is above theirs. They had already been sent a message about it, so they were sent a correction.",
+    );
+    assert.equal(world.sent[1]!.text, "Irrtum: {action}.");
+  });
+
+  test("the dashboard's sentence ignores the owner's words altogether", async () => {
+    world.failBan = true;
+    const result = await refused(performAction(context({ labels: { verbs: { ban: "den Bann setzen" } } }), input({ action: "ban", origin: "dashboard" })));
+    assert.equal(
+      result.message,
+      "The bot could not ban that member. Check that its role is above theirs. They had already been sent a message about it, so they were sent a correction.",
+    );
+  });
+
+  test("the notes come back by name as well as worded for the dashboard", async () => {
+    world.members.delete(TARGET);
+    const { notes, noteKeys } = await performAction(context(), input({ action: "ban", targetId: STRANGER }));
+    assert.deepEqual(noteKeys, ["banNotInServer", "dmWithheld"]);
+    assert.equal(notes.length, 2);
   });
 });

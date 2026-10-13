@@ -1,17 +1,20 @@
-import { SlashCommandBuilder, PermissionFlagsBits, MessageFlags } from "discord.js";
-import { plainReply, type CommandDefinition } from "@tier0/core";
+import { SlashCommandBuilder, PermissionFlagsBits } from "discord.js";
+import { plainReply, type CommandDefinition, type ResponseTemplate } from "@tier0/core";
 import type { ModerationSettings } from "../settings.js";
+import { answer } from "./answer.js";
 import { runFromCommand } from "./run-action.js";
+
+const KICK_REPLY: ResponseTemplate = {
+  starting: plainReply("Kicked {user}. Case #{case}."),
+  placeholders: [
+    { name: "user", description: "The member's username", sample: "spamlord_42" },
+    { name: "case", description: "The case number", sample: "118" },
+  ],
+};
 
 export const kickCommand: CommandDefinition<ModerationSettings> = {
   name: "kick",
-  response: {
-    starting: plainReply("Kicked {user}. Case #{case}."),
-    placeholders: [
-      { name: "user", description: "The member's username", sample: "spamlord_42" },
-      { name: "case", description: "The case number", sample: "118" },
-    ],
-  },
+  response: KICK_REPLY,
   description: "Remove a member from the server.",
   build: () =>
     new SlashCommandBuilder()
@@ -29,10 +32,6 @@ export const kickCommand: CommandDefinition<ModerationSettings> = {
     const record = await runFromCommand(interaction, ctx, { action: "kick", target });
     if (!record) return;
 
-    const custom = ctx.customReply?.({ user: target.username, case: record.caseNumber });
-    await interaction.reply({
-      ...(custom ?? { content: `Kicked ${target.username}. Case #${record.caseNumber}.` }),
-      flags: MessageFlags.Ephemeral,
-    });
+    await answer(interaction, ctx, KICK_REPLY, { user: target.username, case: record.caseNumber });
   },
 };

@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { Collection } from "discord.js";
 import { ModuleRegistry } from "@tier0/core";
 import automod from "@tier0/module-automod";
-import { NOTICE_MESSAGE, tripValues } from "../../../packages/modules/automod/dist/messages.js";
+import { DM_MESSAGE, NOTICE_MESSAGE, tripValues } from "../../../packages/modules/automod/dist/messages.js";
 import { sendMessage } from "../dist/runtime/send-message.js";
 
 const registry = new ModuleRegistry();
@@ -80,5 +80,69 @@ describe("the automod notice", () => {
       console.error = original;
     }
     assert.equal(payloads[0]?.content, `<@111111111111111111>, your message was removed (invites: ${"z".repeat(700)}).`);
+  });
+});
+
+describe("the automod direct message", () => {
+  function fakeMember(payloads: Record<string, unknown>[], failWith?: Error) {
+    return {
+      id: "111111111111111111",
+      client: { user: { username: "TierZero" } },
+      async send(payload: Record<string, unknown>) {
+        if (failWith) throw failWith;
+        payloads.push(payload);
+        return { id: "1", channelId: "2", react: async () => undefined };
+      },
+    };
+  }
+
+  const dmOf = (stored: Record<string, unknown>) => {
+    const resolved = registry.resolveSettings("automod", { dmOnAction: true, ...stored });
+    assert.ok(resolved.ok);
+    return resolved.value as { dmMessage: never; labels: Parameters<typeof tripValues>[1] };
+  };
+
+  test("says who, what and why in plain words, and mentions nobody", async () => {
+    const payloads: Record<string, unknown>[] = [];
+    const settings = dmOf({});
+    const sent = await sendMessage(fakeMember(payloads) as never, settings.dmMessage, tripValues(facts, settings.labels), { guild: guild as never, fallback: DM_MESSAGE });
+    assert.ok(sent);
+    assert.equal(payloads[0]?.content, "In Test Server, your message was removed (invites: Spam).");
+    assert.deepEqual(payloads[0]?.allowedMentions, { parse: [] });
+  });
+
+  test("uses the owner's message and the owner's name for the rule", async () => {
+    const payloads: Record<string, unknown>[] = [];
+    const settings = dmOf({ dmMessage: { content: "{rule} ({ruleKey}): {reason} - {outcome}" }, labels: { ruleNames: { invites: "Invite links" } } });
+    await sendMessage(fakeMember(payloads) as never, settings.dmMessage, tripValues(facts, settings.labels), { guild: guild as never, fallback: DM_MESSAGE });
+    assert.equal(payloads[0]?.content, "Invite links (invites): Spam - your message was removed");
+  });
+
+  test("falls back to the stock message when the owner's no longer fits", async () => {
+    const payloads: Record<string, unknown>[] = [];
+    const settings = dmOf({ dmMessage: { content: "{reason}{reason}{reason}!" } });
+    const original = console.error;
+    console.error = () => undefined;
+    try {
+      await sendMessage(fakeMember(payloads) as never, settings.dmMessage, tripValues({ ...facts, reason: "z".repeat(700) }, settings.labels), { guild: guild as never, fallback: DM_MESSAGE });
+    } finally {
+      console.error = original;
+    }
+    assert.equal(payloads[0]?.content, `In Test Server, your message was removed (invites: ${"z".repeat(700)}).`);
+  });
+
+  test("a member with direct messages closed is skipped without throwing", async () => {
+    const settings = dmOf({});
+    const original = console.error;
+    console.error = () => undefined;
+    try {
+      const sent = await sendMessage(fakeMember([], new Error("Cannot send messages to this user")) as never, settings.dmMessage, tripValues(facts, settings.labels), {
+        guild: guild as never,
+        fallback: DM_MESSAGE,
+      });
+      assert.equal(sent, null);
+    } finally {
+      console.error = original;
+    }
   });
 });

@@ -1,18 +1,64 @@
 import { MessageFlags } from "discord.js";
-import type { ChatInputCommandInteraction } from "discord.js";
-import type { ModuleContext } from "@tier0/core";
+import type { ContextMenuCommandInteraction, MessageComponentInteraction, RepliableInteraction } from "discord.js";
+import type { MessageBody, ModuleContext, ReplyValues } from "@tier0/core";
 import type { ModerationSettings } from "./settings.js";
-import { noticeValues, type ModLogEntry } from "./modlog.js";
+import { clip, noticeValues, type ModLogEntry } from "./modlog.js";
 import { MODLOG_MESSAGE } from "./messages.js";
-import type { ModLogOutcome } from "./action-rules.js";
+import { ActionRefused, type ModLogOutcome } from "./action-rules.js";
+import { REFUSALS, REPLIES, defaultBody, fillLabel, stringValues, type ReplyGroup } from "./texts.js";
 
-/** A user-facing failure. Always ephemeral, and always sent before any reply. */
-export async function replyError(
-  interaction: ChatInputCommandInteraction,
-  message: string,
+type Ctx = ModuleContext<ModerationSettings>;
+/** A context menu interaction can be replied to like any other, though discord.js types its base class apart from the rest. */
+export type Answerable = RepliableInteraction | MessageComponentInteraction | ContextMenuCommandInteraction;
+
+export const repliable = (interaction: Answerable): RepliableInteraction | MessageComponentInteraction => interaction as RepliableInteraction;
+
+/**
+ * Answers an interaction with one of the owner's editable replies. If it cannot
+ * be sent in the owner's words, such as when a filled-in value pushes it past
+ * Discord's limits, the default wording goes instead, so a moderator is never
+ * left with no answer.
+ */
+export async function say<G extends ReplyGroup>(
+  ctx: Ctx,
+  interaction: Answerable,
+  group: G,
+  key: keyof (typeof REPLIES)[G] & string,
+  values: ReplyValues = {},
 ): Promise<void> {
-  await interaction.reply({ content: message, flags: MessageFlags.Ephemeral });
+  const owned: Record<string, MessageBody> = ctx.settings.replies[group];
+  const body = owned[key];
+  const fallback = defaultBody(group, key);
+  if (body && (await ctx.reply(repliable(interaction), body, values, { fallback }))) return;
+  // Both were refused, which only happens when the values themselves are too long for a message.
+  const specs: Record<string, { text: string }> = REPLIES[group];
+  const content = fillLabel(specs[key]?.text ?? "", stringValues(values)).slice(0, 2000);
+  try {
+    if (interaction.replied) await interaction.followUp({ content, flags: MessageFlags.Ephemeral });
+    else if (interaction.deferred) await interaction.editReply({ content });
+    else await interaction.reply({ content, flags: MessageFlags.Ephemeral });
+  } catch (error) {
+    console.error("moderation: a reply could not be sent:", error);
+  }
 }
+
+/**
+ * Tells the person who asked why an action was refused, in the owner's wording
+ * when the refusal has some and in the plain sentence it carries otherwise.
+ */
+export async function replyRefusal(ctx: Ctx, interaction: Answerable, error: ActionRefused): Promise<void> {
+  if (error.code !== undefined && Object.hasOwn(REFUSALS, error.code)) {
+    await say(ctx, interaction, "refusals", error.code, error.values);
+    return;
+  }
+  const content = error.message;
+  if (interaction.replied) await interaction.followUp({ content, flags: MessageFlags.Ephemeral });
+  else if (interaction.deferred) await interaction.editReply({ content });
+  else await interaction.reply({ content, flags: MessageFlags.Ephemeral });
+}
+
+/** Discord's limit on an embed field's value, which the mod log's Reason field is. */
+const FIELD_MAX = 1024;
 
 /** Posts to the configured mod log channel. A no-op when none is set; never throws. */
 export async function postModLog(
@@ -27,6 +73,9 @@ export async function postModLog(
 
   // A failed send is logged by ctx.send, which also falls back to the stock post if the owner's no longer fits.
   const links = { guildId: ctx.guild.id, dashboardBase: await ctx.dashboardUrl() };
-  const sent = await ctx.send(channel, ctx.settings.modLogMessage, noticeValues({ ...entry, links }), { fallback: MODLOG_MESSAGE });
+  const values = noticeValues({ ...entry, links }, ctx.settings.labels);
+  const reason = values.reason;
+  if (typeof reason === "string") values.reason = clip(reason, FIELD_MAX);
+  const sent = await ctx.send(channel, ctx.settings.modLogMessage, values, { fallback: MODLOG_MESSAGE });
   return sent ? "posted" : "failed";
 }

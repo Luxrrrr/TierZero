@@ -1,5 +1,8 @@
 import { s, type Infer } from "@tier0/core";
 import {
+  DM_MESSAGE,
+  DM_NOTE,
+  DM_VARIABLES,
   LOG_MESSAGES,
   LOG_NOTE,
   LOG_VARIABLES,
@@ -7,6 +10,7 @@ import {
   NOTICE_NOTE,
   NOTICE_VARIABLES,
 } from "./messages.js";
+import { labelsShape } from "./texts.js";
 
 export type RuleAction = "delete" | "warn" | "timeout";
 
@@ -152,6 +156,25 @@ export const settings = s.object({
     variables: NOTICE_VARIABLES,
     note: NOTICE_NOTE,
   }),
+  noticeLifetime: s.duration({
+    label: "How long the notice stays",
+    default: "8s",
+    max: "5m",
+    help: "Then the bot removes it again. Anything under 2 seconds is taken as 2, and 0s keeps the notice.",
+  }),
+  dmOnAction: s.boolean({
+    label: "Also message the member privately",
+    default: false,
+    help: "Sends the member a direct message when one of their messages trips a rule, so they know why without the whole channel seeing. It never quotes what they wrote. A member with direct messages closed is skipped.",
+  }),
+  dmMessage: s.message({
+    label: "Direct message to the member",
+    starting: DM_MESSAGE,
+    variables: DM_VARIABLES,
+    delivery: "dm",
+    note: DM_NOTE,
+    when: { field: "dmOnAction", equals: true },
+  }),
   logMessages: s.object(
     {
       delete: s.message({
@@ -289,6 +312,12 @@ export const settings = s.object({
     },
     ruleOptions("Rate limit", "rateLimit"),
   ),
+
+  labels: s.object(labelsShape(), {
+    label: "Labels and text",
+    help: "The short pieces the notice, the direct message and the log are built from: how each rule is named, what the member did, and what happened to them.",
+    collapsible: true,
+  }),
 });
 
 export type AutomodSettings = Infer<typeof settings>;

@@ -2,7 +2,8 @@ import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 import { ModuleRegistry, applyVariablesToMessage, parseMessage, type MessageBody } from "@tier0/core";
 import moderation from "../dist/index.js";
-import { formatModLogEntry, noticeValues } from "../dist/modlog.js";
+import { noticeValues } from "../dist/modlog.js";
+import { formatModLogEntry } from "./legacy-view.ts";
 import { CASE_REPLY, DM_MESSAGE, HISTORY_REPLY, MODLOG_MESSAGE, PURGE_REPLY } from "../dist/messages.js";
 
 const TARGET = "111111111111111111";

@@ -26,7 +26,9 @@ after(async () => {
 
 interface Sent {
   target: string;
+  body: { content: string };
   values: Record<string, string>;
+  options: { fallback?: { content: string }; mentions?: { users?: string[]; roles?: string[] } };
 }
 
 function setup(options: {
@@ -37,12 +39,16 @@ function setup(options: {
   dashboard?: string;
   content?: string;
   messageId: string;
+  stored?: Record<string, unknown>;
+  dmFails?: boolean;
 }) {
   const sent: Sent[] = [];
   const calls: string[] = [];
+  const timeoutReasons: (string | undefined)[] = [];
   const parsed = settings.parse({
     logChannel: LOG_CHANNEL,
     bannedWords: { enabled: true, actions: options.actions ?? ["delete"], words: ["badword", "other thing"] },
+    ...options.stored,
   });
   assert.ok(parsed.ok);
 
@@ -54,8 +60,9 @@ function setup(options: {
     roles: { cache: new Map() },
     permissions: { has: () => false },
     moderatable: options.moderatable ?? true,
-    timeout: async (ms: number) => {
+    timeout: async (ms: number, reason?: string) => {
       calls.push(`timeout:${ms}`);
+      timeoutReasons.push(reason);
       if (options.timeoutFails) throw Object.assign(new Error("Missing Permissions"), { code: 50013 });
     },
   };
@@ -64,15 +71,16 @@ function setup(options: {
     guild: { id: GUILD, channels: { cache: new Map([[LOG_CHANNEL, logChannel]]) } },
     settings: parsed.value,
     dashboardUrl: async () => options.dashboard ?? "",
-    send: async (target: { id: string }, _body: unknown, values: Record<string, string>) => {
-      sent.push({ target: target.id, values });
+    send: async (target: { id: string }, body: { content: string }, values: Record<string, string>, sendOptions: Sent["options"]) => {
+      if (options.dmFails && target.id === MEMBER) return null;
+      sent.push({ target: target.id, body, values, options: sendOptions });
       return { delete: async () => undefined };
     },
   };
   const message = {
     id: options.messageId,
     guild: { id: GUILD, members: { fetch: async () => member } },
-    author: { id: MEMBER, bot: false },
+    author: { id: MEMBER, bot: false, username: "luxtester" },
     member,
     content: options.content ?? "you badword, and then some other thing too",
     channel,
@@ -84,7 +92,7 @@ function setup(options: {
       if (options.deleteFails) throw Object.assign(new Error("Missing Permissions"), { code: 50013 });
     },
   };
-  return { ctx, message, sent, calls };
+  return { ctx, message, sent, calls, timeoutReasons };
 }
 
 const recordFor = (messageId: string) =>
@@ -363,6 +371,161 @@ describe("the recommended actions", () => {
     for (const set of Object.values(RECOMMENDED_ACTIONS)) {
       assert.ok(set.length >= 1);
       assert.equal(new Set(set).size, set.length);
+    }
+  });
+});
+
+describe("the direct message to the member", () => {
+  let next = 300;
+  const id = () => `1000000000000003${String(next++).padStart(2, "0")}`;
+
+  async function trip(options: Omit<Parameters<typeof setup>[0], "messageId">) {
+    const made = setup({ ...options, messageId: id() });
+    await automod.events!.messageCreate!(made.message as never, made.ctx as never);
+    return made;
+  }
+
+  test("is off unless it is switched on, so nothing changes for a server that already runs automod", async () => {
+    const { sent, ctx } = await trip({ actions: ["delete"] });
+    assert.equal((ctx.settings as { dmOnAction: boolean }).dmOnAction, false);
+    assert.equal(sent.some((s) => s.target === MEMBER), false);
+    assert.equal(sent.length, 2, "the notice and the log, as before");
+  });
+
+  test("goes to the member with the stock wording and the same fixed reason as the notice", async () => {
+    const { sent } = await trip({ actions: ["delete", "warn"], stored: { dmOnAction: true } });
+    const dm = sent.find((s) => s.target === MEMBER);
+    assert.ok(dm);
+    assert.equal(dm.body.content, "In {server}, {outcome} ({rule}{reasonNote}).");
+    assert.equal(dm.options.fallback?.content, "In {server}, {outcome} ({rule}{reasonNote}).");
+    assert.equal(dm.values.outcome, "your message was removed and you were warned");
+    assert.equal(dm.values.rule, "bannedWords");
+    assert.equal(dm.values.reason, "Used a banned word or phrase");
+    assert.equal(dm.values.action, "delete and warn");
+    assert.equal(dm.values.user, `<@${MEMBER}>`);
+  });
+
+  test("never carries what the member wrote, or anything only staff should see", async () => {
+    const { sent } = await trip({ actions: ["delete"], stored: { dmOnAction: true }, dashboard: "https://bot.example.com" });
+    const dm = sent.find((s) => s.target === MEMBER);
+    assert.ok(dm);
+    for (const value of Object.values(dm.values)) {
+      assert.ok(!value.includes("badword") && !value.includes("other thing") && !value.includes("bot.example.com"), value);
+    }
+    assert.deepEqual(Object.keys(dm.values).sort(), ["action", "duration", "outcome", "reason", "reasonNote", "rule", "ruleKey", "user", "userId"]);
+    assert.equal(dm.options.mentions, undefined, "a direct message mentions nobody on its own account");
+  });
+
+  test("uses the owner's message", async () => {
+    const { sent } = await trip({ actions: ["timeout"], stored: { dmOnAction: true, dmMessage: { content: "Hi {user}: {outcome} for {duration}." } } });
+    const dm = sent.find((s) => s.target === MEMBER);
+    assert.equal(dm?.body.content, "Hi {user}: {outcome} for {duration}.");
+    assert.equal(dm?.values.duration, "10 minutes");
+  });
+
+  test("a member with direct messages closed is skipped, and everything else still happens", async () => {
+    const { sent, calls, ctx } = await trip({ actions: ["delete"], stored: { dmOnAction: true }, dmFails: true });
+    assert.deepEqual(calls, ["delete"]);
+    assert.equal(sent.some((s) => s.target === MEMBER), false);
+    assert.equal(sent.some((s) => s.target === CHANNEL), true);
+    assert.equal(sent.some((s) => s.target === LOG_CHANNEL), true);
+    assert.ok(ctx);
+  });
+});
+
+describe("how long the notice stays", () => {
+  function delays(): { seen: number[]; restore(): void } {
+    const seen: number[] = [];
+    const original = globalThis.setTimeout;
+    globalThis.setTimeout = ((handler: () => void, delay?: number) => {
+      seen.push(delay ?? 0);
+      return { unref() {} } as unknown as ReturnType<typeof setTimeout>;
+    }) as typeof setTimeout;
+    return {
+      seen,
+      restore: () => {
+        globalThis.setTimeout = original;
+      },
+    };
+  }
+
+  async function lifetimeFor(stored: Record<string, unknown>, messageId: string) {
+    const timers = delays();
+    try {
+      const { ctx, message } = setup({ messageId, stored });
+      await automod.events!.messageCreate!(message as never, ctx as never);
+    } finally {
+      timers.restore();
+    }
+    return timers.seen;
+  }
+
+  test("is eight seconds until the owner changes it", async () => {
+    assert.deepEqual(await lifetimeFor({}, "100000000000000401"), [8000]);
+  });
+
+  test("follows the setting, with two seconds as the least and zero meaning the notice is kept", async () => {
+    assert.deepEqual(await lifetimeFor({ noticeLifetime: "30s" }, "100000000000000402"), [30_000]);
+    assert.deepEqual(await lifetimeFor({ noticeLifetime: "1s" }, "100000000000000403"), [2000]);
+    assert.deepEqual(await lifetimeFor({ noticeLifetime: "0s" }, "100000000000000404"), []);
+  });
+
+  test("cannot be set past five minutes", () => {
+    assert.equal(settings.parse({ noticeLifetime: "6m" }).ok, false);
+    assert.equal(settings.parse({ noticeLifetime: "5m" }).ok, true);
+  });
+});
+
+describe("the wording an owner can change", () => {
+  test("the reason on the timeout in the audit log is Automod and the rule, until it is changed", async () => {
+    const stock = setup({ messageId: "100000000000000411", actions: ["timeout"] });
+    await automod.events!.messageCreate!(stock.message as never, stock.ctx as never);
+    assert.deepEqual(stock.timeoutReasons, ["Automod: bannedWords"]);
+
+    const custom = setup({
+      messageId: "100000000000000412",
+      actions: ["timeout"],
+      stored: { labels: { audit: { timeoutReason: "Auto: {rule} ({ruleKey})" }, ruleNames: { bannedWords: "Word filter" } } },
+    });
+    await automod.events!.messageCreate!(custom.message as never, custom.ctx as never);
+    assert.deepEqual(custom.timeoutReasons, ["Auto: Word filter (bannedWords)"]);
+  });
+
+  test("the notice and the case follow the owner's labels, and the case keeps the rule's own key", async () => {
+    const stored = {
+      labels: {
+        ruleNames: { bannedWords: "Word filter" },
+        reasons: { bannedWords: "Said something not allowed" },
+        outcomes: { removed: "your post is gone" },
+        fragments: { reasonNote: " - {reason}" },
+      },
+    };
+    const { ctx, message, sent } = setup({ messageId: "100000000000000413", actions: ["delete"], stored });
+    await automod.events!.messageCreate!(message as never, ctx as never);
+    const notice = sent.find((s) => s.target === CHANNEL)!;
+    assert.equal(notice.values.rule, "Word filter");
+    assert.equal(notice.values.ruleKey, "bannedWords");
+    assert.equal(notice.values.outcome, "your post is gone");
+    assert.equal(notice.values.reasonNote, " - Said something not allowed");
+    const row = await recordFor("100000000000000413");
+    assert.equal(row?.reason, "bannedWords: Said something not allowed (matched `badword`, `other thing`)");
+  });
+
+  test("the problems staff see follow the owner's words", async () => {
+    const original = console.error;
+    console.error = () => undefined;
+    try {
+      const { ctx, message, sent } = setup({
+        messageId: "100000000000000414",
+        actions: ["delete"],
+        deleteFails: true,
+        stored: { labels: { problems: { deleteMissingPermission: "No delete rights" } } },
+      });
+      await automod.events!.messageCreate!(message as never, ctx as never);
+      assert.equal(sent.find((s) => s.target === LOG_CHANNEL)?.values.problems, "No delete rights");
+      assert.match((await recordFor("100000000000000414"))?.reason ?? "", /\(No delete rights\)$/);
+    } finally {
+      console.error = original;
     }
   });
 });

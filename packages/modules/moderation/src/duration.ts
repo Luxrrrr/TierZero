@@ -4,6 +4,8 @@
  * can be tested without a gateway connection.
  */
 
+import { refusalSentence, type RefusalCode } from "./texts.js";
+
 const PATTERN = /^(\d+)(s|m|h|d)$/;
 
 const DAY_MS = 86_400_000;
@@ -33,7 +35,8 @@ export function parseDuration(text: string): number | null {
   return value > 0 ? value * factor : null;
 }
 
-export type DurationCheck = { ok: true; ms: number } | { ok: false; reason: string };
+/** `code` is set when the refusal has wording an owner can change; the others are only ever shown on the dashboard. */
+export type DurationCheck = { ok: true; ms: number } | { ok: false; reason: string; code?: RefusalCode };
 
 /** Timeouts specifically: Discord's own API rejects anything past 28 days. */
 export function validateTimeoutDuration(ms: number): DurationCheck {
@@ -41,7 +44,7 @@ export function validateTimeoutDuration(ms: number): DurationCheck {
     return { ok: false, reason: "Duration must be greater than zero." };
   }
   if (ms > MAX_TIMEOUT_MS) {
-    return { ok: false, reason: "Timeouts cannot be longer than 28 days - that's Discord's own limit." };
+    return { ok: false, reason: refusalSentence("timeoutTooLong", {}), code: "timeoutTooLong" };
   }
   return { ok: true, ms };
 }

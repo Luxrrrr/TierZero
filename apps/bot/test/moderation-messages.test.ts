@@ -3,9 +3,9 @@ import assert from "node:assert/strict";
 import { Collection } from "discord.js";
 import { ModuleRegistry } from "@tier0/core";
 import moderation from "@tier0/module-moderation";
-import { tryDirectMessage } from "../../../packages/modules/moderation/dist/dm.js";
-import { postModLog } from "../../../packages/modules/moderation/dist/reply.js";
-import { sendMessage } from "../dist/runtime/send-message.js";
+import { tryCorrectionMessage, tryDirectMessage } from "../../../packages/modules/moderation/dist/dm.js";
+import { postModLog, say } from "../../../packages/modules/moderation/dist/reply.js";
+import { replyMessage, sendMessage } from "../dist/runtime/send-message.js";
 
 const GUILD_ID = "100000000000000001";
 const LOG_CHANNEL_ID = "200000000000000002";
@@ -234,5 +234,87 @@ describe("the moderation mod log post", () => {
     assert.equal(await postModLog(unset, entry), "unset");
     const failing = context({ modLogChannel: LOG_CHANNEL_ID }, fakeUser({ payloads: [] }), fakeLogChannel({ payloads: [] }, new Error("Missing Access")));
     assert.equal(await quietly(() => postModLog(failing, entry)), "failed");
+  });
+});
+
+describe("the moderation replies, sent for real", () => {
+  function interaction(state: { deferred?: boolean } = {}) {
+    const calls: { method: string; payload: Record<string, unknown> }[] = [];
+    const record = (method: string) => async (payload: Record<string, unknown>) => {
+      calls.push({ method, payload });
+    };
+    return {
+      calls,
+      interaction: {
+        guild,
+        user: { id: MODERATOR_ID, displayName: "Ada" },
+        channelId: LOG_CHANNEL_ID,
+        channel: { id: LOG_CHANNEL_ID, name: "mod-chat" },
+        client: { user: { username: "TierZero" } },
+        deferred: state.deferred ?? false,
+        replied: false,
+        reply: record("reply"),
+        editReply: record("editReply"),
+        followUp: record("followUp"),
+      } as never,
+    };
+  }
+
+  function replying(stored: Record<string, unknown>) {
+    const base = context(stored, fakeUser({ payloads: [] }), fakeLogChannel({ payloads: [] })) as unknown as object;
+    return {
+      ...base,
+      reply: (target: never, body: never, values: never, options: object) => replyMessage(target, body, values, { guild: guild as never, ...options }),
+    } as never;
+  }
+
+  test("a refusal reads as it always did, privately", async () => {
+    const { interaction: i, calls } = interaction();
+    await say(replying({}), i, "refusals", "notBanned", { name: "spamlord_42" });
+    assert.equal(calls[0]?.method, "reply");
+    assert.equal(calls[0]?.payload.content, "spamlord_42 is not banned.");
+    assert.equal(calls[0]?.payload.flags, 64);
+  });
+
+  test("the owner's wording is used, with the values filled in", async () => {
+    const { interaction: i, calls } = interaction();
+    await say(replying({ replies: { refusals: { notBanned: "{name} is free to go, says {server}." } } }), i, "refusals", "notBanned", { name: "sam" });
+    assert.equal(calls[0]?.payload.content, "sam is free to go, says Test Server.");
+  });
+
+  test("falls back to the stock sentence when the owner's no longer fits once the name is in it", async () => {
+    const { interaction: i, calls } = interaction();
+    const long = { replies: { refusals: { notBanned: `${"x".repeat(1990)} {name}` } } };
+    await quietly(() => say(replying(long), i, "refusals", "notBanned", { name: "n".repeat(30) }));
+    assert.equal(calls[0]?.payload.content, `${"n".repeat(30)} is not banned.`);
+  });
+
+  test("a purge that was deferred edits its answer", async () => {
+    const { interaction: i, calls } = interaction({ deferred: true });
+    await say(replying({}), i, "purge", "purgeFailed");
+    assert.equal(calls[0]?.method, "editReply");
+    assert.equal(calls[0]?.payload.content, "I could not delete those messages. Check my permissions in this channel.");
+  });
+
+  test("the correction to a member says what it always did and mentions nobody", async () => {
+    const delivered: Delivered = { payloads: [] };
+    const ctx = context({}, fakeUser(delivered), fakeLogChannel({ payloads: [] }));
+    assert.equal(await tryCorrectionMessage(ctx, MEMBER_ID, "ban"), true);
+    assert.equal(delivered.payloads[0]?.content, "Correction: the message you were just sent about being banned was sent in error. Nothing happened to you.");
+    assert.deepEqual(delivered.payloads[0]?.allowedMentions, { parse: [] });
+
+    const reworded: Delivered = { payloads: [] };
+    const own = context({ replies: { direct: { correction: "Sorry {server}: not {action}." } } }, fakeUser(reworded), fakeLogChannel({ payloads: [] }));
+    await tryCorrectionMessage(own, MEMBER_ID, "timeout");
+    assert.equal(reworded.payloads[0]?.content, "Sorry Test Server: not timed out.");
+  });
+
+  test("a mod log post for a case with a very long reason is still posted", async () => {
+    const delivered: Delivered = { payloads: [] };
+    const ctx = context({ modLogChannel: LOG_CHANNEL_ID }, fakeUser({ payloads: [] }), fakeLogChannel(delivered));
+    const outcome = await postModLog(ctx, { caseNumber: 3, action: "warn", targetId: MEMBER_ID, moderatorId: MODERATOR_ID, reason: "r".repeat(1500), expiresAt: null });
+    assert.equal(outcome, "posted");
+    const embed = (delivered.payloads[0]?.embeds as { toJSON(): { fields: { name: string; value: string }[] } }[])[0]!.toJSON();
+    assert.equal(embed.fields.find((field) => field.name === "Reason")?.value.length, 1024);
   });
 });

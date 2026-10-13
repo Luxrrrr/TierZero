@@ -23,6 +23,8 @@ export {
   type ActionOrigin,
 } from "./action-rules.js";
 export { fetchMemberOrNull } from "./lookups.js";
+export { describeLength } from "./modlog.js";
+export { DEFAULT_WORDING, fillLabel, labelGroup, timeWordsGroup, type TextSpec, type Wording } from "./texts.js";
 export {
   evidenceForTrip,
   loggedCopyOf,

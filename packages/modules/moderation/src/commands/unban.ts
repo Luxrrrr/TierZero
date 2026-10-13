@@ -1,17 +1,20 @@
-import { SlashCommandBuilder, PermissionFlagsBits, MessageFlags } from "discord.js";
-import { plainReply, type CommandDefinition } from "@tier0/core";
+import { SlashCommandBuilder, PermissionFlagsBits } from "discord.js";
+import { plainReply, type CommandDefinition, type ResponseTemplate } from "@tier0/core";
 import type { ModerationSettings } from "../settings.js";
+import { answer } from "./answer.js";
 import { runFromCommand } from "./run-action.js";
+
+const UNBAN_REPLY: ResponseTemplate = {
+  starting: plainReply("Unbanned {user}. Case #{case}."),
+  placeholders: [
+    { name: "user", description: "The member's username", sample: "spamlord_42" },
+    { name: "case", description: "The case number", sample: "118" },
+  ],
+};
 
 export const unbanCommand: CommandDefinition<ModerationSettings> = {
   name: "unban",
-  response: {
-    starting: plainReply("Unbanned {user}. Case #{case}."),
-    placeholders: [
-      { name: "user", description: "The member's username", sample: "spamlord_42" },
-      { name: "case", description: "The case number", sample: "118" },
-    ],
-  },
+  response: UNBAN_REPLY,
   description: "Lift a ban.",
   build: () =>
     new SlashCommandBuilder()
@@ -29,10 +32,6 @@ export const unbanCommand: CommandDefinition<ModerationSettings> = {
     const record = await runFromCommand(interaction, ctx, { action: "unban", target });
     if (!record) return;
 
-    const custom = ctx.customReply?.({ user: target.username, case: record.caseNumber });
-    await interaction.reply({
-      ...(custom ?? { content: `Unbanned ${target.username}. Case #${record.caseNumber}.` }),
-      flags: MessageFlags.Ephemeral,
-    });
+    await answer(interaction, ctx, UNBAN_REPLY, { user: target.username, case: record.caseNumber });
   },
 };

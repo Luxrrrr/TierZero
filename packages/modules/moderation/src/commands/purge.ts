@@ -4,6 +4,8 @@ import type { ModerationSettings } from "../settings.js";
 import { BULK_DELETE_WINDOW_MS } from "../duration.js";
 import { PURGE_REPLY } from "../messages.js";
 import { auditPurge } from "../purge-audit.js";
+import { say } from "../reply.js";
+import { fillLabel } from "../texts.js";
 
 export const purgeCommand: CommandDefinition<ModerationSettings> = {
   name: "purge",
@@ -27,19 +29,13 @@ export const purgeCommand: CommandDefinition<ModerationSettings> = {
 
     // The command is only hidden from people without the permission by default; an operator can widen it.
     if (!interaction.memberPermissions?.has(PermissionFlagsBits.ManageMessages)) {
-      await interaction.reply({
-        content: "You need the Manage Messages permission to delete messages.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await say(ctx, interaction, "purge", "purgeNeedsPermission");
       return;
     }
 
     const channel = await ctx.guild.channels.fetch(interaction.channelId).catch(() => null);
     if (!channel || !channel.isTextBased()) {
-      await interaction.reply({
-        content: "This command only works in a server text channel.",
-        flags: MessageFlags.Ephemeral,
-      });
+      await say(ctx, interaction, "purge", "purgeWrongChannel");
       return;
     }
 
@@ -51,9 +47,7 @@ export const purgeCommand: CommandDefinition<ModerationSettings> = {
     const skipped = fetched.size - eligible.size;
 
     if (eligible.size === 0) {
-      await interaction.editReply(
-        "None of those messages can be bulk deleted: Discord only allows deleting messages sent in the last 14 days.",
-      );
+      await say(ctx, interaction, "purge", "purgeNothingEligible");
       return;
     }
 
@@ -69,7 +63,7 @@ export const purgeCommand: CommandDefinition<ModerationSettings> = {
       }
     } catch (error) {
       console.error("moderation: purge failed:", error);
-      await interaction.editReply("I could not delete those messages. Check my permissions in this channel.");
+      await say(ctx, interaction, "purge", "purgeFailed");
       return;
     }
 
@@ -84,13 +78,16 @@ export const purgeCommand: CommandDefinition<ModerationSettings> = {
       });
     }
 
-    const skippedNote =
-      skipped > 0
-        ? ` ${skipped} message${skipped === 1 ? " was" : "s were"} left because ${skipped === 1 ? "it is" : "they are"} older than 14 days.`
-        : "";
-    const messages = `${deletedCount} message${deletedCount === 1 ? "" : "s"}`;
+    const { counts } = ctx.settings.labels;
+    const skippedNote = skipped > 0 ? ` ${fillLabel(skipped === 1 ? counts.skippedOne : counts.skippedMany, { count: skipped })}` : "";
+    const messages = fillLabel(deletedCount === 1 ? counts.messageOne : counts.messageMany, { count: deletedCount });
+    const values = { count: deletedCount, messages, skippedNote };
     // The reply was deferred as ephemeral, and an edit cannot change that.
-    const { flags: _flags, ...custom } = ctx.customReply?.({ count: deletedCount, messages, skippedNote }) ?? {};
-    await interaction.editReply(Object.keys(custom).length > 0 ? custom : `Deleted ${messages}.${skippedNote}`);
+    const { flags: _flags, ...custom } = ctx.customReply?.(values) ?? {};
+    if (Object.keys(custom).length > 0) {
+      await interaction.editReply(custom);
+      return;
+    }
+    await ctx.reply(interaction, PURGE_REPLY.starting, values);
   },
 };

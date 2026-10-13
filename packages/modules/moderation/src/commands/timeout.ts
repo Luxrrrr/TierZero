@@ -1,20 +1,22 @@
-import { SlashCommandBuilder, PermissionFlagsBits, MessageFlags } from "discord.js";
+import { SlashCommandBuilder, PermissionFlagsBits } from "discord.js";
 import type { ChatInputCommandInteraction } from "discord.js";
-import { plainReply, type CommandDefinition, type ModuleContext } from "@tier0/core";
+import { plainReply, type CommandDefinition, type ModuleContext, type ResponseTemplate } from "@tier0/core";
 import type { ModerationSettings } from "../settings.js";
 import { parseDuration } from "../duration.js";
+import { say } from "../reply.js";
+import { answer } from "./answer.js";
 import { runFromCommand } from "./run-action.js";
 
 type Ctx = ModuleContext<ModerationSettings>;
 
-const TIMEOUT_REPLY = {
+const TIMEOUT_REPLY: ResponseTemplate = {
   starting: plainReply("Timed out {user} until {until}. Case #{case}."),
   placeholders: [
     { name: "user", description: "The member's username", sample: "spamlord_42" },
     { name: "until", description: "When the timeout ends, as a Discord date", sample: "Oct 18, 4:12 PM" },
     { name: "case", description: "The case number", sample: "118" },
   ],
-  note: "Used when a timeout is set. Lifting one keeps its own reply.",
+  note: "Used when a timeout is set. Lifting one is Replies and errors, in the Moderation settings.",
 };
 
 async function runSet(interaction: ChatInputCommandInteraction, ctx: Ctx): Promise<void> {
@@ -27,16 +29,12 @@ async function runSet(interaction: ChatInputCommandInteraction, ctx: Ctx): Promi
     action: "timeout",
     target,
     durationMs,
-    unreadableDuration: durationMs === null ? "Duration must look like 10m, 2h or 7d." : undefined,
+    unreadableDuration: durationMs === null,
   });
   if (!record) return;
 
   const until = `<t:${Math.floor(record.expiresAt!.getTime() / 1000)}:f>`;
-  const custom = ctx.customReply?.({ user: target.username, until, case: record.caseNumber });
-  await interaction.reply({
-    ...(custom ?? { content: `Timed out ${target.username} until ${until}. Case #${record.caseNumber}.` }),
-    flags: MessageFlags.Ephemeral,
-  });
+  await answer(interaction, ctx, TIMEOUT_REPLY, { user: target.username, until, case: record.caseNumber });
 }
 
 async function runClear(interaction: ChatInputCommandInteraction, ctx: Ctx): Promise<void> {
@@ -44,10 +42,7 @@ async function runClear(interaction: ChatInputCommandInteraction, ctx: Ctx): Pro
   const record = await runFromCommand(interaction, ctx, { action: "timeout-clear", target });
   if (!record) return;
 
-  await interaction.reply({
-    content: `Cleared ${target.username}'s timeout. Case #${record.caseNumber}.`,
-    flags: MessageFlags.Ephemeral,
-  });
+  await say(ctx, interaction, "confirmations", "timeoutCleared", { user: target.username, case: record.caseNumber });
 }
 
 export const timeoutCommand: CommandDefinition<ModerationSettings> = {

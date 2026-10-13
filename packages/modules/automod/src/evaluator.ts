@@ -5,6 +5,7 @@
  * calls; this file only ever answers "what, if anything, should happen".
  */
 import { createHash } from "node:crypto";
+import { fill } from "./fill.js";
 import type { AutomodSettings, RuleAction, RuleName } from "./settings.js";
 
 export type { RuleAction, RuleName };
@@ -155,7 +156,7 @@ function checkInvites(input: EvaluationInput): RuleMatch | null {
   const disallowed = codes.find((code) => !allowlist.has(code));
   if (!disallowed) return null;
 
-  return toMatch("invites", rule, "Posted a Discord invite link", disallowed);
+  return toMatch("invites", rule, input.settings.labels.reasons.invites, disallowed);
 }
 
 // -- links ---------------------------------------------------------------
@@ -216,7 +217,8 @@ function checkLinks(input: EvaluationInput): RuleMatch | null {
   const disallowed = hosts.find((host) => host === null || !domainAllowed(host, allowlist));
   if (disallowed === undefined) return null;
 
-  return toMatch("links", rule, "Posted a link to a site that isn't allowed", disallowed ?? "an invalid address");
+  const { reasons, fragments } = input.settings.labels;
+  return toMatch("links", rule, reasons.links, disallowed ?? fragments.invalidAddress);
 }
 
 // -- capitals --------------------------------------------------------------
@@ -234,7 +236,7 @@ function checkCapitals(input: EvaluationInput): RuleMatch | null {
   const percent = (upper / letters.length) * 100;
   if (percent < rule.thresholdPercent) return null;
 
-  return toMatch("capitals", rule, `Message was ${Math.round(percent)}% capital letters`);
+  return toMatch("capitals", rule, fill(input.settings.labels.reasons.capitals, { percent: Math.round(percent) }));
 }
 
 // -- repeated text -----------------------------------------------------
@@ -246,11 +248,7 @@ function checkRepeatedText(input: EvaluationInput): RuleMatch | null {
   const runLength = Math.max(rule.maxCharacterRepeat - 1, 1);
   const wall = new RegExp(`(.)\\1{${runLength},}`, "u");
   if (wall.test(input.content)) {
-    return toMatch(
-      "repeatedText",
-      rule,
-      `Message repeats one character ${rule.maxCharacterRepeat} or more times in a row`,
-    );
+    return toMatch("repeatedText", rule, fill(input.settings.labels.reasons.repeatedCharacter, { limit: rule.maxCharacterRepeat }));
   }
 
   // An edit is not another copy, and the message it replaced is in the history.
@@ -265,7 +263,7 @@ function checkRepeatedText(input: EvaluationInput): RuleMatch | null {
   const totalCopies = priorCopies + 1;
   if (totalCopies < rule.repeatMessageCount) return null;
 
-  return toMatch("repeatedText", rule, `Sent the same message ${totalCopies} times in a row`);
+  return toMatch("repeatedText", rule, fill(input.settings.labels.reasons.repeatedMessage, { count: totalCopies }));
 }
 
 // -- mentions ----------------------------------------------------------
@@ -286,11 +284,7 @@ function checkMentions(input: EvaluationInput): RuleMatch | null {
   const count = countMentions(input.content);
   if (count <= rule.limit) return null;
 
-  return toMatch(
-    "mentions",
-    rule,
-    `Mentioned ${count} users or roles, more than the limit of ${rule.limit}`,
-  );
+  return toMatch("mentions", rule, fill(input.settings.labels.reasons.mentions, { count, limit: rule.limit }));
 }
 
 // -- banned words ------------------------------------------------------
@@ -357,7 +351,7 @@ function checkBannedWords(input: EvaluationInput): RuleMatch | null {
 
   // The list's own entries are reported, never the member's text around them.
   const matches = [...new Set(hits.map((word) => word.trim()))];
-  return { ...toMatch("bannedWords", rule, "Used a banned word or phrase", matches.join(", ")), matches };
+  return { ...toMatch("bannedWords", rule, input.settings.labels.reasons.bannedWords, matches.join(", ")), matches };
 }
 
 // -- rate limit ----------------------------------------------------------
@@ -372,11 +366,7 @@ function checkRateLimit(input: EvaluationInput): RuleMatch | null {
   if (count <= rule.limit) return null;
 
   const seconds = Math.round(rule.window / 1000);
-  return toMatch(
-    "rateLimit",
-    rule,
-    `Sent ${count} messages in ${seconds}s, more than the limit of ${rule.limit}`,
-  );
+  return toMatch("rateLimit", rule, fill(input.settings.labels.reasons.rateLimit, { count, seconds, limit: rule.limit }));
 }
 
 // -- evaluation ------------------------------------------------------------

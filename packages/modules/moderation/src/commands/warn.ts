@@ -1,17 +1,20 @@
-import { SlashCommandBuilder, PermissionFlagsBits, MessageFlags } from "discord.js";
-import { plainReply, type CommandDefinition } from "@tier0/core";
+import { SlashCommandBuilder, PermissionFlagsBits } from "discord.js";
+import { plainReply, type CommandDefinition, type ResponseTemplate } from "@tier0/core";
 import type { ModerationSettings } from "../settings.js";
+import { answer } from "./answer.js";
 import { runFromCommand } from "./run-action.js";
+
+const WARN_REPLY: ResponseTemplate = {
+  starting: plainReply("Warned {user}. Case #{case}."),
+  placeholders: [
+    { name: "user", description: "The member's username", sample: "spamlord_42" },
+    { name: "case", description: "The case number", sample: "118" },
+  ],
+};
 
 export const warnCommand: CommandDefinition<ModerationSettings> = {
   name: "warn",
-  response: {
-    starting: plainReply("Warned {user}. Case #{case}."),
-    placeholders: [
-      { name: "user", description: "The member's username", sample: "spamlord_42" },
-      { name: "case", description: "The case number", sample: "118" },
-    ],
-  },
+  response: WARN_REPLY,
   description: "Log a warning against a member.",
   build: () =>
     new SlashCommandBuilder()
@@ -29,10 +32,6 @@ export const warnCommand: CommandDefinition<ModerationSettings> = {
     const record = await runFromCommand(interaction, ctx, { action: "warn", target });
     if (!record) return;
 
-    const custom = ctx.customReply?.({ user: target.username, case: record.caseNumber });
-    await interaction.reply({
-      ...(custom ?? { content: `Warned ${target.username}. Case #${record.caseNumber}.` }),
-      flags: MessageFlags.Ephemeral,
-    });
+    await answer(interaction, ctx, WARN_REPLY, { user: target.username, case: record.caseNumber });
   },
 };

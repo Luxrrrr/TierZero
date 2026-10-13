@@ -1,7 +1,8 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 import { historyList, HISTORY_LIST_MAX, HISTORY_REASON_MAX } from "../dist/history-list.js";
-import { actionLabel, clip, formatModLogEntry, moderatorName, noticeValues } from "../dist/modlog.js";
+import { actionLabel, clip, moderatorName, noticeValues } from "../dist/modlog.js";
+import { formatModLogEntry } from "./legacy-view.ts";
 
 const record = (n: number, reason: string | null, action = "warn", active = true) => ({
   caseNumber: n,

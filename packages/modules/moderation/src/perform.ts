@@ -2,38 +2,34 @@ import { PermissionFlagsBits, type GuildMember } from "discord.js";
 import type { EvidenceMessage, ModuleContext } from "@tier0/core";
 import type { ModerationSettings } from "./settings.js";
 import {
-  ACTION_IN_PROGRESS,
   ActionRefused,
-  BOT_RANK_DASHBOARD,
-  NOT_A_MEMBER,
-  alreadyBanned,
-  cannotActOn,
   checkActorMayAct,
   checkBanDuration,
   checkDeleteDays,
   checkReason,
   checkTargetIdentity,
   checkTimeoutDuration,
-  correctionText,
   describeDiscordError,
-  discordFailure,
+  discordFailureCode,
   needsMember,
-  notBanned,
   notTimedOut,
+  outcomeNoteKeys,
   outcomeNotes,
+  refusal,
   shouldMessage,
   type ActionOrigin,
   type DmOutcome,
+  type OutcomeNote,
 } from "./action-rules.js";
 import { deleteMessageSeconds } from "./duration.js";
-import { NOT_IN_SERVER } from "./hierarchy.js";
 import { guardAgainstMember, guardForDashboard } from "./hierarchy-guard.js";
 import { deactivateOpen, deactivateOpenTimeouts, recordInfraction, type InfractionRecord } from "./infractions.js";
 import type { ModerationAction } from "./modlog.js";
-import { tryDirectMessage, tryPlainDirectMessage } from "./dm.js";
+import { tryCorrectionMessage, tryDirectMessage } from "./dm.js";
 import { fetchBanOrNull, fetchMemberOrNull } from "./lookups.js";
 import { postModLog } from "./reply.js";
 import { staffRoleOf } from "./staff.js";
+import { DEFAULT_WORDING, refusalSentence } from "./texts.js";
 
 export interface PerformInput {
   action: ModerationAction;
@@ -46,11 +42,11 @@ export interface PerformInput {
   /** A timeout's length (required) or a ban's (null for permanent). Ignored otherwise. */
   durationMs: number | null;
   /**
-   * The refusal to give when the duration was typed but could not be read.
-   * It is raised where a bad duration always has been, after the reason and,
-   * for a ban, after the check for an existing ban.
+   * Set when a duration was typed but could not be read. The refusal is raised
+   * where a bad duration always has been, after the reason and, for a ban,
+   * after the check for an existing ban.
    */
-  unreadableDuration?: string;
+  unreadableDuration?: boolean;
   /** A ban's days of messages to delete; null takes the server's setting. */
   deleteDays: number | null;
   /** The person acting, as a member of this server, or null when they are not one. */
@@ -64,7 +60,10 @@ export interface PerformInput {
 
 export interface PerformOutcome {
   record: InfractionRecord;
+  /** Worded for the dashboard. */
   notes: string[];
+  /** The same notes by name, for a caller that words them from the server's settings. */
+  noteKeys: OutcomeNote[];
 }
 
 type Ctx = ModuleContext<ModerationSettings>;
@@ -80,7 +79,7 @@ export async function performAction(ctx: Ctx, input: PerformInput): Promise<Perf
   // Two actions on one member at once could both pass the checks against the
   // same state, such as two bans that each find no existing ban.
   const key = `${ctx.guild.id}:${input.targetId}`;
-  if (inFlight.has(key)) throw new ActionRefused(409, ACTION_IN_PROGRESS);
+  if (inFlight.has(key)) throw refusal(409, "actionInProgress", {}, input.origin);
   inFlight.add(key);
   try {
     return await perform(ctx, input);
@@ -104,30 +103,35 @@ async function perform(ctx: Ctx, input: PerformInput): Promise<PerformOutcome> {
   const { guild, settings } = ctx;
   const { action, targetId, origin } = input;
   const dashboard = origin === "dashboard";
+  // The dashboard keeps the plain wording; the owner's labels are for what is said in Discord.
+  const words = dashboard ? DEFAULT_WORDING : settings.labels;
 
   checkTargetIdentity(targetId, input.moderatorId, ctx.client.user?.id ?? null, guild.ownerId);
-  if (dashboard && !input.actorMember && !input.actorIsInstanceOwner) throw new ActionRefused(403, NOT_IN_SERVER);
+  if (dashboard && !input.actorMember && !input.actorIsInstanceOwner) throw refusal(403, "notInServer", {}, origin);
 
   // Checked here and not only where the command or the dashboard route is
   // reached, because the slash commands' default visibility is a setting an
   // operator can widen.
-  checkActorMayAct({
-    action,
-    hasDiscordPermission: input.actorMember?.permissions.has(DISCORD_PERMISSION[action]) ?? false,
-    staffRole: input.actorIsInstanceOwner ? "owner" : await staffRoleOf(guild.id, input.moderatorId),
-    isInstanceOwner: input.actorIsInstanceOwner,
-  });
+  checkActorMayAct(
+    {
+      action,
+      hasDiscordPermission: input.actorMember?.permissions.has(DISCORD_PERMISSION[action]) ?? false,
+      staffRole: input.actorIsInstanceOwner ? "owner" : await staffRoleOf(guild.id, input.moderatorId),
+      isInstanceOwner: input.actorIsInstanceOwner,
+    },
+    words.abilities,
+  );
 
   const reason = checkReason(input.reason, settings);
 
   if (action === "ban" || action === "unban") {
     const existing = await fetchBanOrNull(guild, targetId);
-    if (action === "ban" && existing) throw new ActionRefused(409, alreadyBanned(input.targetName, origin));
-    if (action === "unban" && !existing) throw new ActionRefused(409, notBanned(input.targetName));
+    if (action === "ban" && existing) throw refusal(409, "alreadyBanned", { name: input.targetName }, origin);
+    if (action === "unban" && !existing) throw refusal(409, "notBanned", { name: input.targetName }, origin);
   }
 
-  if (input.unreadableDuration !== undefined && (action === "timeout" || action === "ban")) {
-    throw new ActionRefused(400, input.unreadableDuration);
+  if (input.unreadableDuration && (action === "timeout" || action === "ban")) {
+    throw refusal(400, action === "timeout" ? "durationUnreadableTimeout" : "durationUnreadableBan", {}, origin);
   }
   const timeoutMs = action === "timeout" ? checkTimeoutDuration(input.durationMs) : null;
   const banMs = action === "ban" ? checkBanDuration(input.durationMs) : null;
@@ -136,24 +140,21 @@ async function perform(ctx: Ctx, input: PerformInput): Promise<PerformOutcome> {
   // A departed member has no roles left to weigh against the moderator's or
   // the bot's, so the hierarchy check only applies while they are still here.
   const targetMember = action === "unban" ? null : await fetchMemberOrNull(guild, targetId);
-  if (!targetMember && needsMember(action, origin)) throw new ActionRefused(404, NOT_A_MEMBER);
+  if (!targetMember && needsMember(action, origin)) throw refusal(404, "notAMember", {}, origin);
 
   if (targetMember) {
     const requiresDiscordAction = action !== "warn";
-    if (!dashboard && !input.actorMember) throw new ActionRefused(403, NOT_IN_SERVER);
+    if (!dashboard && !input.actorMember) throw refusal(403, "notInServer", {}, origin);
     const verdict = dashboard
       ? guardForDashboard(guild, input.actorMember, input.actorIsInstanceOwner, targetMember, requiresDiscordAction)
       : guardAgainstMember(guild, input.actorMember!, targetMember, requiresDiscordAction);
-    if (!verdict.allowed) {
-      const message = dashboard && verdict.rule === "bot-rank" ? BOT_RANK_DASHBOARD : verdict.reason;
-      throw new ActionRefused(403, message);
-    }
+    if (!verdict.allowed) throw refusal(403, verdict.code, {}, origin);
   }
 
   // Discord would refuse these, and the member must not be told otherwise first.
   if (targetMember && (action === "timeout" || action === "kick" || action === "ban")) {
     const allowed = action === "timeout" ? targetMember.moderatable : action === "kick" ? targetMember.kickable : targetMember.bannable;
-    if (!allowed) throw new ActionRefused(403, cannotActOn(action, origin));
+    if (!allowed) throw refusal(403, "cannotActOn", { verb: words.verbs[action] }, origin);
   }
 
   if (dashboard && action === "timeout-clear" && targetMember && !targetMember.isCommunicationDisabled()) {
@@ -182,16 +183,19 @@ async function perform(ctx: Ctx, input: PerformInput): Promise<PerformOutcome> {
       console.warn(
         `moderation: Discord refused ${action} on ${targetId} in guild ${guild.id}: ${describeDiscordError(error)}`,
       );
-      let message = discordFailure(action as Exclude<ModerationAction, "warn">, origin);
+      const failed = action as Exclude<ModerationAction, "warn">;
+      const { code, values } = discordFailureCode(failed, words.verbs);
+      let correctionNote = "";
+      let plainNote = "";
       // The member may already have been told it happened, so say that it did not.
       if (dm === "sent") {
-        const corrected = await tryPlainDirectMessage(ctx, targetId, correctionText(action));
-        message += corrected
-          ? " They had already been sent a message about it, so they were sent a correction."
-          : " They had already been sent a message about it and the correction could not be delivered.";
+        const corrected = await tryCorrectionMessage(ctx, targetId, action);
+        correctionNote = ` ${corrected ? words.notes.correctionSent : words.notes.correctionFailed}`;
+        plainNote = ` ${corrected ? DEFAULT_WORDING.notes.correctionSent : DEFAULT_WORDING.notes.correctionFailed}`;
         console.warn(`moderation: ${action} on ${targetId} in guild ${guild.id} failed after the member was messaged; correction ${corrected ? "sent" : "not delivered"}`);
       }
-      throw new ActionRefused(502, message);
+      const sentence = refusalSentence(code, { ...discordFailureCode(failed).values, correctionNote: plainNote }, origin);
+      throw new ActionRefused(502, sentence, code, { ...values, correctionNote });
     }
   };
 
@@ -268,8 +272,6 @@ async function perform(ctx: Ctx, input: PerformInput): Promise<PerformOutcome> {
     createdAt: record.createdAt,
   });
 
-  return {
-    record,
-    notes: outcomeNotes({ action, dm, modLog, targetInServer: action === "unban" || targetMember !== null }),
-  };
+  const facts = { action, dm, modLog, targetInServer: action === "unban" || targetMember !== null };
+  return { record, notes: outcomeNotes(facts), noteKeys: outcomeNoteKeys(facts) };
 }

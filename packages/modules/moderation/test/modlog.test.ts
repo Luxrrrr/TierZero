@@ -1,6 +1,7 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { formatModLogEntry, actionLabel, describeLength, lengthBetween, noticeValues } from "../dist/modlog.js";
+import { actionLabel, describeLength, lengthBetween, noticeValues } from "../dist/modlog.js";
+import { formatModLogEntry } from "./legacy-view.ts";
 
 const TARGET = "111111111111111111";
 const MODERATOR = "222222222222222222";

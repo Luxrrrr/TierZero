@@ -1,7 +1,13 @@
 import { dashboardLinks, emptyEmbed, plainReply, viewCaseButton, type MessageBody, type MessageEmbed, type MessageVariable } from "@tier0/core";
+import { describeLength } from "@tier0/module-moderation";
+import { fill } from "./fill.js";
+import { DEFAULT_AUTOMOD_WORDING, type AutomodWording } from "./texts.js";
+
+export { describeLength };
 
 /**
- * The two things automod says when a rule trips, as the dashboard offers them.
+ * What automod says when a rule trips, as the dashboard offers it: the notice in
+ * the channel, a direct message to the member and the log post.
  * Each `starting` body is what automod sent before they were editable.
  *
  * What a member wrote never reaches the channel. The reason is fixed wording;
@@ -13,7 +19,8 @@ export type LoggedAction = "warn" | "delete" | "timeout";
 
 const USER: MessageVariable = { name: "user", description: "The member who tripped the rule, as a mention", sample: "@spamlord_42" };
 const USER_ID: MessageVariable = { name: "userId", description: "The member's user ID", sample: "123456789012345678" };
-const RULE: MessageVariable = { name: "rule", description: "The rule that tripped, as it is named in the settings", sample: "invites" };
+const RULE: MessageVariable = { name: "rule", description: "The rule that tripped, as it is named in Labels and text", sample: "invites" };
+const RULE_KEY: MessageVariable = { name: "ruleKey", description: "The rule's own name, whatever it is called in Labels and text", sample: "invites" };
 const ACTION: MessageVariable = { name: "action", description: "What was done, in words: delete, warn, timeout, or several such as delete and warn", sample: "delete" };
 const REASON: MessageVariable = { name: "reason", description: "What the member did to trip it, worded so it is safe to show anyone, or a dash when there is nothing to add", sample: "Posted a Discord invite link" };
 const DURATION: MessageVariable = { name: "duration", description: "How long the timeout lasts. Empty unless the member was timed out", sample: "10 minutes" };
@@ -33,6 +40,16 @@ const MEMBER_URL: MessageVariable = {
   description: "A link that opens the member's record in the dashboard. Empty when the bot does not know the dashboard's address yet",
   sample: "https://bot.example.com/guilds/123456789012345678/mod/members/123456789012345678",
 };
+const REASON_NOTE: MessageVariable = {
+  name: "reasonNote",
+  description: "A colon, a space and the reason. Empty when there is nothing to add",
+  sample: ": Posted a Discord invite link",
+};
+const OUTCOME: MessageVariable = {
+  name: "outcome",
+  description: "What actually happened, worded for the member: your message was removed, you were timed out, your message was removed and you were warned, and so on, or that message tripped automod when all that happened was a warning or nothing",
+  sample: "your message was removed",
+};
 const PROBLEMS: MessageVariable = {
   name: "problems",
   description: "What the bot could not do, such as time the member out. Empty when everything it was set to do worked",
@@ -43,26 +60,27 @@ export const NOTICE_VARIABLES: MessageVariable[] = [
   USER,
   USER_ID,
   RULE,
+  RULE_KEY,
   ACTION,
   REASON,
-  {
-    name: "reasonNote",
-    description: "A colon, a space and the reason. Empty when there is nothing to add",
-    sample: ": Posted a Discord invite link",
-  },
-  {
-    name: "outcome",
-    description: "What actually happened, worded for the member: your message was removed, you were timed out, your message was removed and you were warned, and so on, or that message tripped automod when all that happened was a warning or nothing",
-    sample: "your message was removed",
-  },
+  REASON_NOTE,
+  OUTCOME,
   DURATION,
 ];
 
 export const NOTICE_MESSAGE: MessageBody = plainReply("{user}, {outcome} ({rule}{reasonNote}).");
 
-export const NOTICE_NOTE = "Posted in the channel where the message was, and removed again after 8 seconds. It can only mention the member it is about.";
+export const NOTICE_NOTE = "Posted in the channel where the message was, and removed again after the time set below. It can only mention the member it is about.";
 
-export const LOG_VARIABLES: MessageVariable[] = [USER, USER_ID, RULE, ACTION, REASON, MATCH, PROBLEMS, DURATION, CASE, CASE_URL, MEMBER_URL];
+/** Never the matched text: what a member wrote goes only to the log and the case, which staff read. */
+export const DM_VARIABLES: MessageVariable[] = [USER, USER_ID, RULE, RULE_KEY, ACTION, REASON, REASON_NOTE, OUTCOME, DURATION];
+
+export const DM_MESSAGE: MessageBody = plainReply("In {server}, {outcome} ({rule}{reasonNote}).");
+
+export const DM_NOTE =
+  "Sent privately to the member whose message tripped a rule, when it is switched on. It gives the rule's reason in general words and never quotes what they wrote. A member with direct messages closed does not get it.";
+
+export const LOG_VARIABLES: MessageVariable[] = [USER, USER_ID, RULE, RULE_KEY, ACTION, REASON, MATCH, PROBLEMS, DURATION, CASE, CASE_URL, MEMBER_URL];
 
 function logPost(color: string): MessageBody {
   const embed: MessageEmbed = {
@@ -93,39 +111,23 @@ export const LOG_MESSAGES: Record<LoggedAction, MessageBody> = {
 export const LOG_NOTE =
   "Posted in the log channel when a rule trips. There is one for each thing a rule can do, so each can have its own colour. It never mentions anyone. The View in dashboard button is left out until the bot knows the dashboard's address (see Dashboard address in the moderation settings).";
 
-const UNITS: readonly [string, number][] = [
-  ["day", 86_400_000],
-  ["hour", 3_600_000],
-  ["minute", 60_000],
-  ["second", 1_000],
-];
-
-/** "10 minutes", "2 hours": the largest unit that divides the length exactly. */
-export function describeLength(ms: number): string {
-  const whole = Math.max(1000, Math.round(ms / 1000) * 1000);
-  for (const [name, size] of UNITS) {
-    if (whole % size === 0) {
-      const n = whole / size;
-      return `${n} ${name}${n === 1 ? "" : "s"}`;
-    }
-  }
-  return "1 second";
-}
-
 /**
  * What the member is told, from what was done rather than from what the rule
  * was set to do. A warning on its own gets the same line as nothing at all, as
  * it always has: the notice is not where a warning is announced.
  */
-export function describeOutcome(done: { deleted: boolean; warned?: boolean; timedOut: boolean }): string {
+export function describeOutcome(
+  done: { deleted: boolean; warned?: boolean; timedOut: boolean },
+  words: AutomodWording["outcomes"] = DEFAULT_AUTOMOD_WORDING.outcomes,
+): string {
   const warned = done.warned === true;
-  if (done.deleted && warned && done.timedOut) return "your message was removed, and you were warned and timed out";
-  if (done.deleted && warned) return "your message was removed and you were warned";
-  if (done.deleted && done.timedOut) return "your message was removed and you were timed out";
-  if (warned && done.timedOut) return "you were warned and timed out";
-  if (done.deleted) return "your message was removed";
-  if (done.timedOut) return "you were timed out";
-  return "that message tripped automod";
+  if (done.deleted && warned && done.timedOut) return words.removedWarnedTimedOut;
+  if (done.deleted && warned) return words.removedWarned;
+  if (done.deleted && done.timedOut) return words.removedTimedOut;
+  if (warned && done.timedOut) return words.warnedTimedOut;
+  if (done.deleted) return words.removed;
+  if (done.timedOut) return words.timedOut;
+  return warned ? words.warned : words.nothing;
 }
 
 const STRENGTH: readonly LoggedAction[] = ["timeout", "warn", "delete"];
@@ -146,9 +148,10 @@ export function loggedAs(facts: Pick<TripFacts, "actions" | "deleted" | "warned"
 }
 
 /** "delete", "delete and warn", "delete, warn and timeout". */
-function readableList(actions: LoggedAction[]): string {
-  if (actions.length <= 1) return actions[0] ?? "";
-  return `${actions.slice(0, -1).join(", ")} and ${actions[actions.length - 1]}`;
+function readableList(actions: LoggedAction[], words: AutomodWording["actionWords"]): string {
+  const named = actions.map((action) => words[action]);
+  if (named.length <= 1) return named[0] ?? "";
+  return `${named.slice(0, -1).join(`${words.comma} `)} ${words.and} ${named[named.length - 1]}`;
 }
 
 export interface TripFacts {
@@ -197,19 +200,25 @@ export function codeSpan(text: string): string {
 }
 
 /** The values the notice in the channel is filled from. Nothing here is taken from the offending message. */
-export function tripValues(facts: TripFacts): Record<string, string> {
+export function tripValues(facts: TripFacts, wording: AutomodWording = DEFAULT_AUTOMOD_WORDING): Record<string, string> {
   const reason = facts.reason ? breakMentions(facts.reason) : undefined;
   const timedOut = facts.timedOut && facts.timeoutMs !== undefined;
   return {
     user: `<@${facts.userId}>`,
     userId: facts.userId,
-    rule: facts.rule,
-    action: readableList(effectiveActions({ ...facts, timedOut })),
-    reason: reason ?? "-",
-    reasonNote: reason ? `: ${reason}` : "",
-    outcome: describeOutcome({ deleted: facts.deleted, warned: facts.warned, timedOut }),
-    duration: timedOut && facts.timeoutMs ? describeLength(facts.timeoutMs) : "",
+    rule: ruleName(facts.rule, wording),
+    ruleKey: facts.rule,
+    action: readableList(effectiveActions({ ...facts, timedOut }), wording.actionWords),
+    reason: reason ?? wording.fragments.noReason,
+    reasonNote: reason ? fill(wording.fragments.reasonNote, { reason }) : "",
+    outcome: describeOutcome({ deleted: facts.deleted, warned: facts.warned, timedOut }, wording.outcomes),
+    duration: timedOut && facts.timeoutMs ? describeLength(facts.timeoutMs, wording.time) : "",
   };
+}
+
+/** What a rule is called to members and in the log. A rule this version does not know keeps its key. */
+export function ruleName(rule: string, wording: AutomodWording = DEFAULT_AUTOMOD_WORDING): string {
+  return Object.hasOwn(wording.ruleNames, rule) ? wording.ruleNames[rule as keyof AutomodWording["ruleNames"]] : rule;
 }
 
 const MATCHES_SHOWN = 10;
@@ -219,22 +228,22 @@ const MATCH_LENGTH = 80;
  * What matched, ready for staff-facing text: each banned word on its own, or
  * the single thing another rule found. Kept short enough for an embed field.
  */
-export function matchText(facts: Pick<TripFacts, "detail" | "matches">): string {
+export function matchText(facts: Pick<TripFacts, "detail" | "matches">, wording: AutomodWording = DEFAULT_AUTOMOD_WORDING): string {
   const matches = facts.matches ?? [];
   if (matches.length > 0) {
     const shown = matches.slice(0, MATCHES_SHOWN).map((match) => codeSpan(match.slice(0, MATCH_LENGTH)));
     const more = matches.length - shown.length;
-    return more > 0 ? `${shown.join(", ")} and ${more} more` : shown.join(", ");
+    return more > 0 ? `${shown.join(", ")} ${fill(wording.fragments.matchesMore, { count: more })}` : shown.join(", ");
   }
   return facts.detail ? codeSpan(facts.detail) : "";
 }
 
 /** The values the log post is filled from: the notice's, plus what staff need to act on it. */
-export function logValues(facts: TripFacts): Record<string, string> {
+export function logValues(facts: TripFacts, wording: AutomodWording = DEFAULT_AUTOMOD_WORDING): Record<string, string> {
   const links = dashboardLinks(facts.dashboardBase ?? "", facts.guildId ?? "", facts.userId, facts.caseNumber);
   return {
-    ...tripValues(facts),
-    match: matchText(facts),
+    ...tripValues(facts, wording),
+    match: matchText(facts, wording),
     case: facts.caseNumber === undefined ? "" : String(facts.caseNumber),
     caseUrl: facts.guildId ? links.caseUrl : "",
     memberUrl: facts.guildId ? links.memberUrl : "",

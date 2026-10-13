@@ -1,7 +1,8 @@
-import { plainReply, type ModuleContext } from "@tier0/core";
+import type { ModuleContext } from "@tier0/core";
 import type { ModerationSettings } from "./settings.js";
 import { DM_MESSAGE } from "./messages.js";
-import { noticeValues, type ActionNotice } from "./modlog.js";
+import { actionLabel, noticeValues, type ActionNotice } from "./modlog.js";
+import { defaultBody } from "./texts.js";
 
 /**
  * Best-effort direct message. A member with DMs closed, or who has left
@@ -16,23 +17,24 @@ export async function tryDirectMessage(
 ): Promise<boolean> {
   try {
     const user = await ctx.client.users.fetch(userId);
-    const sent = await ctx.send(user, ctx.settings.dmMessage, noticeValues(notice), { fallback: DM_MESSAGE });
+    const sent = await ctx.send(user, ctx.settings.dmMessage, noticeValues(notice, ctx.settings.labels), { fallback: DM_MESSAGE });
     return sent !== null;
   } catch {
     return false;
   }
 }
 
-/** A plain note to a member, outside the owner's editable message, for a correction. Best effort like the rest. */
-export async function tryPlainDirectMessage(
+/** Tells a member that the message they were just sent about an action was a mistake. Best effort like the rest. */
+export async function tryCorrectionMessage(
   ctx: ModuleContext<ModerationSettings>,
   userId: string,
-  text: string,
+  action: string,
 ): Promise<boolean> {
   try {
     const user = await ctx.client.users.fetch(userId);
-    const body = plainReply(text);
-    return (await ctx.send(user, body, {}, { fallback: body })) !== null;
+    const values = { action: actionLabel(action, ctx.settings.labels).toLowerCase() };
+    const sent = await ctx.send(user, ctx.settings.replies.direct.correction, values, { fallback: defaultBody("direct", "correction") });
+    return sent !== null;
   } catch {
     return false;
   }

@@ -1,4 +1,5 @@
 import { dashboardLinks } from "@tier0/core";
+import { DEFAULT_WORDING, fillLabel, type Wording } from "./texts.js";
 
 /**
  * What the mod log post, the direct message and the case replies say, as plain
@@ -10,19 +11,17 @@ import { dashboardLinks } from "@tier0/core";
 
 export type ModerationAction = "warn" | "timeout" | "timeout-clear" | "kick" | "ban" | "unban";
 
-const ACTION_LABEL: Record<ModerationAction, string> = {
-  warn: "Warned",
-  timeout: "Timed out",
-  "timeout-clear": "Timeout cleared",
-  kick: "Kicked",
-  ban: "Banned",
-  unban: "Unbanned",
+const ACTION_WORD: Record<ModerationAction, keyof Wording["actions"]> = {
+  warn: "warned",
+  timeout: "timedOut",
+  "timeout-clear": "timeoutCleared",
+  kick: "kicked",
+  ban: "banned",
+  unban: "unbanned",
 };
 
-const KNOWN_ACTIONS = new Set(Object.keys(ACTION_LABEL));
-
 function isModerationAction(value: string): value is ModerationAction {
-  return KNOWN_ACTIONS.has(value);
+  return Object.hasOwn(ACTION_WORD, value);
 }
 
 /**
@@ -30,10 +29,10 @@ function isModerationAction(value: string): value is ModerationAction {
  * automodActionLabel in apps/web/components/mod/automod.ts), which has to
  * be kept in step by hand because the two sides share no code.
  */
-const AUTOMOD_LABEL: Record<string, string> = {
-  "automod-warn": "Automod warn",
-  "automod-timeout": "Automod timeout",
-  "automod-delete": "Automod message delete",
+const AUTOMOD_WORD: Record<string, keyof Wording["actions"]> = {
+  "automod-warn": "automodWarn",
+  "automod-timeout": "automodTimeout",
+  "automod-delete": "automodDelete",
 };
 
 const AUTOMOD_PREFIX = "automod-";
@@ -43,20 +42,20 @@ export function isAutomodAction(action: string): boolean {
 }
 
 /** Falls back to a tidied form for an automod kind this version does not know, and the raw value for any other. */
-export function actionLabel(action: string): string {
-  if (isModerationAction(action)) return ACTION_LABEL[action];
-  const automod = AUTOMOD_LABEL[action];
-  if (automod) return automod;
+export function actionLabel(action: string, wording: Wording = DEFAULT_WORDING): string {
+  if (isModerationAction(action)) return wording.actions[ACTION_WORD[action]];
+  const automod = AUTOMOD_WORD[action];
+  if (automod) return wording.actions[automod];
   if (isAutomodAction(action)) {
     const kind = action.slice(AUTOMOD_PREFIX.length).replace(/[-_]+/g, " ").trim();
-    return kind === "" ? "Automod" : `Automod ${kind}`;
+    return kind === "" ? wording.actions.automod : fillLabel(wording.actions.automodOther, { kind });
   }
   return action;
 }
 
 /** How a case names its moderator: automod's rows are written under the bot's own id, which is no use to read. */
-export function moderatorName(action: string, moderatorId: string, botId: string | null): string | undefined {
-  return isAutomodAction(action) && moderatorId === botId ? "Automod" : undefined;
+export function moderatorName(action: string, moderatorId: string, botId: string | null, wording: Wording = DEFAULT_WORDING): string | undefined {
+  return isAutomodAction(action) && moderatorId === botId ? wording.actions.automod : undefined;
 }
 
 export interface ActionNotice {
@@ -79,63 +78,28 @@ export interface ModLogEntry extends ActionNotice {
   createdAt?: Date;
 }
 
-export interface EmbedField {
-  name: string;
-  value: string;
-  inline?: boolean;
-}
-
-export interface ModLogView {
-  title: string;
-  fields: EmbedField[];
-}
-
-/** Discord's limit on an embed field's value. */
-const FIELD_MAX = 1024;
-
 /** Cuts text to `max` characters, ending in an ellipsis when it had to. */
 export function clip(text: string, max: number): string {
   return text.length <= max ? text : `${text.slice(0, Math.max(0, max - 3)).trimEnd()}...`;
 }
 
-/** The default look of a case, kept in code so /case still has it when no reply is customised. */
-export function formatModLogEntry(entry: ModLogEntry): ModLogView {
-  const fields: EmbedField[] = [
-    { name: "Member", value: `<@${entry.targetId}> (${entry.targetId})`, inline: true },
-    {
-      name: "Moderator",
-      value: entry.moderatorName ?? `<@${entry.moderatorId}> (${entry.moderatorId})`,
-      inline: true,
-    },
-    { name: "Reason", value: clip(entry.reason ?? "No reason given", FIELD_MAX) },
-  ];
-  if (entry.expiresAt) {
-    const seconds = Math.floor(entry.expiresAt.getTime() / 1000);
-    fields.push({ name: "Expires", value: `<t:${seconds}:f> (<t:${seconds}:R>)` });
-  }
-  return {
-    title: `Case #${entry.caseNumber} - ${actionLabel(entry.action)}`,
-    fields,
-  };
-}
-
-const UNITS: readonly [string, number][] = [
-  ["day", 86_400_000],
-  ["hour", 3_600_000],
-  ["minute", 60_000],
-  ["second", 1_000],
+const UNITS: readonly [keyof Wording["time"], keyof Wording["time"], number][] = [
+  ["dayOne", "dayMany", 86_400_000],
+  ["hourOne", "hourMany", 3_600_000],
+  ["minuteOne", "minuteMany", 60_000],
+  ["secondOne", "secondMany", 1_000],
 ];
 
 /** "10 minutes", "2 hours": the largest unit that divides the length exactly. */
-export function describeLength(ms: number): string {
+export function describeLength(ms: number, time: Wording["time"] = DEFAULT_WORDING.time): string {
   const whole = Math.max(1000, Math.round(ms / 1000) * 1000);
-  for (const [name, size] of UNITS) {
+  for (const [one, many, size] of UNITS) {
     if (whole % size === 0) {
       const n = whole / size;
-      return `${n} ${name}${n === 1 ? "" : "s"}`;
+      return fillLabel(n === 1 ? time[one] : time[many], { n });
     }
   }
-  return "1 second";
+  return fillLabel(time.secondOne, { n: 1 });
 }
 
 /**
@@ -163,14 +127,14 @@ type NoticeSource = ActionNotice &
  * share. Parts a caller does not have are left out, not blanked, so a message
  * that asks for one shows it as typed instead of silently empty.
  */
-export function noticeValues(notice: NoticeSource): Record<string, string | number> {
-  const label = actionLabel(notice.action);
+export function noticeValues(notice: NoticeSource, wording: Wording = DEFAULT_WORDING): Record<string, string | number> {
+  const label = actionLabel(notice.action, wording);
   const created = notice.createdAt ?? new Date();
   const values: Record<string, string | number> = {
     action: label.toLowerCase(),
     actionTitle: label,
-    reason: notice.reason ?? "No reason given",
-    reasonNote: notice.reason ? ` Reason: ${notice.reason}` : "",
+    reason: notice.reason ?? wording.actions.noReason,
+    reasonNote: notice.reason ? ` ${fillLabel(wording.notes.reasonNote, { reason: notice.reason })}` : "",
     expires: "",
     expiresRelative: "",
     expiryNote: "",
@@ -181,8 +145,8 @@ export function noticeValues(notice: NoticeSource): Record<string, string | numb
     const seconds = Math.floor(notice.expiresAt.getTime() / 1000);
     values.expires = `<t:${seconds}:f> (<t:${seconds}:R>)`;
     values.expiresRelative = `<t:${seconds}:R>`;
-    values.expiryNote = ` This expires <t:${seconds}:R>.`;
-    values.duration = describeLength(notice.durationMs ?? lengthBetween(created, notice.expiresAt));
+    values.expiryNote = ` ${fillLabel(wording.notes.expiryNote, { when: `<t:${seconds}:R>` })}`;
+    values.duration = describeLength(notice.durationMs ?? lengthBetween(created, notice.expiresAt), wording.time);
   }
   if (notice.caseNumber !== undefined) values.case = notice.caseNumber;
   if (notice.targetId) {
@@ -192,6 +156,7 @@ export function noticeValues(notice: NoticeSource): Record<string, string | numb
   if (notice.moderatorId) {
     values.moderator = notice.moderatorName ?? `<@${notice.moderatorId}>`;
     values.moderatorId = notice.moderatorId;
+    values.moderatorLine = notice.moderatorName ?? `<@${notice.moderatorId}> (${notice.moderatorId})`;
   }
   if (notice.links && notice.targetId) {
     const { caseUrl, memberUrl } = dashboardLinks(notice.links.dashboardBase, notice.links.guildId, notice.targetId, notice.caseNumber);

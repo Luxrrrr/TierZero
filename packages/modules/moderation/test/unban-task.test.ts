@@ -1,6 +1,7 @@
 import { test, describe, before, after, beforeEach } from "node:test";
 import assert from "node:assert/strict";
 import { createTestDatabase } from "./db-helper.ts";
+import { moderationSettingsWith } from "./settings-helper.ts";
 
 const GUILD = "100000000000000010";
 const USER = "200000000000000010";
@@ -13,6 +14,7 @@ const { liftTemporaryBan, nextUnbanAttempt, UNBAN_GIVE_UP_AFTER_MS } = await imp
 
 interface Calls {
   unban: string[];
+  reasons: (string | undefined)[];
   scheduled: { kind: string; at: Date; payload: Record<string, unknown> }[];
   dms: unknown[];
 }
@@ -23,13 +25,14 @@ function discordError(code: number, message = "Discord said no") {
   return Object.assign(new Error(message), { code });
 }
 
-function context(options: { fetch?: () => Promise<unknown>; unban?: () => Promise<unknown> } = {}) {
+function context(options: { fetch?: () => Promise<unknown>; unban?: () => Promise<unknown>; stored?: Record<string, unknown> } = {}) {
   const guild = {
     id: GUILD,
     bans: { fetch: options.fetch ?? (async () => ({ user: { id: USER } })) },
     members: {
-      unban: async (id: string) => {
+      unban: async (id: string, reason?: string) => {
         calls.unban.push(id);
+        calls.reasons.push(reason);
         await options.unban?.();
       },
     },
@@ -37,7 +40,7 @@ function context(options: { fetch?: () => Promise<unknown>; unban?: () => Promis
   return {
     client: { user: { id: BOT }, users: { fetch: async (id: string) => ({ id }) } },
     guild,
-    settings: { dmOnAction: true, modLogChannel: null, dmMessage: {}, modLogMessage: {} },
+    settings: { ...moderationSettingsWith(options.stored), dmOnAction: true, modLogChannel: null, dmMessage: {}, modLogMessage: {} },
     tasks: {
       schedule: async (kind: string, at: Date, payload: Record<string, unknown>) => {
         calls.scheduled.push({ kind, at, payload });
@@ -67,7 +70,7 @@ after(async () => {
 });
 
 beforeEach(async () => {
-  calls = { unban: [], scheduled: [], dms: [] };
+  calls = { unban: [], reasons: [], scheduled: [], dms: [] };
   await prisma.infraction.deleteMany();
 });
 
@@ -82,6 +85,20 @@ describe("liftTemporaryBan", () => {
     const [ban, unban] = await rows();
     assert.equal(ban!.active, false);
     assert.equal(unban!.action, "unban");
+  });
+
+  test("gives the reason the owner chose to Discord and to the case, and Temporary ban expired until they do", async () => {
+    await openBan();
+    await liftTemporaryBan({ userId: USER }, context());
+    assert.deepEqual(calls.reasons, ["Temporary ban expired"]);
+    assert.equal((await rows())[1]!.reason, "Temporary ban expired");
+
+    await prisma.infraction.deleteMany();
+    calls.reasons = [];
+    await openBan();
+    await liftTemporaryBan({ userId: USER }, context({ stored: { labels: { reasons: { tempBanExpired: "Zeit abgelaufen" } } } }));
+    assert.deepEqual(calls.reasons, ["Zeit abgelaufen"]);
+    assert.equal((await rows())[1]!.reason, "Zeit abgelaufen");
   });
 
   test("a failed unban is retried, and nothing is recorded or said", async () => {

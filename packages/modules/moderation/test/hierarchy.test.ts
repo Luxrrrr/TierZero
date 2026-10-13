@@ -157,7 +157,7 @@ describe("checkStanding for a dashboard actor", () => {
 
   test("refuses staff who are not in the server", () => {
     const result = checkStanding({ ...standing(), actor: null });
-    assert.deepEqual(result, { allowed: false, reason: NOT_IN_SERVER, rule: "actor-rank" });
+    assert.deepEqual(result, { allowed: false, reason: NOT_IN_SERVER, rule: "actor-rank", code: "notInServer" });
   });
 
   test("trusts the instance owner who is not in the server past the actor comparison", () => {

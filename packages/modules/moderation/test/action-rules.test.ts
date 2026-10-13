@@ -25,7 +25,6 @@ import {
   banOutlivesTask,
   checkActorMayAct,
   cannotActOn,
-  correctionText,
 } from "../dist/action-rules.js";
 
 const DAY = 86_400_000;
@@ -330,13 +329,6 @@ describe("cannotActOn", () => {
   test("is worded for where it is shown", () => {
     assert.match(cannotActOn("ban", "command"), /^I cannot ban that member/);
     assert.match(cannotActOn("timeout", "dashboard"), /^The bot cannot time that member out/);
-  });
-});
-
-describe("correctionText", () => {
-  test("says nothing happened and names what they were told", () => {
-    assert.match(correctionText("ban"), /about being banned/);
-    assert.match(correctionText("timeout"), /Nothing happened to you/);
   });
 });
 
