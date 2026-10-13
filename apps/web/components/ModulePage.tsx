@@ -193,17 +193,24 @@ export function ModulePage({ guildId, serverName, eyebrow, module, embedded = fa
           Walk me through it
         </Link>
       ) : null}
-      <span className={BADGE_CLASS[status]}>{statusWord(status)}</span>
-      <span className="switch-labelled">
-        <span className="switch-text">{enabled ? "On" : "Off"}</span>
-        <Switch
-          checked={enabled}
-          onChange={toggle}
-          pending={togglePending}
-          size="lg"
-          aria-label={module.name}
-        />
-      </span>
+      {module.alwaysOn ? (
+        // Part of the bot itself: there is nothing to turn on or off.
+        <span className="badge badge-on">Always on</span>
+      ) : (
+        <>
+          <span className={BADGE_CLASS[status]}>{statusWord(status)}</span>
+          <span className="switch-labelled">
+            <span className="switch-text">{enabled ? "On" : "Off"}</span>
+            <Switch
+              checked={enabled}
+              onChange={toggle}
+              pending={togglePending}
+              size="lg"
+              aria-label={module.name}
+            />
+          </span>
+        </>
+      )}
     </div>
   );
 

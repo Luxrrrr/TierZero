@@ -10,6 +10,8 @@ export interface ModuleSummary {
   category: ModuleCategory;
   /** Where the dashboard hosts this module's settings, when not on its own page. */
   area: "moderation" | null;
+  /** On in every server with no switch, as the bot's own built-in settings are. */
+  alwaysOn: boolean;
   requires: string[];
   commands: CommandSummary[];
   schema: FieldDescriptor;
@@ -100,6 +102,7 @@ export class ModuleRegistry {
       summary: module.summary,
       category: module.category ?? "utility",
       area: module.area ?? null,
+      alwaysOn: module.alwaysOn === true,
       requires: module.requires ?? [],
       commands: [
         ...(module.commands ?? []).map((c) => ({

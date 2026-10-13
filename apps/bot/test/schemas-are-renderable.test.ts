@@ -11,6 +11,7 @@ import moderation from "@tier0/module-moderation";
 import tickets from "@tier0/module-tickets";
 import auditlog from "@tier0/module-auditlog";
 import feeds from "@tier0/module-feeds";
+import system from "@tier0/module-system";
 
 /**
  * The dashboard renders any module's settings from its schema alone, which
@@ -35,7 +36,7 @@ const RENDERABLE = new Set([
 ]);
 
 const registry = new ModuleRegistry();
-for (const module of [utility, welcome, roles, automod, leveling, moderation, tickets, auditlog, feeds]) {
+for (const module of [utility, welcome, roles, automod, leveling, moderation, tickets, auditlog, feeds, system]) {
   registry.register(module);
 }
 
@@ -90,7 +91,7 @@ describe("every registered module", () => {
   const modules = registry.describe();
 
   test("registers at least the modules under test", () => {
-    assert.equal(modules.length, 9);
+    assert.equal(modules.length, 10);
   });
 
   for (const module of modules) {

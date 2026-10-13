@@ -1,4 +1,5 @@
 import type { Client, Guild } from "discord.js";
+import type { SystemLabels } from "@tier0/module-system";
 
 export interface Reply {
   status: number;
@@ -14,6 +15,8 @@ export interface Reply {
 export interface ModCtx {
   client: Client;
   guild: Guild;
+  /** The owner's short pieces of text, for the few the bot writes to Discord itself. The defaults apply without them. */
+  labels?: SystemLabels;
 }
 
 export const ok = (body: unknown): Reply => ({ status: 200, body });

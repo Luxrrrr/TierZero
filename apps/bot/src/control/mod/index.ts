@@ -1,6 +1,7 @@
 import type { Client, Guild } from "discord.js";
 import { isStaffRole, type Actor } from "@tier0/core";
 import type { GuildState } from "../../runtime/guild-state.js";
+import { systemLabels } from "../../runtime/system-messages.js";
 import { actionContextFor, editInfraction, memberMessages, takeAction } from "./actions.js";
 import { listAudit } from "./audit-list.js";
 import { exportInfractions, listInfractions, purgeInfraction, restoreInfraction, voidInfraction } from "./infractions.js";
@@ -50,7 +51,7 @@ const isReply = (value: Actor | Reply): value is Reply => "status" in value;
 /** Routes one request under `/guilds/:id/mod/`. Returns null for a path that matches nothing. */
 export async function handleMod(request: ModRequest): Promise<Reply | null> {
   const { client, guild, state, method, segments, query, body } = request;
-  const ctx: ModCtx = { client, guild };
+  const ctx: ModCtx = { client, guild, labels: await systemLabels(state, guild.id) };
   const [area, a, b] = segments;
 
   if (method === "GET") {

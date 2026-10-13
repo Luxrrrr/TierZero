@@ -12,6 +12,7 @@ import type {
   ShapeValues,
 } from "@tier0/core";
 import { prisma } from "@tier0/db";
+import { LABEL_DEFAULTS, SYSTEM_MODULE_ID, type SystemSettings } from "@tier0/module-system";
 import { matchesPayload, namespaceKind } from "./task-payload.js";
 import { parseIdList, type CommandSettings } from "./command-policy.js";
 import { storedReply } from "./command-reply.js";
@@ -74,9 +75,14 @@ export class GuildState {
     const rows = await prisma.guildModule.findMany({
       where: { guildId, enabled: true },
     });
-    const modules = rows
+    const chosen = rows
       .map((row) => this.registry.get(row.moduleId))
       .filter((module): module is ModuleDefinition => module !== undefined);
+    // Built-in modules have no switch and no row to say they are on.
+    const modules = [
+      ...this.registry.all().filter((module) => module.alwaysOn === true && !chosen.includes(module)),
+      ...chosen,
+    ];
 
     this.enabledCache.set(guildId, modules);
     return modules;
@@ -117,10 +123,29 @@ export class GuildState {
   }
 
   async isEnabled(guildId: string, moduleId: string): Promise<boolean> {
+    if (this.registry.get(moduleId)?.alwaysOn === true) return true;
     const row = await prisma.guildModule.findUnique({
       where: { guildId_moduleId: { guildId, moduleId } },
     });
     return row?.enabled ?? false;
+  }
+
+  /**
+   * The settings of the built-in system module: the text the router and the
+   * component handlers send. Null only when that module is not registered; a
+   * server that never saved anything, or whose stored settings no longer
+   * validate, gets the defaults, so the bot never goes quiet over it.
+   */
+  async systemSettings(guildId: string): Promise<SystemSettings | null> {
+    if (!this.registry.get(SYSTEM_MODULE_ID)) return null;
+    const stored = (await this.settings(guildId, SYSTEM_MODULE_ID)) as SystemSettings | null;
+    return stored ?? (this.defaults(SYSTEM_MODULE_ID) as SystemSettings);
+  }
+
+  /** What a menu says for a role or channel that was deleted, from the owner's labels. */
+  private async unknownLabels(guildId: string): Promise<{ role: string; channel: string }> {
+    const labels = (await this.systemSettings(guildId))?.labels;
+    return { role: labels?.unknownRole ?? LABEL_DEFAULTS.unknownRole, channel: labels?.unknownChannel ?? LABEL_DEFAULTS.unknownChannel };
   }
 
   /**
@@ -139,9 +164,12 @@ export class GuildState {
       guild,
       settings,
       tasks: taskQueue(guild.id, moduleId),
-      send: (target, body, values, options) => sendMessage(target, body, values, { guild, ...options }),
-      edit: (message, body, values, options) => editMessage(message, body, values, { guild, ...options }),
-      reply: (interaction, body, values, options) => replyMessage(interaction, body, values, { guild, ...options }),
+      send: async (target, body, values, options) =>
+        sendMessage(target, body, values, { guild, unknown: await this.unknownLabels(guild.id), ...options }),
+      edit: async (message, body, values, options) =>
+        editMessage(message, body, values, { guild, unknown: await this.unknownLabels(guild.id), ...options }),
+      reply: async (interaction, body, values, options) =>
+        replyMessage(interaction, body, values, { guild, unknown: await this.unknownLabels(guild.id), ...options }),
       dashboardUrl: async () => {
         // The address is one setting of the moderation module, which every module's links share.
         const moderation = await this.settings(guild.id, "moderation");
@@ -203,7 +231,7 @@ export class GuildState {
             customReply: storedReply(override ?? null),
           };
         });
-        return { ...summary, enabled: row?.enabled ?? false, settings, commands };
+        return { ...summary, enabled: summary.alwaysOn || (row?.enabled ?? false), settings, commands };
       }),
     );
   }
@@ -229,7 +257,8 @@ export class GuildState {
     const existing = await prisma.guildModule.findUnique({
       where: { guildId_moduleId: { guildId: guild.id, moduleId } },
     });
-    const wasEnabled = existing?.enabled ?? false;
+    // A built-in module is on whatever its row says, and cannot be switched off.
+    const wasEnabled = module.alwaysOn === true || (existing?.enabled ?? false);
     const storedBefore = existing ? safeParse(existing.settings) : {};
     const resolvedBefore = this.registry.resolveSettings(moduleId, storedBefore);
     const settingsBefore = resolvedBefore.ok ? (resolvedBefore.value as Settings) : undefined;
@@ -246,7 +275,7 @@ export class GuildState {
       nextSettings = resolved.value as Settings;
     }
 
-    const isEnabled = patch.enabled ?? wasEnabled;
+    const isEnabled = module.alwaysOn === true || (patch.enabled ?? wasEnabled);
     const settingsJson = nextSettings === undefined ? undefined : JSON.stringify(nextSettings);
 
     await prisma.guildModule.upsert({

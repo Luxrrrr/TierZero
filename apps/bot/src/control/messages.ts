@@ -19,6 +19,7 @@ import {
   type VariableValues,
 } from "@tier0/core";
 import { prisma } from "@tier0/db";
+import { LABEL_DEFAULTS, type SystemLabels } from "@tier0/module-system";
 import { saveInteractions } from "../runtime/message-components.js";
 import { firstEmptyLimitedMenu, namesOf, toDiscordPayload } from "./message-payload.js";
 import { ok, refuse, type Reply } from "./mod/types.js";
@@ -29,6 +30,8 @@ export interface MessagesRequest {
   /** The path after `/guilds/:id/messages/`, split on slashes. */
   segments: string[];
   body: unknown;
+  /** The owner's short pieces of text; the defaults apply without them. */
+  labels?: SystemLabels;
 }
 
 /** Enough for any real server, and a ceiling on what one install can be made to store. */
@@ -93,7 +96,7 @@ const templateDto = (row: TemplateRow) => ({
 
 /** Routes one request under `/guilds/:id/messages/`. Returns null for a path that matches nothing. */
 export async function handleMessages(request: MessagesRequest): Promise<Reply | null> {
-  const { guild, method, segments, body } = request;
+  const { guild, method, segments, body, labels = LABEL_DEFAULTS } = request;
   const [area, rawId] = segments;
   const payload = isRecord(body) ? body : {};
 
@@ -117,7 +120,7 @@ export async function handleMessages(request: MessagesRequest): Promise<Reply | 
 
   if (method === "GET" && area === "emojis" && rawId === undefined) return listEmojis(guild);
 
-  if (method === "POST" && area === "send" && rawId === undefined) return sendMessage(guild, payload);
+  if (method === "POST" && area === "send" && rawId === undefined) return sendMessage(guild, payload, labels);
 
   return null;
 }
@@ -320,19 +323,17 @@ function variableValues(guild: Guild, channel: { id: string; name: string }, sen
   };
 }
 
-const WEBHOOK_NAME = "TierZero messages";
-
 /**
  * The webhook the bot sends through when a message goes out under another name.
  * One per channel is reused, found by name among the ones the bot owns, so
  * sending twice does not leave a pile of webhooks behind.
  */
-async function webhookFor(channel: TextChannel | NewsChannel, botId: string): Promise<Webhook> {
-  const existing = (await channel.fetchWebhooks()).find((hook) => hook.owner?.id === botId && hook.name === WEBHOOK_NAME);
-  return existing ?? channel.createWebhook({ name: WEBHOOK_NAME });
+async function webhookFor(channel: TextChannel | NewsChannel, botId: string, name: string): Promise<Webhook> {
+  const existing = (await channel.fetchWebhooks()).find((hook) => hook.owner?.id === botId && hook.name === name);
+  return existing ?? channel.createWebhook({ name });
 }
 
-async function sendMessage(guild: Guild, payload: Record<string, unknown>): Promise<Reply> {
+async function sendMessage(guild: Guild, payload: Record<string, unknown>, labels: SystemLabels): Promise<Reply> {
   const parsed = parseMessage(payload);
   if (!parsed.ok) return messageErrors(parsed.errors);
 
@@ -366,13 +367,13 @@ async function sendMessage(guild: Guild, payload: Record<string, unknown>): Prom
   }
 
   // Variables can lengthen a message, so what is sent is checked again after they are filled in.
-  const sender = typeof payload.sender === "string" && payload.sender.trim() !== "" ? payload.sender.trim().slice(0, 80) : "the dashboard";
+  const sender = typeof payload.sender === "string" && payload.sender.trim() !== "" ? payload.sender.trim().slice(0, 80) : labels.defaultSender;
   const filled = parseMessage(applyVariablesToMessage(parsed.value, variableValues(guild, channel, sender)));
   if (!filled.ok) {
     return refuse(400, `Once the variables are filled in, the message no longer fits Discord's limits: ${filled.errors[0]?.message ?? "it is too long."}`);
   }
 
-  const names = namesOf(guild);
+  const names = namesOf(guild, { role: labels.unknownRole, channel: labels.unknownChannel });
   const emptyMenu = firstEmptyLimitedMenu(filled.value, names);
   if (emptyMenu >= 0) {
     return refuse(400, `Menu ${emptyMenu + 1} is limited to channels or roles that no longer exist. Pick some that do, or clear the limit.`);
@@ -395,7 +396,7 @@ async function sendMessage(guild: Guild, payload: Record<string, unknown>): Prom
   let sent: Message;
   try {
     if (asOther && (channel.type === ChannelType.GuildText || channel.type === ChannelType.GuildAnnouncement)) {
-      const hook = await webhookFor(channel, guild.client.user.id);
+      const hook = await webhookFor(channel, guild.client.user.id, labels.webhookName);
       sent = await hook.send({
         ...body,
         username: choice.asName,

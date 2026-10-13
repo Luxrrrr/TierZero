@@ -60,7 +60,7 @@ export default async function GuildsPage() {
     guilds.map(async (guild) => {
       if (!managed.has(guild.id)) return { guild, staffOnly: true, features: null };
       try {
-        const modules = await guildModules(guild.id);
+        const modules = (await guildModules(guild.id)).filter((module) => !module.alwaysOn);
         return {
           guild,
           staffOnly: false,

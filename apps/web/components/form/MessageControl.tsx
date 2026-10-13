@@ -1,10 +1,11 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { parseMessage, plainReply, type MessageBody } from "@tier0/core";
+import type { MessageBody } from "@tier0/core";
 import { MessageEditorDialog, previewContextFor, type EditorVariable } from "../messages/MessageEditorDialog";
 import { MessagePreview } from "../messages/MessagePreview";
 import { messageSummary } from "../../lib/message-summary";
+import { isCustomized, storedMessage } from "../../lib/bot-messages";
 
 interface Props {
   id: string;
@@ -32,12 +33,63 @@ interface Props {
 const FEATURE_WORDING = { sender: "The bot's name" };
 const DM_HIDDEN = ["channel", "channel.name"];
 
-/** What was stored, as a message; null for the default and for anything that no longer reads as one. */
-function storedMessage(value: unknown): MessageBody | null {
-  if (value === undefined || value === null) return null;
-  if (typeof value === "string") return value.trim() === "" ? null : plainReply(value);
-  const parsed = parseMessage(value);
-  return parsed.ok ? parsed.value : null;
+interface DialogProps {
+  guildId: string;
+  /** Names the dialog. */
+  label: string;
+  starting: MessageBody;
+  variables: EditorVariable[];
+  delivery: "channel" | "dm";
+  components: boolean;
+  note?: string | undefined;
+  /** What the owner has saved, or null while the default is in use. */
+  customized: MessageBody | null;
+  /** Called with undefined to go back to the default. */
+  onChange(next: MessageBody | undefined): void;
+  onClose(): void;
+}
+
+/**
+ * The editor for a message a feature sends, shared by the settings form and the
+ * Bot messages page so a message is edited the same way wherever it is found.
+ * Saving what the default already says stores nothing, so a later change to the
+ * default still reaches this server.
+ */
+export function SettingMessageDialog({ guildId, label, starting, variables, delivery, components, note, customized, onChange, onClose }: DialogProps) {
+  const direct = delivery === "dm";
+  const componentMode = !components ? "none" : direct ? "direct" : "all";
+  return (
+    <MessageEditorDialog
+      guildId={guildId}
+      title={label}
+      hint={customized ? "This is the message the bot sends instead of the usual one." : "This starts from what the bot sends now."}
+      current={customized}
+      starting={starting}
+      variables={variables}
+      sharedWording={FEATURE_WORDING}
+      hideShared={direct ? DM_HIDDEN : undefined}
+      showReactions={!direct}
+      components={componentMode}
+      note={note}
+      footnote={
+        direct
+          ? "The preview fills the variables with examples. A direct message mentions nobody."
+          : "The preview fills the variables with examples. Mentions of @everyone and @here never ping from here."
+      }
+      textLabel="Message text"
+      saveLabel="Use this message"
+      resetLabel="Go back to the default"
+      onSave={(message) => {
+        onChange(JSON.stringify(message) === JSON.stringify(starting) ? undefined : message);
+        onClose();
+      }}
+      onReset={() => {
+        onChange(undefined);
+        onClose();
+      }}
+      onClose={onClose}
+    />
+  );
 }
 
 /**
@@ -62,43 +114,21 @@ export function MessageControl({
 }: Props) {
   const [open, setOpen] = useState(false);
   const stored = useMemo(() => storedMessage(value), [value]);
-  const customized = stored !== null && JSON.stringify(stored) !== JSON.stringify(starting);
+  const customized = isCustomized(stored, starting);
   const shown = stored ?? starting;
   const context = useMemo(() => previewContextFor(guildId, variables), [guildId, variables]);
 
-  const direct = delivery === "dm";
-  const componentMode = !components ? "none" : direct ? "direct" : "all";
-
   const dialog = open ? (
-    <MessageEditorDialog
+    <SettingMessageDialog
       guildId={guildId}
-      title={label}
-      hint={customized ? "This is the message the bot sends instead of the usual one." : "This starts from what the bot sends now."}
-      current={customized ? stored : null}
+      label={label}
       starting={starting}
       variables={variables}
-      sharedWording={FEATURE_WORDING}
-      hideShared={direct ? DM_HIDDEN : undefined}
-      showReactions={!direct}
-      components={componentMode}
+      delivery={delivery}
+      components={components}
       note={note}
-      footnote={
-        direct
-          ? "The preview fills the variables with examples. A direct message mentions nobody."
-          : "The preview fills the variables with examples. Mentions of @everyone and @here never ping from here."
-      }
-      textLabel="Message text"
-      saveLabel="Use this message"
-      resetLabel="Go back to the default"
-      onSave={(message) => {
-        // Saving what the default already says stores nothing, so a later change to the default still reaches this server.
-        onChange(JSON.stringify(message) === JSON.stringify(starting) ? undefined : message);
-        setOpen(false);
-      }}
-      onReset={() => {
-        onChange(undefined);
-        setOpen(false);
-      }}
+      customized={customized ? stored : null}
+      onChange={onChange}
       onClose={() => setOpen(false)}
     />
   ) : null;

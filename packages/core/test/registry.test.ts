@@ -298,3 +298,34 @@ describe("reply templates", () => {
     assert.equal(plain!.defaultPermissions, null);
   });
 });
+
+describe("built-in modules", () => {
+  const builtIn = () =>
+    defineModule({
+      id: "system",
+      name: "Bot messages",
+      summary: "What the bot says itself.",
+      alwaysOn: true,
+      settings: s.object({ note: s.string({ default: "hello" }) }),
+    });
+
+  test("describe says which modules cannot be switched off", () => {
+    const registry = new ModuleRegistry();
+    registry.register(builtIn());
+    registry.register(moduleWith("utility"));
+    const [system, utility] = registry.describe();
+    assert.equal(system?.alwaysOn, true);
+    assert.equal(utility?.alwaysOn, false);
+  });
+
+  test("a module that does not say is not always on", () => {
+    assert.equal(moduleWith("utility").alwaysOn, undefined);
+  });
+
+  test("its settings still resolve from nothing stored", () => {
+    const registry = new ModuleRegistry();
+    registry.register(builtIn());
+    const resolved = registry.resolveSettings("system", undefined);
+    assert.deepEqual(resolved, { ok: true, value: { note: "hello" } });
+  });
+});

@@ -3,6 +3,7 @@ import type { EventHandlers, ModuleContext } from "@tier0/core";
 import { parseCustomId } from "@tier0/core";
 import type { GuildState } from "./guild-state.js";
 import { rememberOwnMessage, takeOwnMessage } from "./own-messages.js";
+import { replySystem } from "./system-messages.js";
 
 interface Deps {
   client: Client;
@@ -229,6 +230,8 @@ function registerComponentDispatch({ client, state }: Deps): void {
       });
     } catch (error) {
       console.error(`[${module.id}] ${parsed.action} interaction failed:`, error);
+      // Without an answer Discord tells the member "This interaction failed", which says nothing about what to do.
+      if (interaction.isRepliable()) await replySystem(state, interaction, interaction.guild, "componentFailed");
     }
   });
 }

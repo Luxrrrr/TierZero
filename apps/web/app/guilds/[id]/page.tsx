@@ -38,7 +38,8 @@ export default async function GuildOverviewPage({ params }: { params: Promise<{ 
     }
 
     const [rawModules, guilds] = await Promise.all([guildModules(id), botGuilds()]);
-    const modules = toModuleViews(rawModules);
+    // The bot's own settings are not a feature to switch on, so they stay out of the counts and the grid.
+    const modules = toModuleViews(rawModules.filter((module) => !module.alwaysOn));
     const guild = guilds.find((entry) => entry.id === id);
 
     const enabledCount = modules.filter((module) => module.enabled).length;

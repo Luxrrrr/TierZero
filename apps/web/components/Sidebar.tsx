@@ -15,7 +15,7 @@ import { RoadmapList } from "./RoadmapList";
 import { peekUpdateStatus } from "../lib/updates";
 import { SidebarToggle } from "./SidebarToggle";
 import { ThemeToggle } from "./ThemeToggle";
-import { CommandsIcon, DownloadIcon, HelpIcon, MessagesIcon, OverviewIcon, SetupIcon, ShieldIcon, SignOutIcon } from "./Icons";
+import { BotMessagesIcon, CommandsIcon, DownloadIcon, HelpIcon, MessagesIcon, OverviewIcon, SetupIcon, ShieldIcon, SignOutIcon } from "./Icons";
 
 interface Props {
   user: { name: string | null | undefined; image: string | null | undefined };
@@ -86,6 +86,10 @@ export async function Sidebar({
                   <NavLink href={`/guilds/${currentGuild.id}/messages`} tip="Messages">
                     <MessagesIcon />
                     <span className="nav-link-text">Messages</span>
+                  </NavLink>
+                  <NavLink href={`/guilds/${currentGuild.id}/bot-messages`} tip="Bot messages">
+                    <BotMessagesIcon />
+                    <span className="nav-link-text">Bot messages</span>
                   </NavLink>
                 </>
               ) : null}

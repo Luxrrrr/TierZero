@@ -35,12 +35,15 @@ export const selectId = (index: number): string => `${COMPONENT_PREFIX}:s:${inde
 export interface NameLookup {
   channels: ReadonlyMap<string, string>;
   roles: ReadonlyMap<string, string>;
+  /** What a menu option says for a role or channel that has been deleted. Set from the owner's "Labels and text". */
+  unknown?: { role: string; channel: string };
 }
 
-export function namesOf(guild: Guild): NameLookup {
+export function namesOf(guild: Guild, unknown?: NameLookup["unknown"]): NameLookup {
   return {
     channels: new Map(guild.channels.cache.map((channel) => [channel.id, channel.name])),
     roles: new Map(guild.roles.cache.map((role) => [role.id, role.name])),
+    ...(unknown ? { unknown } : {}),
   };
 }
 
@@ -58,7 +61,7 @@ function selectBuilder(select: MessageSelect, index: number, names?: NameLookup)
   // A menu limited to particular channels or roles is a menu of those, since Discord's own pickers can't be.
   if ((select.kind === "channel" || select.kind === "role") && select.limitTo.length > 0) {
     const known = names ? limitedChoices(select, names) : select.limitTo;
-    const label = (id: string) => (select.kind === "role" ? names?.roles.get(id) ?? "Unknown role" : `# ${names?.channels.get(id) ?? "unknown channel"}`);
+    const label = (id: string) => (select.kind === "role" ? names?.roles.get(id) ?? names?.unknown?.role ?? "Unknown role" : names?.channels.has(id) ? `# ${names.channels.get(id)}` : names?.unknown?.channel ?? "# unknown channel");
     const max = Math.max(1, Math.min(select.maxValues, known.length));
     const builder = new StringSelectMenuBuilder().setCustomId(selectId(index)).setMinValues(Math.min(select.minValues, max)).setMaxValues(max).setDisabled(select.disabled);
     if (select.placeholder.trim() !== "") builder.setPlaceholder(select.placeholder);

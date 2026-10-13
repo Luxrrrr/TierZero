@@ -141,6 +141,8 @@ export interface GuildModuleState {
   category: ModuleCategory;
   /** The part of the dashboard that hosts this module's settings, when it is not its own page. */
   area: "moderation" | null;
+  /** Part of the bot itself: on everywhere, with no switch, and left out of the feature lists. */
+  alwaysOn: boolean;
   enabled: boolean;
   settings: Record<string, unknown>;
   schema: Record<string, unknown>;

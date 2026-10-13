@@ -12,7 +12,7 @@ import {
   type ReplyValues,
   type SendMessageOptions,
 } from "@tier0/core";
-import { firstEmptyLimitedMenu, namesOf, toDiscordPayload } from "../control/message-payload.js";
+import { firstEmptyLimitedMenu, namesOf, toDiscordPayload, type NameLookup } from "../control/message-payload.js";
 import { commandVariables, globalVariables, stringValues } from "./command-variables.js";
 import { saveInteractions } from "./message-components.js";
 
@@ -36,13 +36,14 @@ export function renderMessage(
   guild?: Guild,
   delivery: MessageDelivery = "channel",
   mentions?: SendMessageOptions["mentions"],
+  unknown?: NameLookup["unknown"],
 ): RenderedMessage | null {
   const filled = parseMessage(applyVariablesToMessage(restrictMessage(body, delivery), values));
   if (!filled.ok) {
     console.error("A message no longer fits Discord's limits once its variables are filled in:", filled.errors[0]?.message);
     return null;
   }
-  const names = guild ? namesOf(guild) : undefined;
+  const names = guild ? namesOf(guild, unknown) : undefined;
   if (names && firstEmptyLimitedMenu(filled.value, names) >= 0) {
     console.error("A message has a menu limited to channels or roles that no longer exist.");
     return null;
@@ -69,6 +70,8 @@ export interface SendOptions extends SendMessageOptions {
   guild?: Guild;
   /** Replaced in tests, which have no database. */
   persist?: typeof saveInteractions;
+  /** Set by the module context from the owner's "Labels and text"; the defaults apply without it. */
+  unknown?: NameLookup["unknown"];
 }
 
 type Destination = { send(options: MessageCreateOptions): Promise<Message> };
@@ -113,8 +116,8 @@ export async function sendMessage(
     // Without a server there is nothing for a button to act on, so a direct
     // message then keeps only the buttons that open an address.
     const usable = (message: MessageBody) => (delivery === "dm" && !guild ? linksOnly(message) : message);
-    let rendered = renderMessage(usable(body), variables, guild, delivery, options.mentions);
-    if (!rendered && options.fallback) rendered = renderMessage(usable(options.fallback), variables, guild, delivery, options.mentions);
+    let rendered = renderMessage(usable(body), variables, guild, delivery, options.mentions, options.unknown);
+    if (!rendered && options.fallback) rendered = renderMessage(usable(options.fallback), variables, guild, delivery, options.mentions, options.unknown);
     if (!rendered) return null;
 
     const payload: MessageCreateOptions = {
@@ -144,6 +147,7 @@ export async function sendMessage(
 export interface EditOptions extends EditMessageOptions {
   guild?: Guild;
   persist?: typeof saveInteractions;
+  unknown?: NameLookup["unknown"];
 }
 
 /**
@@ -171,8 +175,8 @@ export async function editMessage(
     };
     variables.sender = variables.bot ?? "";
 
-    let rendered = renderMessage(body, variables, guild);
-    if (!rendered && options.fallback) rendered = renderMessage(options.fallback, variables, guild);
+    let rendered = renderMessage(body, variables, guild, "channel", undefined, options.unknown);
+    if (!rendered && options.fallback) rendered = renderMessage(options.fallback, variables, guild, "channel", undefined, options.unknown);
     if (!rendered) return null;
 
     const edited = await message.edit({
@@ -206,7 +210,7 @@ export async function replyMessage(
   interaction: RepliableInteraction | MessageComponentInteraction,
   body: MessageBody,
   values: ReplyValues = {},
-  options: ReplyMessageOptions & { guild?: Guild } = {},
+  options: ReplyMessageOptions & { guild?: Guild; unknown?: NameLookup["unknown"] } = {},
 ): Promise<boolean> {
   try {
     const guild = options.guild ?? interaction.guild ?? undefined;
@@ -221,8 +225,8 @@ export async function replyMessage(
       ...stringValues(values),
     };
 
-    let rendered = renderMessage(linksOnly(body), variables, guild);
-    if (!rendered && options.fallback) rendered = renderMessage(linksOnly(options.fallback), variables, guild);
+    let rendered = renderMessage(linksOnly(body), variables, guild, "channel", undefined, options.unknown);
+    if (!rendered && options.fallback) rendered = renderMessage(linksOnly(options.fallback), variables, guild, "channel", undefined, options.unknown);
     if (!rendered) return false;
 
     const ephemeral = options.ephemeral ?? true;

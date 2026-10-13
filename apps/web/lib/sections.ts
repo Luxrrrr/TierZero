@@ -73,10 +73,11 @@ export function groupModulesBySection<M extends { category: ModuleCategory }>(
  * dashboard are reached through that area's own entry, and a category left
  * with nothing to list gets no heading at all.
  */
-export function navGroups<M extends { category: ModuleCategory; area?: string | null }>(
+export function navGroups<M extends { category: ModuleCategory; area?: string | null; alwaysOn?: boolean }>(
   modules: M[],
 ): SectionGroup<M>[] {
-  return groupModulesBySection(modules.filter((module) => !module.area)).filter(
+  // The bot's own settings are reached through the Bot messages page, not as a feature.
+  return groupModulesBySection(modules.filter((module) => !module.area && module.alwaysOn !== true)).filter(
     (group) => group.modules.length > 0,
   );
 }

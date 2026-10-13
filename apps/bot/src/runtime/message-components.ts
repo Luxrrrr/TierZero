@@ -1,4 +1,4 @@
-import { Events, MessageFlags, type AnySelectMenuInteraction, type ButtonInteraction, type Client, type Guild, type GuildMember } from "discord.js";
+import { Events, MessageFlags, type AnySelectMenuInteraction, type ButtonInteraction, type Client, type Guild, type GuildMember, type MessageCreateOptions } from "discord.js";
 import {
   applyVariablesToMessage,
   isRoleAssignable,
@@ -10,10 +10,12 @@ import {
   type MessageButton,
   type MessageSelect,
 } from "@tier0/core";
+import type { SystemMessageKey } from "@tier0/module-system";
 import { prisma } from "@tier0/db";
 import { COMPONENT_PREFIX, hasInteractiveComponents } from "../control/message-payload.js";
 import { buildReply } from "./command-reply.js";
 import { commandVariables } from "./command-variables.js";
+import { renderSystem, replySystem, type SystemSource } from "./system-messages.js";
 
 const parseJson = (text: string): unknown => {
   try {
@@ -73,29 +75,52 @@ function clickVariables(interaction: Clicked, guild: Guild, extra: Record<string
   };
 }
 
+/** What a role action has to say, before it is joined with what the others said. */
+export interface Piece {
+  content?: string | undefined;
+  embeds: NonNullable<MessageCreateOptions["embeds"]>;
+}
+
+/**
+ * One reply for a click that did several things, such as a menu that gave two
+ * roles: every text on its own line, every embed kept in order, and Discord's
+ * ten embeds per message as the ceiling.
+ */
+export function mergePieces(pieces: readonly Piece[]): Piece {
+  const lines = pieces.map((piece) => piece.content).filter((text): text is string => text !== undefined && text !== "");
+  return {
+    ...(lines.length > 0 ? { content: lines.join("\n") } : {}),
+    embeds: pieces.flatMap((piece) => piece.embeds).slice(0, 10),
+  };
+}
+
 interface Outcome {
   /** A reply the action asked for, which wins over any confirmation. */
   reply: { message: MessageBody; ephemeral: boolean } | null;
-  confirmations: string[];
+  confirmations: Piece[];
 }
 
 /** Gives, takes or toggles a role for whoever clicked, and says what happened. */
-async function applyRole(
+export async function applyRole(
+  source: SystemSource,
   interaction: Clicked,
   guild: Guild,
   action: Extract<ComponentAction, { type: "role" }>,
   variables: Record<string, string>,
-): Promise<string> {
+): Promise<Piece> {
+  const say = async (key: SystemMessageKey, roleName: string): Promise<Piece> => {
+    const rendered = await renderSystem(source, guild, key, { ...variables, role: roleName });
+    return { content: rendered?.payload.content, embeds: rendered?.payload.embeds ?? [] };
+  };
+
   const role = guild.roles.cache.get(action.roleId);
-  if (!role) return "That role no longer exists.";
+  if (!role) return say("roleGone", "");
 
   const botHighest = guild.members.me?.roles.highest.position ?? 0;
-  if (!isRoleAssignable(role.position, botHighest)) {
-    return `I can't change **${role.name}** because it sits above my own highest role. Ask an admin to move my role above it.`;
-  }
+  if (!isRoleAssignable(role.position, botHighest)) return say("roleTooHigh", role.name);
 
   const member: GuildMember | null = await guild.members.fetch(interaction.user.id).catch(() => null);
-  if (!member) return "I couldn't find you on this server.";
+  if (!member) return say("memberNotFound", role.name);
 
   const has = member.roles.cache.has(role.id);
   const adding = action.mode === "add" || (action.mode === "toggle" && !has);
@@ -103,17 +128,19 @@ async function applyRole(
     if (adding) await member.roles.add(role);
     else await member.roles.remove(role);
   } catch {
-    return `I couldn't change **${role.name}**. Check that I have Manage Roles.`;
+    return say("roleChangeFailed", role.name);
   }
 
-  const filled = { ...variables, role: role.name };
+  // A confirmation written on the button itself wins over the server's usual one.
   if (action.confirmation.trim() !== "") {
-    return applyVariablesToMessage(plainReply(action.confirmation), filled).content;
+    const filled = { ...variables, role: role.name };
+    return { content: applyVariablesToMessage(plainReply(action.confirmation), filled).content, embeds: [] };
   }
-  return adding ? `You now have **${role.name}**.` : `**${role.name}** was taken off you.`;
+  return say(adding ? "roleGiven" : "roleTaken", role.name);
 }
 
 async function run(
+  source: SystemSource,
   interaction: Clicked,
   guild: Guild,
   actions: ComponentAction[],
@@ -123,7 +150,7 @@ async function run(
   const outcome: Outcome = { reply: null, confirmations: [] };
 
   for (const action of actions) {
-    if (action.type === "role") outcome.confirmations.push(await applyRole(interaction, guild, action, variables));
+    if (action.type === "role") outcome.confirmations.push(await applyRole(source, interaction, guild, action, variables));
     else if (action.type === "reply" && outcome.reply === null) {
       outcome.reply = {
         message: { content: action.reply.content, embeds: action.reply.embeds, buttons: [], selects: [], reactions: [] },
@@ -140,17 +167,23 @@ async function run(
     }
   }
   if (outcome.confirmations.length > 0) {
-    await interaction.reply({ content: outcome.confirmations.join("\n"), ...ephemeralFlag(interaction) });
-    return;
+    const { content, embeds } = mergePieces(outcome.confirmations);
+    if (content !== undefined || embeds.length > 0) {
+      await interaction.reply({
+        ...(content !== undefined ? { content } : {}),
+        embeds,
+        allowedMentions: { parse: ["users", "roles"] },
+        ...ephemeralFlag(interaction),
+      });
+      return;
+    }
   }
   // An action of "nothing" still has to answer, or Discord shows the person a failure.
   await interaction.deferUpdate();
 }
 
-const NOT_ACTIVE = "This message's buttons and menus are no longer active.";
-
 /** Answers the buttons and menus the bot put on messages, by looking up what each was set to do. */
-export function registerMessageComponents(client: Client): void {
+export function registerMessageComponents(client: Client, source: SystemSource): void {
   client.on(Events.InteractionCreate, async (interaction) => {
     if (!(interaction.isButton() || interaction.isAnySelectMenu())) return;
     const parts = interaction.customId.split(":");
@@ -158,48 +191,49 @@ export function registerMessageComponents(client: Client): void {
     const kind = parts[1];
     const index = Number(parts[2]);
 
+    // In a server this is the owner's wording for that server; in a direct message with no record there is nobody to ask, so it is the usual wording.
+    const notActive = (guild: Guild | null) => replySystem(source, interaction, guild ?? interaction.guild, "notActive");
+
     try {
       const row = await prisma.messageInteraction.findUnique({ where: { messageId: interaction.message.id } });
       const guildId = clickGuildId(interaction.guildId, row);
       const guild = guildId !== null ? (interaction.guild ?? (await guildOf(interaction.client, guildId))) : null;
       if (!row || !guild || !Number.isInteger(index)) {
-        await interaction.reply({ content: NOT_ACTIVE, ...ephemeralFlag(interaction) });
+        await notActive(guild);
         return;
       }
 
       if (kind === "b" && interaction.isButton()) {
         const button: MessageButton | undefined = readButtons(parseJson(row.buttons))[index];
         if (!button) {
-          await interaction.reply({ content: NOT_ACTIVE, ...ephemeralFlag(interaction) });
+          await notActive(guild);
           return;
         }
-        await run(interaction, guild, [button.action], {});
+        await run(source, interaction, guild, [button.action], {});
         return;
       }
 
       if (kind === "s" && interaction.isAnySelectMenu()) {
         const select: MessageSelect | undefined = readSelects(parseJson(row.selects))[index];
         if (!select) {
-          await interaction.reply({ content: NOT_ACTIVE, ...ephemeralFlag(interaction) });
+          await notActive(guild);
           return;
         }
         if (select.kind === "string") {
           const chosen = select.options.filter((option) => interaction.values.includes(option.value));
-          await run(interaction, guild, chosen.map((option) => option.action), { selected: chosen.map((option) => option.label).join(", ") });
+          await run(source, interaction, guild, chosen.map((option) => option.action), { selected: chosen.map((option) => option.label).join(", ") });
         } else {
           const mention = (id: string) =>
             select.kind === "user" ? `<@${id}>` : select.kind === "role" ? `<@&${id}>` : select.kind === "channel" ? `<#${id}>` : interaction.isMentionableSelectMenu() && interaction.roles.has(id) ? `<@&${id}>` : `<@${id}>`;
-          await run(interaction, guild, [select.action], { selected: interaction.values.map(mention).join(", ") });
+          await run(source, interaction, guild, [select.action], { selected: interaction.values.map(mention).join(", ") });
         }
         return;
       }
 
-      await interaction.reply({ content: NOT_ACTIVE, ...ephemeralFlag(interaction) });
+      await notActive(guild);
     } catch (error) {
       console.error("message component failed:", error);
-      const message = "That didn't work. The server log has the details.";
-      if (interaction.replied || interaction.deferred) await interaction.followUp({ content: message, ...ephemeralFlag(interaction) }).catch(() => undefined);
-      else await interaction.reply({ content: message, ...ephemeralFlag(interaction) }).catch(() => undefined);
+      await replySystem(source, interaction, interaction.guild, "componentFailed");
     }
   });
 }

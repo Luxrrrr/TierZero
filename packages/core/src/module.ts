@@ -361,6 +361,14 @@ export interface ModuleDefinition<S extends Shape = Shape> {
    * module's own page.
    */
   area?: "moderation";
+  /**
+   * The module is part of the bot rather than a feature an owner chooses: it is
+   * on in every server, has no switch, and needs no row to say so. Its settings
+   * are still stored per server. For text the bot sends on its own account,
+   * such as the router's refusals, which belong to no feature that can be
+   * turned off.
+   */
+  alwaysOn?: boolean;
   settings: ObjectField<S>;
   commands?: CommandDefinition<ShapeValues<S>>[];
   /** Entries for Discord's right-click menu on members and messages. */

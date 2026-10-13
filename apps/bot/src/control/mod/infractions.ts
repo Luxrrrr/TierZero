@@ -12,6 +12,7 @@ import {
 } from "./dto.js";
 import { infractionWhere } from "./filters.js";
 import { refOf, resolveUsers } from "./names.js";
+import { timeoutRemovalReason } from "../../runtime/system-messages.js";
 import { forbidden, notFound, ok, pageOf, refuse, type ModCtx, type Reply } from "./types.js";
 
 const EXPORT_NAME_LOOKUPS = 300;
@@ -126,7 +127,7 @@ async function liftTimeout(ctx: ModCtx, row: InfractionRow, actor: Actor): Promi
     return "The member was not timed out on Discord.";
   }
   try {
-    await member.timeout(null, `Case #${row.caseNumber} removed by ${actor.name}`);
+    await member.timeout(null, timeoutRemovalReason(ctx.labels?.timeoutRemovalReason, row.caseNumber, actor.name));
     return "Lifted the Discord timeout.";
   } catch {
     return "Could not lift the Discord timeout; the bot may lack permission or rank.";

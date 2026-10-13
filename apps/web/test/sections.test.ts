@@ -98,6 +98,14 @@ describe("navGroups", () => {
   test("renders no groups at all for no modules", () => {
     assert.deepEqual(navGroups([]), []);
   });
+
+  test("leaves out the bot's own always-on settings, which are reached from Bot messages", () => {
+    const groups = navGroups([
+      { id: "system", category: "more" as const, area: null, alwaysOn: true },
+      { id: "feeds", category: "logging" as const, area: null, alwaysOn: false },
+    ]);
+    assert.deepEqual(groups.map((group) => group.id), ["logging"]);
+  });
 });
 
 describe("orderModulesBySection", () => {

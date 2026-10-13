@@ -59,7 +59,7 @@ export default async function ModuleSettingsPage({
       <ModulePage
         guildId={id}
         serverName={guild?.name ?? "your server"}
-        eyebrow={section?.heading ?? "Feature"}
+        eyebrow={module.alwaysOn ? "Bot messages" : (section?.heading ?? "Feature")}
         module={toModuleView(module)}
       />
     );

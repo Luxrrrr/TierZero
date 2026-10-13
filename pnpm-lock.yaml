@@ -56,6 +56,9 @@ importers:
       '@tier0/module-serverlog':
         specifier: workspace:*
         version: link:../../packages/modules/serverlog
+      '@tier0/module-system':
+        specifier: workspace:*
+        version: link:../../packages/modules/system
       '@tier0/module-tickets':
         specifier: workspace:*
         version: link:../../packages/modules/tickets
@@ -218,6 +221,12 @@ importers:
       discord.js:
         specifier: ^14.16.0
         version: 14.27.0
+
+  packages/modules/system:
+    dependencies:
+      '@tier0/core':
+        specifier: workspace:*
+        version: link:../../core
 
   packages/modules/tickets:
     dependencies:

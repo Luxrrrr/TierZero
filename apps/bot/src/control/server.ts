@@ -6,6 +6,7 @@ import { permissionOverrideAllowed } from "../runtime/command-policy.js";
 import type { GuildState } from "../runtime/guild-state.js";
 import type { CommandSync } from "../runtime/commands.js";
 import { config } from "../config.js";
+import { systemLabels } from "../runtime/system-messages.js";
 import { rowStatuses, runRowAction } from "./rows.js";
 import { handleMessages } from "./messages.js";
 import { handleMod } from "./mod/index.js";
@@ -81,7 +82,13 @@ export function startControlApi({ client, registry, state, commands }: Deps): vo
       }
       const segments = rest ? decodeSegments(rest) : [];
       if (!segments) return send(400, { error: "the path is not valid" });
-      const reply = await handleMessages({ guild, method: req.method ?? "GET", segments, body: parsed });
+      const reply = await handleMessages({
+        guild,
+        method: req.method ?? "GET",
+        segments,
+        body: parsed,
+        labels: await systemLabels(state, guild.id),
+      });
       return reply ? sendReply(reply) : send(404, { error: "not found" });
     }
 
@@ -162,6 +169,9 @@ export function startControlApi({ client, registry, state, commands }: Deps): vo
       }
       if (settings !== undefined && !isPlainObject(settings)) {
         return send(400, { error: "settings must be an object" });
+      }
+      if (enabled === false && registry.get(moduleId)?.alwaysOn === true) {
+        return send(400, { error: "That part of the bot is always on and cannot be switched off." });
       }
 
       const result = await state.applyModuleUpdate(

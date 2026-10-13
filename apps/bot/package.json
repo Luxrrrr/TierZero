@@ -17,6 +17,7 @@
     "@tier0/module-leveling": "workspace:*",
     "@tier0/module-moderation": "workspace:*",
     "@tier0/module-serverlog": "workspace:*",
+    "@tier0/module-system": "workspace:*",
     "@tier0/module-roles": "workspace:*",
     "@tier0/module-tickets": "workspace:*",
     "@tier0/module-utility": "workspace:*",

@@ -156,6 +156,23 @@ s.object({ message: s.message({ /* ... */ }) }, { upgrade: (stored) => /* old ti
 
 Keep the upgrade in a file that doesn't import discord.js so its tests are plain input and output. The implementation is `apps/bot/src/runtime/send-message.ts`, where `renderMessage` is the pure half if you need the payload without sending.
 
+### Every visible text is a setting
+
+Anything a member, a moderator or a server owner can read because of your module is a setting with the current wording as its default. Nothing the bot says should need a code change to reword. Two kinds, kept apart:
+
+- **Messages**: anything sent to a channel, a direct message or an interaction, including an ephemeral refusal or error. Use `s.message` with the variables the text needs (`{role}`, `{limit}`) and a `help` that says when it fires. Put them in one `collapsible` group with `compact: true` on each, called "Replies and errors", with sub-groups by feature if there are many. Send through `ctx.send`, `ctx.reply` or `ctx.edit`, passing the default as `fallback`.
+- **Short strings Discord limits**: modal titles and labels (45), placeholders (100), button labels (80), select options (100), channel names, topics, webhook names (80) and audit-log reasons (512). Use `s.string` or `s.template` with `max` set to Discord's limit and the placeholders declared, in a separate collapsible group called "Labels and text". Sanitise a channel name after its variables are filled in.
+
+Shared code that can refuse something (a hierarchy check, a policy function) returns a stable code and the values, not a sentence. The place that replies looks the sentence up in the module's settings. Refusals shown in the dashboard to moderators, rather than in Discord, keep the dashboard's wording. Command names, descriptions and option descriptions are registered with Discord at sync time under fixed limits, so they are not settings.
+
+The dashboard's Bot messages page finds every `s.message` field by walking the schema, at any depth and inside lists, so a message that follows this needs no dashboard code to appear there.
+
+### Built-in modules
+
+A module with `alwaysOn: true` is part of the bot, not a feature an owner picks. It has no switch, counts as enabled in every server without a `GuildModule` row, is left out of the sidebar's feature list and the overview, and cannot be disabled through the control API (the `PATCH` is refused with a 400). Its settings are stored per server like any other module's and a server that never saved them runs on the defaults. The registry's `describe()` reports it as `alwaysOn`.
+
+The only one is `system` (`packages/modules/system`), which holds the text the command router and the button handlers send on their own: refusals, the failure notice, the role button replies and a few labels. It has no commands or events. Code outside a module reads it through `GuildState.systemSettings(guildId)` and sends with `replySystem` in `apps/bot/src/runtime/system-messages.ts`, which falls back to the default wording when the settings can't be read. A handler that throws gets the same failure reply (the `componentFailed` message), so a member never sees Discord's own "This interaction failed".
+
 ### Groups with a switch
 
 A top-level `s.object` is drawn as a card. If its first field is a boolean named `enabled`, it becomes a switch in the card header and the rest of the group dims while it's off. Name the boolean something else to keep it in the body.
