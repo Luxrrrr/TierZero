@@ -1,4 +1,6 @@
 import type {
+  ActionRowBuilder,
+  AttachmentBuilder,
   ChatInputCommandInteraction,
   Client,
   ReadonlyCollection,
@@ -11,12 +13,16 @@ import type {
   GuildMember,
   InteractionReplyOptions,
   Invite,
+  MessageActionRowComponentBuilder,
   MessageComponentInteraction,
   ModalSubmitInteraction,
   Message,
   PartialGuildMember,
   PartialMessage,
+  RepliableInteraction,
   Role,
+  TextBasedChannel,
+  User,
   Snowflake,
   SlashCommandBuilder,
   SlashCommandOptionsOnlyBuilder,
@@ -24,6 +30,7 @@ import type {
   ThreadChannel,
   VoiceState,
 } from "discord.js";
+import type { MessageBody } from "./message.js";
 import type { ReplyValues, ResponseTemplate } from "./response.js";
 import type { ObjectField, Shape, ShapeValues } from "./schema.js";
 
@@ -47,6 +54,74 @@ export interface ModuleContext<T = unknown> {
    * has not written one and the command should say what it always says.
    */
   customReply?(values: ReplyValues): InteractionReplyOptions | null;
+  /**
+   * Sends a message the owner can edit, a `s.message` setting, to a channel or
+   * as a direct message. The variables every message has are filled in beside
+   * `values`. Never throws: a message that cannot be delivered is logged and
+   * this resolves to null.
+   */
+  send(
+    target: TextBasedChannel | User | GuildMember,
+    body: MessageBody,
+    values?: ReplyValues,
+    options?: SendMessageOptions,
+  ): Promise<Message | null>;
+  /**
+   * Replaces what a message this module sent earlier says, from the owner's
+   * message, and leaves the buttons the module owns (`options.rows`) as given.
+   * Never throws; resolves to null when it could not be edited.
+   */
+  edit(message: Message, body: MessageBody, values?: ReplyValues, options?: EditMessageOptions): Promise<Message | null>;
+  /**
+   * Answers an interaction with the owner's message. Ephemeral unless told
+   * otherwise, and edits the reply when the interaction was already deferred.
+   * Buttons and menus other than links are left out, since nothing would
+   * answer them. Never throws; resolves to false when nothing could be sent.
+   */
+  reply(interaction: RepliableInteraction | MessageComponentInteraction, body: MessageBody, values?: ReplyValues, options?: ReplyMessageOptions): Promise<boolean>;
+  /**
+   * The address this server's dashboard is opened at, such as `https://bot.example.com`, with no
+   * trailing slash. Empty when none is known, in which case a link built from it should be left
+   * out. Taken from the moderation module's "Dashboard address" setting, else from the address the
+   * owner last opened the dashboard at. Cached for a few seconds.
+   */
+  dashboardUrl(): Promise<string>;
+}
+
+export interface EditMessageOptions {
+  fallback?: MessageBody;
+  /** Rows the module builds itself, such as a button its own handler answers. */
+  rows?: ActionRowBuilder<MessageActionRowComponentBuilder>[];
+}
+
+export interface ReplyMessageOptions {
+  fallback?: MessageBody;
+  /** Defaults to true. A public reply can mention people and roles. */
+  ephemeral?: boolean;
+}
+
+export interface SendMessageOptions {
+  /**
+   * Sent instead when the owner's message no longer fits Discord's limits once
+   * its variables are filled in, so the feature never goes silent. Usually the
+   * field's `starting` message.
+   */
+  fallback?: MessageBody;
+  /** What `{sender}` becomes. Defaults to the bot's name. */
+  sender?: string;
+  /**
+   * Rows the module builds itself, for a button its own handler answers. They
+   * go under any buttons and menus the owner's message has.
+   */
+  rows?: ActionRowBuilder<MessageActionRowComponentBuilder>[];
+  /** Files sent along with the message. */
+  files?: AttachmentBuilder[];
+  /**
+   * Who the message may ping, by id. Without it a channel post may ping any user
+   * or role it mentions. With it, only the listed ones are pinged and nothing
+   * else is, whatever the text says: pass empty lists for a post that pings no one.
+   */
+  mentions?: { users?: string[]; roles?: string[] };
 }
 
 export type TaskPayload = Record<string, unknown>;
@@ -115,6 +190,8 @@ export interface ContextCommandDefinition<T = unknown> {
    * which choice an owner has not changed.
    */
   publicReply?: boolean;
+  /** Present when the owner may rewrite the reply from the dashboard. */
+  response?: ResponseTemplate;
   run(interaction: ContextMenuCommandInteraction, ctx: ModuleContext<T>): Promise<void>;
 }
 

@@ -29,6 +29,7 @@ const RENDERABLE = new Set([
   "choice",
   "emoji",
   "template",
+  "message",
   "array",
   "object",
 ]);

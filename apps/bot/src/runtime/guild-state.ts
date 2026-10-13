@@ -15,6 +15,8 @@ import { prisma } from "@tier0/db";
 import { matchesPayload, namespaceKind } from "./task-payload.js";
 import { parseIdList, type CommandSettings } from "./command-policy.js";
 import { storedReply } from "./command-reply.js";
+import { resolveDashboardUrl } from "./dashboard-url.js";
+import { editMessage, replyMessage, sendMessage } from "./send-message.js";
 
 // The router resolves a module by name at runtime, so the cache cannot be
 // generic over one module's shape. This is the widest settings type that
@@ -137,6 +139,14 @@ export class GuildState {
       guild,
       settings,
       tasks: taskQueue(guild.id, moduleId),
+      send: (target, body, values, options) => sendMessage(target, body, values, { guild, ...options }),
+      edit: (message, body, values, options) => editMessage(message, body, values, { guild, ...options }),
+      reply: (interaction, body, values, options) => replyMessage(interaction, body, values, { guild, ...options }),
+      dashboardUrl: async () => {
+        // The address is one setting of the moderation module, which every module's links share.
+        const moderation = await this.settings(guild.id, "moderation");
+        return resolveDashboardUrl(moderation?.dashboardUrl);
+      },
       update: async (patch) => {
         const merged = { ...settings, ...patch };
         const parsed = module.settings.parse(merged);

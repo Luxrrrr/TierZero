@@ -25,6 +25,11 @@ interface Props {
   variables?: readonly InsertVariable[];
   /** Replies only the person who ran a command sees cannot carry reactions, so a command hides the card. */
   showReactions?: boolean;
+  /**
+   * Which buttons and menus the message can carry. A direct message takes every
+   * button but only text menus, and some places take no components at all.
+   */
+  components?: "all" | "direct" | "none";
   /** The text a problem is shown under, when it is not the first thing the person typed. */
   problems?: MessageError[];
   /** Shown above the text box. Defaults to "Message text". */
@@ -44,7 +49,7 @@ export function MessageForm(props: Props) {
   );
 }
 
-function MessageFormBody({ guildId, value, onChange, errors, variables, showReactions = true, problems, textLabel = "Message text" }: Props) {
+function MessageFormBody({ guildId, value, onChange, errors, variables, showReactions = true, components = "all", problems, textLabel = "Message text" }: Props) {
   const [addedEmbed, setAddedEmbed] = useState<number | null>(null);
   const target = useToolTarget(value.content, (content) => onChange({ ...value, content }), textLabel, "full");
   const shown = problems ?? errors;
@@ -121,8 +126,12 @@ function MessageFormBody({ guildId, value, onChange, errors, variables, showReac
         <p className="field-hint">A message can have at most {MESSAGE_LIMITS.embeds} embeds.</p>
       )}
 
-      <ButtonsEditor guildId={guildId} buttons={value.buttons} selectCount={value.selects.length} errors={errors} onChange={(buttons) => onChange({ ...value, buttons })} />
-      <SelectsEditor guildId={guildId} selects={value.selects} buttonCount={value.buttons.length} errors={errors} onChange={(selects) => onChange({ ...value, selects })} />
+      {components !== "none" ? (
+        <ButtonsEditor guildId={guildId} buttons={value.buttons} selectCount={value.selects.length} errors={errors} onChange={(buttons) => onChange({ ...value, buttons })} />
+      ) : null}
+      {components !== "none" ? (
+        <SelectsEditor guildId={guildId} selects={value.selects} buttonCount={value.buttons.length} errors={errors} textOnly={components === "direct"} onChange={(selects) => onChange({ ...value, selects })} />
+      ) : null}
       {showReactions ? (
         <ReactionsEditor guildId={guildId} reactions={value.reactions} errors={errors} onChange={(reactions) => onChange({ ...value, reactions })} />
       ) : null}

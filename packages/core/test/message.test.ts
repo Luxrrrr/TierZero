@@ -9,8 +9,10 @@ import {
   discordTimestamp,
   emptyEmbed,
   isEmojiToken,
+  linksOnly,
   parseMessage,
   parseSendOptions,
+  restrictMessage,
 } from "../dist/message.js";
 
 const embed = (patch: Record<string, unknown> = {}) => ({ ...emptyEmbed(), title: "Rules", ...patch });
@@ -154,7 +156,11 @@ describe("variables", () => {
     assert.equal(applyVariables("in #{channel.name}", values), "in #rules");
   });
 
-  test("reaches every piece of text and picture address but not links someone follows", () => {
+  test("names may use capital letters and digits, as a module's own variables do", () => {
+    assert.equal(applyVariables("{memberCount} and {tier2}", { memberCount: "128", tier2: "x" }), "128 and x");
+  });
+
+  test("reaches every piece of text and picture address and the title link and a link button's address but not what other buttons do", () => {
     const message = applyVariablesToMessage(
       {
         content: "{server}",
@@ -168,10 +174,88 @@ describe("variables", () => {
     assert.equal(message.content, "Northwind");
     assert.equal(message.embeds[0]?.title, "Northwind");
     assert.equal(message.embeds[0]?.fields[0]?.value, "2,431");
-    assert.equal(message.embeds[0]?.url, "https://example.com/{server}");
+    assert.equal(message.embeds[0]?.url, "https://example.com/Northwind");
     assert.equal(message.embeds[0]?.thumbnailUrl, "https://example.com/Northwind.png");
     assert.equal(message.buttons[0]?.label, "Northwind");
-    assert.equal(message.buttons[0]?.url, "https://example.com/{server}");
+    assert.equal(message.buttons[0]?.url, "https://example.com/Northwind");
+  });
+
+  test("fills a title link and a time that are a variable on their own", () => {
+    const embed = { ...emptyEmbed(), title: "T", url: "{link}", authorUrl: "{link}", timestamp: "{published.iso}" };
+    const checked = parseMessage({ content: "", embeds: [embed] });
+    assert.equal(checked.ok, true);
+    const filled = applyVariablesToMessage(
+      { content: "", embeds: [embed], buttons: [], selects: [], reactions: [] },
+      { link: "https://example.com/a", "published.iso": "2026-01-01T00:00:00.000Z" },
+    );
+    assert.equal(filled.embeds[0]?.url, "https://example.com/a");
+    assert.equal(filled.embeds[0]?.timestamp, "2026-01-01T00:00:00.000Z");
+  });
+
+  test("still rejects an address that is not a variable and not a web address", () => {
+    assert.equal(parseMessage({ content: "", embeds: [{ title: "T", url: "nope" }] }).ok, false);
+    assert.equal(parseMessage({ content: "", embeds: [{ title: "T", timestamp: "{a} b" }] }).ok, false);
+  });
+});
+
+describe("an embed field that comes out empty", () => {
+  const withFields = (fields: { name: string; value: string; inline: boolean }[]) => ({
+    content: "",
+    embeds: [{ ...emptyEmbed(), title: "Case", fields }],
+    buttons: [],
+    selects: [],
+    reactions: [],
+  });
+
+  test("is left out when its variable is empty, so a line can exist only some of the time", () => {
+    const body = withFields([
+      { name: "Reason", value: "{reason}", inline: false },
+      { name: "Expires", value: "{expires}", inline: false },
+    ]);
+    assert.equal(parseMessage(body).ok, true);
+    const filled = applyVariablesToMessage(body, { reason: "Spam", expires: "" });
+    assert.deepEqual(filled.embeds[0]?.fields.map((f) => f.name), ["Reason"]);
+    assert.equal(parseMessage(filled).ok, true);
+  });
+
+  test("stays when it has a value", () => {
+    const filled = applyVariablesToMessage(withFields([{ name: "Expires", value: "{expires}", inline: false }]), { expires: "soon" });
+    assert.equal(filled.embeds[0]?.fields.length, 1);
+  });
+});
+
+describe("a link button whose address is a variable", () => {
+  const link = (url: string) => ({ label: "View in dashboard", emoji: "", style: "link" as const, url, disabled: false, action: { type: "none" as const } });
+  const withButtons = (buttons: ReturnType<typeof link>[]) => ({ content: "Case", embeds: [], buttons, selects: [], reactions: [] });
+
+  test("is accepted while it is being typed", () => {
+    assert.equal(parseMessage(withButtons([link("{caseUrl}")])).ok, true);
+    assert.equal(parseMessage(withButtons([link("{base}/cases/{case}")])).ok, true);
+    assert.equal(parseMessage(withButtons([link("not a link")])).ok, false);
+  });
+
+  test("is filled in", () => {
+    const filled = applyVariablesToMessage(withButtons([link("{caseUrl}")]), { caseUrl: "https://dash.example/guilds/1/mod/members/2?case=3" });
+    assert.equal(filled.buttons[0]?.url, "https://dash.example/guilds/1/mod/members/2?case=3");
+    assert.equal(parseMessage(filled).ok, true);
+  });
+
+  test("is dropped when it comes out empty, so the post goes without it", () => {
+    const filled = applyVariablesToMessage(withButtons([link("{caseUrl}")]), { caseUrl: "" });
+    assert.deepEqual(filled.buttons, []);
+    assert.equal(parseMessage(filled).ok, true);
+  });
+
+  test("is dropped when it is not a web address once filled in, or when the variable is unknown", () => {
+    assert.deepEqual(applyVariablesToMessage(withButtons([link("{caseUrl}")]), { caseUrl: "javascript:alert(1)" }).buttons, []);
+    assert.deepEqual(applyVariablesToMessage(withButtons([link("{caseUrl}")]), {}).buttons, []);
+  });
+
+  test("leaves a static address and other buttons as they were", () => {
+    const reply = { ...link(""), style: "primary" as const, label: "Reply" };
+    const body = withButtons([link("https://example.com/rules"), reply]);
+    const filled = applyVariablesToMessage(body, { caseUrl: "" });
+    assert.deepEqual(filled.buttons, body.buttons);
   });
 });
 
@@ -320,5 +404,53 @@ describe("menus limited to particular channels or roles", () => {
     assert.ok(parseMessage({ content: "x", selects: [{ kind: "role", limitTo: ids, maxValues: 2 }] }).ok);
     assert.ok(!parseMessage({ content: "x", selects: [{ kind: "role", limitTo: ids, maxValues: 3 }] }).ok);
     assert.ok(!parseMessage({ content: "x", selects: [{ kind: "channel", limitTo: ["general"] }] }).ok);
+  });
+});
+
+describe("restrictMessage and linksOnly", () => {
+  const message = () => {
+    const result = parseMessage({
+      content: "Hi",
+      reactions: ["🎉"],
+      buttons: [
+        { label: "Docs", style: "link", url: "https://example.com" },
+        { label: "Press", style: "primary" },
+      ],
+      selects: [
+        { kind: "string", placeholder: "Pick", options: [{ label: "A", value: "a" }] },
+        { kind: "role", placeholder: "Role" },
+        { kind: "user", placeholder: "User" },
+      ],
+    });
+    assert.ok(result.ok);
+    return result.value;
+  };
+
+  test("a direct message keeps every button and the text menus, and loses reactions", () => {
+    const kept = restrictMessage(message(), "dm");
+    assert.equal(kept.buttons.length, 2);
+    assert.deepEqual(kept.selects.map((select) => select.kind), ["string"]);
+    assert.deepEqual(kept.reactions, []);
+  });
+
+  test("a channel post is left as it was", () => {
+    const original = message();
+    assert.equal(restrictMessage(original, "channel"), original);
+  });
+
+  test("turning components off removes every button and menu either way", () => {
+    for (const delivery of ["channel", "dm"] as const) {
+      const bare = restrictMessage(message(), delivery, false);
+      assert.deepEqual(bare.buttons, []);
+      assert.deepEqual(bare.selects, []);
+    }
+    assert.equal(restrictMessage(message(), "channel", false).reactions.length, 1);
+  });
+
+  test("linksOnly keeps link buttons and nothing else that needs an answer", () => {
+    const kept = linksOnly(message());
+    assert.deepEqual(kept.buttons.map((button) => button.style), ["link"]);
+    assert.deepEqual(kept.selects, []);
+    assert.deepEqual(kept.reactions, []);
   });
 });

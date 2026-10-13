@@ -23,7 +23,7 @@ export interface MessageEmbed {
   footerIconUrl: string;
   imageUrl: string;
   thumbnailUrl: string;
-  /** Empty for none, "now" for the time it is sent, or a date and time as ISO text. */
+  /** Empty for none, "now" for the time it is sent, a date and time as ISO text, or a variable that holds one. */
   timestamp: string;
   fields: EmbedField[];
 }
@@ -120,6 +120,23 @@ export function isHttpUrl(value: string): boolean {
   }
 }
 
+/**
+ * The origin of a web address: scheme, host and port, with any path, query or
+ * login dropped and no trailing slash. Null when the value is not an http(s)
+ * address, so what is left is safe to put in front of a path.
+ */
+export function normalizeOrigin(value: string): string | null {
+  const trimmed = value.trim();
+  if (trimmed === "" || trimmed.length > MESSAGE_LIMITS.url) return null;
+  try {
+    const url = new URL(trimmed);
+    if ((url.protocol !== "https:" && url.protocol !== "http:") || url.hostname === "") return null;
+    return url.origin;
+  } catch {
+    return null;
+  }
+}
+
 /** A unicode emoji, or one of this server's custom emoji written the way Discord writes it. */
 export function isEmojiToken(value: string): boolean {
   if (/^<a?:\w{2,32}:\d{17,20}>$/.test(value)) return true;
@@ -150,6 +167,19 @@ export function badUrl(errors: MessageError[], path: string, value: string, labe
   if (value !== "" && !isHttpUrl(value)) {
     errors.push({ path, message: `${label} must be a web address starting with http:// or https://.` });
   }
+}
+
+/** A variable on its own, such as {link}, which stands for a whole value the module supplies. */
+export const isWholeVariable = (value: string): boolean => /^\{[a-z][a-z.]*\}$/.test(value);
+
+/**
+ * Like `badUrl`, for the addresses in an embed. A variable that opens the
+ * address is accepted as it stands because it supplies the whole address; the
+ * message is checked again once the variable is filled in.
+ */
+function badEmbedUrl(errors: MessageError[], path: string, value: string, label: string): void {
+  if (/^\{[a-z][a-z.]*\}/.test(value)) return;
+  badUrl(errors, path, value, label);
 }
 
 /** Reads one embed off the wire, with anything missing filled in and the old true time read as "now". */
@@ -183,13 +213,13 @@ export function checkEmbed(embed: MessageEmbed, at: string, errors: MessageError
   tooLong(errors, `${at}.description`, embed.description, L.description, "The description");
   tooLong(errors, `${at}.authorName`, embed.authorName, L.authorName, "The author name");
   tooLong(errors, `${at}.footerText`, embed.footerText, L.footerText, "The footer");
-  badUrl(errors, `${at}.url`, embed.url, "The title link");
-  badUrl(errors, `${at}.authorUrl`, embed.authorUrl, "The author link");
-  badUrl(errors, `${at}.authorIconUrl`, embed.authorIconUrl, "The author icon");
-  badUrl(errors, `${at}.footerIconUrl`, embed.footerIconUrl, "The footer icon");
-  badUrl(errors, `${at}.imageUrl`, embed.imageUrl, "The image");
-  badUrl(errors, `${at}.thumbnailUrl`, embed.thumbnailUrl, "The thumbnail");
-  if (embed.timestamp !== "" && embed.timestamp !== "now" && Number.isNaN(Date.parse(embed.timestamp))) {
+  badEmbedUrl(errors, `${at}.url`, embed.url, "The title link");
+  badEmbedUrl(errors, `${at}.authorUrl`, embed.authorUrl, "The author link");
+  badEmbedUrl(errors, `${at}.authorIconUrl`, embed.authorIconUrl, "The author icon");
+  badEmbedUrl(errors, `${at}.footerIconUrl`, embed.footerIconUrl, "The footer icon");
+  badEmbedUrl(errors, `${at}.imageUrl`, embed.imageUrl, "The image");
+  badEmbedUrl(errors, `${at}.thumbnailUrl`, embed.thumbnailUrl, "The thumbnail");
+  if (embed.timestamp !== "" && embed.timestamp !== "now" && !isWholeVariable(embed.timestamp) && Number.isNaN(Date.parse(embed.timestamp))) {
     errors.push({ path: `${at}.timestamp`, message: "The time must be a real date and time." });
   }
   if (embed.color !== "" && !isHexColor(embed.color)) {

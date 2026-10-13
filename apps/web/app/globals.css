@@ -7119,3 +7119,32 @@ html[data-sidebar="collapsed"] .nav-more-body[hidden] {
   padding: 0 var(--space-4) var(--space-3);
   font-size: var(--text-xs);
 }
+
+/* A message setting: a small preview and the button that opens the editor --- */
+
+.message-control {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  align-items: flex-start;
+}
+
+.message-control-preview {
+  width: min(100%, 36rem);
+  max-height: 11rem;
+  overflow: hidden;
+  border-radius: var(--radius-lg);
+  pointer-events: none;
+}
+
+/* A long message is cut off, and the fade says so rather than slicing a line in half. */
+.message-control-preview[data-clipped="true"] {
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 1.75rem), transparent);
+}
+
+.message-control-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-4);
+}

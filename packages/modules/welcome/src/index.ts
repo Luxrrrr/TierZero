@@ -1,42 +1,19 @@
-import { EmbedBuilder, type GuildMember, type PartialGuildMember } from "discord.js";
-import { defineModule, isRoleAssignable, s } from "@tier0/core";
-import { PLACEHOLDERS, renderTemplate, type PlaceholderValues } from "./template.js";
+import type { GuildMember, PartialGuildMember } from "discord.js";
+import { defineModule, isRoleAssignable, s, type MessageBody, type ModuleContext } from "@tier0/core";
+import { JOIN_DM, JOIN_MESSAGE, LEAVE_DM, LEAVE_MESSAGE, VARIABLES, upgradeGroup, valuesFor } from "./messages.js";
 
-function placeholdersFor(member: GuildMember | PartialGuildMember): PlaceholderValues {
-  const guild = member.guild;
-  return {
-    user: `<@${member.id}>`,
-    username: member.user.username,
-    server: guild.name,
-    memberCount: String(guild.memberCount),
-  };
-}
+type Member = GuildMember | PartialGuildMember;
 
-async function announce(
-  channelId: string,
-  message: string,
-  embed: boolean,
-  member: GuildMember | PartialGuildMember,
-): Promise<void> {
-  const channel = member.guild.channels.cache.get(channelId);
+async function announce(ctx: ModuleContext, channelId: string, message: MessageBody, starting: MessageBody, member: Member): Promise<void> {
+  const channel = ctx.guild.channels.cache.get(channelId);
   if (!channel?.isTextBased()) return;
-
-  const body = renderTemplate(message, placeholdersFor(member));
-  if (embed) {
-    await channel.send({ embeds: [new EmbedBuilder().setDescription(body)] });
-  } else {
-    await channel.send({ content: body });
-  }
+  await ctx.send(channel, message, valuesFor(member), { fallback: starting });
 }
 
-async function directMessage(
-  message: string,
-  member: GuildMember | PartialGuildMember,
-): Promise<void> {
-  const body = renderTemplate(message, placeholdersFor(member));
-  // Members can close DMs or share no mutual server, and neither is something
-  // a welcome message should ever fail loudly over.
-  await member.user.send({ content: body }).catch(() => {});
+// Members can close DMs or share no mutual server, and neither is something
+// a welcome message should ever fail loudly over. ctx.send logs and moves on.
+async function directMessage(ctx: ModuleContext, message: MessageBody, starting: MessageBody, member: Member): Promise<void> {
+  await ctx.send(member.user, message, valuesFor(member), { fallback: starting });
 }
 
 export default defineModule({
@@ -48,55 +25,61 @@ export default defineModule({
   settings: s.object({
     join: s.object(
       {
-      channel: s.channel({
-        types: ["text"],
-        optional: true,
-        guided: true,
-        label: "Channel to greet in",
-        help: "Left unset, no greeting is posted.",
-      }),
-      message: s.template({
-        optional: true,
-        guided: true,
-        placeholders: [...PLACEHOLDERS],
-        label: "Greeting message",
-        help: "Posted in the channel above. Both need to be set for anything to be sent.",
-      }),
-      embed: s.boolean({ default: false, label: "Send the greeting as an embed" }),
-      roles: s.array(s.role(), {
-        label: "Roles to assign on join",
-      }),
-      dm: s.template({
-        optional: true,
-        placeholders: [...PLACEHOLDERS],
-        label: "Direct message to the new member",
-        help: "Sent in addition to the channel greeting, if the member allows DMs.",
-      }),
+        channel: s.channel({
+          types: ["text"],
+          optional: true,
+          guided: true,
+          label: "Channel to greet in",
+          help: "Left unset, no greeting is posted.",
+        }),
+        message: s.message({
+          guided: true,
+          label: "Greeting message",
+          help: "Posted in the channel above.",
+          starting: JOIN_MESSAGE,
+          variables: VARIABLES,
+          when: { field: "channel" },
+        }),
+        roles: s.array(s.role(), {
+          label: "Roles to assign on join",
+        }),
+        sendDm: s.boolean({ default: false, label: "Send the new member a direct message" }),
+        dm: s.message({
+          label: "Direct message to the new member",
+          help: "Sent in addition to the channel greeting, if the member allows DMs.",
+          delivery: "dm",
+          starting: JOIN_DM,
+          variables: VARIABLES,
+          when: { field: "sendDm", equals: true },
+        }),
       },
-      { label: "When someone joins" },
+      { label: "When someone joins", upgrade: upgradeGroup },
     ),
     leave: s.object(
       {
-      channel: s.channel({
-        types: ["text"],
-        optional: true,
-        label: "Channel to post departures in",
-        help: "Left unset, nothing is posted when a member leaves.",
-      }),
-      message: s.template({
-        optional: true,
-        placeholders: [...PLACEHOLDERS],
-        label: "Farewell message",
-        help: "Posted in the channel above. Both need to be set for anything to be sent.",
-      }),
-      embed: s.boolean({ default: false, label: "Send the farewell as an embed" }),
-      dm: s.template({
-        optional: true,
-        placeholders: [...PLACEHOLDERS],
-        label: "Direct message to a departing member",
-      }),
+        channel: s.channel({
+          types: ["text"],
+          optional: true,
+          label: "Channel to post departures in",
+          help: "Left unset, nothing is posted when a member leaves.",
+        }),
+        message: s.message({
+          label: "Farewell message",
+          help: "Posted in the channel above.",
+          starting: LEAVE_MESSAGE,
+          variables: VARIABLES,
+          when: { field: "channel" },
+        }),
+        sendDm: s.boolean({ default: false, label: "Send a departing member a direct message" }),
+        dm: s.message({
+          label: "Direct message to a departing member",
+          delivery: "dm",
+          starting: LEAVE_DM,
+          variables: VARIABLES,
+          when: { field: "sendDm", equals: true },
+        }),
       },
-      { label: "When someone leaves" },
+      { label: "When someone leaves", upgrade: upgradeGroup },
     ),
   }),
 
@@ -119,22 +102,22 @@ export default defineModule({
         });
       }
 
-      if (join.channel && join.message) {
-        await announce(join.channel, join.message, join.embed, member);
+      if (join.channel) {
+        await announce(ctx, join.channel, join.message, JOIN_MESSAGE, member);
       }
-      if (join.dm) {
-        await directMessage(join.dm, member);
+      if (join.sendDm) {
+        await directMessage(ctx, join.dm, JOIN_DM, member);
       }
     },
 
     async memberLeave(member, ctx) {
       const { leave } = ctx.settings;
 
-      if (leave.channel && leave.message) {
-        await announce(leave.channel, leave.message, leave.embed, member);
+      if (leave.channel) {
+        await announce(ctx, leave.channel, leave.message, LEAVE_MESSAGE, member);
       }
-      if (leave.dm) {
-        await directMessage(leave.dm, member);
+      if (leave.sendDm) {
+        await directMessage(ctx, leave.dm, LEAVE_DM, member);
       }
     },
   },

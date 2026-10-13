@@ -1,6 +1,6 @@
 import { SlashCommandBuilder, EmbedBuilder, MessageFlags } from "discord.js";
 import type { GuildMember } from "discord.js";
-import { defineModule, emptyEmbed, isRoleAssignable, s } from "@tier0/core";
+import { defineModule, emptyEmbed, isRoleAssignable, plainReply, s } from "@tier0/core";
 import type { Infer, ModuleContext } from "@tier0/core";
 import { prisma } from "@tier0/db";
 import {
@@ -13,6 +13,8 @@ import {
   resolveRewardRoles,
   xpForMessage,
 } from "./curve.js";
+
+const LEVEL_UP_MESSAGE = plainReply("{user} reached level {level}!");
 
 const settingsSchema = s.object({
   xp: s.object(
@@ -39,10 +41,13 @@ const settingsSchema = s.object({
         optional: true,
         guided: true,
       }),
-      message: s.template({
+      message: s.message({
         label: "Level-up message",
-        placeholders: ["user", "level"],
-        default: "{user} reached level {level}!",
+        starting: LEVEL_UP_MESSAGE,
+        variables: [
+          { name: "user", description: "The member who levelled up, as a mention", sample: "@Ada" },
+          { name: "level", description: "The level they reached", sample: "5" },
+        ],
         when: { field: "channel" },
       }),
     },
@@ -383,11 +388,6 @@ async function announceLevelUp(
   const channel = ctx.guild.channels.cache.get(channelId);
   if (!channel?.isTextBased()) return;
 
-  const text = settings.announce.message
-    .replace(/\{user\}/g, `<@${member.id}>`)
-    .replace(/\{level\}/g, String(level));
-
-  await channel.send(text).catch((error: unknown) => {
-    console.error(`[leveling] could not announce in channel ${channelId}:`, error);
-  });
+  // A failed send is logged by ctx.send and must not hold up the next message.
+  await ctx.send(channel, settings.announce.message, { user: `<@${member.id}>`, level }, { fallback: LEVEL_UP_MESSAGE });
 }

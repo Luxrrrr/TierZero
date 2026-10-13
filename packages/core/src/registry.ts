@@ -116,7 +116,7 @@ export class ModuleRegistry {
           description: c.description,
           kind: c.kind as CommandKind,
           defaultPermissions: defaultPermissionsOf(c.build()),
-          response: null,
+          response: c.response ?? null,
           privateByDefault: c.publicReply !== true,
           repliesVary: false,
         })),

@@ -60,6 +60,8 @@ A module declares its settings as a schema. Each field has a runtime validator a
 
 `s.role()` is a validator, a TypeScript type and an instruction to draw a role picker from the server's live roles. A bespoke settings page per feature is fine for three features and a drag at twelve.
 
+`s.message` is the field for anything the bot sends. It stores a `MessageBody` (the Messages page's shape), reads old plain strings as a message of that text, and the form draws it as a preview with an Edit message button that opens the shared `MessageEditorDialog`, the same dialog a command's reply uses. Modules send it through `ctx.send`, which calls `runtime/send-message.ts`: shared variables merged with the module's, a second validity check after filling, the same component and reaction handling as the Messages page send, and no exception back to the caller.
+
 The quick setup reuses this. Fields tagged `guided` are reduced to a smaller schema and fed to the same renderer.
 
 ## Configuration and storage
@@ -104,7 +106,11 @@ The bot checks the role again in each handler. Reads have no actor, so their res
 
 Dashboard, slash command and right-click actions all go through `performAction` in `packages/modules/moderation/src/perform.ts`: checks, DM, Discord call, case, scheduled unban, mod log post. The commands are thin wrappers. Rules that need no Discord objects are in `action-rules.ts` and tested alone.
 
-The dashboard adds a few rules the commands don't need, because Discord didn't vet the actor. No acting on yourself or the bot. A staff member who isn't in the server is refused, since their roles can't be compared with the target's. No DMs to non-members except on an unban, or a staff member's text could be sent to any Discord account.
+Checks that hold for every origin: the actor has the Discord permission for the action or a staff role that covers it (`checkActorMayAct`), nobody acts on themselves, the bot or the server owner, and role hierarchy. The bot's own ability to act (`moderatable`, `kickable`, `bannable`) is checked before the DM, which for a kick or ban has to go out first. If the Discord call still fails after a DM was sent, the member is sent a correction. No DMs to non-members except on an unban, or a staff member's text could be sent to any Discord account.
+
+The dashboard adds one more rule: a staff member who isn't in the server is refused, since their roles can't be compared with the target's.
+
+A temporary ban is lifted by the `unban` scheduled task (`unban-task.ts`). The scheduler deletes a task's row before running it, so the handler schedules its own retry on failure (1, 5, 15, 60 minutes, then hourly until a day has passed). Discord's Unknown Ban (10026) counts as already lifted. The scheduler keeps a task whose module is off or whose guild isn't cached yet, pushing it back a minute at a time, and drops it after a week.
 
 ### Server logs
 

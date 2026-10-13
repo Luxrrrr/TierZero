@@ -1,12 +1,11 @@
-import { ChannelType, EmbedBuilder, type NewsChannel, type TextChannel } from "discord.js";
+import { ChannelType, type NewsChannel, type TextChannel } from "discord.js";
 import { prisma } from "@tier0/db";
 import { FetchError, safeFetch } from "./net.js";
+import { NEWS_MESSAGE, STEAM_MESSAGE, deliver, newsValues, steamValues } from "./messages.js";
 import { parseFeed, type FeedItem } from "./parse.js";
 import { selectNew } from "./seen.js";
 import {
-  cleanSteamBody,
   isPatchNotes,
-  logoUrl,
   parseSteamNews,
   steamNewsUrl,
   type SteamPost,
@@ -16,7 +15,6 @@ import type { FeedsContext } from "./settings.js";
 
 export const MIN_POLL_MS = 5 * 60_000;
 const POSTS_PER_POLL = 5;
-const EMBED_COLOR = 0x5865f2;
 
 function readSeen(raw: string | undefined): string[] | null {
   if (raw === undefined) return null;
@@ -158,22 +156,7 @@ function textChannel(ctx: FeedsContext, id: string): TextChannel | NewsChannel {
 
 async function postFeedItem(ctx: FeedsContext, source: Source & { kind: "rss" }, item: FeedItem): Promise<void> {
   const channel = textChannel(ctx, source.row.channel);
-
-  const embed = new EmbedBuilder()
-    .setColor(EMBED_COLOR)
-    .setAuthor({ name: truncate(source.label, 256) })
-    .setTitle(truncate(item.title, 256));
-  if (item.link) embed.setURL(item.link);
-  if (item.summary) embed.setDescription(truncate(item.summary, 400));
-  if (item.image) embed.setImage(item.image);
-  if (item.publishedAt) embed.setTimestamp(item.publishedAt);
-
-  const mention = source.row.mention;
-  await channel.send({
-    content: mention ? `<@&${mention}>` : undefined,
-    embeds: [embed],
-    allowedMentions: { roles: mention ? [mention] : [] },
-  });
+  await deliver(ctx, channel, ctx.settings.news.message, newsValues(source.label, item, source.row.mention), NEWS_MESSAGE);
 }
 
 async function postSteamPost(
@@ -182,23 +165,8 @@ async function postSteamPost(
   post: SteamPost,
 ): Promise<void> {
   const channel = textChannel(ctx, source.channel);
-
-  const embed = new EmbedBuilder()
-    .setColor(EMBED_COLOR)
-    .setAuthor({ name: truncate(source.game, 256) })
-    .setTitle(truncate(post.title, 256))
-    .setURL(post.url)
-    .setThumbnail(logoUrl(source.appId))
-    .setFooter({ text: "Steam" })
-    .setTimestamp(post.publishedAt);
-  const body = cleanSteamBody(post.body);
-  if (body) embed.setDescription(truncate(body, 900));
-
-  await channel.send({
-    content: source.mention ? `<@&${source.mention}>` : undefined,
-    embeds: [embed],
-    allowedMentions: { roles: source.mention ? [source.mention] : [] },
-  });
+  const values = steamValues(source.game, source.appId, post, source.mention);
+  await deliver(ctx, channel, ctx.settings.patchNotes.message, values, STEAM_MESSAGE);
 }
 
 export interface SendResult {

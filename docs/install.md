@@ -235,6 +235,7 @@ Leave `CONTROL_HOST` unset so the bot only listens on localhost, and set `CONTRO
 | A moderator can't open the dashboard at all | It only opens on the machine running TierZero by default | See [Reaching the dashboard from other devices](#reaching-the-dashboard-from-other-devices) |
 | Your server isn't listed | You lack Manage Server there, or the bot isn't a member | You need both |
 | "This request did not come from the dashboard" when saving | The reverse proxy isn't passing the host through | See [Reaching the dashboard from other devices](#reaching-the-dashboard-from-other-devices) |
+| Mod log posts have no View in dashboard button, or it opens the wrong address | The bot learns the address from the owner opening the dashboard, and hasn't yet, or saw a different one | Open the dashboard once at the address your moderators use, or type it into **Dashboard address** in the moderation settings |
 | Channel or role lists won't load | Discord rate limited the server list lookup | Wait 30 seconds and reload |
 | A teammate signs in and sees no servers | They aren't on the Moderation list and lack Manage Server | Add them on the Access tab |
 | No moderation statistics, or no Staff activity page | The bot is running an old version, or you aren't an admin | Run `docker compose up -d --build`. Only admins and the owner see Audit |

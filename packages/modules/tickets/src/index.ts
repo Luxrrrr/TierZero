@@ -4,7 +4,6 @@ import {
   ButtonBuilder,
   ButtonStyle,
   ChannelType,
-  EmbedBuilder,
   MessageFlags,
   ModalBuilder,
   PermissionFlagsBits,
@@ -21,6 +20,26 @@ import { customId, defineModule, s, type Infer, type ModuleContext } from "@tier
 import { prisma, type Ticket } from "@tier0/db";
 import { canManageTicket, evaluateOpenRequest } from "./policy.js";
 import { ticketChannelName } from "./naming.js";
+import {
+  ADDED_MESSAGE,
+  CLOSING_MESSAGE,
+  CLOSING_VARIABLES,
+  CREATED_MESSAGE,
+  CREATED_VARIABLES,
+  MEMBER_VARIABLES,
+  OPENED_MESSAGE,
+  OPENED_VARIABLES,
+  PANEL_MESSAGE,
+  PANEL_POSTED_MESSAGE,
+  PANEL_POSTED_VARIABLES,
+  REMOVED_MESSAGE,
+  TRANSCRIPT_MESSAGE,
+  TRANSCRIPT_VARIABLES,
+  closingValues,
+  openedValues,
+  transcriptValues,
+  upgradePanel,
+} from "./messages.js";
 import { renderTranscript, type TranscriptMessage } from "./transcript.js";
 
 const CATEGORY_CHILD_LIMIT = 50;
@@ -36,16 +55,16 @@ const settingsSchema = s.object({
         label: "Panel channel",
         help: "Where the ticket panel is posted. Until this is set there is nowhere to publish it.",
       }),
-      title: s.string({ label: "Panel title", default: "Need help?", max: 256 }),
-      body: s.template({
+      message: s.message({
         label: "Panel message",
-        default: "Press the button below to open a ticket and the support team will be with you.",
-        max: 2000,
+        note: "The button members press to open a ticket is added under this message for you.",
+        starting: PANEL_MESSAGE,
+        components: false,
       }),
       buttonLabel: s.string({ label: "Button label", default: "Open a ticket", max: 80 }),
       buttonEmoji: s.emoji({ label: "Button emoji", optional: true }),
     },
-    { label: "The panel members press" },
+    { label: "The panel members press", upgrade: upgradePanel },
   ),
   category: s.channel({
     types: ["category"],
@@ -82,8 +101,63 @@ const settingsSchema = s.object({
         guided: true,
         when: { field: "enabled", equals: true },
       }),
+      message: s.message({
+        label: "Transcript message",
+        note: "The transcript itself is attached to this message as a text file.",
+        starting: TRANSCRIPT_MESSAGE,
+        variables: TRANSCRIPT_VARIABLES,
+        components: false,
+        when: { field: "enabled", equals: true },
+      }),
     },
     { label: "Transcripts" },
+  ),
+  messages: s.object(
+    {
+      opened: s.message({
+        label: "First message in a new ticket",
+        note: "Mentions in it are real pings, so keep {supportRoles} in the text if the support team should be notified. The Close ticket button is added under it for you.",
+        starting: OPENED_MESSAGE,
+        variables: OPENED_VARIABLES,
+        components: false,
+      }),
+      created: s.message({
+        label: "Reply to the member who opened a ticket",
+        note: "Only the member who opened the ticket sees this.",
+        starting: CREATED_MESSAGE,
+        variables: CREATED_VARIABLES,
+        delivery: "dm",
+        components: false,
+      }),
+      closing: s.message({
+        label: "When a ticket is being closed",
+        note: "Posted in the ticket by the Close ticket button and by /ticket close.",
+        starting: CLOSING_MESSAGE,
+        variables: CLOSING_VARIABLES,
+        components: false,
+      }),
+      added: s.message({
+        label: "When a member is added with /ticket add",
+        starting: ADDED_MESSAGE,
+        variables: MEMBER_VARIABLES,
+        components: false,
+      }),
+      removed: s.message({
+        label: "When a member is removed with /ticket remove",
+        starting: REMOVED_MESSAGE,
+        variables: MEMBER_VARIABLES,
+        components: false,
+      }),
+      panelPosted: s.message({
+        label: "After /ticket panel posts the panel",
+        note: "Only the person who ran the command sees this.",
+        starting: PANEL_POSTED_MESSAGE,
+        variables: PANEL_POSTED_VARIABLES,
+        delivery: "dm",
+        components: false,
+      }),
+    },
+    { label: "Other messages" },
   ),
   autoClose: s.object(
     {
@@ -102,20 +176,13 @@ const settingsSchema = s.object({
 type TicketSettings = Infer<typeof settingsSchema>;
 type Ctx = ModuleContext<TicketSettings>;
 
-function panelMessagePayload(settings: TicketSettings) {
-  const embed = new EmbedBuilder()
-    .setTitle(settings.panel.title)
-    .setDescription(settings.panel.body)
-    .setColor(0x5865f2);
+function panelRow(settings: TicketSettings) {
   const button = new ButtonBuilder()
     .setCustomId(customId("tickets", "open"))
     .setLabel(settings.panel.buttonLabel)
     .setStyle(ButtonStyle.Primary);
   if (settings.panel.buttonEmoji) button.setEmoji(settings.panel.buttonEmoji);
-  return {
-    embeds: [embed],
-    components: [new ActionRowBuilder<ButtonBuilder>().addComponents(button)],
-  };
+  return new ActionRowBuilder<ButtonBuilder>().addComponents(button);
 }
 
 function memberRoleIds(member: GuildMember | APIInteractionGuildMember | null | undefined): string[] {
@@ -209,12 +276,16 @@ async function saveTranscript(ctx: Ctx, ticket: Ticket, closedAt: Date, closedBy
     messages,
   );
 
-  await destination
-    .send({
-      content: `Transcript for ticket #${ticket.id}`,
+  const posted = await ctx.send(
+    destination,
+    ctx.settings.transcript.message,
+    transcriptValues(ticket, closedBy, "name" in channel ? (channel.name ?? "ticket") : "ticket"),
+    {
+      fallback: TRANSCRIPT_MESSAGE,
       files: [new AttachmentBuilder(Buffer.from(transcript, "utf8"), { name: `ticket-${ticket.id}.txt` })],
-    })
-    .catch((error: unknown) => console.error("[tickets] failed to post transcript:", error));
+    },
+  );
+  if (!posted) console.error(`[tickets] failed to post the transcript for ticket ${ticket.id}`);
 }
 
 /**
@@ -328,8 +399,20 @@ export default defineModule({
             });
             return;
           }
-          await channel.send(panelMessagePayload(ctx.settings));
-          await interaction.reply({ content: `Panel posted in ${channel}.`, flags: MessageFlags.Ephemeral });
+          const posted = await ctx.send(channel, ctx.settings.panel.message, {}, { fallback: PANEL_MESSAGE, rows: [panelRow(ctx.settings)] });
+          if (!posted) {
+            await interaction.reply({
+              content: "I couldn't post the panel there. Check that I can send messages and embed links in that channel.",
+              flags: MessageFlags.Ephemeral,
+            });
+            return;
+          }
+          await ctx.reply(
+            interaction,
+            ctx.settings.messages.panelPosted,
+            { panelChannel: `<#${channel.id}>` },
+            { fallback: PANEL_POSTED_MESSAGE },
+          );
           return;
         }
 
@@ -348,7 +431,12 @@ export default defineModule({
             return;
           }
           const reason = interaction.options.getString("reason");
-          await interaction.reply(reason ? `Closing this ticket: ${reason}` : "Closing this ticket.");
+          await ctx.reply(
+            interaction,
+            ctx.settings.messages.closing,
+            closingValues(interaction.user, ticket, reason),
+            { fallback: CLOSING_MESSAGE, ephemeral: false },
+          );
           await closeTicket(ctx, ticket, { id: interaction.user.id, tag: interaction.user.tag });
           return;
         }
@@ -377,10 +465,20 @@ export default defineModule({
             SendMessages: true,
             ReadMessageHistory: true,
           });
-          await interaction.reply(`Added ${target} to this ticket.`);
+          await ctx.reply(
+            interaction,
+            ctx.settings.messages.added,
+            { member: `<@${target.id}>`, staff: `<@${interaction.user.id}>`, number: ticket.id },
+            { fallback: ADDED_MESSAGE, ephemeral: false },
+          );
         } else {
           await channel.permissionOverwrites.delete(target.id).catch(() => undefined);
-          await interaction.reply(`Removed ${target} from this ticket.`);
+          await ctx.reply(
+            interaction,
+            ctx.settings.messages.removed,
+            { member: `<@${target.id}>`, staff: `<@${interaction.user.id}>`, number: ticket.id },
+            { fallback: REMOVED_MESSAGE, ephemeral: false },
+          );
         }
       },
     },
@@ -423,7 +521,12 @@ export default defineModule({
         });
         return;
       }
-      await interaction.reply("Closing this ticket.");
+      await ctx.reply(
+        interaction,
+        ctx.settings.messages.closing,
+        closingValues(interaction.user, ticket, null),
+        { fallback: CLOSING_MESSAGE, ephemeral: false },
+      );
       await closeTicket(ctx, ticket, { id: interaction.user.id, tag: interaction.user.tag });
     },
   },
@@ -517,17 +620,12 @@ export default defineModule({
           .setLabel("Close ticket")
           .setStyle(ButtonStyle.Danger),
       );
-      const mentionSupport = ctx.settings.supportRoles.map((roleId) => `<@&${roleId}>`).join(" ");
-      await channel.send({
-        content: `<@${interaction.user.id}> ${mentionSupport}`.trim(),
-        embeds: [
-          new EmbedBuilder()
-            .setTitle(subject ?? "New ticket")
-            .setDescription(`Opened by <@${interaction.user.id}>`)
-            .setColor(0x5865f2),
-        ],
-        components: [closeRow],
-      });
+      await ctx.send(
+        channel,
+        ctx.settings.messages.opened,
+        openedValues(interaction.user, ticket, channel.id, ctx.settings.supportRoles),
+        { fallback: OPENED_MESSAGE, rows: [closeRow] },
+      );
 
       if (ctx.settings.autoClose.enabled) {
         await ctx.tasks.schedule("autoclose", new Date(Date.now() + ctx.settings.autoClose.after), {
@@ -535,7 +633,12 @@ export default defineModule({
         });
       }
 
-      await interaction.editReply(`Your ticket has been created: ${channel}`);
+      await ctx.reply(
+        interaction,
+        ctx.settings.messages.created,
+        { ticket: `<#${channel.id}>`, number: ticket.id, subject: subject ?? "" },
+        { fallback: CREATED_MESSAGE },
+      );
     },
   },
 

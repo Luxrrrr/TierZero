@@ -102,6 +102,41 @@ export function parseMessage(
   return errors.length > 0 ? { ok: false, errors } : { ok: true, value: { content, embeds, buttons, selects, reactions } };
 }
 
+/** Where a message goes. A direct message cannot carry reactions or the menus that list a server's roles, channels or members. */
+export type MessageDelivery = "channel" | "dm";
+
+/**
+ * Takes out what the place a message is going cannot do, so a message built for
+ * a channel and later pointed at a direct message still sends. A direct message
+ * keeps every button and the text menus, which the bot answers like any other,
+ * but loses reactions and the role, channel, user and mentionable menus, which
+ * Discord does not fill in outside a server.
+ */
+export function restrictMessage(message: MessageBody, delivery: MessageDelivery, components = true): MessageBody {
+  const direct = delivery === "dm";
+  if (components && !direct) return message;
+  return {
+    ...message,
+    buttons: components ? message.buttons : [],
+    selects: components ? message.selects.filter((select) => select.kind === "string") : [],
+    reactions: direct ? [] : message.reactions,
+  };
+}
+
+/**
+ * Keeps only link buttons and drops menus and reactions. For a message whose
+ * buttons the bot will never be able to look up, such as a reply to a command,
+ * which is not stored the way a posted message is.
+ */
+export function linksOnly(message: MessageBody): MessageBody {
+  return {
+    ...message,
+    buttons: message.buttons.filter((button) => button.style === "link"),
+    selects: [],
+    reactions: [],
+  };
+}
+
 /** A name for a template or folder: trimmed, never empty, no longer than `max`. */
 export function cleanName(
   value: unknown,
@@ -151,17 +186,19 @@ export type VariableValues = Record<string, string>;
 
 /** Fills `{name}` for every name above and leaves any other braces exactly as typed. */
 export function applyVariables(value: string, values: VariableValues): string {
-  return value.replace(/\{([a-z][a-z.]*)\}/g, (whole, name: string) =>
+  return value.replace(/\{([a-zA-Z][a-zA-Z0-9.]*)\}/g, (whole, name: string) =>
     Object.hasOwn(values, name) ? (values[name] ?? whole) : whole,
   );
 }
 
 /**
  * Applies variables to every piece of text a message shows, and to the addresses
- * of its pictures so an icon can come from a variable. A link someone follows,
- * the title link and a button's address, is left exactly as written. What a
- * button or a menu does when it is used is left alone too: it is filled in then,
- * for the person who used it.
+ * of its pictures and links so an icon, or the title link, can come from a
+ * variable. A link button's address is filled in too, and a link button whose
+ * address comes out empty or is not a web address is left out, the way a field
+ * with nothing in it is, so a feature can offer a link that only exists when it
+ * has somewhere to point. What a button or a menu does when it is used is left
+ * alone: it is filled in then, for the person who used it.
  */
 export function applyVariablesToMessage(message: MessageBody, values: VariableValues): MessageBody {
   const fill = (value: string) => applyVariables(value, values);
@@ -170,6 +207,9 @@ export function applyVariablesToMessage(message: MessageBody, values: VariableVa
     embeds: message.embeds.map((embed) => ({
       ...embed,
       title: fill(embed.title),
+      url: fill(embed.url),
+      authorUrl: fill(embed.authorUrl),
+      timestamp: fill(embed.timestamp),
       description: fill(embed.description),
       authorName: fill(embed.authorName),
       footerText: fill(embed.footerText),
@@ -177,9 +217,19 @@ export function applyVariablesToMessage(message: MessageBody, values: VariableVa
       thumbnailUrl: fill(embed.thumbnailUrl),
       authorIconUrl: fill(embed.authorIconUrl),
       footerIconUrl: fill(embed.footerIconUrl),
-      fields: embed.fields.map((field) => ({ ...field, name: fill(field.name), value: fill(field.value) })),
+      // A field whose variables came to nothing is left out, so a feature can offer a
+      // line that only exists some of the time, such as an expiry.
+      fields: embed.fields
+        .map((field) => ({ ...field, name: fill(field.name), value: fill(field.value) }))
+        .filter((field, i) => {
+          const was = embed.fields[i];
+          const emptied = (before: string | undefined, after: string) => before !== undefined && before.trim() !== "" && after.trim() === "";
+          return !(emptied(was?.name, field.name) || emptied(was?.value, field.value));
+        }),
     })),
-    buttons: message.buttons.map((button) => ({ ...button, label: fill(button.label) })),
+    buttons: message.buttons
+      .map((button) => ({ ...button, label: fill(button.label), ...(button.style === "link" ? { url: fill(button.url).trim() } : {}) }))
+      .filter((button) => button.style !== "link" || isHttpUrl(button.url)),
     selects: message.selects.map((select) => ({
       ...select,
       placeholder: fill(select.placeholder),

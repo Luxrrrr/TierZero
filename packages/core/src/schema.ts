@@ -10,6 +10,9 @@
  * every minor release.
  */
 
+import { normalizeOrigin, parseMessage, restrictMessage, type MessageBody, type MessageDelivery } from "./message.js";
+import { plainReply } from "./response.js";
+
 export type FieldKind =
   | "string"
   | "integer"
@@ -20,6 +23,7 @@ export type FieldKind =
   | "choice"
   | "emoji"
   | "template"
+  | "message"
   | "array"
   | "object";
 
@@ -108,10 +112,15 @@ interface StringOptions extends FieldMeta {
   max?: number;
   multiline?: boolean;
   default?: string;
+  /**
+   * The value is a web address, kept as its origin: `https://bot.example.com/panel/`
+   * is stored as `https://bot.example.com`. Anything that is not an http(s) address is refused.
+   */
+  origin?: boolean;
 }
 
 function string(options: StringOptions = {}): Field<string> {
-  const { min, max, multiline, default: def, ...meta } = options;
+  const { min, max, multiline, origin, default: def, ...meta } = options;
   return {
     kind: "string",
     meta,
@@ -127,9 +136,13 @@ function string(options: StringOptions = {}): Field<string> {
       if (max !== undefined && input.length > max) {
         return fail(path, `must be at most ${max} characters`);
       }
+      if (origin) {
+        const normalized = normalizeOrigin(input);
+        return normalized === null ? fail(path, "must be a web address starting with http:// or https://") : { ok: true, value: normalized };
+      }
       return { ok: true, value: input };
     },
-    describe: () => ({ kind: "string", ...meta, default: def, min, max, multiline }),
+    describe: () => ({ kind: "string", ...meta, default: def, min, max, multiline, ...(origin ? { origin: true } : {}) }),
   };
 }
 
@@ -341,6 +354,72 @@ function template(options: TemplateOptions = {}): Field<string> {
   };
 }
 
+/** A `{name}` a module fills into one of its messages, with a stand-in the dashboard shows in the preview. */
+export interface MessageVariable {
+  name: string;
+  description: string;
+  sample: string;
+}
+
+export interface MessageFieldOptions extends FieldMeta {
+  /** What is particular to this message. The variables every message has are always on offer too. */
+  variables?: MessageVariable[];
+  /**
+   * What the feature sends today. It is the default value, so the dashboard
+   * shows the real wording and "go back to the default" has something to go
+   * back to.
+   */
+  starting: MessageBody;
+  /** Where it goes. A direct message cannot carry reactions or role, channel, user and mentionable menus. */
+  delivery?: MessageDelivery;
+  /** Set to false where the message cannot carry buttons or menus at all. */
+  components?: boolean;
+  /** A caveat shown in the editor, for when this covers more than one situation. */
+  note?: string;
+}
+
+/**
+ * A message the owner can rewrite with the full message builder: text, embeds,
+ * buttons, menus and reactions. A value saved while this setting was still a
+ * plain `template` string is read as a message that is just that text, so
+ * changing a setting's kind does not lose what owners already wrote.
+ */
+function message(options: MessageFieldOptions): Field<MessageBody> {
+  const { variables = [], starting, delivery = "channel", components = true, note, ...meta } = options;
+  const fit = (body: MessageBody) => restrictMessage(body, delivery, components);
+  const defaultValue = fit(starting);
+  return {
+    kind: "message",
+    meta,
+    defaultValue,
+    parse(input, path = "") {
+      if (input === undefined || input === null) return missing(this, path);
+      let raw: unknown = input;
+      if (typeof input === "string") {
+        if (input.trim() === "") return missing(this, path);
+        raw = plainReply(input);
+      }
+      const parsed = parseMessage(raw);
+      if (!parsed.ok) {
+        // One error per field: the dashboard shows it under the control, and
+        // the editor already pointed at the exact piece while it was typed.
+        return fail(path, parsed.errors[0]?.message ?? "is not a valid message");
+      }
+      return { ok: true, value: fit(parsed.value) };
+    },
+    describe: () => ({
+      kind: "message",
+      ...meta,
+      default: defaultValue,
+      variables,
+      starting: defaultValue,
+      delivery,
+      components,
+      note,
+    }),
+  };
+}
+
 // -- composites ------------------------------------------------------------
 
 function array<T>(
@@ -384,17 +463,29 @@ export interface ObjectField<S extends Shape> extends Field<ShapeValues<S>> {
   shape: S;
 }
 
-function object<S extends Shape>(shape: S, meta: FieldMeta = {}): ObjectField<S> {
+interface ObjectOptions extends FieldMeta {
+  /**
+   * Rewrites what was stored before it is read, for a group whose settings were
+   * reshaped. Settings are validated on read and unknown keys are dropped, so
+   * without this an owner's old wording would silently fall back to the default.
+   * It runs on every read, so it must leave an already-current value alone.
+   */
+  upgrade?: (stored: Record<string, unknown>) => Record<string, unknown>;
+}
+
+function object<S extends Shape>(shape: S, options: ObjectOptions = {}): ObjectField<S> {
+  const { upgrade, ...meta } = options;
   return {
     kind: "object",
     meta,
     shape,
     defaultValue: undefined,
     parse(input, path = "") {
-      const source = (input ?? {}) as Record<string, unknown>;
+      let source = (input ?? {}) as Record<string, unknown>;
       if (typeof source !== "object" || Array.isArray(source)) {
         return fail(path, "must be a set of settings");
       }
+      if (upgrade) source = upgrade(source);
       const value: Record<string, unknown> = {};
       const errors: FieldError[] = [];
       for (const [key, field] of Object.entries(shape)) {
@@ -430,6 +521,7 @@ export const s = {
   choice,
   emoji,
   template,
+  message,
   array,
   object,
 };

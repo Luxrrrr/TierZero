@@ -8,6 +8,8 @@ export type {
   FieldKind,
   FieldMeta,
   Infer,
+  MessageFieldOptions,
+  MessageVariable,
   ObjectField,
   ParseResult,
   Shape,
@@ -31,9 +33,15 @@ export type {
   RowRef,
   RowStatus,
   ScheduledWork,
+  SendMessageOptions,
+  EditMessageOptions,
+  ReplyMessageOptions,
   TaskHandler,
   TaskPayload,
 } from "./module.js";
+
+export { dashboardLinks, viewCaseButton } from "./dashboard-links.js";
+export type { DashboardLinks } from "./dashboard-links.js";
 
 export { plainReply } from "./response.js";
 export type { ReplyPlaceholder, ReplyValues, ResponseTemplate } from "./response.js";
@@ -138,12 +146,16 @@ export {
   isEmojiToken,
   isHexColor,
   isHttpUrl,
+  normalizeOrigin,
   parseMessage,
   parseSendOptions,
+  linksOnly,
+  restrictMessage,
 } from "./message.js";
 export type {
   EmbedField,
   MessageBody,
+  MessageDelivery,
   MessageEmbed,
   MessageError,
   MessageFolderDto,

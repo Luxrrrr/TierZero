@@ -41,6 +41,7 @@ export const AUDIT_KIND_SHORT: Record<AuditKind, string> = {
   "infraction.restore": "Action restored",
   "infraction.edit": "Action edited",
   "action.take": "Action taken",
+  "channel.purge": "Messages deleted",
   "messagelog.purge": "Server logs deleted",
   "logs.purge": "Log deleted",
   "staff.add": "Staff added",

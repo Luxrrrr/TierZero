@@ -91,6 +91,16 @@ Send posts it to the channel you pick, after a confirmation that shows the messa
 
 A sent message can mention people and roles. @everyone and @here only ping when you turn on "Let @everyone and @here ping" for that send, and Discord still ignores them unless the bot has the Mention Everyone permission.
 
+### Messages the bot sends by itself
+
+Where a feature has a message that is a setting, it shows a small preview of the message and an **Edit message** button instead of a text box. The button opens the editor from the Messages page: text, embeds, buttons, menus, reactions and variables, with a preview beside it. The editor starts from what the bot sends now, so you can change one word without rebuilding anything. Nothing is kept until you press **Use this message** and then Save on the settings page.
+
+A variable is a name in braces that the bot fills in when it sends, like `{user}` or `{level}`. The Variables tool lists the ones that message understands first, then the ones every message has. **Go back to the default** puts the original wording back.
+
+Almost everything the bot posts or sends works this way: the punishment DM and the mod log post, automod notices and log posts, welcome and farewell messages and their DMs, level-up announcements, the ticket panel and the messages around a ticket, role menus and their replies, news and patch note posts, and each kind of log channel entry. Slash command replies are edited from the Commands page. Error messages such as "you can't do that" are not editable.
+
+Messages written before the editor existed are kept and show up as plain text in it. If an edit ends up too long once the variables are filled in, the bot sends the default instead of nothing. Buttons and text menus work in a direct message too. Menus of roles, channels or people do not, and reactions are dropped. A role button in a direct message changes the role on the server the message came from.
+
 ## Moderation
 
 Warnings, timeouts, kicks, bans and temporary bans. Each gets a numbered case you can look up later.
@@ -99,8 +109,27 @@ Warnings, timeouts, kicks, bans and temporary bans. Each gets a numbered case yo
 - **A temporary ban schedules its own unban.** It's stored in the database, so a restart doesn't leave someone banned. Unban by hand first and the pending one is dropped.
 - **Discord's limits apply.** Timeouts cap at 28 days, and bulk delete can't touch messages older than 14 days.
 - **Cases outlive the action.** Unbanning keeps the row, marked inactive.
+- **Every action checks who is asking.** A slash command, the right-click menu and the dashboard all need the Discord permission for the action or a staff role that covers it, whatever the command's visibility is set to in Discord. Nobody can act on themselves, on the bot or on the server owner. `/case` and `/history` are for staff, like the right-click **Member history**.
+- **Nothing is sent before Discord can do it.** The bot checks that it can time out, kick or ban the member, and refuses with a reason if not, so nobody is told they were banned by a ban that could not happen. If Discord still refuses after the member was messaged, they get a short correction.
+- **Only members are messaged.** Someone who is not in the server, such as a user id banned ahead of time, is never sent a direct message, except that a confirmed ban being lifted still tells its member.
+- **A temporary ban that cannot be lifted is tried again.** If Discord refuses the unban, the bot tries again after 1, 5, 15 and then every 60 minutes for a day, and only records the unban and messages the member once it has worked. A ban someone already lifted by hand is closed on the record without a message. Work waiting on a server the bot has not loaded yet, or on a feature that is switched off, waits instead of being dropped.
+- **`/purge` is written to Staff activity.** Who deleted how many messages in which channel. It is not posted to the mod log, because that post is built around a case and a member.
+- **The reason goes to the member as written.** The reason a moderator types is both the note on the case and the text in the member's direct message. Leave anything meant only for staff out of it. The default message does not name the moderator; `{moderator}` and `{moderatorId}` are there if you want them.
+
+A mod log post can carry a **View in dashboard** button that opens that case on the member's record, scrolled to and highlighted. The address in the link is learned from the instance owner: whenever the owner has the dashboard open, its address is saved, and an address that only works on the same machine, such as `localhost`, is replaced as soon as the owner opens the dashboard on a real one. If the link is wrong, for example behind a proxy that hides the real address, type it into **Dashboard address** in the moderation settings, which takes priority over the saved one. Until one of the two exists the button is left off the post. The same button is on the posts automod makes and on the stock `/case` reply. The link only works for moderators who can sign in to the dashboard; anyone else gets the usual access refusal.
 
 A case that staff removed in the [moderation dashboard](#moderation-dashboard) is hidden from `/history` and `/case`. The row stays in the database and shows in the dashboard, marked as removed.
+
+### Wording you can change
+
+Everything the module posts or sends on its own can be rewritten with the message editor (see [Messages the bot sends by itself](#messages-the-bot-sends-by-itself)). On the module's settings page:
+
+- **Direct message to the member** is what a member is sent when action is taken on them, if **Direct message the member when action is taken** is on. One message covers every action, because `{action}` becomes warned, timed out, kicked, banned, unbanned or timeout cleared. Besides the variables every message has, it understands `{action}`, `{actionTitle}` (the same with a capital), `{reason}` (or "No reason given"), `{reasonNote}`, `{expires}`, `{expiresRelative}`, `{expiryNote}`, `{duration}`, `{moderator}` and `{moderatorId}`. `{reasonNote}` is " Reason: " and the reason, and `{expiryNote}` is " This expires " and the time, each with its leading space, and both are empty when there is nothing to say. The default message is `You were {action} in {server}.{reasonNote}{expiryNote}`. The moderator is not named unless you add `{moderator}`. Buttons work, including ones that open a web address, which suits an appeal link. Reactions and the role, channel and user menus are dropped, because a direct message can't carry them.
+- **Mod log post** is the embed posted in the mod log channel. It understands the same variables plus `{case}`, `{member}`, `{memberId}`, `{created}`, `{caseUrl}` (a link to the case in the dashboard) and `{memberUrl}` (a link to the member's record). An embed field whose variable is empty is left out, which is how the default leaves the Expires line off warnings and kicks. A link button whose address comes out empty is left out the same way, which is how the default **View in dashboard** button (`{caseUrl}`) disappears until the bot knows the dashboard's address. The direct message to the member never has these two.
+
+The replies to `/case`, `/history`, `/purge` and the right-click **Member history** are edited on the Commands page, as the replies to `/warn`, `/timeout` set, `/kick`, `/ban` and `/unban` already are. `/history` fills in `{user}`, `{count}` and `{list}`, where `{list}` is one line per case. `/purge` fills in `{count}`, `{messages}` and `{skippedNote}`. `/case` uses the mod log variables plus `{reversedNote}`, which says when the action has since been reversed.
+
+Some wording stays as it is. Refusals ("you can't act on that member"), `/timeout clear`, which shares a command with `/timeout set` and so has no reply of its own, a member with no history, a case number that doesn't exist, and the forms and notes shown to the moderator after a right-click action are not editable. If an edited message ends up too long once the variables are filled in, the bot sends the default one instead.
 
 ## Moderation dashboard
 
@@ -317,17 +346,42 @@ Seven rules you switch on separately, each with its own action and exemptions: i
 
 Banned word matching is conservative on purpose. Text is lowercased, common letter-for-number swaps are folded back, a letter stretched out three or more times is collapsed, and it matches on word boundaries. So `assassin` doesn't trip a rule for the rude three letters inside it. The cost is that spacing letters out gets past it, since catching that means stripping whitespace, which glues unrelated words together and brings the false positives back. Missing a few real cases beats deleting innocent messages.
 
-Anyone with moderator permissions is exempt by default, and you can turn that off. When several rules trip on one message, you get one action, the most severe.
+Anyone with moderator permissions is exempt by default, and you can turn that off. When several rules trip on one message, you get one action, the most severe. A message in a thread follows the channel the thread is in, so exempting a channel exempts its threads too.
+
+What each rule reads:
+
+- **Invites** looks for `discord.gg/code` and `discord.com/invite/code`. Allowed invites can be a bare code or a pasted link, with or without a query string.
+- **Links** looks at the address of every `http` or `https` link. Allowed domains can be pasted as a whole link, such as `https://youtube.com/watch?v=1`, and only the domain is used. A domain also covers its subdomains. A link whose address isn't a valid domain (stray symbols, or a name followed by `@`) counts as not allowed.
+- **Banned words** matches whole words in any alphabet, so a Cyrillic or accented word works, and punctuation next to a word doesn't hide it (`damn!`). The record and the log post list which entries of your list matched, not the member's whole message.
+
+Automod reads edits as well as new messages, since an edit is an easy way past a filter. An edit is only checked when its text changed, and it doesn't count as another message toward rate limiting or repeated text. A message is acted on once, even if Discord sends several updates for it.
+
+Automod only reports what it managed to do. If the bot can't delete a message, or can't time a member out because they're an administrator, the owner, or above the bot, the notice and the record say only what actually happened, and the log post gets a **Not carried out** line saying what failed. A timeout that didn't go through is recorded as the deletion or warning that did, not as a timeout.
+
+Messages never repeat what the member wrote. The reason in the notice, the log and the record is fixed wording such as "Posted a Discord invite link". The specific invite code, domain or banned word that matched goes only to staff, in the **Matched** field of the log post and in the record on the dashboard.
+
+Each trip also keeps the message itself on the case, as a moderator's attached message is kept: its text, channel, attachments and a note of whether it was deleted. If the member edited it into breaking the rule, the earlier versions are kept as well, from Server logs when that is on, and the version that tripped the rule is marked. It is kept even when the bot couldn't delete the message. This is staff-only and shows on the member's record in the dashboard, never in Discord. The log post carries the **View in dashboard** button, which opens the case. Automod's cases have case numbers like any other. The notice can only mention the member it is about, and the log post mentions no one.
+
+### Wording you can change
+
+Two things automod says are edited with the message editor.
+
+- **Notice in the channel** is posted where the message was removed and deleted again after 8 seconds. Besides the variables every message has, it understands `{user}` (a mention), `{userId}`, `{rule}`, `{action}` (delete, warn or timeout), `{reason}`, `{reasonNote}`, `{outcome}` and `{duration}`. `{reasonNote}` is a colon, a space and the reason, or nothing. `{outcome}` is the sentence the notice has always used, chosen from what actually happened: your message was removed, your message was removed and you were timed out, you were timed out, or that message tripped automod. The default is `{user}, {outcome} ({rule}{reasonNote}).`
+- **Log posts** are the embeds sent to the log channel, one for each thing a rule can do (delete, warn, time out) so that each keeps its own colour. They understand the same variables except `{outcome}` and `{reasonNote}`, plus `{match}` (the invite code, domain or banned words that matched, in code blocks so nothing becomes a link), `{problems}` (what the bot couldn't do), `{case}`, `{caseUrl}` and `{memberUrl}`. The default post shows these as **Matched** and **Not carried out** fields, which are left out when empty. `{match}` and `{problems}` aren't available in the channel notice. `{reason}` is a dash when there is nothing to add.
+
+Both are shown on the module's settings page, and the log posts only when a log channel is set. A message that comes out too long once filled in is replaced by the default.
 
 ## Welcome messages
 
-Greetings on join, farewells on leave, an optional direct message, and roles given on arrival. Messages support `{user}`, `{username}`, `{server}` and `{memberCount}`. An unknown placeholder fails the save and names it, so a typo shows up right away. The bot can't give a role above its own. It logs that and carries on with the rest of the join.
+Greetings on join, farewells on leave, an optional direct message to each, and roles given on arrival. The greeting and the farewell are posted in the channel you pick, and nothing is posted while that is empty. Each of the four messages is edited with the message builder, so it can be an embed, carry an image or use any of the other variables. They start as a short line you can change. Besides the variables every message has, they understand `{user}` (a mention), `{username}`, `{server}` and `{memberCount}`. The two direct messages are off until you switch them on, and are only sent if the member allows DMs. A message you wrote before the builder existed is kept, and one that was set to send as an embed becomes an embed with the same text. The bot can't give a role above its own. It logs that and carries on with the rest of the join.
 
 ![Welcome message settings with a live preview](images/welcome-settings.png)
 
 ## Role menus
 
-Members pick roles from buttons on a menu you publish to a channel. Buttons keep working after the message leaves the bot's cache, need no message content permission, and give the member a private confirmation. Publishing a menu again edits the existing message. Mark a menu exclusive and picking one option clears the others, which suits pronouns or colors.
+Members pick roles from buttons on a menu you publish to a channel. Buttons keep working after the message leaves the bot's cache, need no message content permission, and give the member a private confirmation. Publishing a menu again edits the existing message. Mark a menu exclusive and picking one option clears the others, which suits a rank or a main platform.
+
+The message above a menu's buttons is edited with the message builder, with `{menu}` for the menu's name. The buttons themselves come from the menu's options and are added under whatever you write, so the builder doesn't offer buttons for it. A menu saved with a title and description keeps them as an embed. Under **Replies** you can reword the private confirmations: one when a role is given and one when it is taken away, both with `{role}` and `{menu}`, and the one `/rolemenu` shows after publishing a menu, with `{menu}` and `{menuChannel}`. Refusals, such as a role above the bot's own, keep their fixed wording.
 
 ![A role menu being edited with its options](images/role-menus.png)
 
@@ -335,11 +389,24 @@ Members pick roles from buttons on a menu you publish to a channel. Buttons keep
 
 A panel with a button. A member presses it, gives a subject and gets a private channel with your support team. The channel denies the whole server and grants access back to the opener, your support roles and the bot, whatever other roles anyone has. Transcripts (sent to a channel you pick when the ticket closes) and auto-close (the clock resets when anyone speaks) are optional. A member who's hit their ticket limit is told so.
 
+The panel, the first message inside a new ticket, the transcript post and the short replies are all edited with the message builder, and each starts as what the bot posts now. The button on the panel and the Close ticket button in a ticket are added by the bot under your message, so you can't change them there, only their labels in the panel settings. Variables, besides the ones every message has:
+
+- First message in a ticket: `{user}`, `{username}`, `{subject}`, `{title}` (the subject, or "New ticket" when there is none), `{number}`, `{ticket}` and `{supportRoles}`. The mentions in it do ping, so keep `{supportRoles}` if the team should be notified.
+- Closing: `{closedBy}`, `{reason}`, `{number}` and `{ending}`, which is a colon and the reason when `/ticket close` was given one and a full stop otherwise. The default is "Closing this ticket{ending}".
+- Transcript post: `{number}`, `{user}`, `{subject}`, `{closedBy}` and `{ticketName}`. The transcript is still attached as a text file.
+- Reply when a ticket is opened: `{ticket}`, `{number}` and `{subject}`. Only the member sees it.
+- `/ticket add` and `/ticket remove`: `{member}`, `{staff}` and `{number}`.
+- `/ticket panel`: `{panelChannel}`. Only the person who ran it sees it.
+
+A panel saved with a title and body keeps them as an embed in the same colour. Messages that refuse something, like a member at their ticket limit, keep their fixed wording.
+
 ![Ticket panel settings with a preview](images/tickets-settings.png)
 
 ## Log channel
 
 Found under **More** in the sidebar, since most servers use [Server logs](#server-logs) instead. Posts what changed on the server into a channel you pick, so staff who stay in Discord see it as it happens. It doesn't keep anything searchable. It posts: message edits and deletions, joins and departures, nickname and role changes, channels and roles created and deleted, bans and unbans. Every category has its own switch. Entries for messages the bot never cached say what's known and leave out the rest. An edit that didn't change the text, like a link preview loading, is skipped. The log channel isn't logged about itself, and bot messages are skipped unless you ask for them.
+
+Every kind of entry has its own message under **How each entry looks**, edited with the same message builder as everywhere else, and it starts out as the entry the bot posts today. Each one has variables for what happened, such as `{author}`, `{content}`, `{before}` and `{after}` for messages, `{member}` for joins, departures and bans, `{reason}` for a ban, `{new.channel}` and `{old.channel}` for channels, and `{new.role}` and `{old.role}` for roles. The editor lists them for each entry. A line whose variable is empty is left out, which is how a ban with no reason has no reason line, and how a nickname change doesn't show the role lines. Nickname and role changes share one entry. Put the variables in the embed rather than the message text: text from a deleted or edited message can contain mentions, and an embed never pings anyone. Which events are posted is still chosen with the switches, not by the messages.
 
 ## News and patch notes
 
@@ -355,6 +422,8 @@ A new source posts its newest item once, to show it works, then only new items. 
 
 - `/feeds status` shows what's watched, when each source was last checked, and why one isn't working.
 - `/feeds send` posts the latest items from one feed or game now (up to ten, oldest first). Give it part of a name or address, and if that matches several sources it lists them. The scheduled checks won't repeat what it sent. Only members who can manage the server see `/feeds` by default.
+
+The post for news items and the post for patch notes are each a message you can rewrite, under **Post** in their sections, and they start out as the embed described above. News items have `{source}`, `{title}`, `{link}`, `{description}`, `{image}`, `{published}` and `{role}`. Patch notes have `{game}`, `{game.id}`, `{title}`, `{link}`, `{description}`, `{logo}`, `{published}` and `{role}`. `{description}` is already cut to the length the bot uses (400 characters for news, 900 for patch notes), and a variable that is empty, such as the picture of an item that has none, is simply left out. The role you pick to ping is not added by itself: it arrives as `{role}`, which the starting message has as its text, so keep `{role}` in the text if you still want the ping. `{published.iso}` is the same moment in the form an embed's time setting needs. Rewriting the post applies to every feed or game, not to one of them. The answer to `/feeds send` can be reworded from the Commands page with `{posted}`, `{count}`, `{source}` and `{problem}`; `/feeds status` keeps its own wording.
 
 Feed addresses are fetched from the public internet only. An address pointing at the bot's own machine or network is refused, which matters when people other than the operator can reach the dashboard.
 

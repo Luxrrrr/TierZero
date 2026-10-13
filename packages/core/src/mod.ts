@@ -166,6 +166,7 @@ export type AuditKind =
   | "infraction.restore"
   | "infraction.edit"
   | "action.take"
+  | "channel.purge"
   | "messagelog.purge"
   | "logs.purge"
   | "staff.add"
@@ -181,6 +182,7 @@ export const AUDIT_KIND_LABEL: Record<AuditKind, string> = {
   "infraction.edit": "Edited an action on a record",
   "infraction.restore": "Restored an action to a record",
   "action.take": "Took an action on a member",
+  "channel.purge": "Deleted messages in a channel",
   "messagelog.purge": "Deleted the server logs",
   "logs.purge": "Deleted a whole log",
   "staff.add": "Added staff",

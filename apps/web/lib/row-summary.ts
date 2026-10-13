@@ -89,6 +89,8 @@ function detailFor(
       return isFilled(value) ? truncate(value) : undefined;
     case "emoji":
       return isFilled(value) ? value : undefined;
+    case "message":
+      return messageDetail(value);
     case "integer":
       return typeof value === "number" ? `${label} ${value}` : undefined;
     case "duration": {
@@ -113,6 +115,19 @@ function detailFor(
     default:
       return undefined;
   }
+}
+
+/** The first of a message's text, or what it is made of when it has none. */
+function messageDetail(value: unknown): string | undefined {
+  if (typeof value === "string") return isFilled(value.trim()) ? truncate(value.trim()) : undefined;
+  if (typeof value !== "object" || value === null) return undefined;
+  const { content, embeds } = value as { content?: unknown; embeds?: unknown };
+  if (typeof content === "string" && content.trim() !== "") return truncate(content.trim().replace(/\s+/g, " "));
+  if (Array.isArray(embeds) && embeds.length > 0) {
+    const title = (embeds[0] as { title?: unknown } | undefined)?.title;
+    return typeof title === "string" && title.trim() !== "" ? truncate(title.trim()) : embeds.length === 1 ? "Embed" : `${embeds.length} embeds`;
+  }
+  return undefined;
 }
 
 function choiceLabel(field: FieldDescriptor, value: unknown): string | undefined {

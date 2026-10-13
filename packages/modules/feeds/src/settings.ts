@@ -1,4 +1,5 @@
 import { s, type Infer, type ModuleContext } from "@tier0/core";
+import { NEWS_MESSAGE, NEWS_VARIABLES, STEAM_MESSAGE, STEAM_VARIABLES } from "./messages.js";
 
 export const settingsSchema = s.object({
   pollEvery: s.duration({
@@ -10,6 +11,12 @@ export const settingsSchema = s.object({
   news: s.object(
     {
       enabled: s.boolean({ label: "Post new items from news feeds", default: true }),
+      message: s.message({
+        label: "Post",
+        help: "How each new item is posted. Every feed uses it.",
+        starting: NEWS_MESSAGE,
+        variables: NEWS_VARIABLES,
+      }),
       feeds: s.array(
         s.object({
           name: s.string({
@@ -38,6 +45,12 @@ export const settingsSchema = s.object({
   patchNotes: s.object(
     {
       enabled: s.boolean({ label: "Post Steam patch notes", default: true }),
+      message: s.message({
+        label: "Post",
+        help: "How each patch note is posted. Every game uses it.",
+        starting: STEAM_MESSAGE,
+        variables: STEAM_VARIABLES,
+      }),
       destinations: s.array(
         s.object({
           channel: s.channel({ types: ["text"], label: "Post in" }),

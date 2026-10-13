@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import type { FieldCondition, FieldDescriptor, RowDescription } from "@tier0/core";
+import type { FieldCondition, FieldDescriptor, MessageBody, RowDescription } from "@tier0/core";
 import { describeDuration } from "../lib/duration";
 import { isBlank } from "../lib/module-status";
 import { humanize } from "../lib/row-summary";
@@ -11,11 +11,13 @@ import { arrayItemPath, objectChildPath } from "../lib/schema-paths";
 import { ChannelPicker, MultiChannelPicker } from "./form/ChannelPicker";
 import { DurationInput } from "./form/DurationInput";
 import { Field, type FieldChrome } from "./form/Field";
+import { MessageControl } from "./form/MessageControl";
 import { ObjectArray, type RowsContext } from "./form/ObjectArray";
 import { MultiRolePicker, RolePicker } from "./form/RolePicker";
 import { Switch } from "./form/Switch";
 import { TagInput } from "./form/TagInput";
 import { TemplateEditor } from "./form/TemplateEditor";
+import type { EditorVariable } from "./messages/MessageEditorDialog";
 
 interface Props {
   schema: FieldDescriptor;
@@ -431,6 +433,22 @@ function control(chrome: FieldChrome, props: ControlProps): ReactNode {
         />
       );
 
+    case "message":
+      return (
+        <MessageControl
+          {...common}
+          guildId={ctx.guildId}
+          label={field.label ?? humanize(props.name)}
+          starting={field.starting as MessageBody}
+          variables={(field.variables as EditorVariable[] | undefined) ?? []}
+          delivery={field.delivery === "dm" ? "dm" : "channel"}
+          components={field.components !== false}
+          note={field.note as string | undefined}
+          value={value}
+          onChange={onChange}
+        />
+      );
+
     case "channel":
       return (
         <ChannelPicker
@@ -680,7 +698,7 @@ function isComposite(field: FieldDescriptor): boolean {
 }
 
 function wantsWholeRow(field: FieldDescriptor): boolean {
-  if (field.kind === "template") return true;
+  if (field.kind === "template" || field.kind === "message") return true;
   if (field.kind === "array") return true;
   return field.kind === "string" && field.multiline === true;
 }

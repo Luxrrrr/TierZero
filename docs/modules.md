@@ -48,6 +48,7 @@ The settings page is generated from `settings`, and `ctx.settings` is typed from
 | `s.choice({ options })` | string | select |
 | `s.emoji()` | string | text input for a unicode or `<:name:id>` emoji |
 | `s.template({ placeholders })` | string | textarea with insertable placeholders and a preview |
+| `s.message({ starting, variables, delivery })` | message body | a preview and an Edit message button that opens the message editor |
 | `s.array(field, { min, max })` | array | chips, tags or removable rows, depending on the item |
 | `s.object({ ... })` | object | a card at the top level, a subgroup inside one |
 
@@ -88,6 +89,57 @@ modLogChannel: s.channel({ types: ["text"], optional: true, guided: true, label:
 ```
 
 Which modules the quick setup groups, and in what order, is in `apps/web/lib/guided.ts`. It's the one place the dashboard names modules directly.
+
+### Messages the owner can edit
+
+Use `s.message` for anything the module sends, in place of `s.template`. The owner edits it with the same builder as the Messages page: text, embeds, buttons, menus, reactions and variables.
+
+```ts
+import { plainReply, s } from "@tier0/core";
+
+const LEVEL_UP = plainReply("{user} reached level {level}!");
+
+message: s.message({
+  label: "Level-up message",
+  starting: LEVEL_UP,
+  variables: [
+    { name: "user", description: "The member who levelled up, as a mention", sample: "@Ada" },
+    { name: "level", description: "The level they reached", sample: "5" },
+  ],
+}),
+```
+
+`starting` is what the feature sends today. It is also the default, so the editor opens on the real wording and "Go back to the default" has something to return to. `variables` are the module's own placeholders, each with a sample for the preview. The ones every message has (`{server}`, `{members}`, `{channel}`, `{channel.name}`, `{date}`, `{time}`, `{now}`, `{sender}`, `{bot}`, `{server.icon}`) are always offered as well.
+
+| Option | Default | Effect |
+| --- | --- | --- |
+| `delivery` | `"channel"` | `"dm"` hides reactions and the role, channel, user and mentionable menus, which Discord does not fill in outside a server. Buttons and text menus stay and work. A direct message also mentions nobody. |
+| `components` | `true` | `false` hides buttons and menus entirely. |
+| `note` | none | A caveat shown beside the preview, for a setting that covers more than one situation. |
+
+The parsed value is a `MessageBody`. A value stored while the setting was still an `s.template` string is accepted and read as a message that is only that text, so changing a setting from `s.template` to `s.message` loses nothing. Anything that is missing or blank falls back to `starting`, and a message that fails Discord's limits is a validation error like any other.
+
+Send it with `ctx.send`, which takes a channel, a user or a member:
+
+```ts
+await ctx.send(channel, ctx.settings.announce.message, { user: `<@${member.id}>`, level }, { fallback: LEVEL_UP });
+```
+
+`ctx.send` fills the shared variables, then the values you pass (which win on a clash), checks the message again because variables can lengthen it, sends it, and afterwards stores what its buttons do and adds its reactions. A button in a direct message is stored against the server the module runs for, so pressing it acts on that server; with no server known, only link buttons are sent. It resolves to the sent message, or to null if nothing was sent. It never throws: a closed DM or a missing permission is logged and the feature carries on. If the message no longer fits once filled in, `fallback` is sent instead, so a feature doesn't go silent over an owner's edit. Pass `sender` in the options to set `{sender}`, which is the bot's name otherwise. When the module owns a button or menu of its own, such as one answered by its `components` handler, set `components: false` on the field and pass the row you built as `rows`, which is placed under the message's own. `files` attaches files. `mentions: { users, roles }` lists the ids the post may ping and nothing else; pass it when the text includes anything a member wrote, and empty lists for a post that pings no one. Without it a channel post may ping any user or role it mentions.
+
+`ctx.dashboardUrl()` resolves the address the dashboard is opened at, with no trailing slash, or an empty string when it isn't known. It is the moderation module's **Dashboard address** setting if set, else the address the instance owner last opened the dashboard at, read from the database and cached for 30 seconds. Build links from it with `dashboardLinks(base, guildId, userId, caseNumber)` from `@tier0/core`, which gives `caseUrl` and `memberUrl`, both empty when there is no address. A link button whose address comes out empty or isn't an http(s) address is dropped when the message is filled in, so a post that has no address simply has no button. `viewCaseButton()` is the default one. A link button's address may contain a variable, as in `{caseUrl}`, and the editor accepts that while it is being typed. An `s.string({ origin: true })` setting is stored as an origin: a pasted path or trailing slash is dropped and anything that isn't an http(s) address is refused.
+
+Two companions cover the other places a message goes. `ctx.edit(message, body, values, { fallback, rows })` rewrites a message the module posted earlier, for a post that is refreshed in place, and resolves to null if it could not. `ctx.reply(interaction, body, values, { fallback, ephemeral })` answers a button, modal or command with the owner's message. It is ephemeral unless you pass `ephemeral: false`, edits the reply if the interaction was deferred, and drops buttons other than links, since nothing is stored to answer them. It resolves to false when nothing could be sent.
+
+A line that should only exist some of the time, such as an expiry on an action that may not expire, is an embed field whose value is a variable. When the variable fills to nothing the field is left out, instead of the whole message failing Discord's check for an empty field. For text in a sentence, give the variable its own punctuation and leading space, empty when there is nothing to say, so the template stays a plain fill-in.
+
+When you turn two settings into one message, say a title and a body, write an `upgrade` on the `s.object` that holds them. Settings are validated on read and unknown keys are dropped, so without it the owner's old wording would quietly go back to the default. It receives the stored object and returns the one to validate, runs on every read, and must leave an already-current value alone:
+
+```ts
+s.object({ message: s.message({ /* ... */ }) }, { upgrade: (stored) => /* old title and body become message */ stored });
+```
+
+Keep the upgrade in a file that doesn't import discord.js so its tests are plain input and output. The implementation is `apps/bot/src/runtime/send-message.ts`, where `renderMessage` is the pure half if you need the payload without sending.
 
 ### Groups with a switch
 
@@ -155,7 +207,7 @@ Commands are registered per server and re-synced, debounced by five seconds, whe
 
 ### Right-click entries
 
-`contextCommands` adds entries to Discord's right-click menu on members and messages. They share the name space, the Commands page and the per-server switches with slash commands, so a name has to be unique across both. Names can contain spaces and capitals. Discord allows five of each kind per server.
+`contextCommands` adds entries to Discord's right-click menu on members and messages. They share the name space, the Commands page and the per-server switches with slash commands, so a name has to be unique across both. Names can contain spaces and capitals. Discord allows five of each kind per server. An entry can declare `response` like a slash command, and its handler asks `ctx.customReply` the same way.
 
 ```ts
 contextCommands: [

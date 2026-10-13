@@ -336,7 +336,9 @@ export function ButtonsEditor({
           {buttons.length} of {L.buttons} · <RowsNote buttons={buttons.length} selects={selectCount} />
         </span>
       </div>
-      <p className="field-hint">Blue, grey, green and red buttons do something when pressed. A link button opens a web address. Five fit on a row.</p>
+      <p className="field-hint">
+        Blue, grey, green and red buttons do something when pressed. A link button opens a web address. Five fit on a row.
+      </p>
       {errorAt(errors, "buttons") ? <p className="field-error">{errorAt(errors, "buttons")}</p> : null}
 
       {buttons.map((button, i) => {
@@ -411,12 +413,15 @@ export function SelectsEditor({
   selects,
   buttonCount,
   errors,
+  textOnly = false,
   onChange,
 }: {
   guildId: string;
   selects: MessageSelect[];
   buttonCount: number;
   errors: MessageError[];
+  /** For a direct message, where only a menu of typed options is filled in. */
+  textOnly?: boolean;
   onChange(next: MessageSelect[]): void;
 }) {
   const L = MESSAGE_LIMITS;
@@ -431,7 +436,10 @@ export function SelectsEditor({
           {selects.length} of {L.selects} · <RowsNote buttons={buttonCount} selects={selects.length} />
         </span>
       </div>
-      <p className="field-hint">A dropdown people pick from. Each takes a row of its own, under the buttons.</p>
+      <p className="field-hint">
+        A dropdown people pick from. Each takes a row of its own, under the buttons.
+        {textOnly ? " Menus of roles, channels or people are not available in a direct message." : ""}
+      </p>
       {errorAt(errors, "selects") ? <p className="field-error">{errorAt(errors, "selects")}</p> : null}
 
       {selects.map((select, i) => (
@@ -441,7 +449,7 @@ export function SelectsEditor({
       {selects.length < L.selects ? (
         picking ? (
           <div className="select-kinds" role="group" aria-label="What the menu lets people pick">
-            {SELECT_KINDS.map((kind) => (
+            {SELECT_KINDS.filter((kind) => !textOnly || kind.id === "string").map((kind) => (
               <button
                 key={kind.id}
                 type="button"

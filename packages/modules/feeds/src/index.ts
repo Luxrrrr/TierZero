@@ -1,5 +1,5 @@
 import { MessageFlags, PermissionFlagsBits, SlashCommandBuilder, type ChatInputCommandInteraction } from "discord.js";
-import { defineModule } from "@tier0/core";
+import { defineModule, plainReply } from "@tier0/core";
 import { prisma } from "@tier0/db";
 import { MAX_SEND, clampCount, matchSources } from "./match.js";
 import { MIN_POLL_MS, pollAll, sendLatest } from "./poll.js";
@@ -20,6 +20,8 @@ async function scheduleNext(ctx: FeedsContext, delayMs: number): Promise<void> {
   await ctx.tasks.cancel("poll");
   await ctx.tasks.schedule("poll", new Date(Date.now() + delayMs));
 }
+
+const SEND_REPLY = plainReply("Sent {posted} of the latest {count} from {source}. {problem}");
 
 const intervalOf = (ctx: FeedsContext): number => Math.max(ctx.settings.pollEvery, MIN_POLL_MS);
 
@@ -77,7 +79,15 @@ async function runSend(interaction: ChatInputCommandInteraction, ctx: FeedsConte
   const result = await sendLatest(ctx, source, count);
 
   const sent = `Sent ${result.posted} of the latest ${count} from ${source.label}.`;
-  await interaction.editReply(result.error ? `${sent} Stopped because: ${result.error}.` : sent);
+  const custom = ctx.customReply?.({
+    posted: result.posted,
+    count,
+    source: source.label,
+    problem: result.error ? `Stopped because: ${result.error}.` : "",
+  });
+  // Visibility was fixed when the reply was deferred, so the flags an owner reply might carry do not apply.
+  const { flags: _flags, ...editable } = custom ?? {};
+  await interaction.editReply(custom ? editable : (result.error ? `${sent} Stopped because: ${result.error}.` : sent));
 }
 
 export default defineModule({
@@ -92,6 +102,16 @@ export default defineModule({
     {
       name: "feeds",
       description: "See what the bot is watching, or send a source's latest posts now.",
+      response: {
+        starting: SEND_REPLY,
+        placeholders: [
+          { name: "posted", description: "How many posts were sent", sample: "3" },
+          { name: "count", description: "How many were asked for", sample: "3" },
+          { name: "source", description: "The feed or game they came from", sample: "Example Gazette" },
+          { name: "problem", description: "Why it stopped early, as a sentence. Empty when everything was sent", sample: "" },
+        ],
+        note: "Used for the answer to /feeds send. /feeds status, and the answers that say nothing matched, keep their own wording.",
+      },
       build: () =>
         new SlashCommandBuilder()
           .setName("feeds")

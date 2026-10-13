@@ -2,15 +2,23 @@ import {
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
-  EmbedBuilder,
   MessageFlags,
   PermissionFlagsBits, SlashCommandBuilder,
-  type Guild,
 } from "discord.js";
-import { customId, defineModule, isRoleAssignable, s, type Infer } from "@tier0/core";
+import { customId, defineModule, isRoleAssignable, s, type Infer, type ModuleContext } from "@tier0/core";
 import { prisma } from "@tier0/db";
 import { computeToggle } from "./toggle.js";
 import { parseMapping, serializeMapping, type MenuMapping } from "./mapping.js";
+import {
+  GAVE_MESSAGE,
+  MENU_MESSAGE,
+  MENU_VARIABLES,
+  PUBLISHED_MESSAGE,
+  PUBLISHED_VARIABLES,
+  REMOVED_MESSAGE,
+  TOGGLE_VARIABLES,
+  upgradeMenu,
+} from "./messages.js";
 
 const MAX_BUTTONS_PER_ROW = 5;
 
@@ -22,18 +30,26 @@ const optionField = s.object({
 
 type OptionSettings = Infer<typeof optionField>;
 
-const menuField = s.object({
-  name: s.string({ label: "Menu name", max: 100 }),
-  channel: s.channel({ types: ["text"], label: "Channel to post in" }),
-  title: s.string({ label: "Title", max: 256 }),
-  description: s.string({ optional: true, multiline: true, max: 2000, label: "Description" }),
-  exclusive: s.boolean({
-    default: false,
-    label: "Picking one option clears the others",
-    help: "Turn this on for menus like pronouns or color where only one choice makes sense.",
-  }),
-  options: s.array(optionField, { min: 1, max: 25, label: "Options" }),
-});
+const menuField = s.object(
+  {
+    name: s.string({ label: "Menu name", max: 100 }),
+    channel: s.channel({ types: ["text"], label: "Channel to post in" }),
+    message: s.message({
+      label: "Menu message",
+      note: "The role buttons are added under this message for you.",
+      starting: MENU_MESSAGE,
+      variables: MENU_VARIABLES,
+      components: false,
+    }),
+    exclusive: s.boolean({
+      default: false,
+      label: "Picking one option clears the others",
+      help: "Turn this on for menus like platform or rank where only one choice makes sense.",
+    }),
+    options: s.array(optionField, { min: 1, max: 25, label: "Options" }),
+  },
+  { upgrade: upgradeMenu },
+);
 
 type MenuSettings = Infer<typeof menuField>;
 
@@ -62,7 +78,8 @@ type PublishResult = { ok: true } | { ok: false; reason: string };
  * it, since ReactionRoleMenu has no notion of a menu beyond the message it
  * backs.
  */
-async function publishMenu(guild: Guild, menu: MenuSettings): Promise<PublishResult> {
+async function publishMenu(ctx: ModuleContext, menu: MenuSettings): Promise<PublishResult> {
+  const guild = ctx.guild;
   const channel = guild.channels.cache.get(menu.channel);
   if (!channel || !channel.isTextBased()) {
     return { ok: false, reason: "The channel configured for this menu no longer exists." };
@@ -78,9 +95,8 @@ async function publishMenu(guild: Guild, menu: MenuSettings): Promise<PublishRes
     })),
   };
 
-  const embed = new EmbedBuilder().setTitle(menu.title);
-  if (menu.description) embed.setDescription(menu.description);
-  const components = buildRows(menu.options);
+  const values = { menu: menu.name };
+  const options = { fallback: MENU_MESSAGE, rows: buildRows(menu.options) };
 
   const guildMenus = await prisma.reactionRoleMenu.findMany({ where: { guildId: guild.id } });
   const existing = guildMenus.find((row) => parseMapping(row.mapping).name === menu.name);
@@ -88,7 +104,9 @@ async function publishMenu(guild: Guild, menu: MenuSettings): Promise<PublishRes
   if (existing && existing.channelId === channel.id) {
     const message = await channel.messages.fetch(existing.messageId).catch(() => null);
     if (message) {
-      await message.edit({ embeds: [embed], components });
+      const edited = await ctx.edit(message, menu.message, values, options);
+      // Not falling through to a repost: that would delete the live menu over a message that cannot be built.
+      if (!edited) return { ok: false, reason: "I couldn't update the menu message. Check that I can still edit it." };
       await prisma.reactionRoleMenu.update({
         where: { id: existing.id },
         data: { mapping: serializeMapping(mapping) },
@@ -107,7 +125,10 @@ async function publishMenu(guild: Guild, menu: MenuSettings): Promise<PublishRes
     await prisma.reactionRoleMenu.delete({ where: { id: existing.id } }).catch(() => {});
   }
 
-  const posted = await channel.send({ embeds: [embed], components });
+  const posted = await ctx.send(channel, menu.message, values, options);
+  if (!posted) {
+    return { ok: false, reason: "I couldn't post the menu there. Check that I can send messages and embed links in that channel." };
+  }
   await prisma.reactionRoleMenu.create({
     data: {
       guildId: guild.id,
@@ -127,6 +148,35 @@ export default defineModule({
 
   settings: s.object({
     menus: s.array(menuField, { label: "Role menus" }),
+    replies: s.object(
+      {
+        gave: s.message({
+          label: "When a role is given",
+          starting: GAVE_MESSAGE,
+          variables: TOGGLE_VARIABLES,
+          delivery: "dm",
+          components: false,
+          note: "Only the member who pressed the button sees this.",
+        }),
+        removed: s.message({
+          label: "When a role is taken away",
+          starting: REMOVED_MESSAGE,
+          variables: TOGGLE_VARIABLES,
+          delivery: "dm",
+          components: false,
+          note: "Only the member who pressed the button sees this.",
+        }),
+        published: s.message({
+          label: "After /rolemenu publishes a menu",
+          starting: PUBLISHED_MESSAGE,
+          variables: PUBLISHED_VARIABLES,
+          delivery: "dm",
+          components: false,
+          note: "Only the moderator who ran the command sees this.",
+        }),
+      },
+      { label: "Replies" },
+    ),
   }),
 
   commands: [
@@ -155,13 +205,17 @@ export default defineModule({
           return;
         }
 
-        const result = await publishMenu(ctx.guild, menu);
-        await interaction.reply({
-          content: result.ok
-            ? `Published "${menu.name}" in <#${menu.channel}>.`
-            : result.reason,
-          flags: MessageFlags.Ephemeral,
-        });
+        const result = await publishMenu(ctx, menu);
+        if (!result.ok) {
+          await interaction.reply({ content: result.reason, flags: MessageFlags.Ephemeral });
+          return;
+        }
+        await ctx.reply(
+          interaction,
+          ctx.settings.replies.published,
+          { menu: menu.name, menuChannel: `<#${menu.channel}>` },
+          { fallback: PUBLISHED_MESSAGE },
+        );
       },
     },
   ],
@@ -211,10 +265,12 @@ export default defineModule({
       for (const id of toRemove) await member.roles.remove(id).catch(() => {});
       for (const id of toAdd) await member.roles.add(id).catch(() => {});
 
-      await interaction.reply({
-        content: willGrant ? `Gave you **${role.name}**.` : `Removed **${role.name}**.`,
-        flags: MessageFlags.Ephemeral,
-      });
+      await ctx.reply(
+        interaction,
+        willGrant ? ctx.settings.replies.gave : ctx.settings.replies.removed,
+        { role: role.name, menu: mapping.name },
+        { fallback: willGrant ? GAVE_MESSAGE : REMOVED_MESSAGE },
+      );
     },
   },
 

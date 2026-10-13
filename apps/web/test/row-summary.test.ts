@@ -179,3 +179,33 @@ describe("expanded rows", () => {
     assert.deepEqual([...expandedWithout(new Set([0, 1]), 0)], [1]);
   });
 });
+
+describe("summarizeRow with a message field", () => {
+  const shape = fields({ reply: { kind: "message" } });
+
+  test("shows the start of the text", () => {
+    const row = { reply: { content: "Welcome   aboard,\nfriend", embeds: [] } };
+    assert.equal(summarizeRow(row, shape, labels).detail, "Welcome aboard, friend");
+  });
+
+  test("reads text saved before the setting was a message", () => {
+    assert.equal(summarizeRow({ reply: "Hello there" }, shape, labels).detail, "Hello there");
+  });
+
+  test("names the embed when there is no text", () => {
+    assert.equal(summarizeRow({ reply: { content: "", embeds: [{ title: "Rules" }] } }, shape, labels).detail, "Rules");
+    assert.equal(summarizeRow({ reply: { content: "", embeds: [{ title: "" }] } }, shape, labels).detail, "Embed");
+  });
+
+  test("says nothing for a message that is still the default", () => {
+    assert.equal(summarizeRow({}, shape, labels).detail, "");
+  });
+
+  test("leaves the title to the row's name, as on a role menu", () => {
+    const menu = fields({ name: { kind: "string" }, channel: { kind: "channel" }, message: { kind: "message" } });
+    const row = { name: "Platforms", channel: "c1", message: { content: "", embeds: [{ title: "Where do you play?" }] } };
+    const result = summarizeRow(row, menu, labels);
+    assert.equal(result.title, "Platforms");
+    assert.ok(result.detail.includes("Where do you play?"));
+  });
+});

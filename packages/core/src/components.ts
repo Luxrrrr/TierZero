@@ -249,6 +249,8 @@ export function checkAction(action: ComponentAction, at: string, errors: Message
   }
 }
 
+const hasVariable = (value: string): boolean => /\{[a-zA-Z][a-zA-Z0-9.]*\}/.test(value);
+
 export function checkButtons(buttons: MessageButton[], errors: MessageError[]): void {
   const L = MESSAGE_LIMITS;
   if (buttons.length > L.buttons) errors.push({ path: "buttons", message: `A message can have at most ${L.buttons} buttons.` });
@@ -259,7 +261,8 @@ export function checkButtons(buttons: MessageButton[], errors: MessageError[]): 
     if (button.emoji !== "" && !isEmojiToken(button.emoji)) errors.push({ path: `${at}.emoji`, message: "A button emoji must be one emoji." });
     if (button.style === "link") {
       if (button.url === "") errors.push({ path: `${at}.url`, message: "A link button needs a web address to open." });
-      else badUrl(errors, `${at}.url`, button.url, "A button link");
+      // A variable can supply the address, as in {caseUrl}. The filled-in message is checked again when it is sent.
+      else if (!hasVariable(button.url)) badUrl(errors, `${at}.url`, button.url, "A button link");
     } else {
       checkAction(button.action, `${at}.action`, errors);
     }

@@ -35,6 +35,25 @@ export async function saveInteractions(guildId: string, channelId: string, messa
 
 type Clicked = ButtonInteraction | AnySelectMenuInteraction;
 
+/**
+ * Which server a click belongs to. In a server it is that server, and a stored
+ * row from anywhere else is not trusted. In a direct message the row is the only
+ * thing that says which server the message was sent about.
+ */
+export function clickGuildId(interactionGuildId: string | null, row: { guildId: string } | null): string | null {
+  if (!row) return null;
+  if (interactionGuildId !== null && row.guildId !== interactionGuildId) return null;
+  return row.guildId;
+}
+
+/** Ephemeral means nothing in a direct message, which only the clicker can see anyway. */
+export const ephemeralFlag = (interaction: Clicked, wanted = true): { flags?: MessageFlags.Ephemeral } =>
+  wanted && interaction.inGuild() ? { flags: MessageFlags.Ephemeral } : {};
+
+async function guildOf(client: Client, id: string): Promise<Guild | null> {
+  return client.guilds.cache.get(id) ?? (await client.guilds.fetch(id).catch(() => null));
+}
+
 /** Everything a click can say: the usual variables, plus who clicked and what they picked. */
 function clickVariables(interaction: Clicked, guild: Guild, extra: Record<string, string>): Record<string, string> {
   return {
@@ -42,7 +61,8 @@ function clickVariables(interaction: Clicked, guild: Guild, extra: Record<string
       guild,
       user: interaction.user,
       channelId: interaction.channelId ?? "",
-      channel: interaction.channel,
+      // A direct message has no channel in the server to link to.
+      channel: interaction.inGuild() ? interaction.channel : null,
       client: interaction.client,
     }),
     user: interaction.member && "displayName" in interaction.member ? interaction.member.displayName : interaction.user.displayName,
@@ -115,12 +135,12 @@ async function run(
   if (outcome.reply) {
     const options = buildReply(outcome.reply.message, variables, guild);
     if (options) {
-      await interaction.reply({ ...options, ...(outcome.reply.ephemeral ? { flags: MessageFlags.Ephemeral } : {}) });
+      await interaction.reply({ ...options, ...ephemeralFlag(interaction, outcome.reply.ephemeral) });
       return;
     }
   }
   if (outcome.confirmations.length > 0) {
-    await interaction.reply({ content: outcome.confirmations.join("\n"), flags: MessageFlags.Ephemeral });
+    await interaction.reply({ content: outcome.confirmations.join("\n"), ...ephemeralFlag(interaction) });
     return;
   }
   // An action of "nothing" still has to answer, or Discord shows the person a failure.
@@ -132,8 +152,7 @@ const NOT_ACTIVE = "This message's buttons and menus are no longer active.";
 /** Answers the buttons and menus the bot put on messages, by looking up what each was set to do. */
 export function registerMessageComponents(client: Client): void {
   client.on(Events.InteractionCreate, async (interaction) => {
-    const guild = interaction.guild;
-    if (!guild || !(interaction.isButton() || interaction.isAnySelectMenu())) return;
+    if (!(interaction.isButton() || interaction.isAnySelectMenu())) return;
     const parts = interaction.customId.split(":");
     if (parts[0] !== COMPONENT_PREFIX) return;
     const kind = parts[1];
@@ -141,15 +160,17 @@ export function registerMessageComponents(client: Client): void {
 
     try {
       const row = await prisma.messageInteraction.findUnique({ where: { messageId: interaction.message.id } });
-      if (!row || row.guildId !== guild.id || !Number.isInteger(index)) {
-        await interaction.reply({ content: NOT_ACTIVE, flags: MessageFlags.Ephemeral });
+      const guildId = clickGuildId(interaction.guildId, row);
+      const guild = guildId !== null ? (interaction.guild ?? (await guildOf(interaction.client, guildId))) : null;
+      if (!row || !guild || !Number.isInteger(index)) {
+        await interaction.reply({ content: NOT_ACTIVE, ...ephemeralFlag(interaction) });
         return;
       }
 
       if (kind === "b" && interaction.isButton()) {
         const button: MessageButton | undefined = readButtons(parseJson(row.buttons))[index];
         if (!button) {
-          await interaction.reply({ content: NOT_ACTIVE, flags: MessageFlags.Ephemeral });
+          await interaction.reply({ content: NOT_ACTIVE, ...ephemeralFlag(interaction) });
           return;
         }
         await run(interaction, guild, [button.action], {});
@@ -159,7 +180,7 @@ export function registerMessageComponents(client: Client): void {
       if (kind === "s" && interaction.isAnySelectMenu()) {
         const select: MessageSelect | undefined = readSelects(parseJson(row.selects))[index];
         if (!select) {
-          await interaction.reply({ content: NOT_ACTIVE, flags: MessageFlags.Ephemeral });
+          await interaction.reply({ content: NOT_ACTIVE, ...ephemeralFlag(interaction) });
           return;
         }
         if (select.kind === "string") {
@@ -173,12 +194,12 @@ export function registerMessageComponents(client: Client): void {
         return;
       }
 
-      await interaction.reply({ content: NOT_ACTIVE, flags: MessageFlags.Ephemeral });
+      await interaction.reply({ content: NOT_ACTIVE, ...ephemeralFlag(interaction) });
     } catch (error) {
       console.error("message component failed:", error);
       const message = "That didn't work. The server log has the details.";
-      if (interaction.replied || interaction.deferred) await interaction.followUp({ content: message, flags: MessageFlags.Ephemeral }).catch(() => undefined);
-      else await interaction.reply({ content: message, flags: MessageFlags.Ephemeral }).catch(() => undefined);
+      if (interaction.replied || interaction.deferred) await interaction.followUp({ content: message, ...ephemeralFlag(interaction) }).catch(() => undefined);
+      else await interaction.reply({ content: message, ...ephemeralFlag(interaction) }).catch(() => undefined);
     }
   });
 }

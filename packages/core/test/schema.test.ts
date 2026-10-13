@@ -315,3 +315,105 @@ describe("template", () => {
     assert.deepEqual(field.describe().placeholders, ["user", "server"]);
   });
 });
+
+describe("message", () => {
+  const starting = { content: "{user} reached level {level}!", embeds: [], buttons: [], selects: [], reactions: [] };
+  const field = s.message({
+    label: "Level-up message",
+    starting,
+    variables: [{ name: "user", description: "The member", sample: "Ada" }],
+  });
+
+  test("reads a stored message", () => {
+    const stored = { ...starting, content: "Well done {user}", reactions: ["🎉"] };
+    const read = value(field.parse(stored));
+    assert.equal(read.content, "Well done {user}");
+    assert.deepEqual(read.reactions, ["🎉"]);
+  });
+
+  test("reads a plain string saved while the setting was a template", () => {
+    const read = value(field.parse("Hello {user}"));
+    assert.equal(read.content, "Hello {user}");
+    assert.deepEqual(read.embeds, []);
+  });
+
+  test("falls back to what the feature sends today when nothing is stored", () => {
+    assert.deepEqual(value(field.parse(undefined)), starting);
+    assert.deepEqual(value(field.parse("   ")), starting);
+    assert.deepEqual(field.defaultValue, starting);
+  });
+
+  test("rejects a message Discord would refuse", () => {
+    assert.equal(field.parse({ content: "", embeds: [] }).ok, false);
+    assert.equal(field.parse({ content: "x".repeat(2001) }).ok, false);
+    assert.equal(field.parse("x".repeat(2001)).ok, false);
+    assert.equal(field.parse(42).ok, false);
+    const reported = errors(field.parse({ content: "" }, "announce.message"));
+    assert.equal(reported[0]?.path, "announce.message");
+  });
+
+  test("describes itself as plain JSON for the dashboard", () => {
+    const withNote = s.message({ starting, delivery: "dm", components: false, note: "Sent once." });
+    const described = JSON.parse(JSON.stringify(withNote.describe())) as Record<string, unknown>;
+    assert.equal(described.kind, "message");
+    assert.equal(described.delivery, "dm");
+    assert.equal(described.components, false);
+    assert.equal(described.note, "Sent once.");
+    assert.deepEqual(described.starting, starting);
+    assert.deepEqual(described.default, starting);
+    assert.deepEqual(field.describe().variables, [{ name: "user", description: "The member", sample: "Ada" }]);
+    assert.equal(field.describe().delivery, "channel");
+    assert.equal(field.describe().components, true);
+  });
+
+  test("drops what a direct message cannot carry", () => {
+    const dm = s.message({ starting, delivery: "dm" });
+    const read = value(
+      dm.parse({
+        content: "Hi",
+        reactions: ["🎉"],
+        buttons: [
+          { label: "Docs", style: "link", url: "https://example.com" },
+          { label: "Press", style: "primary" },
+        ],
+        selects: [
+          { kind: "user", placeholder: "Pick" },
+          { kind: "string", placeholder: "Choose", options: [{ label: "A", value: "a" }] },
+        ],
+      }),
+    );
+    assert.deepEqual(read.reactions, []);
+    assert.deepEqual(read.selects.map((select) => select.kind), ["string"]);
+    assert.equal(read.buttons.length, 2);
+  });
+
+  test("drops every button and menu where components are turned off", () => {
+    const bare = s.message({ starting, components: false });
+    const read = value(bare.parse({ content: "Hi", buttons: [{ label: "Docs", style: "link", url: "https://example.com" }], reactions: ["🎉"] }));
+    assert.deepEqual(read.buttons, []);
+    assert.deepEqual(read.reactions, ["🎉"]);
+  });
+});
+
+describe("object upgrade", () => {
+  const field = s.object(
+    { text: s.string({ optional: true }), loud: s.boolean({ default: false }) },
+    {
+      upgrade: (stored) => (typeof stored.message === "string" ? { ...stored, text: stored.message } : stored),
+    },
+  );
+
+  test("reads a value saved under the old shape", () => {
+    const result = field.parse({ message: "hello" });
+    assert.deepEqual(result.ok && result.value, { text: "hello", loud: false });
+  });
+
+  test("leaves a current value alone", () => {
+    const result = field.parse({ text: "hi", loud: true });
+    assert.deepEqual(result.ok && result.value, { text: "hi", loud: true });
+  });
+
+  test("does not put the hook in what the dashboard receives", () => {
+    assert.equal("upgrade" in field.describe(), false);
+  });
+});
