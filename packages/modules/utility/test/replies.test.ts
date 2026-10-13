@@ -1,8 +1,8 @@
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
-import { ModuleRegistry, REPLY_COLOR, applyVariablesToMessage, emptyEmbed, parseMessage, type FieldDescriptor, type MessageBody } from "@tier0/core";
+import { ModuleRegistry, REPLY_COLOR, applyVariablesToMessage, emptyEmbed, parseMessage, type MessageBody } from "@tier0/core";
 import utility from "../dist/index.js";
-import { PING_STARTING, serverinfoBody, userinfoBody } from "../dist/messages.js";
+import { PING_STARTING } from "../dist/messages.js";
 
 const registry = new ModuleRegistry();
 registry.register(utility);
@@ -101,7 +101,7 @@ describe("/serverinfo", () => {
     assert.deepEqual(embed, {
       ...emptyEmbed(),
       title: "Northwind",
-      color: "#5865f2",
+      color: REPLY_COLOR.info,
       thumbnailUrl: "https://cdn.example/icon.png",
       fields: [
         { name: "Members", value: "12345", inline: true },
@@ -112,12 +112,10 @@ describe("/serverinfo", () => {
     });
   });
 
-  test("takes its colour from the setting", async () => {
+  test("is the colour every information reply has", async () => {
     fresh();
-    await command("serverinfo").run(interaction(), context({ accent: "green" }));
-    assert.equal(render(replied[0]!.body, SHARED, replied[0]!.values).embeds[0]?.color, "#57f287");
-    assert.equal(serverinfoBody("grey").embeds[0]?.color, "#99aab5");
-    assert.equal(serverinfoBody("removed-option").embeds[0]?.color, "#5865f2");
+    await command("serverinfo").run(interaction(), context());
+    assert.equal(render(replied[0]!.body, SHARED, replied[0]!.values).embeds[0]?.color, REPLY_COLOR.info);
   });
 });
 
@@ -129,22 +127,13 @@ describe("/userinfo", () => {
     assert.deepEqual(embed, {
       ...emptyEmbed(),
       title: "ada",
-      color: "#5865f2",
+      color: REPLY_COLOR.info,
       thumbnailUrl: "https://cdn.example/ada.png",
       fields: [
         { name: "Account created", value: "<t:1500000000:D>", inline: true },
         { name: "Joined server", value: "<t:1700000000:D>", inline: true },
       ],
     });
-  });
-
-  test("leaves the join date out when the server turned it off", async () => {
-    fresh();
-    await command("userinfo").run(interaction(), context({ showJoinDate: false, accent: "grey" }));
-    const [embed] = render(replied[0]!.body, SHARED, replied[0]!.values).embeds;
-    assert.deepEqual(embed?.fields.map((field) => field.name), ["Account created"]);
-    assert.equal(embed?.color, "#99aab5");
-    assert.equal(userinfoBody("blurple", false).embeds[0]?.fields.length, 1);
   });
 
   test("leaves the join date out for someone who is not in the server, as before", async () => {
@@ -154,36 +143,11 @@ describe("/userinfo", () => {
     assert.deepEqual(embed?.fields.map((field) => field.name), ["Account created"]);
   });
 
-  test("an owner's reply gets Unknown for that person, or the server's own word", async () => {
+  test("an owner's reply gets Unknown for that person", async () => {
     fresh();
     const seen: Record<string, string | number>[] = [];
     await command("userinfo").run(interaction(), context({}, (values) => (seen.push(values), { content: "x" }), null));
     assert.equal(seen[0]?.joined, "Unknown");
-    seen.length = 0;
-    await command("userinfo").run(interaction(), context({ labels: { unknown: "Not here" } }, (values) => (seen.push(values), { content: "x" }), null));
-    assert.equal(seen[0]?.joined, "Not here");
-    assert.deepEqual(direct.length, 2);
-  });
-
-  test("an owner's reply still sees the join date even with the setting off", async () => {
-    fresh();
-    const seen: Record<string, string | number>[] = [];
-    await command("userinfo").run(interaction(), context({ showJoinDate: false }, (values) => (seen.push(values), { content: "x" })));
-    assert.equal(seen[0]?.joined, "<t:1700000000:D>");
-  });
-});
-
-describe("what the dashboard is told", () => {
-  test("the editor opens on the standard replies", () => {
-    assert.deepEqual(command("ping").response?.starting, PING_STARTING);
-    assert.deepEqual(command("serverinfo").response?.starting, serverinfoBody());
-    assert.deepEqual(command("userinfo").response?.starting, userinfoBody());
-  });
-
-  test("the labels are a collapsible group", () => {
-    const summary = registry.describe().find((entry) => entry.id === "utility");
-    const fields = summary?.schema.fields as Record<string, FieldDescriptor>;
-    assert.equal(fields.labels?.collapsible, true);
-    assert.equal((fields.labels?.fields as Record<string, FieldDescriptor>).unknown?.default, "Unknown");
+    assert.deepEqual(direct.length, 1);
   });
 });

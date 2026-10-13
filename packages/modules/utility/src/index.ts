@@ -5,9 +5,9 @@ import {
   PING_STARTING,
   SERVERINFO_PLACEHOLDERS,
   USERINFO_PLACEHOLDERS,
-  labelsGroup,
   serverinfoBody,
   userinfoBody,
+  UNKNOWN,
 } from "./messages.js";
 
 /**
@@ -21,24 +21,8 @@ export default defineModule({
   summary: "Server and member information commands.",
   category: "utility",
 
-  settings: s.object({
-    accent: s.choice({
-      label: "Embed color",
-      help: "The colour of the standard /serverinfo and /userinfo replies. A reply you wrote on the Commands page sets its own colour.",
-      options: [
-        { value: "blurple", label: "Blurple" },
-        { value: "grey", label: "Grey" },
-        { value: "green", label: "Green" },
-      ],
-      default: "blurple",
-    }),
-    showJoinDate: s.boolean({
-      label: "Show join dates on /userinfo",
-      help: "Applies to the standard reply. A reply you wrote on the Commands page decides for itself.",
-      default: true,
-    }),
-    labels: labelsGroup,
-  }),
+  // Nothing to configure here: the replies are edited on the Commands page.
+  settings: s.object({}),
 
   commands: [
     {
@@ -86,7 +70,7 @@ export default defineModule({
         // These two keep the plain forms the standard reply has always shown: no thousands separator, the icon at Discord's own size.
         await ctx.reply(
           interaction,
-          serverinfoBody(ctx.settings.accent),
+          serverinfoBody(),
           { ...values, members: guild.memberCount, "server.icon": guild.iconURL() ?? "" },
           { ephemeral: false },
         );
@@ -117,7 +101,7 @@ export default defineModule({
           "user.avatar": target.displayAvatarURL(),
           created: `<t:${Math.floor(target.createdTimestamp / 1000)}:D>`,
         };
-        const custom = ctx.customReply?.({ ...values, joined: joined ?? ctx.settings.labels.unknown });
+        const custom = ctx.customReply?.({ ...values, joined: joined ?? UNKNOWN });
         if (custom) {
           await interaction.reply(custom);
           return;
@@ -125,7 +109,7 @@ export default defineModule({
         // A join date that is not known leaves the line out of the standard reply, as an empty value does.
         await ctx.reply(
           interaction,
-          userinfoBody(ctx.settings.accent, ctx.settings.showJoinDate),
+          userinfoBody(),
           { ...values, joined: joined ?? "" },
           { ephemeral: false },
         );

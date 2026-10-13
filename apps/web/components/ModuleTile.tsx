@@ -8,7 +8,7 @@ import { ChevronRightIcon } from "./Icons";
 import { useToast } from "./Toaster";
 import { moduleStatus } from "../lib/module-status";
 import { moduleHref } from "../lib/module-href";
-import { sectionHeading } from "../lib/sections";
+import { hasSettings, sectionHeading } from "../lib/sections";
 import { statusLine, type ModuleView } from "../lib/module-view";
 
 interface Props {
@@ -86,8 +86,8 @@ export function ModuleTile({ guildId, module, index = 0, animate = false }: Prop
           <span className="dot" data-status={status} aria-hidden="true" />
           {statusLine(status, module.missing)}
         </span>
-        <Link className="module-tile-link" href={moduleHref(guildId, module)}>
-          Configure
+        <Link className="module-tile-link" href={hasSettings(module) ? moduleHref(guildId, module) : `/guilds/${guildId}/commands`}>
+          {hasSettings(module) ? "Configure" : "Commands"}
           <ChevronRightIcon />
         </Link>
       </div>

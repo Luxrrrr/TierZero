@@ -73,13 +73,27 @@ export function groupModulesBySection<M extends { category: ModuleCategory }>(
  * dashboard are reached through that area's own entry, and a category left
  * with nothing to list gets no heading at all.
  */
-export function navGroups<M extends { category: ModuleCategory; area?: string | null; alwaysOn?: boolean }>(
+export function navGroups<M extends { category: ModuleCategory; area?: string | null; alwaysOn?: boolean; schema?: unknown }>(
   modules: M[],
 ): SectionGroup<M>[] {
-  // The bot's own settings are reached through the Bot messages page, not as a feature.
-  return groupModulesBySection(modules.filter((module) => !module.area && module.alwaysOn !== true)).filter(
+  // The bot's own settings are reached through the Bot messages page, not as a feature. A feature with
+  // nothing to configure has no page of its own: its switch is on the overview and its commands are on
+  // the Commands page.
+  return groupModulesBySection(modules.filter((module) => !module.area && module.alwaysOn !== true && hasSettings(module))).filter(
     (group) => group.modules.length > 0,
   );
+}
+
+/**
+ * Whether a feature has any settings to show. One that declares none, such as the information
+ * commands, would only repeat the Commands page, so nothing links to a page of its own.
+ */
+export function hasSettings(module: { schema?: unknown }): boolean {
+  const schema = module.schema;
+  if (typeof schema !== "object" || schema === null) return true;
+  const fields = (schema as { fields?: unknown }).fields;
+  if (typeof fields !== "object" || fields === null) return true;
+  return Object.keys(fields).length > 0;
 }
 
 /** Flattens modules into one list: category order first, arrival order within a category. */

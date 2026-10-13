@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   SECTIONS,
   groupModulesBySection,
+  hasSettings,
   navGroups,
   orderModulesBySection,
   sectionCounts,
@@ -135,5 +136,24 @@ describe("sectionCounts", () => {
 describe("sectionHeading", () => {
   test("looks up a category's heading", () => {
     assert.equal(sectionHeading("support"), "Support");
+  });
+});
+
+describe("features with nothing to configure", () => {
+  const empty = { type: "object", fields: {} };
+  const some = { type: "object", fields: { channel: { kind: "channel" } } };
+
+  test("are told apart from ones with settings", () => {
+    assert.equal(hasSettings({ schema: empty }), false);
+    assert.equal(hasSettings({ schema: some }), true);
+    assert.equal(hasSettings({}), true);
+  });
+
+  test("get no sidebar page, and the section they leave empty has no heading", () => {
+    const groups = navGroups([
+      { id: "utility", category: "utility" as const, area: null, schema: empty },
+      { id: "welcome", category: "members" as const, area: null, schema: some },
+    ]);
+    assert.deepEqual(groups.map((group) => group.id), ["members"]);
   });
 });
