@@ -1,6 +1,6 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { ModuleRegistry, applyVariables, applyVariablesToMessage, type FieldDescriptor, type MessageBody } from "@tier0/core";
+import { ModuleRegistry, REPLY_COLOR, applyVariables, applyVariablesToMessage, type FieldDescriptor, type MessageBody } from "@tier0/core";
 import tickets from "../dist/index.js";
 import {
   ADDED_MESSAGE,
@@ -123,12 +123,12 @@ describe("closing", () => {
 
   test("says Closing this ticket. with no reason", () => {
     const message = fill(CLOSING_MESSAGE, closingValues({ id: "9" }, ticket, null));
-    assert.equal(message.content, "Closing this ticket.");
+    assert.equal(message.embeds[0]?.description, "Closing this ticket.");
   });
 
   test("says Closing this ticket: reason when one was given", () => {
     const message = fill(CLOSING_MESSAGE, closingValues({ id: "9" }, ticket, "Solved"));
-    assert.equal(message.content, "Closing this ticket: Solved");
+    assert.equal(message.embeds[0]?.description, "Closing this ticket: Solved");
   });
 
   test("a customised message is used", () => {
@@ -143,7 +143,7 @@ describe("closing", () => {
 describe("the transcript post", () => {
   test("says Transcript for ticket #N by default", () => {
     const values = transcriptValues({ id: 12, subject: null, openerId: "42" }, { id: "9", tag: "grace" }, "ticket-ada");
-    assert.equal(fill(TRANSCRIPT_MESSAGE, values).content, "Transcript for ticket #12");
+    assert.equal(fill(TRANSCRIPT_MESSAGE, values).embeds[0]?.description, "Transcript for ticket #12");
     assert.deepEqual(resolve({}).transcript.message, TRANSCRIPT_MESSAGE);
   });
 
@@ -161,13 +161,31 @@ describe("the transcript post", () => {
   });
 });
 
+describe("the default look", () => {
+  test("confirmations are success embeds and the closing and transcript posts are info embeds", () => {
+    for (const body of [CREATED_MESSAGE, PANEL_POSTED_MESSAGE, ADDED_MESSAGE, REMOVED_MESSAGE]) {
+      assert.equal(body.content, "");
+      assert.equal(body.embeds[0]?.color, REPLY_COLOR.success);
+    }
+    for (const body of [CLOSING_MESSAGE, TRANSCRIPT_MESSAGE]) {
+      assert.equal(body.content, "");
+      assert.equal(body.embeds[0]?.color, REPLY_COLOR.info);
+    }
+  });
+
+  test("the opening message still pings the opener and the support roles from its text", () => {
+    assert.equal(OPENED_MESSAGE.content, "{user} {supportRoles}");
+    assert.equal(OPENED_MESSAGE.embeds.length, 1);
+  });
+});
+
 describe("the other replies", () => {
   test("say what they always have", () => {
     const { messages } = resolve({});
-    assert.equal(applyVariables(messages.created.content, { ticket: `<#${CHANNEL}>` }), `Your ticket has been created: <#${CHANNEL}>`);
-    assert.equal(applyVariables(messages.panelPosted.content, { panelChannel: `<#${CHANNEL}>` }), `Panel posted in <#${CHANNEL}>.`);
-    assert.equal(applyVariables(messages.added.content, { member: "<@42>" }), "Added <@42> to this ticket.");
-    assert.equal(applyVariables(messages.removed.content, { member: "<@42>" }), "Removed <@42> from this ticket.");
+    assert.equal(applyVariables(messages.created.embeds[0]?.description ?? "", { ticket: `<#${CHANNEL}>` }), `Your ticket has been created: <#${CHANNEL}>`);
+    assert.equal(applyVariables(messages.panelPosted.embeds[0]?.description ?? "", { panelChannel: `<#${CHANNEL}>` }), `Panel posted in <#${CHANNEL}>.`);
+    assert.equal(applyVariables(messages.added.embeds[0]?.description ?? "", { member: "<@42>" }), "Added <@42> to this ticket.");
+    assert.equal(applyVariables(messages.removed.embeds[0]?.description ?? "", { member: "<@42>" }), "Removed <@42> from this ticket.");
     assert.deepEqual(messages.created, CREATED_MESSAGE);
     assert.deepEqual(messages.panelPosted, PANEL_POSTED_MESSAGE);
     assert.deepEqual(messages.added, ADDED_MESSAGE);

@@ -1,6 +1,6 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { ModuleRegistry, applyVariables, plainReply, type FieldDescriptor, type MessageBody } from "@tier0/core";
+import { ModuleRegistry, REPLY_COLOR, applyVariables, plainReply, type FieldDescriptor, type MessageBody } from "@tier0/core";
 import roles from "../dist/index.js";
 import { GAVE_MESSAGE, PUBLISHED_MESSAGE, REMOVED_MESSAGE, upgradeMenu } from "../dist/messages.js";
 
@@ -88,15 +88,23 @@ describe("the menu message", () => {
 describe("the replies", () => {
   test("say what they always have", () => {
     const { replies } = resolve({});
-    assert.equal(applyVariables(replies.gave.content, { role: "Gamers" }), "Gave you **Gamers**.");
-    assert.equal(applyVariables(replies.removed.content, { role: "Gamers" }), "Removed **Gamers**.");
+    assert.equal(applyVariables(replies.gave.embeds[0]?.description ?? "", { role: "Gamers" }), "Gave you **Gamers**.");
+    assert.equal(applyVariables(replies.removed.embeds[0]?.description ?? "", { role: "Gamers" }), "Removed **Gamers**.");
     assert.equal(
-      applyVariables(replies.published.content, { menu: "Pings", menuChannel: `<#${CHANNEL}>` }),
+      applyVariables(replies.published.embeds[0]?.description ?? "", { menu: "Pings", menuChannel: `<#${CHANNEL}>` }),
       `Published "Pings" in <#${CHANNEL}>.`,
     );
     assert.deepEqual(replies.gave, GAVE_MESSAGE);
     assert.deepEqual(replies.removed, REMOVED_MESSAGE);
     assert.deepEqual(replies.published, PUBLISHED_MESSAGE);
+  });
+
+  test("start out as success embeds", () => {
+    for (const body of [GAVE_MESSAGE, REMOVED_MESSAGE, PUBLISHED_MESSAGE]) {
+      assert.equal(body.content, "");
+      assert.equal(body.embeds.length, 1);
+      assert.equal(body.embeds[0]?.color, REPLY_COLOR.success);
+    }
   });
 
   test("use the owner's wording once it is written", () => {

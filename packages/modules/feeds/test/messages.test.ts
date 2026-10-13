@@ -166,12 +166,12 @@ describe("the /feeds send answer", () => {
   test("reads as it always has when everything was sent", () => {
     assert.ok(starting);
     const message = fill(starting, { posted: 3, count: 3, source: "Example Gazette", problem: "" });
-    assert.equal(message.content.trim(), "Sent 3 of the latest 3 from Example Gazette.");
+    assert.equal(message.embeds[0]?.description.trim(), "Sent 3 of the latest 3 from Example Gazette.");
   });
 
   test("adds why it stopped when it stopped early", () => {
     assert.ok(starting);
     const message = fill(starting, { posted: 1, count: 3, source: "Example Gazette", problem: "Stopped because: the site answered with status 500." });
-    assert.equal(message.content, "Sent 1 of the latest 3 from Example Gazette. Stopped because: the site answered with status 500.");
+    assert.equal(message.embeds[0]?.description, "Sent 1 of the latest 3 from Example Gazette. Stopped because: the site answered with status 500.");
   });
 });

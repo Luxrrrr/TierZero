@@ -1,6 +1,6 @@
 import { describe, test, before, after, beforeEach } from "node:test";
 import assert from "node:assert/strict";
-import { ModuleRegistry, applyVariablesToMessage, emptyEmbed, parseMessage, type FieldDescriptor, type MessageBody } from "@tier0/core";
+import { ModuleRegistry, REPLY_COLOR, applyVariablesToMessage, emptyEmbed, parseMessage, type FieldDescriptor, type MessageBody } from "@tier0/core";
 import { createTestDatabase } from "./db-helper.ts";
 
 const GUILD = "100000000000000050";
@@ -159,10 +159,13 @@ describe("/leaderboard", () => {
   test("an empty leaderboard says so, and reads as it did", async () => {
     await prisma.levelMember.deleteMany();
     await board.run(boardInteraction(), context());
-    assert.equal(replied[0]?.body.content, "Nobody has earned experience here yet.");
+    assert.equal(replied[0]?.body.embeds[0]?.description, "Nobody has earned experience here yet.");
+    assert.equal(replied[0]?.body.embeds[0]?.color, REPLY_COLOR.info);
+    assert.equal(replied[0]?.body.content, "");
     replied = [];
     await board.run(boardInteraction(2), context());
-    assert.equal(replied[0]?.body.content, "There is no page that far into the leaderboard.");
+    assert.equal(replied[0]?.body.embeds[0]?.description, "There is no page that far into the leaderboard.");
+    assert.equal(replied[0]?.body.embeds[0]?.color, REPLY_COLOR.info);
   });
 });
 

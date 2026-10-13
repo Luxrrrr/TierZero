@@ -1,6 +1,6 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { ModuleRegistry, type FieldDescriptor, type MessageBody } from "@tier0/core";
+import { ModuleRegistry, REPLY_COLOR, type FieldDescriptor, type MessageBody } from "@tier0/core";
 import leveling from "../dist/index.js";
 
 const CHANNEL = "123456789012345678";
@@ -15,10 +15,12 @@ function announce(stored: unknown): MessageBody {
 }
 
 describe("the level-up message", () => {
-  test("is the line the module has always sent until the owner writes another", () => {
+  test("is an info embed until the owner writes another, with the mention kept above it so it pings", () => {
     const message = announce({});
-    assert.equal(message.content, "{user} reached level {level}!");
-    assert.deepEqual(message.embeds, []);
+    assert.equal(message.content, "{user}");
+    assert.equal(message.embeds.length, 1);
+    assert.equal(message.embeds[0]?.description, "Reached level {level}!");
+    assert.equal(message.embeds[0]?.color, REPLY_COLOR.info);
   });
 
   test("still reads a plain string saved before it was a whole message", () => {

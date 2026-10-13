@@ -1,6 +1,6 @@
 import { describe, test, before, after, beforeEach } from "node:test";
 import assert from "node:assert/strict";
-import { ModuleRegistry, type FieldDescriptor, type MessageBody } from "@tier0/core";
+import { ModuleRegistry, REPLY_COLOR, type FieldDescriptor, type MessageBody } from "@tier0/core";
 import { createTestDatabase } from "./db-helper.ts";
 
 const GUILD = "100000000000000040";
@@ -120,7 +120,7 @@ describe("/feeds status", () => {
   test("says nothing is watched in the server's own words", async () => {
     await command.run(interaction("status"), context());
     assert.deepEqual(told[0]?.fallback, STATUS_EMPTY);
-    assert.equal(told[0]?.body.content, "Nothing is being watched yet. Add a feed or a game in the dashboard.");
+    assert.equal(told[0]?.body.embeds[0]?.description, "Nothing is being watched yet. Add a feed or a game in the dashboard.");
 
     told = [];
     await command.run(interaction("status"), context({ replies: { statusEmpty: "Nothing here." } }));
@@ -167,7 +167,7 @@ describe("/feeds send", () => {
     await command.run(interaction("send", "zzz"), context(stored));
     assert.deepEqual(told[0]?.fallback, NO_MATCH);
     assert.deepEqual(told[0]?.values, { query: "zzz" });
-    assert.equal(told[0]?.body.content, 'Nothing being watched matches "{query}". /feeds status lists everything.');
+    assert.equal(told[0]?.body.embeds[0]?.description, 'Nothing being watched matches "{query}". /feeds status lists everything.');
   });
 
   test("lists the sources that matched when several do", async () => {
@@ -205,6 +205,23 @@ describe("/feeds send", () => {
     await command.run(interaction("send", "Daily"), context(stored, () => custom));
     assert.equal(told.length, 0);
     assert.deepEqual(edited, [{ content: "Done: {x}" }]);
+  });
+});
+
+describe("the default look of the replies", () => {
+  test("each starts as one embed with no text above it, in the colour of what it says", () => {
+    const expected = [
+      [STATUS_EMPTY, REPLY_COLOR.info],
+      [STATUS_REPLY, REPLY_COLOR.info],
+      [NO_MATCH, REPLY_COLOR.error],
+      [AMBIGUOUS, REPLY_COLOR.error],
+      [command.response!.starting, REPLY_COLOR.success],
+    ] as const;
+    for (const [body, color] of expected) {
+      assert.equal(body.content, "");
+      assert.equal(body.embeds.length, 1);
+      assert.equal(body.embeds[0]?.color, color);
+    }
   });
 });
 

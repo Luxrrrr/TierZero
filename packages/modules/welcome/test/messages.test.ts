@@ -1,6 +1,6 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { ModuleRegistry, applyVariables, plainReply, type MessageBody } from "@tier0/core";
+import { ModuleRegistry, REPLY_COLOR, applyVariables, plainReply, type MessageBody } from "@tier0/core";
 import welcome from "../dist/index.js";
 import { JOIN_DM, JOIN_MESSAGE, LEAVE_DM, LEAVE_MESSAGE, upgradeGroup, valuesFor } from "../dist/messages.js";
 
@@ -40,9 +40,28 @@ describe("the defaults", () => {
 
   test("fill in with the module's own variables", () => {
     const values = valuesFor(member);
-    assert.equal(applyVariables(JOIN_MESSAGE.content, values), "Welcome to Northwind, <@42>!");
-    assert.equal(applyVariables(LEAVE_MESSAGE.content, values), "ada has left Northwind.");
+    assert.equal(applyVariables(JOIN_MESSAGE.content, values), "<@42>");
+    assert.equal(applyVariables(JOIN_MESSAGE.embeds[0]?.description ?? "", values), "Welcome to Northwind!");
+    assert.equal(applyVariables(LEAVE_MESSAGE.embeds[0]?.description ?? "", values), "ada has left Northwind.");
     assert.equal(applyVariables("member {memberCount}", values), "member 128");
+  });
+});
+
+describe("the default look", () => {
+  test("every default is one info embed", () => {
+    for (const body of [JOIN_MESSAGE, LEAVE_MESSAGE, JOIN_DM, LEAVE_DM]) {
+      assert.equal(body.embeds.length, 1);
+      assert.equal(body.embeds[0]?.color, REPLY_COLOR.info);
+    }
+  });
+
+  test("the join greeting keeps the mention above the embed so it pings", () => {
+    assert.equal(JOIN_MESSAGE.content, "{user}");
+    assert.ok(!JOIN_MESSAGE.embeds[0]?.description.includes("{user}"));
+  });
+
+  test("the farewell and the direct messages carry no text above the embed", () => {
+    for (const body of [LEAVE_MESSAGE, JOIN_DM, LEAVE_DM]) assert.equal(body.content, "");
   });
 });
 

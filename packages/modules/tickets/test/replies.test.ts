@@ -1,6 +1,6 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { ModuleRegistry, applyVariables, type FieldDescriptor, type MessageBody } from "@tier0/core";
+import { ModuleRegistry, REPLY_COLOR, applyVariables, type FieldDescriptor, type MessageBody } from "@tier0/core";
 import tickets from "../dist/index.js";
 import { REPLIES } from "../dist/messages.js";
 import { DEFAULT_LABELS, closeReasonOf, topicOf, transcriptFileName, transcriptTexts } from "../dist/labels.js";
@@ -45,14 +45,16 @@ describe("the refusals and failures", () => {
     const replies = flat(resolve().messages);
     assert.deepEqual(Object.keys(replies).sort(), Object.keys(TODAY).sort());
     for (const [key, text] of Object.entries(TODAY)) {
-      assert.equal(replies[key]?.content, text, key);
+      assert.equal(replies[key]?.embeds[0]?.description, text, key);
+      assert.equal(replies[key]?.embeds[0]?.color, REPLY_COLOR.error, key);
+      assert.equal(replies[key]?.content, "", key);
       assert.deepEqual(replies[key], REPLIES[key as keyof typeof REPLIES].starting, key);
     }
   });
 
   test("a limit message can name how many tickets the member has and the limit", () => {
     const { limitMany } = flat(resolve().messages);
-    assert.equal(applyVariables(limitMany!.content, { openCount: "3", limit: "3" }), "You already have 3 open tickets, the most this server allows. Close one before opening another.");
+    assert.equal(applyVariables(limitMany!.embeds[0]?.description ?? "", { openCount: "3", limit: "3" }), "You already have 3 open tickets, the most this server allows. Close one before opening another.");
     const names = (REPLIES.limitMany.variables ?? []).map((variable) => variable.name);
     assert.deepEqual(names, ["openCount", "limit"]);
   });
@@ -66,7 +68,7 @@ describe("the refusals and failures", () => {
     }).messages;
     assert.equal(refusals.notStaff?.content, "Staff only, sorry.");
     assert.equal(opening.limitOne?.embeds[0]?.description, "One at a time, {limit} allowed.");
-    assert.equal(refusals.cannotClose?.content, TODAY.cannotClose, "the others are untouched");
+    assert.equal(refusals.cannotClose?.embeds[0]?.description, TODAY.cannotClose, "the others are untouched");
   });
 
   test("a message over Discord's limit is refused when it is saved", () => {

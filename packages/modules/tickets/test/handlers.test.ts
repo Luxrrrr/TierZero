@@ -103,18 +103,18 @@ describe("a refusal", () => {
 
   test("reads as it always has when nothing was changed", async () => {
     await command.run(interactionFor("panel"), context());
-    assert.equal(replies[0]?.body.content, "You need a support role or Manage Channels to do that.");
+    assert.equal(replies[0]?.body.embeds[0]?.description, "You need a support role or Manage Channels to do that.");
   });
 
   test("outside a ticket channel says so", async () => {
     await command.run(interactionFor("close"), context());
-    assert.equal(replies[0]?.body.content, "This isn't an open ticket channel.");
+    assert.equal(replies[0]?.body.embeds[0]?.description, "This isn't an open ticket channel.");
   });
 
   test("a member who is not the opener or support staff cannot close", async () => {
     await prisma.ticket.create({ data: { guildId: GUILD, channelId: TICKET_CHANNEL, openerId: "someone-else" } });
     await command.run(interactionFor("close"), context());
-    assert.equal(replies[0]?.body.content, REPLIES.cannotClose.starting.content);
+    assert.equal(replies[0]?.body.embeds[0]?.description, REPLIES.cannotClose.starting.embeds[0]?.description);
   });
 
   test("opening past the limit names the count and the limit", async () => {
@@ -129,7 +129,7 @@ describe("a refusal", () => {
   test("a limit of one has its own wording", async () => {
     await prisma.ticket.create({ data: { guildId: GUILD, channelId: "600000000000000022", openerId: OPENER } });
     await tickets.components!.open!(interactionFor("") as never, { rest: "", ctx: context() });
-    assert.equal(replies[0]?.body.content, "You already have an open ticket. Close it before opening another.");
+    assert.equal(replies[0]?.body.embeds[0]?.description, "You already have an open ticket. Close it before opening another.");
   });
 });
 

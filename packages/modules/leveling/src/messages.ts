@@ -1,4 +1,4 @@
-import { applyVariables, emptyEmbed, plainReply, s, type Field, type MessageBody, type MessageVariable, type ReplyPlaceholder } from "@tier0/core";
+import { applyVariables, embedReply, emptyEmbed, plainReply, s, type Field, type MessageBody, type MessageVariable, type ReplyPlaceholder } from "@tier0/core";
 
 /**
  * Everything /rank, /leaderboard and the level-up post say, in one place and free
@@ -6,7 +6,7 @@ import { applyVariables, emptyEmbed, plainReply, s, type Field, type MessageBody
  * bodies are what the commands answer with until the owner writes another.
  */
 
-export const LEVEL_UP_MESSAGE = plainReply("{user} reached level {level}!");
+export const LEVEL_UP_MESSAGE = embedReply("Reached level {level}!", "info", { ping: "{user}" });
 
 export const RANK_STARTING: MessageBody = {
   ...plainReply(""),
@@ -49,8 +49,8 @@ export const DEFAULT_LABELS = {
   leaderboardLine: "**{position}.** {name} - level {level} ({xp} xp)",
 } as const;
 
-export const EMPTY_LEADERBOARD = plainReply("Nobody has earned experience here yet.");
-export const PAST_END_LEADERBOARD = plainReply("There is no page that far into the leaderboard.");
+export const EMPTY_LEADERBOARD = embedReply("Nobody has earned experience here yet.", "info");
+export const PAST_END_LEADERBOARD = embedReply("There is no page that far into the leaderboard.", "info");
 
 const PAGE: MessageVariable = { name: "page", description: "The page that was asked for", sample: "4" };
 

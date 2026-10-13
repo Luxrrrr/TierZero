@@ -1,6 +1,6 @@
 import { test, describe, before, after, beforeEach } from "node:test";
 import assert from "node:assert/strict";
-import { ModuleRegistry, type FieldDescriptor, type MessageBody } from "@tier0/core";
+import { ModuleRegistry, REPLY_COLOR, type FieldDescriptor, type MessageBody } from "@tier0/core";
 import { createTestDatabase } from "./db-helper.ts";
 
 const GUILD = "100000000000000030";
@@ -91,7 +91,9 @@ describe("the replies", () => {
   test("say what they always have until the owner writes another", () => {
     const { replies } = resolve();
     for (const [key, text] of Object.entries(TODAY)) {
-      assert.equal(replies[key as keyof Replies].content, text, key);
+      assert.equal(replies[key as keyof Replies].embeds[0]?.description, text, key);
+      assert.equal(replies[key as keyof Replies].embeds[0]?.color, REPLY_COLOR.error, key);
+      assert.equal(replies[key as keyof Replies].content, "", key);
       assert.deepEqual(replies[key as keyof Replies], PROBLEMS[key as keyof typeof PROBLEMS].starting, key);
     }
   });
@@ -99,7 +101,7 @@ describe("the replies", () => {
   test("use the owner's wording, and keep the ones they did not touch", () => {
     const { replies } = resolve({ replies: { noMenu: "Nothing called {name}.", gave: "Added {role}!" } });
     assert.equal(replies.noMenu.content, "Nothing called {name}.");
-    assert.equal(replies.channelGone.content, TODAY.channelGone);
+    assert.equal(replies.channelGone.embeds[0]?.description, TODAY.channelGone);
   });
 
   test("are one collapsible group of compact messages", () => {
@@ -123,7 +125,7 @@ describe("a refusal", () => {
 
   test("a menu whose channel is gone says so", async () => {
     await run(slash("Platforms"), context({ menus: [menu] }, { channel: false }));
-    assert.equal(told[0]?.body.content, TODAY.channelGone);
+    assert.equal(told[0]?.body.embeds[0]?.description, TODAY.channelGone);
   });
 
   test("a menu that cannot be posted says so", async () => {
@@ -134,7 +136,7 @@ describe("a refusal", () => {
 
   test("a button on a menu that was removed says so", async () => {
     await toggle(button(), { rest: ROLE, ctx: context({ menus: [menu] }) });
-    assert.equal(told[0]?.body.content, TODAY.inactive);
+    assert.equal(told[0]?.body.embeds[0]?.description, TODAY.inactive);
   });
 
   test("a button whose role was taken off the menu says so", async () => {
@@ -142,7 +144,7 @@ describe("a refusal", () => {
       data: { guildId: GUILD, channelId: CHANNEL, messageId: MESSAGE, mapping: JSON.stringify({ name: "Platforms", exclusive: false, options: [] }) },
     });
     await toggle(button(), { rest: ROLE, ctx: context() });
-    assert.equal(told[0]?.body.content, TODAY.optionGone);
+    assert.equal(told[0]?.body.embeds[0]?.description, TODAY.optionGone);
   });
 
   test("a role above the bot is named, along with the menu", async () => {
@@ -150,7 +152,7 @@ describe("a refusal", () => {
       data: { guildId: GUILD, channelId: CHANNEL, messageId: MESSAGE, mapping: JSON.stringify({ name: "Platforms", exclusive: false, options: [{ role: ROLE, label: "Gamer" }] }) },
     });
     await toggle(button(), { rest: ROLE, ctx: context({}, { roleAbove: true }) });
-    assert.equal(told[0]?.body.content, TODAY.cannotAssign);
+    assert.equal(told[0]?.body.embeds[0]?.description, TODAY.cannotAssign);
     assert.deepEqual(told[0]?.values, { role: "Gamers", menu: "Platforms" });
   });
 });

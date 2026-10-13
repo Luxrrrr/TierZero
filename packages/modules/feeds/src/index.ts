@@ -1,5 +1,5 @@
 import { MessageFlags, PermissionFlagsBits, SlashCommandBuilder, type ChatInputCommandInteraction } from "discord.js";
-import { applyVariables, defineModule, plainReply } from "@tier0/core";
+import { applyVariables, defineModule, embedReply } from "@tier0/core";
 import { prisma } from "@tier0/db";
 import { AMBIGUOUS, NO_MATCH, STATUS_EMPTY, STATUS_REPLY } from "./labels.js";
 import { MAX_SEND, clampCount, matchSources } from "./match.js";
@@ -22,7 +22,7 @@ async function scheduleNext(ctx: FeedsContext, delayMs: number): Promise<void> {
   await ctx.tasks.schedule("poll", new Date(Date.now() + delayMs));
 }
 
-const SEND_REPLY = plainReply("Sent {posted} of the latest {count} from {source}. {problem}");
+const SEND_REPLY = embedReply("Sent {posted} of the latest {count} from {source}. {problem}", "success");
 
 const intervalOf = (ctx: FeedsContext): number => Math.max(ctx.settings.pollEvery, MIN_POLL_MS);
 
@@ -68,7 +68,7 @@ async function runSend(interaction: ChatInputCommandInteraction, ctx: FeedsConte
   }
   if (matches.length > 1) {
     // The list gets whatever room the sentence around it leaves, as a message cut after the fact would lose its end.
-    const room = LIST_LIMIT - applyVariables(AMBIGUOUS.content, { query, sources: "" }).length;
+    const room = LIST_LIMIT - applyVariables(AMBIGUOUS.embeds[0]?.description ?? "", { query, sources: "" }).length;
     const names = matches.map((source) => source.label).join("\n").slice(0, Math.max(0, room));
     await ctx.reply(interaction, ctx.settings.replies.ambiguous, { query, sources: names }, { fallback: AMBIGUOUS });
     return;

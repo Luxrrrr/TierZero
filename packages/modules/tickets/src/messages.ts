@@ -1,4 +1,4 @@
-import { emptyEmbed, plainReply, s, type Field, type MessageBody, type MessageVariable } from "@tier0/core";
+import { embedReply, emptyEmbed, plainReply, s, type Field, type MessageBody, type MessageVariable } from "@tier0/core";
 
 /**
  * Wording the ticket messages start with, the values they are filled from, and
@@ -24,12 +24,12 @@ export const OPENED_MESSAGE: MessageBody = {
   content: "{user} {supportRoles}",
 };
 
-export const CLOSING_MESSAGE: MessageBody = plainReply("Closing this ticket{ending}");
-export const TRANSCRIPT_MESSAGE: MessageBody = plainReply("Transcript for ticket #{number}");
-export const CREATED_MESSAGE: MessageBody = plainReply("Your ticket has been created: {ticket}");
-export const PANEL_POSTED_MESSAGE: MessageBody = plainReply("Panel posted in {panelChannel}.");
-export const ADDED_MESSAGE: MessageBody = plainReply("Added {member} to this ticket.");
-export const REMOVED_MESSAGE: MessageBody = plainReply("Removed {member} from this ticket.");
+export const CLOSING_MESSAGE: MessageBody = embedReply("Closing this ticket{ending}", "info");
+export const TRANSCRIPT_MESSAGE: MessageBody = embedReply("Transcript for ticket #{number}", "info");
+export const CREATED_MESSAGE: MessageBody = embedReply("Your ticket has been created: {ticket}", "success");
+export const PANEL_POSTED_MESSAGE: MessageBody = embedReply("Panel posted in {panelChannel}.", "success");
+export const ADDED_MESSAGE: MessageBody = embedReply("Added {member} to this ticket.", "success");
+export const REMOVED_MESSAGE: MessageBody = embedReply("Removed {member} from this ticket.", "success");
 
 const USER: MessageVariable = { name: "user", description: "The member who opened the ticket, as a mention", sample: "@Ada" };
 const NUMBER: MessageVariable = { name: "number", description: "The ticket's number", sample: "42" };
@@ -187,74 +187,74 @@ export const REPLIES: Record<ReplyKey, ReplyDefinition> = {
   notStaff: {
     label: "Support staff only",
     help: "Shown when someone without a support role or Manage Channels posts the panel or uses /ticket remove.",
-    starting: plainReply("You need a support role or Manage Channels to do that."),
+    starting: embedReply("You need a support role or Manage Channels to do that.", "error"),
   },
   cannotClose: {
     label: "Not allowed to close",
     help: "Shown when someone who is not the opener or support staff presses Close ticket or uses /ticket close.",
-    starting: plainReply("You need to be the ticket opener, hold a support role, or have Manage Channels to close this."),
+    starting: embedReply("You need to be the ticket opener, hold a support role, or have Manage Channels to close this.", "error"),
   },
   cannotAdd: {
     label: "Not allowed to add a member",
     help: "Shown when someone who is not the opener or support staff uses /ticket add.",
-    starting: plainReply("You need to be the ticket opener, hold a support role, or have Manage Channels to do that."),
+    starting: embedReply("You need to be the ticket opener, hold a support role, or have Manage Channels to do that.", "error"),
   },
   notATicket: {
     label: "Not in a ticket",
     help: "Shown when /ticket close, add or remove is used in a channel that is not an open ticket.",
-    starting: plainReply("This isn't an open ticket channel."),
+    starting: embedReply("This isn't an open ticket channel.", "error"),
   },
   alreadyClosed: {
     label: "Ticket already closed",
     help: "Shown when Close ticket is pressed on a ticket that has already been closed.",
-    starting: plainReply("This ticket is already closed."),
+    starting: embedReply("This ticket is already closed.", "error"),
   },
   channelMissing: {
     label: "Ticket channel missing",
     help: "Shown when /ticket add or remove is used on a ticket whose channel can no longer be found.",
-    starting: plainReply("This ticket's channel is missing."),
+    starting: embedReply("This ticket's channel is missing.", "error"),
   },
   categoryGone: {
     label: "Ticket category deleted",
     help: "Shown when a member presses the panel button after the ticket category was deleted.",
-    starting: plainReply("The ticket category no longer exists. Ask a server admin to set a new one in the dashboard."),
+    starting: embedReply("The ticket category no longer exists. Ask a server admin to set a new one in the dashboard.", "error"),
   },
   categoryFull: {
     label: "Ticket category full",
     help: "Shown when the ticket category already holds Discord's limit of 50 channels.",
-    starting: plainReply("The ticket category is full. Ask a server admin to close old tickets or choose a different category."),
+    starting: embedReply("The ticket category is full. Ask a server admin to close old tickets or choose a different category.", "error"),
   },
   limitOne: {
     label: "Already has a ticket (limit of one)",
     help: "Shown when a member who may only have one ticket open tries to open another.",
-    starting: plainReply("You already have an open ticket. Close it before opening another."),
+    starting: embedReply("You already have an open ticket. Close it before opening another.", "error"),
     variables: [OPEN_COUNT, LIMIT],
   },
   limitMany: {
     label: "Already has the most tickets allowed",
     help: "Shown when a member at the limit for open tickets, which is higher than one, tries to open another.",
-    starting: plainReply("You already have {openCount} open tickets, the most this server allows. Close one before opening another."),
+    starting: embedReply("You already have {openCount} open tickets, the most this server allows. Close one before opening another.", "error"),
     variables: [OPEN_COUNT, LIMIT],
   },
   noCategory: {
     label: "No ticket category",
     help: "Shown when the ticket form is sent in but the category is missing or deleted.",
-    starting: plainReply("No ticket category is set, or the one configured has been deleted. Ask a server admin to set one in the dashboard."),
+    starting: embedReply("No ticket category is set, or the one configured has been deleted. Ask a server admin to set one in the dashboard.", "error"),
   },
   createFailed: {
     label: "Ticket could not be created",
     help: "Shown when Discord refuses to create the ticket channel, usually for a missing permission.",
-    starting: plainReply("Something went wrong creating your ticket channel. Try again, or tell a server admin if it keeps happening."),
+    starting: embedReply("Something went wrong creating your ticket channel. Try again, or tell a server admin if it keeps happening.", "error"),
   },
   noPanelChannel: {
     label: "No panel channel",
     help: "Shown to someone using /ticket panel when no panel channel is set or it was deleted.",
-    starting: plainReply("No panel channel is set, or the one configured has been deleted. Set one in the dashboard first."),
+    starting: embedReply("No panel channel is set, or the one configured has been deleted. Set one in the dashboard first.", "error"),
   },
   panelFailed: {
     label: "Panel could not be posted",
     help: "Shown to someone using /ticket panel when the bot cannot post in the panel channel.",
-    starting: plainReply("I couldn't post the panel there. Check that I can send messages and embed links in that channel."),
+    starting: embedReply("I couldn't post the panel there. Check that I can send messages and embed links in that channel.", "error"),
   },
 };
 

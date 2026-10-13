@@ -1,4 +1,4 @@
-import { emptyEmbed, plainReply, s, type MessageBody, type ReplyPlaceholder } from "@tier0/core";
+import { embedReply, emptyEmbed, plainReply, s, type MessageBody, type ReplyPlaceholder } from "@tier0/core";
 
 /**
  * What /ping, /serverinfo and /userinfo answer with until the owner writes
@@ -15,7 +15,7 @@ export const ACCENTS: Record<string, string> = {
 // this falls back instead of handing back nothing.
 export const accentOf = (name: string): string => ACCENTS[name] ?? "#5865f2";
 
-export const PING_STARTING: MessageBody = plainReply("Responding in {roundtrip}ms, gateway at {gateway}ms.");
+export const PING_STARTING: MessageBody = embedReply("Responding in {roundtrip}ms, gateway at {gateway}ms.", "info");
 
 const embedOf = (fields: Partial<ReturnType<typeof emptyEmbed>>): MessageBody => ({
   ...plainReply(""),

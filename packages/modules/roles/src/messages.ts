@@ -1,4 +1,4 @@
-import { emptyEmbed, plainReply, s, type Field, type MessageBody, type MessageVariable } from "@tier0/core";
+import { embedReply, emptyEmbed, plainReply, s, type Field, type MessageBody, type MessageVariable } from "@tier0/core";
 
 /**
  * Wording the role menus start with, and the upgrade for menus saved when a
@@ -11,9 +11,9 @@ export const MENU_MESSAGE: MessageBody = {
   embeds: [{ ...emptyEmbed(), title: "Pick your roles", description: "Press a button to add or remove a role." }],
 };
 
-export const GAVE_MESSAGE: MessageBody = plainReply("Gave you **{role}**.");
-export const REMOVED_MESSAGE: MessageBody = plainReply("Removed **{role}**.");
-export const PUBLISHED_MESSAGE: MessageBody = plainReply('Published "{menu}" in {menuChannel}.');
+export const GAVE_MESSAGE: MessageBody = embedReply("Gave you **{role}**.", "success");
+export const REMOVED_MESSAGE: MessageBody = embedReply("Removed **{role}**.", "success");
+export const PUBLISHED_MESSAGE: MessageBody = embedReply('Published "{menu}" in {menuChannel}.', "success");
 
 export const MENU_VARIABLES = [{ name: "menu", description: "The menu's name", sample: "Platforms" }];
 
@@ -48,38 +48,38 @@ export const PROBLEMS: Record<ProblemKey, ProblemDefinition> = {
   noMenu: {
     label: "Menu not found",
     help: "Shown to a moderator who runs /rolemenu with a name that is not on the list of menus.",
-    starting: plainReply('No role menu named "{name}" is configured. Add one on the dashboard first.'),
+    starting: embedReply('No role menu named "{name}" is configured. Add one on the dashboard first.', "error"),
     variables: [{ name: "name", description: "The name that was typed", sample: "Platforms" }],
   },
   channelGone: {
     label: "Menu channel deleted",
     help: "Shown when a menu is published but the channel it should go in no longer exists.",
-    starting: plainReply("The channel configured for this menu no longer exists."),
+    starting: embedReply("The channel configured for this menu no longer exists.", "error"),
   },
   editFailed: {
     label: "Menu could not be updated",
     help: "Shown when a menu that is already posted cannot be edited, for example because the bot lost access to the channel.",
-    starting: plainReply("I couldn't update the menu message. Check that I can still edit it."),
+    starting: embedReply("I couldn't update the menu message. Check that I can still edit it.", "error"),
   },
   postFailed: {
     label: "Menu could not be posted",
     help: "Shown when the bot cannot post a new menu in its channel.",
-    starting: plainReply("I couldn't post the menu there. Check that I can send messages and embed links in that channel."),
+    starting: embedReply("I couldn't post the menu there. Check that I can send messages and embed links in that channel.", "error"),
   },
   inactive: {
     label: "Menu no longer active",
     help: "Shown to a member who presses a button on a menu that was removed or replaced.",
-    starting: plainReply("This menu is no longer active. Ask a moderator to republish it."),
+    starting: embedReply("This menu is no longer active. Ask a moderator to republish it.", "error"),
   },
   optionGone: {
     label: "Option removed from the menu",
     help: "Shown to a member who presses a button whose role was taken off the menu or deleted.",
-    starting: plainReply("That option is no longer part of this menu."),
+    starting: embedReply("That option is no longer part of this menu.", "error"),
   },
   cannotAssign: {
     label: "Role is above the bot",
     help: "Shown to a member who presses a button for a role the bot is not allowed to give because it sits above the bot's own highest role.",
-    starting: plainReply("I can't give you **{role}** because that role sits above my own highest role. Ask an admin to move my role above it."),
+    starting: embedReply("I can't give you **{role}** because that role sits above my own highest role. Ask an admin to move my role above it.", "error"),
     variables: TOGGLE_VARIABLES,
   },
 };

@@ -1,4 +1,4 @@
-import { emptyEmbed, plainReply, type MessageBody } from "@tier0/core";
+import { embedReply, emptyEmbed, plainReply, type MessageBody } from "@tier0/core";
 
 /**
  * What each message says until the owner writes another. Kept free of
@@ -6,10 +6,10 @@ import { emptyEmbed, plainReply, type MessageBody } from "@tier0/core";
  * client or a guild.
  */
 
-export const JOIN_MESSAGE: MessageBody = plainReply("Welcome to {server}, {user}!");
-export const LEAVE_MESSAGE: MessageBody = plainReply("{username} has left {server}.");
-export const JOIN_DM: MessageBody = plainReply("Welcome to {server}! Have a look around, and say hello when you are ready.");
-export const LEAVE_DM: MessageBody = plainReply("You have left {server}. We hope to see you again.");
+export const JOIN_MESSAGE: MessageBody = embedReply("Welcome to {server}!", "info", { ping: "{user}" });
+export const LEAVE_MESSAGE: MessageBody = embedReply("{username} has left {server}.", "info");
+export const JOIN_DM: MessageBody = embedReply("Welcome to {server}! Have a look around, and say hello when you are ready.", "info");
+export const LEAVE_DM: MessageBody = embedReply("You have left {server}. We hope to see you again.", "info");
 
 export const VARIABLES = [
   { name: "user", description: "The member, as a mention", sample: "@Ada" },

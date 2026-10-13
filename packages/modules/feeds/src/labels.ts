@@ -1,4 +1,4 @@
-import { plainReply, s, type Field, type MessageBody, type MessageVariable } from "@tier0/core";
+import { embedReply, s, type Field, type MessageBody, type MessageVariable } from "@tier0/core";
 import { DEFAULT_FAILURES } from "./failures.js";
 
 /**
@@ -7,10 +7,10 @@ import { DEFAULT_FAILURES } from "./failures.js";
  * on their own.
  */
 
-export const STATUS_EMPTY = plainReply("Nothing is being watched yet. Add a feed or a game in the dashboard.");
-export const STATUS_REPLY = plainReply("{lines}");
-export const NO_MATCH = plainReply('Nothing being watched matches "{query}". /feeds status lists everything.');
-export const AMBIGUOUS = plainReply('"{query}" matches more than one source. Use a more specific name:\n{sources}');
+export const STATUS_EMPTY = embedReply("Nothing is being watched yet. Add a feed or a game in the dashboard.", "info");
+export const STATUS_REPLY = embedReply("{lines}", "info");
+export const NO_MATCH = embedReply('Nothing being watched matches "{query}". /feeds status lists everything.', "error");
+export const AMBIGUOUS = embedReply('"{query}" matches more than one source. Use a more specific name:\n{sources}', "error");
 
 const QUERY: MessageVariable = { name: "query", description: "What was typed after /feeds send", sample: "gazette" };
 

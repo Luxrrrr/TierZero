@@ -1,6 +1,6 @@
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
-import { ModuleRegistry, applyVariablesToMessage, emptyEmbed, parseMessage, type FieldDescriptor, type MessageBody } from "@tier0/core";
+import { ModuleRegistry, REPLY_COLOR, applyVariablesToMessage, emptyEmbed, parseMessage, type FieldDescriptor, type MessageBody } from "@tier0/core";
 import utility from "../dist/index.js";
 import { PING_STARTING, serverinfoBody, userinfoBody } from "../dist/messages.js";
 
@@ -74,7 +74,14 @@ describe("/ping", () => {
     assert.deepEqual(replied[0]?.body, PING_STARTING);
     assert.equal(replied[0]?.options, undefined, "private is the default");
     const filled = render(PING_STARTING, {}, replied[0]!.values);
-    assert.match(filled.content, /^Responding in \d+ms, gateway at 61ms\.$/);
+    assert.match(filled.embeds[0]?.description ?? "", /^Responding in \d+ms, gateway at 61ms\.$/);
+  });
+
+  test("starts out as an info embed with no text above it", () => {
+    assert.equal(PING_STARTING.content, "");
+    assert.equal(PING_STARTING.embeds.length, 1);
+    assert.equal(PING_STARTING.embeds[0]?.color, REPLY_COLOR.info);
+    assert.equal(PING_STARTING.embeds[0]?.description, "Responding in {roundtrip}ms, gateway at {gateway}ms.");
   });
 
   test("an owner's own reply is sent as it was, still privately", async () => {
