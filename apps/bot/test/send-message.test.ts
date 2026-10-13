@@ -82,6 +82,13 @@ async function quietly<T>(run: () => Promise<T> | T): Promise<T> {
 const emptySent = (): Sent => ({ payloads: [], reactions: [] });
 
 describe("renderMessage", () => {
+  test("an embed's editor name is not sent to Discord", () => {
+    const named = embedReply("Hello.", "info");
+    named.embeds[0]!.name = "Greeting";
+    const rendered = renderMessage(named, {});
+    assert.equal(JSON.stringify(rendered?.payload.embeds?.map((embed) => embed.toJSON())).includes("Greeting"), false);
+  });
+
   test("fills in variables and lets a channel post mention people and roles only", () => {
     const rendered = renderMessage(plainReply("{user} reached level {level}"), { user: "<@1>", level: "5" });
     assert.equal(rendered?.payload.content, "<@1> reached level 5");

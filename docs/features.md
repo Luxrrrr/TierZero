@@ -61,7 +61,7 @@ The Commands page lists every command on the server, including the right-click e
 
 ## Message creator
 
-The Message creator page builds messages and embeds for the bot to post, such as rules, announcements or event notices. You edit on the left and see the message drawn the way Discord shows it on the right.
+The Message creator page builds messages and embeds for the bot to post, such as rules, announcements or event notices. You edit on the left and see the message drawn the way Discord shows it on the right. Each embed has a **Name** that only you see in the editor, which helps when a message has several. It is never sent.
 
 ![The Message creator page with a saved template, its live preview and the editor](images/messages.png)
 

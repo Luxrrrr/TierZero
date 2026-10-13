@@ -1,7 +1,7 @@
 "use client";
 
 import { useId, useState, type RefObject } from "react";
-import { MESSAGE_LIMITS, embedLength, isHexColor, type EmbedField, type MessageEmbed, type MessageError } from "@tier0/core";
+import { EMBED_NAME_MAX, MESSAGE_LIMITS, embedLength, isHexColor, type EmbedField, type MessageEmbed, type MessageError } from "@tier0/core";
 import { Switch } from "../form";
 import { useToolTarget, type InsertVariable, type ToolReach } from "./InsertBar";
 import { ChevronDownIcon, PlusIcon, TrashIcon } from "../Icons";
@@ -43,7 +43,7 @@ export function EmbedEditor({ path, variables, embed, index, total, errors, defa
   }
 
   const used = embedLength(embed);
-  const heading = embed.title.trim() || embed.description.trim().slice(0, 40) || "Untitled embed";
+  const heading = embed.name.trim() || embed.title.trim() || "Untitled embed";
 
   return (
     <section className="embed-card" data-open={open ? "true" : undefined} aria-label={`Embed ${index + 1}`}>
@@ -75,6 +75,21 @@ export function EmbedEditor({ path, variables, embed, index, total, errors, defa
       {open ? (
         <div className="embed-body" id={`${base}-body`}>
           {errorAt("") ? <p className="field-error">{errorAt("")}</p> : null}
+
+          <div className="field">
+            <label className="field-label" htmlFor={`${base}-name`}>
+              Name
+            </label>
+            <p className="field-hint">Only you see this. It helps you tell embeds apart, and it is never sent.</p>
+            <input
+              id={`${base}-name`}
+              className="input"
+              placeholder="For example: Rules"
+              maxLength={EMBED_NAME_MAX}
+              value={embed.name}
+              onChange={(event) => set("name", event.target.value)}
+            />
+          </div>
 
           <div className="field">
             <span className="field-label">Color</span>

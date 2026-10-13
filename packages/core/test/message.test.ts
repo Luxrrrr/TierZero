@@ -507,3 +507,18 @@ describe("flattenEmbeds", () => {
     assert.equal(flat.content, "Plain");
   });
 });
+
+describe("an embed's name", () => {
+  test("is kept, trimmed and cut to the limit", () => {
+    const parsed = parseMessage({ content: "", embeds: [{ ...emptyEmbed(), description: "x", name: `  ${"n".repeat(80)}  ` }] });
+    assert.ok(parsed.ok);
+    assert.equal(parsed.ok && parsed.value.embeds[0]?.name.length, 60);
+  });
+
+  test("reads as empty for an embed saved before names existed", () => {
+    const { name: _name, ...old } = { ...emptyEmbed(), description: "x" };
+    const parsed = parseMessage({ content: "", embeds: [old] });
+    assert.ok(parsed.ok);
+    assert.equal(parsed.ok && parsed.value.embeds[0]?.name, "");
+  });
+});

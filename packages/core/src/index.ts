@@ -150,6 +150,7 @@ export {
   discordTimestamp,
   embedHasContent,
   embedLength,
+  EMBED_NAME_MAX,
   emptyEmbed,
   isEmojiToken,
   isHexColor,

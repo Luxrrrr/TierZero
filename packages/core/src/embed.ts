@@ -3,6 +3,9 @@
  * by the components, because a reply that a button sends can carry embeds too.
  */
 
+/** The most characters an embed name may have. */
+export const EMBED_NAME_MAX = 60;
+
 export interface EmbedField {
   name: string;
   value: string;
@@ -10,6 +13,8 @@ export interface EmbedField {
 }
 
 export interface MessageEmbed {
+  /** A name for telling embeds apart in the editor. It is never sent to Discord. */
+  name: string;
   title: string;
   /** Makes the title a link. */
   url: string;
@@ -70,6 +75,7 @@ export const MESSAGE_LIMITS = {
 
 export function emptyEmbed(): MessageEmbed {
   return {
+    name: "",
     title: "",
     url: "",
     description: "",
@@ -187,6 +193,7 @@ export function readEmbed(raw: unknown): MessageEmbed {
   const source = isRecord(raw) ? raw : {};
   const rawFields = Array.isArray(source.fields) ? source.fields : [];
   return {
+    name: text(source.name).trim().slice(0, EMBED_NAME_MAX),
     title: text(source.title),
     url: text(source.url).trim(),
     description: text(source.description).replace(/\r\n/g, "\n"),
