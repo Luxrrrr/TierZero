@@ -77,7 +77,7 @@ const settings = s.object({
       }),
       defaultSender: s.string({
         label: "Who a message from the dashboard comes from",
-        help: "What {sender} becomes in a message you send from the Messages page when you do not give a sender.",
+        help: "What {sender} becomes in a message you send from the Message creator when you do not give a sender.",
         default: LABEL_DEFAULTS.defaultSender,
         max: 80,
       }),

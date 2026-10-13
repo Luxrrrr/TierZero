@@ -16,9 +16,9 @@ export async function generateMetadata({
   try {
     const guilds = await botGuilds();
     const name = guilds.find((guild) => guild.id === id)?.name;
-    return { title: name ? `Messages · ${name}` : "Messages" };
+    return { title: name ? `Message creator · ${name}` : "Message creator" };
   } catch {
-    return { title: "Messages" };
+    return { title: "Message creator" };
   }
 }
 
@@ -42,7 +42,7 @@ export default async function MessagesPage({ params }: { params: Promise<{ id: s
         <div className="page-header">
           <div className="page-header-text">
             <p className="page-eyebrow">Server</p>
-            <h1 className="page-title">Messages</h1>
+            <h1 className="page-title">Message creator</h1>
             <p className="page-summary">
               Build a message or an embed, keep it as a template, and send it to any channel.
             </p>

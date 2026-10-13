@@ -83,9 +83,9 @@ export async function Sidebar({
                     <CommandsIcon />
                     <span className="nav-link-text">Commands</span>
                   </NavLink>
-                  <NavLink href={`/guilds/${currentGuild.id}/messages`} tip="Messages">
+                  <NavLink href={`/guilds/${currentGuild.id}/messages`} tip="Message creator">
                     <MessagesIcon />
-                    <span className="nav-link-text">Messages</span>
+                    <span className="nav-link-text">Message creator</span>
                   </NavLink>
                   <NavLink href={`/guilds/${currentGuild.id}/bot-messages`} tip="Bot messages">
                     <BotMessagesIcon />
