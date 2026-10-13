@@ -11,9 +11,11 @@ import {
   isEmojiToken,
   linksOnly,
   parseMessage,
+  flattenEmbeds,
   parseSendOptions,
   restrictMessage,
 } from "../dist/message.js";
+import { embedReply, REPLY_COLOR } from "../dist/response.js";
 
 const embed = (patch: Record<string, unknown> = {}) => ({ ...emptyEmbed(), title: "Rules", ...patch });
 
@@ -452,5 +454,56 @@ describe("restrictMessage and linksOnly", () => {
     assert.deepEqual(kept.buttons.map((button) => button.style), ["link"]);
     assert.deepEqual(kept.selects, []);
     assert.deepEqual(kept.reactions, []);
+  });
+});
+
+describe("embedReply", () => {
+  test("is a sentence in a coloured embed with no text above it", () => {
+    const body = embedReply("That did not work.", "error");
+    assert.equal(body.content, "");
+    assert.equal(body.embeds.length, 1);
+    assert.equal(body.embeds[0]?.description, "That did not work.");
+    assert.equal(body.embeds[0]?.color, REPLY_COLOR.error);
+    assert.equal(parseMessage(body).ok, true);
+  });
+
+  test("keeps a ping above the embed, where it notifies", () => {
+    const body = embedReply("Welcome in.", "info", { ping: "<@1>" });
+    assert.equal(body.content, "<@1>");
+  });
+
+  test("gives each kind its own colour", () => {
+    assert.equal(new Set(Object.values(REPLY_COLOR)).size, 4);
+  });
+});
+
+describe("flattenEmbeds", () => {
+  test("writes title, description, fields and footer as text under the existing content", () => {
+    const body = {
+      ...embedReply("Body text", "info", { ping: "<@1>", title: "Heads up" }),
+      embeds: [
+        { ...embed({ title: "Heads up", description: "Body text", footerText: "Case 4" }), fields: [{ name: "Reason", value: "Spam", inline: false }] },
+      ],
+    };
+    const flat = flattenEmbeds(body);
+    assert.deepEqual(flat.embeds, []);
+    assert.equal(flat.content, "<@1>\n\n**Heads up**\nBody text\nReason: Spam\nCase 4");
+  });
+
+  test("keeps buttons, menus and reactions", () => {
+    const button = { label: "Go", emoji: "", style: "primary", url: "", disabled: false, action: { type: "none" } } as const;
+    const flat = flattenEmbeds({ ...embedReply("Hi"), buttons: [button], reactions: ["x"] });
+    assert.equal(flat.buttons.length, 1);
+    assert.deepEqual(flat.reactions, ["x"]);
+  });
+
+  test("stays within the 2000 characters a message may hold", () => {
+    const flat = flattenEmbeds(embedReply("x".repeat(4000)));
+    assert.equal(flat.content.length, 2000);
+  });
+
+  test("leaves a message without embeds as it was", () => {
+    const flat = flattenEmbeds({ ...embedReply(""), content: "Plain", embeds: [] });
+    assert.equal(flat.content, "Plain");
   });
 });

@@ -20,6 +20,10 @@ function settingsWith(stored: unknown): SystemSettings {
 }
 
 const body = (content: string): MessageBody => plainReply(content);
+
+/** The sentence of a default, which now sits in an embed rather than in the message text. */
+const descOf = (value: { embeds?: unknown } | undefined) =>
+  (value?.embeds as Array<{ data: { description?: string } }> | undefined)?.[0]?.data.description;
 const source = (settings: SystemSettings) => ({ systemSettings: async () => settings });
 
 interface FakeRole {
@@ -78,41 +82,42 @@ describe("what a role button says", () => {
 
   test("a role that was deleted", async () => {
     const piece = await say(fakeGuild({ role: null }).guild, defaults);
-    assert.equal(piece.content, "That role no longer exists.");
+    assert.equal(descOf(piece), "That role no longer exists.");
   });
 
   test("a role above the bot's own", async () => {
     const piece = await say(fakeGuild({ botPosition: 1 }).guild, defaults);
     assert.equal(
-      piece.content,
+      descOf(piece),
       "I can't change **Events** because it sits above my own highest role. Ask an admin to move my role above it.",
     );
   });
 
   test("a member the bot cannot find", async () => {
     const piece = await say(fakeGuild({ member: false }).guild, defaults);
-    assert.equal(piece.content, "I couldn't find you on this server.");
+    assert.equal(descOf(piece), "I couldn't find you on this server.");
   });
 
   test("a role Discord refuses to change", async () => {
     const piece = await say(fakeGuild({ change: "fail" }).guild, defaults);
-    assert.equal(piece.content, "I couldn't change **Events**. Check that I have Manage Roles.");
+    assert.equal(descOf(piece), "I couldn't change **Events**. Check that I have Manage Roles.");
   });
 
   test("a role given", async () => {
     const { guild, calls } = fakeGuild();
     const piece = await say(guild, defaults);
     assert.deepEqual(calls, ["add"]);
-    assert.equal(piece.content, "You now have **Events**.");
+    assert.equal(descOf(piece), "You now have **Events**.");
+    assert.equal((piece.embeds[0] as { data: { color: number } }).data.color, 0x3ba55d);
   });
 
   test("a role taken away, by removing it or by toggling it off", async () => {
     const removed = fakeGuild();
-    assert.equal((await say(removed.guild, defaults, { mode: "remove" })).content, "**Events** was taken off you.");
+    assert.equal(descOf(await say(removed.guild, defaults, { mode: "remove" })), "**Events** was taken off you.");
     assert.deepEqual(removed.calls, ["remove"]);
 
     const toggled = fakeGuild({ has: true });
-    assert.equal((await say(toggled.guild, defaults, { mode: "toggle" })).content, "**Events** was taken off you.");
+    assert.equal(descOf(await say(toggled.guild, defaults, { mode: "toggle" })), "**Events** was taken off you.");
     assert.deepEqual(toggled.calls, ["remove"]);
   });
 
@@ -244,7 +249,7 @@ describe("a handler that throws", () => {
     await quietly(() => listener(interaction));
     assert.equal(sent.length, 1);
     assert.equal(sent[0]?.how, "reply");
-    assert.equal(sent[0]?.payload.content, "That didn't work. The server log has the details.");
+    assert.equal(descOf(sent[0]?.payload), "That didn't work. The server log has the details.");
     assert.equal(sent[0]?.payload.flags, MessageFlags.Ephemeral);
   });
 

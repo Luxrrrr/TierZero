@@ -75,12 +75,16 @@ function fakeInteraction(state: { replied?: boolean; deferred?: boolean; inGuild
   return { interaction, sent };
 }
 
+/** The sentence of a default, which now sits in an embed rather than in the message text. */
+const descOf = (value: { embeds?: unknown } | undefined) =>
+  (value?.embeds as Array<{ data: { description?: string } }> | undefined)?.[0]?.data.description;
+
 const body = (content: string, overrides: Partial<MessageBody> = {}): MessageBody => ({ ...plainReply(content), ...overrides });
 
 describe("systemBody", () => {
   test("is the default wording for a server that never saved anything", async () => {
     const found = await systemBody(sourceOf(settingsWith({})), GUILD_ID, "featureOff");
-    assert.equal(found.content, "That feature is switched off on this server.");
+    assert.equal(found.embeds[0]?.description, "That feature is switched off on this server.");
   });
 
   test("is the owner's wording when they wrote one", async () => {
@@ -123,7 +127,7 @@ describe("renderSystem", () => {
     // Each {role} grows to 100 characters, which pushes the text past Discord's 2000.
     const settings = settingsWith({ replies: { buttons: { roleGiven: body("{role}".repeat(30)) } } });
     const rendered = await quietly(() => renderSystem(sourceOf(settings), fakeGuild() as never, "roleGiven", { role: "r".repeat(100) }));
-    assert.equal(rendered?.payload.content, `You now have **${"r".repeat(100)}**.`);
+    assert.equal(descOf(rendered?.payload), `You now have **${"r".repeat(100)}**.`);
   });
 });
 
@@ -134,7 +138,7 @@ describe("replySystem", () => {
     assert.equal(ok, true);
     assert.equal(sent.length, 1);
     assert.equal(sent[0]?.how, "reply");
-    assert.equal(sent[0]?.payload.content, "That command is turned off in this channel.");
+    assert.equal(descOf(sent[0]?.payload), "That command is turned off in this channel.");
     assert.equal(sent[0]?.payload.flags, MessageFlags.Ephemeral);
   });
 
@@ -157,7 +161,7 @@ describe("replySystem", () => {
   test("says nothing about being ephemeral in a direct message", async () => {
     const { interaction, sent } = fakeInteraction({ inGuild: false });
     await replySystem(sourceOf(settingsWith({})), interaction as never, null, "notActive");
-    assert.equal(sent[0]?.payload.content, "This message's buttons and menus are no longer active.");
+    assert.equal(descOf(sent[0]?.payload), "This message's buttons and menus are no longer active.");
     assert.equal(sent[0]?.payload.flags, undefined);
   });
 

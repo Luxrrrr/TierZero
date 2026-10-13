@@ -1,7 +1,7 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 import { Collection, MessageFlags } from "discord.js";
-import { emptyEmbed, plainReply, type MessageBody } from "@tier0/core";
+import { embedReply, emptyEmbed, plainReply, type MessageBody } from "@tier0/core";
 import { editMessage, replyMessage, sendMessage } from "../dist/runtime/send-message.js";
 
 const GUILD_ID = "100000000000000001";
@@ -61,6 +61,43 @@ describe("rows and files given to sendMessage", () => {
     assert.equal(components.length, 2);
     assert.equal(components[1], ownRow);
     assert.deepEqual(payloads[0]?.files, [file]);
+  });
+});
+
+describe("editMessage without Embed Links", () => {
+  const refusal = (code: number) => Object.assign(new Error("Discord refused"), { code });
+
+  function fakeMessage(edits: Record<string, unknown>[], failFirstWith?: Error) {
+    return {
+      id: "300000000000000003",
+      channelId: CHANNEL_ID,
+      guild: fakeGuild(),
+      client,
+      channel: { id: CHANNEL_ID, name: "roles" },
+      edit: async (payload: Record<string, unknown>) => {
+        if (failFirstWith && (payload.embeds as unknown[]).length > 0) throw failFirstWith;
+        edits.push(payload);
+        return { id: "300000000000000003", channelId: CHANNEL_ID, react: async () => undefined };
+      },
+    };
+  }
+
+  test("edits to text once when the channel refuses the embed", async () => {
+    const edits: Record<string, unknown>[] = [];
+    const result = await quietly(() =>
+      editMessage(fakeMessage(edits, refusal(50013)) as never, embedReply("Updated.", "info"), {}, { persist: async () => undefined }),
+    );
+    assert.ok(result);
+    assert.equal(edits.length, 1);
+    assert.equal(edits[0]?.content, "Updated.");
+    assert.deepEqual(edits[0]?.embeds, []);
+  });
+
+  test("returns null for other failures", async () => {
+    const result = await quietly(() =>
+      editMessage(fakeMessage([], refusal(10008)) as never, embedReply("Updated."), {}, { persist: async () => undefined }),
+    );
+    assert.equal(result, null);
   });
 });
 

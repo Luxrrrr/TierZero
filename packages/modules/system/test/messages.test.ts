@@ -1,6 +1,6 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { ModuleRegistry, applyVariables, type FieldDescriptor } from "@tier0/core";
+import { ModuleRegistry, REPLY_COLOR, applyVariables, type FieldDescriptor } from "@tier0/core";
 import system, {
   LABEL_DEFAULTS,
   SYSTEM_INFO,
@@ -36,6 +36,22 @@ const TODAY: Record<(typeof SYSTEM_MESSAGE_KEYS)[number], string> = {
   componentFailed: "That didn't work. The server log has the details.",
 };
 
+/** Everything the bot says on its own account is a failure to report, except the two role confirmations. */
+const KIND: Record<(typeof SYSTEM_MESSAGE_KEYS)[number], keyof typeof REPLY_COLOR> = {
+  featureOff: "error",
+  channelOff: "error",
+  noRole: "error",
+  commandFailed: "error",
+  roleGone: "error",
+  roleTooHigh: "error",
+  memberNotFound: "error",
+  roleChangeFailed: "error",
+  roleGiven: "success",
+  roleTaken: "success",
+  notActive: "error",
+  componentFailed: "error",
+};
+
 describe("the system module", () => {
   test("is always on", () => {
     const summary = registry.describe()[0];
@@ -47,13 +63,15 @@ describe("the system module", () => {
     const settings = resolve({});
     for (const key of SYSTEM_MESSAGE_KEYS) {
       const message = systemMessage(settings, key);
-      assert.equal(message.content, TODAY[key], key);
-      assert.deepEqual(message.embeds, [], key);
+      assert.equal(message.content, "", key);
+      assert.equal(message.embeds.length, 1, key);
+      assert.equal(message.embeds[0]?.description, TODAY[key], key);
+      assert.equal(message.embeds[0]?.color, REPLY_COLOR[KIND[key]], key);
     }
   });
 
   test("the defaults the router falls back on are the same text", () => {
-    for (const key of SYSTEM_MESSAGE_KEYS) assert.equal(SYSTEM_MESSAGES[key].content, TODAY[key], key);
+    for (const key of SYSTEM_MESSAGE_KEYS) assert.equal(SYSTEM_MESSAGES[key].embeds[0]?.description, TODAY[key], key);
   });
 
   test("keeps the short labels at today's text", () => {
@@ -71,7 +89,7 @@ describe("the system module", () => {
       replies: { commands: { featureOff: { content: "Not available here.", embeds: [], buttons: [], selects: [], reactions: [] } } },
     });
     assert.equal(systemMessage(settings, "featureOff").content, "Not available here.");
-    assert.equal(systemMessage(settings, "channelOff").content, TODAY.channelOff);
+    assert.equal(systemMessage(settings, "channelOff").embeds[0]?.description, TODAY.channelOff);
   });
 
   test("reads wording stored as plain text, as the message fields do everywhere", () => {
@@ -131,7 +149,7 @@ describe("what the dashboard is told", () => {
 
   test("every variable a default uses is declared, so the editor offers it", () => {
     for (const key of SYSTEM_MESSAGE_KEYS) {
-      const used = [...SYSTEM_MESSAGES[key].content.matchAll(/\{([\w.]+)\}/g)].map((match) => match[1]);
+      const used = [...(SYSTEM_MESSAGES[key].embeds[0]?.description ?? "").matchAll(/\{([\w.]+)\}/g)].map((match) => match[1]);
       const declared = SYSTEM_VARIABLES[key].map((variable) => variable.name);
       for (const name of used) assert.ok(declared.includes(name ?? ""), `${key} uses {${name}} without declaring it`);
     }

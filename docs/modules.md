@@ -109,9 +109,9 @@ Which modules the quick setup groups, and in what order, is in `apps/web/lib/gui
 Use `s.message` for anything the module sends, in place of `s.template`. The owner edits it with the same builder as the Messages page: text, embeds, buttons, menus, reactions and variables.
 
 ```ts
-import { plainReply, s } from "@tier0/core";
+import { embedReply, s } from "@tier0/core";
 
-const LEVEL_UP = plainReply("{user} reached level {level}!");
+const LEVEL_UP = embedReply("You reached level {level}.", "info", { ping: "{user}" });
 
 message: s.message({
   label: "Level-up message",
@@ -122,6 +122,8 @@ message: s.message({
   ],
 }),
 ```
+
+Write defaults with `embedReply(text, kind, { ping?, title? })`, which gives a coloured embed. `kind` is `"error"`, `"success"`, `"warning"` or `"info"`, and the colours live in `REPLY_COLOR` so every module matches. Put a mention that has to notify someone in `ping`, which is sent as text above the embed, since a mention inside an embed does not ping. `plainReply` stays for compatibility with text stored before the editor existed; new defaults should not use it.
 
 `starting` is what the feature sends today. It is also the default, so the editor opens on the real wording and "Go back to the default" has something to return to. `variables` are the module's own placeholders, each with a sample for the preview. The ones every message has (`{server}`, `{members}`, `{channel}`, `{channel.name}`, `{date}`, `{time}`, `{now}`, `{sender}`, `{bot}`, `{server.icon}`) are always offered as well.
 
@@ -140,7 +142,7 @@ Send it with `ctx.send`, which takes a channel, a user or a member:
 await ctx.send(channel, ctx.settings.announce.message, { user: `<@${member.id}>`, level }, { fallback: LEVEL_UP });
 ```
 
-`ctx.send` fills the shared variables, then the values you pass (which win on a clash), checks the message again because variables can lengthen it, sends it, and afterwards stores what its buttons do and adds its reactions. A button in a direct message is stored against the server the module runs for, so pressing it acts on that server; with no server known, only link buttons are sent. It resolves to the sent message, or to null if nothing was sent. It never throws: a closed DM or a missing permission is logged and the feature carries on. If the message no longer fits once filled in, `fallback` is sent instead, so a feature doesn't go silent over an owner's edit. Pass `sender` in the options to set `{sender}`, which is the bot's name otherwise. When the module owns a button or menu of its own, such as one answered by its `components` handler, set `components: false` on the field and pass the row you built as `rows`, which is placed under the message's own. `files` attaches files. `mentions: { users, roles }` lists the ids the post may ping and nothing else; pass it when the text includes anything a member wrote, and empty lists for a post that pings no one. Without it a channel post may ping any user or role it mentions.
+`ctx.send` fills the shared variables, then the values you pass (which win on a clash), checks the message again because variables can lengthen it, sends it, and afterwards stores what its buttons do and adds its reactions. A button in a direct message is stored against the server the module runs for, so pressing it acts on that server; with no server known, only link buttons are sent. It resolves to the sent message, or to null if nothing was sent. A channel post with embeds that Discord refuses for missing permissions is retried once as plain text, written out by `flattenEmbeds`, and logged. It never throws: a closed DM or a missing permission is logged and the feature carries on. If the message no longer fits once filled in, `fallback` is sent instead, so a feature doesn't go silent over an owner's edit. Pass `sender` in the options to set `{sender}`, which is the bot's name otherwise. When the module owns a button or menu of its own, such as one answered by its `components` handler, set `components: false` on the field and pass the row you built as `rows`, which is placed under the message's own. `files` attaches files. `mentions: { users, roles }` lists the ids the post may ping and nothing else; pass it when the text includes anything a member wrote, and empty lists for a post that pings no one. Without it a channel post may ping any user or role it mentions.
 
 `ctx.dashboardUrl()` resolves the address the dashboard is opened at, with no trailing slash, or an empty string when it isn't known. It is the moderation module's **Dashboard address** setting if set, else the address the instance owner last opened the dashboard at, read from the database and cached for 30 seconds. Build links from it with `dashboardLinks(base, guildId, userId, caseNumber)` from `@tier0/core`, which gives `caseUrl` and `memberUrl`, both empty when there is no address. A link button whose address comes out empty or isn't an http(s) address is dropped when the message is filled in, so a post that has no address simply has no button. `viewCaseButton()` is the default one. A link button's address may contain a variable, as in `{caseUrl}`, and the editor accepts that while it is being typed. An `s.string({ origin: true })` setting is stored as an origin: a pasted path or trailing slash is dropped and anything that isn't an http(s) address is refused.
 

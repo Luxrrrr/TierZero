@@ -101,6 +101,10 @@ function fakeInteraction(options: { channelId?: string; roles?: string[]; deferr
 
 const body = (content: string): MessageBody => plainReply(content);
 
+/** The sentence of a default, which now sits in an embed rather than in the message text. */
+const descOf = (value: { embeds?: unknown } | undefined) =>
+  (value?.embeds as Array<{ data: { description?: string } }> | undefined)?.[0]?.data.description;
+
 async function quietly<T>(run: () => Promise<T> | T): Promise<T> {
   const original = console.error;
   console.error = () => undefined;
@@ -120,7 +124,8 @@ describe("a feature that is switched off", () => {
     await run(fakeState({ enabled: false }), interaction);
     assert.equal(ran, 0);
     assert.equal(sent.length, 1);
-    assert.equal(sent[0]?.payload.content, "That feature is switched off on this server.");
+    assert.equal(descOf(sent[0]?.payload), "That feature is switched off on this server.");
+    assert.equal((sent[0]?.payload.embeds as Array<{ data: { color: number } }>)[0]?.data.color, 0xed4245);
     assert.equal(sent[0]?.payload.flags, MessageFlags.Ephemeral);
   });
 
@@ -145,7 +150,7 @@ describe("a command turned off in a channel", () => {
     const { interaction, sent } = fakeInteraction({ channelId: OTHER_CHANNEL });
     await run(fakeState({ policy: policy({ denyChannels: [OTHER_CHANNEL] }) }), interaction);
     assert.equal(ran, 0);
-    assert.equal(sent[0]?.payload.content, "That command is turned off in this channel.");
+    assert.equal(descOf(sent[0]?.payload), "That command is turned off in this channel.");
   });
 
   test("is refused with the owner's sentence, linking the channel", async () => {
@@ -164,7 +169,7 @@ describe("a command limited to roles", () => {
     const { interaction, sent } = fakeInteraction({ roles: ["500000000000000006"] });
     await run(fakeState({ policy: limited }), interaction);
     assert.equal(ran, 0);
-    assert.equal(sent[0]?.payload.content, "You do not have a role that is allowed to use that command.");
+    assert.equal(descOf(sent[0]?.payload), "You do not have a role that is allowed to use that command.");
   });
 
   test("can name the roles that are allowed", async () => {
@@ -190,7 +195,7 @@ describe("a command that fails", () => {
     await quietly(() => run(fakeState(), interaction));
     failWith = null;
     assert.equal(sent[0]?.how, "reply");
-    assert.equal(sent[0]?.payload.content, "That command did not finish. The server log has the details.");
+    assert.equal(descOf(sent[0]?.payload), "That command did not finish. The server log has the details.");
     assert.equal(sent[0]?.payload.flags, MessageFlags.Ephemeral);
   });
 
@@ -219,7 +224,7 @@ describe("a command that fails", () => {
     const { interaction, sent } = fakeInteraction();
     await quietly(() => run(fakeState({ settings }), interaction));
     failWith = null;
-    assert.equal(sent[0]?.payload.content, "That command did not finish. The server log has the details.");
+    assert.equal(descOf(sent[0]?.payload), "That command did not finish. The server log has the details.");
   });
 });
 

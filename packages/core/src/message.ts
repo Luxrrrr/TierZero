@@ -137,6 +137,27 @@ export function linksOnly(message: MessageBody): MessageBody {
   };
 }
 
+/**
+ * The same message with its embeds written out as text, for a channel where the
+ * bot may not post embeds. Each embed becomes a block: bold title, description,
+ * one line per field, footer. Text that was already there stays first, and the
+ * result is cut to the 2000 characters a message may hold. Buttons and menus
+ * are kept, because they do not depend on Embed Links.
+ */
+export function flattenEmbeds(message: MessageBody): MessageBody {
+  const blocks = message.embeds.map((embed) => {
+    const lines: string[] = [];
+    if (embed.title !== "") lines.push("**" + embed.title + "**");
+    if (embed.description !== "") lines.push(embed.description);
+    for (const field of embed.fields) lines.push(field.name + ": " + field.value);
+    if (embed.footerText !== "") lines.push(embed.footerText);
+    return lines.join("\n");
+  });
+  const text = [message.content, ...blocks].filter((part) => part !== "").join("\n\n");
+  const limit = MESSAGE_LIMITS.content;
+  return { ...message, content: text.length > limit ? `${text.slice(0, limit - 1)}…` : text, embeds: [] };
+}
+
 /** A name for a template or folder: trimmed, never empty, no longer than `max`. */
 export function cleanName(
   value: unknown,

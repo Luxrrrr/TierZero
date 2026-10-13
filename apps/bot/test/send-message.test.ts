@@ -1,7 +1,7 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 import { Collection } from "discord.js";
-import { plainReply, type MessageBody } from "@tier0/core";
+import { embedReply, plainReply, type MessageBody } from "@tier0/core";
 import { renderMessage, sendMessage } from "../dist/runtime/send-message.js";
 
 const GUILD_ID = "100000000000000001";
@@ -181,6 +181,89 @@ describe("sendMessage to a channel", () => {
       sendMessage(fakeChannel(fakeGuild(), emptySent(), new Error("Missing Permissions")) as never, plainReply("Hi")),
     );
     assert.equal(result, null);
+  });
+});
+
+describe("sendMessage without Embed Links", () => {
+  const refusal = (code: number) => Object.assign(new Error("Discord refused"), { code });
+
+  /** Refuses the first post when it carries an embed, the way a channel without Embed Links does. */
+  function strictChannel(guild: ReturnType<typeof fakeGuild>, sent: Sent, code: number) {
+    const channel = fakeChannel(guild, sent);
+    const send = channel.send;
+    channel.send = async (payload: Record<string, unknown>) => {
+      if ((payload.embeds as unknown[] | undefined)?.length) throw refusal(code);
+      return send(payload);
+    };
+    return channel;
+  }
+
+  test("sends an embed as it is when the channel takes it", async () => {
+    const sent = emptySent();
+    await sendMessage(fakeChannel(fakeGuild(), sent) as never, embedReply("Done.", "success"));
+    assert.equal((sent.payloads[0]?.embeds as unknown[]).length, 1);
+  });
+
+  for (const code of [50013, 50006]) {
+    test(`retries once as text when Discord answers ${code}`, async () => {
+      const sent = emptySent();
+      const message = await quietly(() =>
+        sendMessage(strictChannel(fakeGuild(), sent, code) as never, embedReply("That did not work.", "error", { ping: "<@1>" }), {}, {
+          persist: async () => undefined,
+        }),
+      );
+      assert.ok(message);
+      assert.equal(sent.payloads.length, 1);
+      assert.equal(sent.payloads[0]?.content, "<@1>\n\nThat did not work.");
+      assert.ok(!(sent.payloads[0]?.embeds as unknown[] | undefined)?.length);
+    });
+  }
+
+  test("keeps the buttons and the module's own rows in the text version", async () => {
+    const sent = emptySent();
+    const ownRow = { own: true };
+    await quietly(() =>
+      sendMessage(strictChannel(fakeGuild(), sent, 50013) as never, { ...embedReply("Pick", "info"), buttons: [primaryButton] }, {}, {
+        rows: [ownRow as never],
+        persist: async () => undefined,
+      }),
+    );
+    const components = sent.payloads[0]?.components as unknown[];
+    assert.equal(components.length, 2);
+    assert.equal(components[1], ownRow);
+  });
+
+  test("logs once that it fell back", async () => {
+    const logged: unknown[][] = [];
+    const original = console.error;
+    console.error = (...args: unknown[]) => void logged.push(args);
+    try {
+      await sendMessage(strictChannel(fakeGuild(), emptySent(), 50013) as never, embedReply("Hi"), {}, { persist: async () => undefined });
+    } finally {
+      console.error = original;
+    }
+    assert.equal(logged.length, 1);
+  });
+
+  test("does not retry other failures", async () => {
+    const sent = emptySent();
+    const channel = fakeChannel(fakeGuild(), sent, refusal(50007));
+    const result = await quietly(() => sendMessage(channel as never, embedReply("Hi")));
+    assert.equal(result, null);
+    assert.equal(sent.payloads.length, 0);
+  });
+
+  test("gives up when the text version is refused too", async () => {
+    const sent = emptySent();
+    const channel = fakeChannel(fakeGuild(), sent, refusal(50013));
+    assert.equal(await quietly(() => sendMessage(channel as never, embedReply("Hi"))), null);
+  });
+
+  test("does not retry a message without embeds", async () => {
+    let attempts = 0;
+    const channel = { ...fakeChannel(fakeGuild(), emptySent()), send: async () => { attempts += 1; throw refusal(50013); } };
+    assert.equal(await quietly(() => sendMessage(channel as never, plainReply("Hi"))), null);
+    assert.equal(attempts, 1);
   });
 });
 

@@ -43,7 +43,7 @@ export type {
 export { dashboardLinks, viewCaseButton } from "./dashboard-links.js";
 export type { DashboardLinks } from "./dashboard-links.js";
 
-export { plainReply } from "./response.js";
+export { plainReply, embedReply, REPLY_COLOR, type ReplyKind } from "./response.js";
 export type { ReplyPlaceholder, ReplyValues, ResponseTemplate } from "./response.js";
 
 export { isRoleAssignable } from "./roles.js";
@@ -155,6 +155,7 @@ export {
   parseMessage,
   parseSendOptions,
   linksOnly,
+  flattenEmbeds,
   restrictMessage,
 } from "./message.js";
 export type {

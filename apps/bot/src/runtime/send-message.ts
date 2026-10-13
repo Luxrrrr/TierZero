@@ -2,6 +2,7 @@ import { MessageFlags } from "discord.js";
 import type { Guild, GuildMember, Message, MessageComponentInteraction, MessageCreateOptions, RepliableInteraction, TextBasedChannel, User } from "discord.js";
 import {
   applyVariablesToMessage,
+  flattenEmbeds,
   linksOnly,
   parseMessage,
   restrictMessage,
@@ -74,6 +75,22 @@ export interface SendOptions extends SendMessageOptions {
   unknown?: NameLookup["unknown"];
 }
 
+/**
+ * Discord answers a post whose embeds the bot may not use with one of two
+ * codes: missing permissions, or an empty message when it dropped the embed and
+ * nothing else was left.
+ */
+function refusesEmbeds(error: unknown): boolean {
+  const code = typeof error === "object" && error !== null && "code" in error ? error.code : undefined;
+  return code === 50013 || code === 50006;
+}
+
+/** What to post instead when the channel will not take embeds: the same message with them written out as text. */
+function withoutEmbeds(rendered: RenderedMessage, guild: Guild | undefined, unknown: NameLookup["unknown"]): MessageCreateOptions {
+  const flat = flattenEmbeds(rendered.message);
+  return { ...toDiscordPayload(flat, guild ? namesOf(guild, unknown) : undefined), allowedMentions: rendered.payload.allowedMentions };
+}
+
 type Destination = { send(options: MessageCreateOptions): Promise<Message> };
 
 const isChannel = (target: MessageTarget): target is TextBasedChannel => "isTextBased" in target && typeof target.isTextBased === "function";
@@ -125,7 +142,20 @@ export async function sendMessage(
       components: [...(rendered.payload.components ?? []), ...(options.rows ?? [])],
       ...(options.files ? { files: options.files } : {}),
     };
-    const sent = await (target as unknown as Destination).send(payload);
+    const destination = target as unknown as Destination;
+    let sent: Message;
+    try {
+      sent = await destination.send(payload);
+    } catch (error) {
+      // Only a channel can lack Embed Links, and only a message with embeds has anything to give up.
+      if (delivery !== "channel" || rendered.message.embeds.length === 0 || !refusesEmbeds(error)) throw error;
+      console.error("A channel would not take embeds, probably because the bot lacks Embed Links there, so the message was sent as text:", error);
+      sent = await destination.send({
+        ...withoutEmbeds(rendered, guild, options.unknown),
+        components: payload.components ?? [],
+        ...(options.files ? { files: options.files } : {}),
+      });
+    }
 
     // The message is out by now, so what follows is extra and must not undo it.
     if (guild) {
@@ -179,13 +209,27 @@ export async function editMessage(
     if (!rendered && options.fallback) rendered = renderMessage(options.fallback, variables, guild, "channel", undefined, options.unknown);
     if (!rendered) return null;
 
-    const edited = await message.edit({
-      // An edit keeps whatever it is not told to change, so an empty text has to be said.
-      content: rendered.payload.content ?? "",
-      embeds: rendered.payload.embeds ?? [],
-      components: [...(rendered.payload.components ?? []), ...(options.rows ?? [])],
-      allowedMentions: rendered.payload.allowedMentions ?? { parse: [] },
-    });
+    const components = [...(rendered.payload.components ?? []), ...(options.rows ?? [])];
+    let edited: Message;
+    try {
+      edited = await message.edit({
+        // An edit keeps whatever it is not told to change, so an empty text has to be said.
+        content: rendered.payload.content ?? "",
+        embeds: rendered.payload.embeds ?? [],
+        components,
+        allowedMentions: rendered.payload.allowedMentions ?? { parse: [] },
+      });
+    } catch (error) {
+      if (rendered.message.embeds.length === 0 || !refusesEmbeds(error)) throw error;
+      console.error("A channel would not take embeds, probably because the bot lacks Embed Links there, so the message was edited to text:", error);
+      const flat = withoutEmbeds(rendered, guild, options.unknown);
+      edited = await message.edit({
+        content: flat.content ?? "",
+        embeds: [],
+        components,
+        allowedMentions: flat.allowedMentions ?? { parse: [] },
+      });
+    }
 
     if (guild) {
       const persist = options.persist ?? saveInteractions;

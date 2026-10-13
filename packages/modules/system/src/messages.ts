@@ -1,4 +1,4 @@
-import { plainReply, type MessageBody, type MessageVariable } from "@tier0/core";
+import { embedReply, type MessageBody, type MessageVariable } from "@tier0/core";
 
 /**
  * What the bot says on its own account, in the wording it has always used.
@@ -23,20 +23,21 @@ export const SYSTEM_MESSAGE_KEYS = [
 export type SystemMessageKey = (typeof SYSTEM_MESSAGE_KEYS)[number];
 
 export const SYSTEM_MESSAGES: Record<SystemMessageKey, MessageBody> = {
-  featureOff: plainReply("That feature is switched off on this server."),
-  channelOff: plainReply("That command is turned off in this channel."),
-  noRole: plainReply("You do not have a role that is allowed to use that command."),
-  commandFailed: plainReply("That command did not finish. The server log has the details."),
-  roleGone: plainReply("That role no longer exists."),
-  roleTooHigh: plainReply(
+  featureOff: embedReply("That feature is switched off on this server.", "error"),
+  channelOff: embedReply("That command is turned off in this channel.", "error"),
+  noRole: embedReply("You do not have a role that is allowed to use that command.", "error"),
+  commandFailed: embedReply("That command did not finish. The server log has the details.", "error"),
+  roleGone: embedReply("That role no longer exists.", "error"),
+  roleTooHigh: embedReply(
     "I can't change **{role}** because it sits above my own highest role. Ask an admin to move my role above it.",
+    "error",
   ),
-  memberNotFound: plainReply("I couldn't find you on this server."),
-  roleChangeFailed: plainReply("I couldn't change **{role}**. Check that I have Manage Roles."),
-  roleGiven: plainReply("You now have **{role}**."),
-  roleTaken: plainReply("**{role}** was taken off you."),
-  notActive: plainReply("This message's buttons and menus are no longer active."),
-  componentFailed: plainReply("That didn't work. The server log has the details."),
+  memberNotFound: embedReply("I couldn't find you on this server.", "error"),
+  roleChangeFailed: embedReply("I couldn't change **{role}**. Check that I have Manage Roles.", "error"),
+  roleGiven: embedReply("You now have **{role}**.", "success"),
+  roleTaken: embedReply("**{role}** was taken off you.", "success"),
+  notActive: embedReply("This message's buttons and menus are no longer active.", "error"),
+  componentFailed: embedReply("That didn't work. The server log has the details.", "error"),
 };
 
 const COMMAND: MessageVariable = { name: "command", description: "The command, as members type it", sample: "/rank" };

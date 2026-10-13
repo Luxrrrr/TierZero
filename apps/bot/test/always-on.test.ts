@@ -77,7 +77,7 @@ describe("a module that is always on", () => {
 
   test("gives its settings at the defaults before anything is saved", async () => {
     const settings = await state.systemSettings(GUILD);
-    assert.equal(settings?.replies.commands.featureOff.content, "That feature is switched off on this server.");
+    assert.equal(settings?.replies.commands.featureOff.embeds[0]?.description, "That feature is switched off on this server.");
     assert.equal(settings?.labels.webhookName, "TierZero messages");
   });
 
