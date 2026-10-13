@@ -1,7 +1,7 @@
 import { test, describe, before, after, beforeEach } from "node:test";
 import assert from "node:assert/strict";
 import { PermissionFlagsBits } from "discord.js";
-import { applyVariablesToMessage, parseMessage, type MessageBody } from "@tier0/core";
+import { REPLY_COLOR, applyVariablesToMessage, parseMessage, type MessageBody } from "@tier0/core";
 import { createTestDatabase } from "./db-helper.ts";
 import { moderationSettingsWith } from "./settings-helper.ts";
 import { formatModLogEntry } from "./legacy-view.ts";
@@ -22,6 +22,9 @@ const { caseCommand } = await import("../dist/commands/case.js");
 const { purgeCommand } = await import("../dist/commands/purge.js");
 const { timeoutCommand } = await import("../dist/commands/timeout.js");
 const { banCommand } = await import("../dist/commands/ban.js");
+const { warnCommand } = await import("../dist/commands/warn.js");
+const { kickCommand } = await import("../dist/commands/kick.js");
+const { unbanCommand } = await import("../dist/commands/unban.js");
 const { CASE_REPLY } = await import("../dist/messages.js");
 const { noticeValues } = await import("../dist/modlog.js");
 
@@ -57,6 +60,13 @@ function member(id: string, options: { top?: number; perms?: bigint[] } = {}) {
 }
 
 const ALL = [PermissionFlagsBits.ModerateMembers, PermissionFlagsBits.KickMembers, PermissionFlagsBits.BanMembers];
+
+/** What a message says as a sentence: its text, or the description of an embed that is only a sentence, as the stock replies are. */
+function sentence(body: MessageBody): string {
+  const [embed] = body.embeds;
+  const plain = embed !== undefined && body.embeds.length === 1 && !embed.title && embed.fields.length === 0;
+  return body.content || (plain ? embed.description : "");
+}
 
 /** Fills a message the way sending it would, without sending. */
 function render(body: MessageBody, values: Record<string, string | number>): MessageBody {
@@ -95,12 +105,12 @@ function context(stored: Record<string, unknown> = {}, extra: Record<string, unk
     tasks: { schedule: async () => undefined, cancel: async () => 0 },
     dashboardUrl: async () => "",
     send: async (target: { id: string }, body: MessageBody) => {
-      world.dms.push(body.content);
+      world.dms.push(sentence(body));
       return {};
     },
     reply: async (_interaction: unknown, body: MessageBody, values: Record<string, string | number> = {}) => {
       const filled = render(body, values);
-      world.said.push(filled.content);
+      world.said.push(sentence(filled));
       world.bodies.push(filled);
       return true;
     },
@@ -372,6 +382,18 @@ describe("history, cases and timeouts", () => {
 
     await timeoutCommand.run(interactionFor({ sub: "set", duration: "5m" }), context());
     assert.match(world.said[2]!, /^Timed out samuel until <t:\d+:f>\. Case #3\.$/);
+    assert.equal(world.bodies[0]?.embeds[0]?.color, REPLY_COLOR.success);
+    assert.equal(world.bodies[2]?.embeds[0]?.color, REPLY_COLOR.success);
+  });
+
+  test("the replies that confirm an action start as green embeds", () => {
+    for (const command of [warnCommand, kickCommand, banCommand, unbanCommand, timeoutCommand]) {
+      const starting = command.response!.starting;
+      assert.equal(starting.content, "", command.name);
+      assert.equal(starting.embeds.length, 1, command.name);
+      assert.equal(starting.embeds[0]?.color, REPLY_COLOR.success, command.name);
+    }
+    assert.equal(purgeCommand.response!.starting.embeds[0]?.color, REPLY_COLOR.success);
   });
 
   test("/timeout set and /ban say what the length could not be read as", async () => {

@@ -34,6 +34,14 @@ function fakeChannel(payloads: Record<string, unknown>[]) {
   };
 }
 
+/** The one embed a default reply is made of, as Discord would receive it. */
+function embedOf(payload: Record<string, unknown> | undefined) {
+  const embeds = payload?.embeds as { toJSON(): { description?: string; color?: number } }[] | undefined;
+  assert.equal(embeds?.length, 1, "a default is a single embed");
+  return embeds![0]!.toJSON();
+}
+
+const WARNING = 0xf5a623;
 const facts = { userId: "111111111111111111", rule: "invites", actions: ["delete"], reason: "Spam", timeoutMs: undefined, deleted: true, warned: false, timedOut: false } as const;
 const onlyTheMember = { users: ["111111111111111111"], roles: [] };
 
@@ -48,7 +56,9 @@ describe("the automod notice", () => {
       mentions: onlyTheMember,
     });
     assert.ok(sent);
-    assert.equal(payloads[0]?.content, "<@111111111111111111>, your message was removed (invites: Spam).");
+    assert.equal(payloads[0]?.content, "<@111111111111111111>", "the mention stays outside the embed so it notifies");
+    assert.equal(embedOf(payloads[0]).description, "Your message was removed (invites: Spam).");
+    assert.equal(embedOf(payloads[0]).color, WARNING);
   });
 
   test("can ping only the member, whatever the reason or the owner's text says", async () => {
@@ -79,7 +89,8 @@ describe("the automod notice", () => {
     } finally {
       console.error = original;
     }
-    assert.equal(payloads[0]?.content, `<@111111111111111111>, your message was removed (invites: ${"z".repeat(700)}).`);
+    assert.equal(payloads[0]?.content, "<@111111111111111111>");
+    assert.equal(embedOf(payloads[0]).description, `Your message was removed (invites: ${"z".repeat(700)}).`);
   });
 });
 
@@ -107,7 +118,9 @@ describe("the automod direct message", () => {
     const settings = dmOf({});
     const sent = await sendMessage(fakeMember(payloads) as never, settings.dmMessage, tripValues(facts, settings.labels), { guild: guild as never, fallback: DM_MESSAGE });
     assert.ok(sent);
-    assert.equal(payloads[0]?.content, "In Test Server, your message was removed (invites: Spam).");
+    assert.equal(payloads[0]?.content, undefined);
+    assert.equal(embedOf(payloads[0]).description, "In Test Server, your message was removed (invites: Spam).");
+    assert.equal(embedOf(payloads[0]).color, WARNING);
     assert.deepEqual(payloads[0]?.allowedMentions, { parse: [] });
   });
 
@@ -128,7 +141,7 @@ describe("the automod direct message", () => {
     } finally {
       console.error = original;
     }
-    assert.equal(payloads[0]?.content, `In Test Server, your message was removed (invites: ${"z".repeat(700)}).`);
+    assert.equal(embedOf(payloads[0]).description, `In Test Server, your message was removed (invites: ${"z".repeat(700)}).`);
   });
 
   test("a member with direct messages closed is skipped without throwing", async () => {

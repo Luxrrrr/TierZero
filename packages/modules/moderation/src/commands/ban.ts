@@ -1,5 +1,5 @@
 import { SlashCommandBuilder, PermissionFlagsBits } from "discord.js";
-import { plainReply, type CommandDefinition, type ResponseTemplate } from "@tier0/core";
+import { embedReply, type CommandDefinition, type ResponseTemplate } from "@tier0/core";
 import type { ModerationSettings } from "../settings.js";
 import { parseDuration } from "../duration.js";
 import { fillLabel } from "../texts.js";
@@ -7,7 +7,7 @@ import { answer } from "./answer.js";
 import { runFromCommand } from "./run-action.js";
 
 const BAN_REPLY: ResponseTemplate = {
-  starting: plainReply("Banned {user}. Case #{case}.{expiry}"),
+  starting: embedReply("Banned {user}. Case #{case}.{expiry}", "success"),
   placeholders: [
     { name: "user", description: "The member's username", sample: "spamlord_42" },
     { name: "case", description: "The case number", sample: "118" },

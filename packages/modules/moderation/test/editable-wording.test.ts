@@ -1,6 +1,6 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { applyVariables, plainReply, type MessageBody } from "@tier0/core";
+import { applyVariables, embedReply, REPLY_COLOR, type MessageBody, type ReplyKind } from "@tier0/core";
 import moderation from "../dist/index.js";
 import { moderationSettingsWith } from "./settings-helper.ts";
 import { ActionRefused, checkActorMayAct, checkBanDuration, checkReason, checkTargetIdentity, checkTimeoutDuration, discordFailureCode, outcomeNoteKeys, outcomeNotes } from "../dist/action-rules.js";
@@ -65,6 +65,14 @@ const WAS_SAID: Record<string, Record<string, string>> = {
   direct: {
     correction: "Correction: the message you were just sent about being {action} was sent in error. Nothing happened to you.",
   },
+};
+
+/** The colour each default has, written out so changing one is a decision and not an accident. */
+const KIND_OF = (group: string, key: string): ReplyKind => {
+  if (group === "confirmations") return "success";
+  if (group === "direct") return "warning";
+  if (key === "noHistory" || key === "purgeNothingEligible") return "info";
+  return "error";
 };
 
 const LABELS_WERE: Record<string, Record<string, string>> = {
@@ -145,7 +153,11 @@ describe("defaults are what the module has always said", () => {
     for (const [group, messages] of Object.entries(WAS_SAID)) {
       assert.deepEqual(Object.keys(settings.replies[group]!).sort(), Object.keys(messages).sort(), `${group} has the same set of messages`);
       for (const [key, text] of Object.entries(messages)) {
-        assert.deepEqual(settings.replies[group]![key], plainReply(text), `${group}.${key}`);
+        assert.deepEqual(settings.replies[group]![key], embedReply(text, KIND_OF(group, key)), `${group}.${key}`);
+        const body = settings.replies[group]![key]!;
+        assert.equal(body.content, "", "nothing above the embed");
+        assert.equal(body.embeds[0]?.description, text);
+        assert.equal(body.embeds[0]?.color, REPLY_COLOR[KIND_OF(group, key)]);
       }
     }
     assert.deepEqual(Object.keys(settings.replies).sort(), Object.keys(WAS_SAID).sort());
@@ -159,7 +171,7 @@ describe("defaults are what the module has always said", () => {
     assert.deepEqual(DEFAULT_WORDING, LABELS_WERE);
     for (const [group, messages] of Object.entries(WAS_SAID)) {
       for (const [key, text] of Object.entries(messages)) {
-        assert.deepEqual(defaultBody(group as keyof typeof REPLIES, key), plainReply(text));
+        assert.deepEqual(defaultBody(group as keyof typeof REPLIES, key), embedReply(text, KIND_OF(group, key)));
       }
     }
   });
@@ -278,14 +290,17 @@ describe("answering in Discord", () => {
     await say(ctx, interaction, "lookups", "caseNotFound", { number: 9 });
     assert.equal(sent.length, 1);
     assert.equal(sent[0]!.body.content, "Nope, no #{number}");
-    assert.deepEqual(sent[0]!.fallback, plainReply("There is no case #{number}."));
+    assert.deepEqual(sent[0]!.fallback, embedReply("There is no case #{number}.", "error"));
     assert.deepEqual(sent[0]!.values, { number: 9 });
   });
 
   test("when neither the owner's message nor the stock one can be sent, the stock sentence goes out plainly", async () => {
     const { ctx, interaction, raw } = stub({}, false);
     await say(ctx, interaction, "lookups", "caseNotFound", { number: 9 });
-    assert.equal((raw[0] as { content: string }).content, "There is no case #9.");
+    const last = raw[0] as { embeds: { description: string; color: number }[]; content?: string };
+    assert.equal(last.embeds[0]?.description, "There is no case #9.");
+    assert.equal(last.embeds[0]?.color, parseInt(REPLY_COLOR.error.slice(1), 16));
+    assert.equal(last.content, undefined);
   });
 
   test("a coded refusal is looked up in the settings, an uncoded one is said as it stands", async () => {
@@ -297,14 +312,15 @@ describe("answering in Discord", () => {
     const plain = stub();
     await replyRefusal(plain.ctx, plain.interaction, new ActionRefused(400, "One of the messages wasn't sent by this member."));
     assert.equal(plain.sent.length, 0);
-    assert.equal((plain.raw[0] as { content: string }).content, "One of the messages wasn't sent by this member.");
+    assert.equal((plain.raw[0] as { embeds: { description: string }[] }).embeds[0]?.description, "One of the messages wasn't sent by this member.");
   });
 
   test("a username that looks like a variable is only a value, never filled in", async () => {
     const { ctx, interaction, sent } = stub();
     await replyRefusal(ctx, interaction, new ActionRefused(409, "x", "notBanned", { name: "{server}" }));
-    assert.equal(sent[0]!.body.content, "{name} is not banned.");
-    assert.equal(applyVariables(sent[0]!.body.content, { name: "{server}", server: "Home" }), "{server} is not banned.");
+    const text = sent[0]!.body.embeds[0]!.description;
+    assert.equal(text, "{name} is not banned.");
+    assert.equal(applyVariables(text, { name: "{server}", server: "Home" }), "{server} is not banned.");
   });
 });
 

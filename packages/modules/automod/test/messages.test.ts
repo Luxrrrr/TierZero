@@ -1,6 +1,6 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { ModuleRegistry, applyVariablesToMessage, colorToInt, parseMessage, type MessageBody } from "@tier0/core";
+import { ModuleRegistry, REPLY_COLOR, applyVariablesToMessage, colorToInt, parseMessage, type MessageBody } from "@tier0/core";
 import type { TripFacts } from "../dist/messages.js";
 import automod from "../dist/index.js";
 import { LOG_MESSAGES, NOTICE_MESSAGE, breakMentions, describeLength, describeOutcome, effectiveActions, loggedAs, logValues, matchText, tripValues } from "../dist/messages.js";
@@ -39,24 +39,23 @@ const tripLog = (action: Preset, reason?: string, more: Partial<TripFacts> = {})
     deleted: action !== "warn", warned: action === "warn", timedOut: action === "timeout", ...more,
   });
 
+/** The mention above the embed and the sentence inside it. */
+const shown = (body: MessageBody) => ({ ping: body.content, text: body.embeds[0]?.description });
+const USER = "<@111111111111111111>";
+
 describe("the notice in the channel", () => {
   test("says what it always has, for each action, with and without a reason", () => {
     const notice = settings({}).noticeMessage;
-    assert.equal(fill(notice, trip("delete", "Posted a Discord invite link")).content,
-      "<@111111111111111111>, your message was removed (invites: Posted a Discord invite link).");
-    assert.equal(fill(notice, trip("timeout", "Spam", 600_000)).content,
-      "<@111111111111111111>, your message was removed and you were timed out (invites: Spam).");
-    assert.equal(fill(notice, trip("warn")).content, "<@111111111111111111>, that message tripped automod (invites).");
+    assert.deepEqual(shown(fill(notice, trip("delete", "Posted a Discord invite link"))), { ping: USER, text: "Your message was removed (invites: Posted a Discord invite link)." });
+    assert.deepEqual(shown(fill(notice, trip("timeout", "Spam", 600_000))), { ping: USER, text: "Your message was removed and you were timed out (invites: Spam)." });
+    assert.deepEqual(shown(fill(notice, trip("warn"))), { ping: USER, text: "That message tripped automod (invites)." });
   });
 
   test("says only what was done when a step failed", () => {
     const notice = settings({}).noticeMessage;
-    assert.equal(fill(notice, trip("timeout", "Spam", 600_000, { timedOut: false })).content,
-      "<@111111111111111111>, your message was removed (invites: Spam).");
-    assert.equal(fill(notice, trip("timeout", "Spam", 600_000, { deleted: false, timedOut: false })).content,
-      "<@111111111111111111>, that message tripped automod (invites: Spam).");
-    assert.equal(fill(notice, trip("delete", "Spam", undefined, { deleted: false })).content,
-      "<@111111111111111111>, that message tripped automod (invites: Spam).");
+    assert.deepEqual(shown(fill(notice, trip("timeout", "Spam", 600_000, { timedOut: false }))), { ping: USER, text: "Your message was removed (invites: Spam)." });
+    assert.deepEqual(shown(fill(notice, trip("timeout", "Spam", 600_000, { deleted: false, timedOut: false }))), { ping: USER, text: "That message tripped automod (invites: Spam)." });
+    assert.deepEqual(shown(fill(notice, trip("delete", "Spam", undefined, { deleted: false }))), { ping: USER, text: "That message tripped automod (invites: Spam)." });
     assert.equal(trip("timeout", "Spam", 600_000, { timedOut: false }).duration, "");
   });
 
@@ -67,8 +66,12 @@ describe("the notice in the channel", () => {
     assert.equal(fill(own, values).content, "<@111111111111111111> {match} {problems}");
   });
 
-  test("starts from a message with only text", () => {
+  test("starts as an amber embed, with the mention above it so it still notifies", () => {
     assert.deepEqual(settings({}).noticeMessage, NOTICE_MESSAGE);
+    assert.equal(NOTICE_MESSAGE.content, "{user}");
+    assert.equal(NOTICE_MESSAGE.embeds.length, 1);
+    assert.equal(NOTICE_MESSAGE.embeds[0]?.color, REPLY_COLOR.warning);
+    assert.ok(!NOTICE_MESSAGE.embeds[0]?.description.includes("{user}"), "a mention inside the embed would not ping");
   });
 
   test("uses the message the owner wrote", () => {

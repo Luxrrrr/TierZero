@@ -1,6 +1,6 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { plainReply } from "@tier0/core";
+import { REPLY_COLOR, embedReply } from "@tier0/core";
 import { settings } from "../dist/settings.js";
 import { evaluateMessage, fingerprintOf } from "../dist/evaluator.js";
 import { carryOut, noticeLifetimeMs, MIN_NOTICE_MS } from "../dist/handler.js";
@@ -66,11 +66,14 @@ describe("defaults are what automod has always said", () => {
   test("the notice is unchanged and the direct message is off", () => {
     const stock = parsed();
     assert.deepEqual(stock.noticeMessage, NOTICE_MESSAGE);
-    assert.equal(stock.noticeMessage.content, "{user}, {outcome} ({rule}{reasonNote}).");
+    assert.equal(stock.noticeMessage.content, "{user}");
+    assert.equal(stock.noticeMessage.embeds[0]?.description, "{outcomeTitle} ({rule}{reasonNote}).");
+    assert.equal(stock.noticeMessage.embeds[0]?.color, REPLY_COLOR.warning);
     assert.equal(stock.noticeLifetime, 8000);
     assert.equal(stock.dmOnAction, false);
     assert.deepEqual(stock.dmMessage, DM_MESSAGE);
-    assert.deepEqual(DM_MESSAGE, plainReply("In {server}, {outcome} ({rule}{reasonNote})."));
+    assert.deepEqual(DM_MESSAGE, embedReply("In {server}, {outcome} ({rule}{reasonNote}).", "warning"));
+    assert.equal(DM_MESSAGE.content, "", "the direct message pings nobody");
   });
 
   test("a notice saved as plain text before it became a message is still read", () => {
@@ -134,6 +137,7 @@ describe("values for the notice, the direct message and the log", () => {
       reason: "Sent 6 messages in 10s, more than the limit of 5",
       reasonNote: ": Sent 6 messages in 10s, more than the limit of 5",
       outcome: "your message was removed, and you were warned and timed out",
+      outcomeTitle: "Your message was removed, and you were warned and timed out",
       duration: "10 minutes",
     });
     assert.equal(tripValues({ ...facts, actions: ["delete"], reason: undefined, warned: false, timedOut: false }).reason, "-");

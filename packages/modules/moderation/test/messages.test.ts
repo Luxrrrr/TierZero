@@ -1,6 +1,6 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { ModuleRegistry, applyVariablesToMessage, parseMessage, type MessageBody } from "@tier0/core";
+import { ModuleRegistry, REPLY_COLOR, applyVariablesToMessage, parseMessage, type MessageBody } from "@tier0/core";
 import moderation from "../dist/index.js";
 import { noticeValues } from "../dist/modlog.js";
 import { formatModLogEntry } from "./legacy-view.ts";
@@ -30,7 +30,7 @@ function fill(body: MessageBody, values: Record<string, string | number>): Messa
 describe("the direct message", () => {
   const expiresAt = new Date("2030-01-01T00:00:00.000Z");
   const seconds = Math.floor(expiresAt.getTime() / 1000);
-  const dm = (notice: Parameters<typeof noticeValues>[0]) => fill(settings({}).dmMessage, noticeValues(notice)).content;
+  const dm = (notice: Parameters<typeof noticeValues>[0]) => fill(settings({}).dmMessage, noticeValues(notice)).embeds[0]?.description;
 
   test("reads as it always has until the owner writes another", () => {
     assert.equal(dm({ action: "warn", reason: null, expiresAt: null }), "You were warned in Test Server.");
@@ -44,9 +44,11 @@ describe("the direct message", () => {
     assert.equal(dm({ action: "unban", reason: null, expiresAt: null }), "You were unbanned in Test Server.");
   });
 
-  test("starts from a message with only text", () => {
+  test("starts as a warning-coloured embed with nothing above it", () => {
     assert.deepEqual(settings({}).dmMessage, DM_MESSAGE);
-    assert.deepEqual(DM_MESSAGE.embeds, []);
+    assert.equal(DM_MESSAGE.content, "");
+    assert.equal(DM_MESSAGE.embeds.length, 1);
+    assert.equal(DM_MESSAGE.embeds[0]?.color, REPLY_COLOR.warning);
   });
 
   test("uses the message the owner wrote, with the moderator only if they ask for it", () => {
@@ -217,13 +219,15 @@ describe("the history reply", () => {
 describe("the purge reply", () => {
   test("says what it always has", () => {
     const one = fill(PURGE_REPLY.starting, { count: 1, messages: "1 message", skippedNote: "" });
-    assert.equal(one.content, "Deleted 1 message.");
+    assert.equal(one.embeds[0]?.description, "Deleted 1 message.");
+    assert.equal(one.embeds[0]?.color, REPLY_COLOR.success);
+    assert.equal(one.content, "");
     const some = fill(PURGE_REPLY.starting, {
       count: 18,
       messages: "18 messages",
       skippedNote: " 2 messages were left because they are older than 14 days.",
     });
-    assert.equal(some.content, "Deleted 18 messages. 2 messages were left because they are older than 14 days.");
+    assert.equal(some.embeds[0]?.description, "Deleted 18 messages. 2 messages were left because they are older than 14 days.");
   });
 });
 

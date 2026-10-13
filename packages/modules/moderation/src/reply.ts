@@ -1,6 +1,6 @@
 import { MessageFlags } from "discord.js";
 import type { ContextMenuCommandInteraction, MessageComponentInteraction, RepliableInteraction } from "discord.js";
-import type { MessageBody, ModuleContext, ReplyValues } from "@tier0/core";
+import { REPLY_COLOR, type MessageBody, type ModuleContext, type ReplyKind, type ReplyValues } from "@tier0/core";
 import type { ModerationSettings } from "./settings.js";
 import { clip, noticeValues, type ModLogEntry } from "./modlog.js";
 import { MODLOG_MESSAGE } from "./messages.js";
@@ -12,6 +12,9 @@ type Ctx = ModuleContext<ModerationSettings>;
 export type Answerable = RepliableInteraction | MessageComponentInteraction | ContextMenuCommandInteraction;
 
 export const repliable = (interaction: Answerable): RepliableInteraction | MessageComponentInteraction => interaction as RepliableInteraction;
+
+/** The last-resort reply, in the same look as the defaults. An embed holds more than a message does, so a long value still fits. */
+const sentence = (text: string, kind: ReplyKind) => ({ embeds: [{ description: text.slice(0, 4000), color: parseInt(REPLY_COLOR[kind].slice(1), 16) }] });
 
 /**
  * Answers an interaction with one of the owner's editable replies. If it cannot
@@ -31,12 +34,12 @@ export async function say<G extends ReplyGroup>(
   const fallback = defaultBody(group, key);
   if (body && (await ctx.reply(repliable(interaction), body, values, { fallback }))) return;
   // Both were refused, which only happens when the values themselves are too long for a message.
-  const specs: Record<string, { text: string }> = REPLIES[group];
-  const content = fillLabel(specs[key]?.text ?? "", stringValues(values)).slice(0, 2000);
+  const specs: Record<string, { text: string; kind: ReplyKind }> = REPLIES[group];
+  const payload = sentence(fillLabel(specs[key]?.text ?? "", stringValues(values)), specs[key]?.kind ?? "info");
   try {
-    if (interaction.replied) await interaction.followUp({ content, flags: MessageFlags.Ephemeral });
-    else if (interaction.deferred) await interaction.editReply({ content });
-    else await interaction.reply({ content, flags: MessageFlags.Ephemeral });
+    if (interaction.replied) await interaction.followUp({ ...payload, flags: MessageFlags.Ephemeral });
+    else if (interaction.deferred) await interaction.editReply(payload);
+    else await interaction.reply({ ...payload, flags: MessageFlags.Ephemeral });
   } catch (error) {
     console.error("moderation: a reply could not be sent:", error);
   }
@@ -51,10 +54,10 @@ export async function replyRefusal(ctx: Ctx, interaction: Answerable, error: Act
     await say(ctx, interaction, "refusals", error.code, error.values);
     return;
   }
-  const content = error.message;
-  if (interaction.replied) await interaction.followUp({ content, flags: MessageFlags.Ephemeral });
-  else if (interaction.deferred) await interaction.editReply({ content });
-  else await interaction.reply({ content, flags: MessageFlags.Ephemeral });
+  const payload = sentence(error.message, "error");
+  if (interaction.replied) await interaction.followUp({ ...payload, flags: MessageFlags.Ephemeral });
+  else if (interaction.deferred) await interaction.editReply(payload);
+  else await interaction.reply({ ...payload, flags: MessageFlags.Ephemeral });
 }
 
 /** Discord's limit on an embed field's value, which the mod log's Reason field is. */

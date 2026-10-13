@@ -1,5 +1,5 @@
-import { applyVariables, plainReply, s } from "@tier0/core";
-import type { Field, MessageBody, MessageVariable, ReplyValues } from "@tier0/core";
+import { applyVariables, embedReply, s } from "@tier0/core";
+import type { Field, MessageBody, MessageVariable, ReplyKind, ReplyValues } from "@tier0/core";
 
 /**
  * Every sentence and word the moderation module puts in front of people in
@@ -37,6 +37,8 @@ export interface MessageSpec {
   help: string;
   /** The wording it has always had. */
   text: string;
+  /** Which colour its embed has: what the message is telling the reader. */
+  kind: ReplyKind;
   variables?: MessageVariable[];
   delivery?: "channel" | "dm";
 }
@@ -52,90 +54,107 @@ export const REFUSALS = {
     label: "A reason is required",
     help: "When Require a reason is on and a moderator leaves the reason empty.",
     text: "This server requires a reason for moderation actions.",
+    kind: "error",
   },
   reasonTooLong: {
     label: "The reason is too long",
     help: "When a reason is longer than the limit.",
     text: "A reason can be at most {max} characters.",
+    kind: "error",
     variables: [v("max", "The most characters a reason can have", "500")],
   },
   durationUnreadableTimeout: {
     label: "A timeout length cannot be read",
     help: "When the length typed for a timeout is not something like 10m, 2h or 7d.",
     text: "Duration must look like 10m, 2h or 7d.",
+    kind: "error",
   },
   durationUnreadableBan: {
     label: "A ban length cannot be read",
     help: "When the length typed for a ban is not something like 1d or 7d.",
     text: "Duration must look like 1d or 7d.",
+    kind: "error",
   },
   timeoutTooLong: {
     label: "A timeout is longer than Discord allows",
     help: "When a timeout is set for more than 28 days.",
     text: "Timeouts cannot be longer than 28 days - that's Discord's own limit.",
+    kind: "error",
   },
   banTooLong: {
     label: "A temporary ban is too long",
     help: "When a temporary ban is set for more days than the limit.",
     text: "A temporary ban can last at most {maxDays} days. Leave the duration unset for a permanent ban.",
+    kind: "error",
     variables: [v("maxDays", "The most days a temporary ban can last", "3650")],
   },
   targetSelf: {
     label: "Acting on yourself",
     help: "When a moderator picks themselves as the member.",
     text: "You cannot take a moderation action against yourself.",
+    kind: "error",
   },
   targetBot: {
     label: "Acting on the bot",
     help: "When the bot is picked as the member.",
     text: "The bot cannot take a moderation action against itself.",
+    kind: "error",
   },
   targetOwner: {
     label: "Acting on the server owner",
     help: "When the server owner is picked as the member.",
     text: "The server owner cannot be actioned.",
+    kind: "error",
   },
   noPermission: {
     label: "Not allowed to take the action",
     help: "When the person asking has neither the Discord permission nor a staff place that allows the action.",
     text: "You are not allowed to {action} here. You need the matching Discord permission, or a place on this server's staff list at a level that allows it.",
+    kind: "error",
     variables: [ABILITY],
   },
   notInServer: {
     label: "The moderator is not in the server",
     help: "When the person asking is not a member of this server, so their roles cannot be compared with the member's.",
     text: "You need to be a member of this server to take moderation actions here, because the bot compares your roles with theirs.",
+    kind: "error",
   },
   actorRank: {
     label: "The member outranks the moderator",
     help: "When the member's highest role is equal to or above the moderator's.",
     text: "You cannot action someone with a role equal to or higher than your own.",
+    kind: "error",
   },
   botRank: {
     label: "The member outranks the bot",
     help: "When the member's highest role is equal to or above the bot's, so Discord would refuse.",
     text: "My highest role is not above theirs, so Discord won't let me do that.",
+    kind: "error",
     dashboard: "The bot's highest role is not above theirs, so Discord will not let it do that. Move the bot's role higher in the server's role settings.",
   },
   notAMember: {
     label: "The user is not in the server",
     help: "When the action needs a member who is still in the server and they have left.",
     text: "That user is not a member of this server.",
+    kind: "error",
   },
   lookupFailed: {
     label: "The member could not be checked",
     help: "When Discord did not answer the question of whether the member is in the server.",
     text: "Could not check that member. Try again.",
+    kind: "error",
   },
   actionInProgress: {
     label: "Another action is still running",
     help: "When a second action on the same member arrives while the first is being carried out.",
     text: "Another action on this member is in progress. Try again in a moment.",
+    kind: "error",
   },
   alreadyBanned: {
     label: "The member is already banned",
     help: "When /ban is used on someone who is banned.",
     text: "{name} is already banned. Use /unban first to change it.",
+    kind: "error",
     dashboard: "{name} is already banned. Lift the ban first to change it.",
     variables: [NAME],
   },
@@ -143,12 +162,14 @@ export const REFUSALS = {
     label: "The member is not banned",
     help: "When /unban is used on someone who is not banned.",
     text: "{name} is not banned.",
+    kind: "error",
     variables: [NAME],
   },
   cannotActOn: {
     label: "Discord would refuse (known in advance)",
     help: "When the member is an administrator, sits above the bot, or the bot lacks the permission. Shown before the member is sent anything.",
     text: "I cannot {verb}. They may be an administrator, my role may not be above theirs, or I may lack the permission.",
+    kind: "error",
     dashboard: "The bot cannot {verb}. They may be an administrator, its role may not be above theirs, or it may lack the permission.",
     variables: [VERB],
   },
@@ -156,6 +177,7 @@ export const REFUSALS = {
     label: "Discord refused: the bot's rank",
     help: "When Discord refuses a timeout, kick or ban, most often because the bot's role is not above the member's.",
     text: "I could not {verb}. Check that my role is above theirs.{correctionNote}",
+    kind: "error",
     dashboard: "The bot could not {verb}. Check that its role is above theirs.{correctionNote}",
     variables: [VERB, CORRECTION_NOTE],
   },
@@ -163,6 +185,7 @@ export const REFUSALS = {
     label: "Discord refused: the bot's permissions",
     help: "When Discord refuses to clear a timeout or lift a ban.",
     text: "I could not {verb}. Check my permissions.{correctionNote}",
+    kind: "error",
     dashboard: "The bot could not {verb}. Check its permissions.{correctionNote}",
     variables: [VERB, CORRECTION_NOTE],
   },
@@ -176,32 +199,38 @@ export const STAFF = {
     label: "Not on the staff list",
     help: "When someone who is not on this server's staff list uses /case, /history or a right-click action.",
     text: "Only moderators on this server's staff list can use this. Ask the server owner to add you on the Access tab of the dashboard.",
+    kind: "error",
   },
   needsAdmin: {
     label: "The action needs an admin",
     help: "When a moderator picks a right-click action only admins may take.",
     text: "You need to be an admin to {action}. A moderator can warn and time members out.",
+    kind: "error",
     variables: [ABILITY],
   },
   menuNotAMember: {
     label: "The message has no member behind it",
     help: "When a right-click action is used on a message sent by a webhook or an app.",
     text: "That message was not sent by a server member, so there is nobody to act on.",
+    kind: "error",
   },
   menuSelf: {
     label: "Right-click: picking yourself",
     help: "When a moderator right-clicks themselves, before the form opens.",
     text: "You cannot take an action on yourself.",
+    kind: "error",
   },
   menuBot: {
     label: "Right-click: picking the bot",
     help: "When someone right-clicks the bot, before the form opens.",
     text: "That is this bot. There is nothing to do.",
+    kind: "error",
   },
   menuOutOfDate: {
     label: "The form is out of date",
     help: "When a form is submitted that this version of the bot no longer understands, such as one left open across an update.",
     text: "That form is out of date. Open the menu again.",
+    kind: "error",
   },
 } satisfies Record<string, MessageSpec>;
 
@@ -211,12 +240,14 @@ export const LOOKUPS = {
     label: "No such case",
     help: "When /case is given a number no case has.",
     text: "There is no case #{number}.",
+    kind: "error",
     variables: [v("number", "The case number that was asked for", "118")],
   },
   noHistory: {
     label: "A member with no history",
     help: "When /history or the Member history menu is used on a member with no cases.",
     text: "{user} has no recorded history.",
+    kind: "info",
     variables: [USER],
   },
 } satisfies Record<string, MessageSpec>;
@@ -227,21 +258,25 @@ export const PURGE = {
     label: "Missing the Manage Messages permission",
     help: "When someone without Manage Messages runs /purge, for a server where the command has been made available to more people.",
     text: "You need the Manage Messages permission to delete messages.",
+    kind: "error",
   },
   purgeWrongChannel: {
     label: "Not a text channel",
     help: "When /purge is used somewhere that is not a server text channel.",
     text: "This command only works in a server text channel.",
+    kind: "error",
   },
   purgeNothingEligible: {
     label: "Everything is too old",
     help: "When none of the messages picked are less than 14 days old, which is all Discord lets a bot delete in bulk.",
     text: "None of those messages can be bulk deleted: Discord only allows deleting messages sent in the last 14 days.",
+    kind: "info",
   },
   purgeFailed: {
     label: "The messages could not be deleted",
     help: "When Discord refuses the deletion.",
     text: "I could not delete those messages. Check my permissions in this channel.",
+    kind: "error",
   },
 } satisfies Record<string, MessageSpec>;
 
@@ -251,30 +286,35 @@ export const CONFIRMATIONS = {
     label: "A timeout was cleared",
     help: "After /timeout clear. The replies to /warn, /timeout set, /kick, /ban and /unban are on the Commands page.",
     text: "Cleared {user}'s timeout. Case #{case}.",
+    kind: "success",
     variables: [USER, CASE],
   },
   contextWarned: {
     label: "Right-click: member warned",
     help: "After a warning from the right-click menu on a member or a message.",
     text: "Warned {name}. Case #{case}.{notes}",
+    kind: "success",
     variables: [NAME, CASE, NOTES_VAR],
   },
   contextTimedOut: {
     label: "Right-click: member timed out",
     help: "After a timeout from the right-click menu on a member or a message.",
     text: "Timed out {name} until {until}. Case #{case}.{notes}",
+    kind: "success",
     variables: [NAME, v("until", "When the timeout ends, as a Discord date", "Oct 18, 4:12 PM"), CASE, NOTES_VAR],
   },
   contextKicked: {
     label: "Right-click: member kicked",
     help: "After a kick from the right-click menu on a member or a message.",
     text: "Kicked {name}. Case #{case}.{notes}",
+    kind: "success",
     variables: [NAME, CASE, NOTES_VAR],
   },
   contextBanned: {
     label: "Right-click: member banned",
     help: "After a ban from the right-click menu on a member or a message.",
     text: "Banned {name}.{expiry} Case #{case}.{notes}",
+    kind: "success",
     variables: [NAME, v("expiry", "A sentence about when a temporary ban ends, with a space in front. Empty for a permanent ban", " It expires in 7 days."), CASE, NOTES_VAR],
   },
 } satisfies Record<string, MessageSpec>;
@@ -285,6 +325,7 @@ export const DIRECT = {
     label: "Correction after a failed action",
     help: "Sent to a member who was told about an action when Discord then refused to carry it out. It says nothing happened.",
     text: "Correction: the message you were just sent about being {action} was sent in error. Nothing happened to you.",
+    kind: "warning",
     variables: [v("action", "What the earlier message said was done, in lower case: warned, timed out, kicked, banned or unbanned", "banned")],
     delivery: "dm",
   },
@@ -328,7 +369,7 @@ export function defaultBody(group: ReplyGroup, key: string): MessageBody {
   const specs: Record<string, MessageSpec> = REPLIES[group];
   const spec = specs[key];
   if (!spec) throw new Error(`No moderation message named ${group}.${key}`);
-  return plainReply(spec.text);
+  return embedReply(spec.text, spec.kind);
 }
 
 function messageGroup<S extends Record<string, MessageSpec>>(specs: S, title: { label: string; help: string }) {
@@ -337,7 +378,7 @@ function messageGroup<S extends Record<string, MessageSpec>>(specs: S, title: { 
     s.message({
       label: spec.label,
       help: spec.help,
-      starting: plainReply(spec.text),
+      starting: embedReply(spec.text, spec.kind),
       variables: spec.variables ?? [],
       compact: true,
       ...(spec.delivery ? { delivery: spec.delivery } : {}),

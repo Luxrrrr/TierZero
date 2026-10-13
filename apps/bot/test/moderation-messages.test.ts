@@ -79,6 +79,15 @@ function context(stored: Record<string, unknown>, user: ReturnType<typeof fakeUs
   } as never;
 }
 
+/** The one embed a default reply is made of, as Discord would receive it. */
+function embedOf(payload: Record<string, unknown> | undefined) {
+  const embeds = payload?.embeds as { toJSON(): { description?: string; color?: number } }[] | undefined;
+  assert.equal(embeds?.length, 1, "a default is a single embed");
+  return embeds![0]!.toJSON();
+}
+
+const COLOR = { error: 0xed4245, success: 0x3ba55d, warning: 0xf5a623, info: 0xe3b34a };
+
 async function quietly<T>(run: () => Promise<T>): Promise<T> {
   const original = console.error;
   console.error = () => undefined;
@@ -95,7 +104,8 @@ describe("the moderation direct message", () => {
     const ctx = context({}, fakeUser(delivered), fakeLogChannel({ payloads: [] }));
     const sent = await tryDirectMessage(ctx, MEMBER_ID, { action: "kick", reason: "Broke rule 4", expiresAt: null, moderatorId: MODERATOR_ID });
     assert.equal(sent, true);
-    assert.equal(delivered.payloads[0]?.content, "You were kicked in Test Server. Reason: Broke rule 4");
+    assert.equal(embedOf(delivered.payloads[0]).description, "You were kicked in Test Server. Reason: Broke rule 4");
+    assert.equal(embedOf(delivered.payloads[0]).color, COLOR.warning);
     assert.deepEqual(delivered.payloads[0]?.allowedMentions, { parse: [] });
   });
 
@@ -112,7 +122,7 @@ describe("the moderation direct message", () => {
     const ctx = context({ dmMessage: { content: "{reason}{reason}{reason}{reason}!" } }, fakeUser(delivered), fakeLogChannel({ payloads: [] }));
     const sent = await quietly(() => tryDirectMessage(ctx, MEMBER_ID, { action: "warn", reason, expiresAt: null }));
     assert.equal(sent, true);
-    assert.equal(delivered.payloads[0]?.content, `You were warned in Test Server. Reason: ${reason}`);
+    assert.equal(embedOf(delivered.payloads[0]).description, `You were warned in Test Server. Reason: ${reason}`);
   });
 
   test("reports a member with direct messages closed without throwing", async () => {
@@ -272,7 +282,8 @@ describe("the moderation replies, sent for real", () => {
     const { interaction: i, calls } = interaction();
     await say(replying({}), i, "refusals", "notBanned", { name: "spamlord_42" });
     assert.equal(calls[0]?.method, "reply");
-    assert.equal(calls[0]?.payload.content, "spamlord_42 is not banned.");
+    assert.equal(embedOf(calls[0]?.payload).description, "spamlord_42 is not banned.");
+    assert.equal(embedOf(calls[0]?.payload).color, COLOR.error);
     assert.equal(calls[0]?.payload.flags, 64);
   });
 
@@ -286,21 +297,23 @@ describe("the moderation replies, sent for real", () => {
     const { interaction: i, calls } = interaction();
     const long = { replies: { refusals: { notBanned: `${"x".repeat(1990)} {name}` } } };
     await quietly(() => say(replying(long), i, "refusals", "notBanned", { name: "n".repeat(30) }));
-    assert.equal(calls[0]?.payload.content, `${"n".repeat(30)} is not banned.`);
+    assert.equal(embedOf(calls[0]?.payload).description, `${"n".repeat(30)} is not banned.`);
   });
 
   test("a purge that was deferred edits its answer", async () => {
     const { interaction: i, calls } = interaction({ deferred: true });
     await say(replying({}), i, "purge", "purgeFailed");
     assert.equal(calls[0]?.method, "editReply");
-    assert.equal(calls[0]?.payload.content, "I could not delete those messages. Check my permissions in this channel.");
+    assert.equal(embedOf(calls[0]?.payload).description, "I could not delete those messages. Check my permissions in this channel.");
+    assert.equal(embedOf(calls[0]?.payload).color, COLOR.error);
   });
 
   test("the correction to a member says what it always did and mentions nobody", async () => {
     const delivered: Delivered = { payloads: [] };
     const ctx = context({}, fakeUser(delivered), fakeLogChannel({ payloads: [] }));
     assert.equal(await tryCorrectionMessage(ctx, MEMBER_ID, "ban"), true);
-    assert.equal(delivered.payloads[0]?.content, "Correction: the message you were just sent about being banned was sent in error. Nothing happened to you.");
+    assert.equal(embedOf(delivered.payloads[0]).description, "Correction: the message you were just sent about being banned was sent in error. Nothing happened to you.");
+    assert.equal(embedOf(delivered.payloads[0]).color, COLOR.warning);
     assert.deepEqual(delivered.payloads[0]?.allowedMentions, { parse: [] });
 
     const reworded: Delivered = { payloads: [] };

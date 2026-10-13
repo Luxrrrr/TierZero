@@ -1,4 +1,4 @@
-import { emptyEmbed, plainReply, viewCaseButton, type MessageBody, type MessageVariable, type ResponseTemplate } from "@tier0/core";
+import { embedReply, emptyEmbed, plainReply, viewCaseButton, type MessageBody, type MessageVariable, type ResponseTemplate } from "@tier0/core";
 
 /**
  * The messages the moderation module sends, as the dashboard offers them. Each
@@ -45,7 +45,7 @@ const CREATED: MessageVariable = { name: "created", description: "When the case 
 
 export const DM_VARIABLES: MessageVariable[] = [ACTION, ACTION_TITLE, REASON, REASON_NOTE, EXPIRES, EXPIRES_RELATIVE, EXPIRY_NOTE, DURATION, MODERATOR, MODERATOR_ID];
 
-export const DM_MESSAGE: MessageBody = plainReply("You were {action} in {server}.{reasonNote}{expiryNote}");
+export const DM_MESSAGE: MessageBody = embedReply("You were {action} in {server}.{reasonNote}{expiryNote}", "warning");
 
 export const DM_NOTE =
   "Sent to the member when a moderator takes an action, if direct messages are on. Everything is worded from {action}, so one message covers warnings, timeouts, kicks, bans and unbans. The moderator's name is not shown unless you add {moderator}. A member with direct messages closed does not get it.";
@@ -131,7 +131,7 @@ export const HISTORY_REPLY: ResponseTemplate = {
 };
 
 export const PURGE_REPLY: ResponseTemplate = {
-  starting: plainReply("Deleted {messages}.{skippedNote}"),
+  starting: embedReply("Deleted {messages}.{skippedNote}", "success"),
   placeholders: [
     { name: "count", description: "How many messages were deleted", sample: "20" },
     { name: "messages", description: "The same with the word after it: \"1 message\" or \"20 messages\"", sample: "20 messages" },

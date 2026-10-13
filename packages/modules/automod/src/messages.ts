@@ -1,4 +1,4 @@
-import { dashboardLinks, emptyEmbed, plainReply, viewCaseButton, type MessageBody, type MessageEmbed, type MessageVariable } from "@tier0/core";
+import { dashboardLinks, embedReply, emptyEmbed, plainReply, viewCaseButton, type MessageBody, type MessageEmbed, type MessageVariable } from "@tier0/core";
 import { describeLength } from "@tier0/module-moderation";
 import { fill } from "./fill.js";
 import { DEFAULT_AUTOMOD_WORDING, type AutomodWording } from "./texts.js";
@@ -50,6 +50,11 @@ const OUTCOME: MessageVariable = {
   description: "What actually happened, worded for the member: your message was removed, you were timed out, your message was removed and you were warned, and so on, or that message tripped automod when all that happened was a warning or nothing",
   sample: "your message was removed",
 };
+const OUTCOME_TITLE: MessageVariable = {
+  name: "outcomeTitle",
+  description: "The same, with a capital letter, for where it starts a sentence",
+  sample: "Your message was removed",
+};
 const PROBLEMS: MessageVariable = {
   name: "problems",
   description: "What the bot could not do, such as time the member out. Empty when everything it was set to do worked",
@@ -65,17 +70,19 @@ export const NOTICE_VARIABLES: MessageVariable[] = [
   REASON,
   REASON_NOTE,
   OUTCOME,
+  OUTCOME_TITLE,
   DURATION,
 ];
 
-export const NOTICE_MESSAGE: MessageBody = plainReply("{user}, {outcome} ({rule}{reasonNote}).");
+// The mention is plain text above the embed because one inside it would not notify anyone.
+export const NOTICE_MESSAGE: MessageBody = embedReply("{outcomeTitle} ({rule}{reasonNote}).", "warning", { ping: "{user}" });
 
 export const NOTICE_NOTE = "Posted in the channel where the message was, and removed again after the time set below. It can only mention the member it is about.";
 
 /** Never the matched text: what a member wrote goes only to the log and the case, which staff read. */
 export const DM_VARIABLES: MessageVariable[] = [USER, USER_ID, RULE, RULE_KEY, ACTION, REASON, REASON_NOTE, OUTCOME, DURATION];
 
-export const DM_MESSAGE: MessageBody = plainReply("In {server}, {outcome} ({rule}{reasonNote}).");
+export const DM_MESSAGE: MessageBody = embedReply("In {server}, {outcome} ({rule}{reasonNote}).", "warning");
 
 export const DM_NOTE =
   "Sent privately to the member whose message tripped a rule, when it is switched on. It gives the rule's reason in general words and never quotes what they wrote. A member with direct messages closed does not get it.";
@@ -203,6 +210,7 @@ export function codeSpan(text: string): string {
 export function tripValues(facts: TripFacts, wording: AutomodWording = DEFAULT_AUTOMOD_WORDING): Record<string, string> {
   const reason = facts.reason ? breakMentions(facts.reason) : undefined;
   const timedOut = facts.timedOut && facts.timeoutMs !== undefined;
+  const outcome = describeOutcome({ deleted: facts.deleted, warned: facts.warned, timedOut }, wording.outcomes);
   return {
     user: `<@${facts.userId}>`,
     userId: facts.userId,
@@ -211,7 +219,8 @@ export function tripValues(facts: TripFacts, wording: AutomodWording = DEFAULT_A
     action: readableList(effectiveActions({ ...facts, timedOut }), wording.actionWords),
     reason: reason ?? wording.fragments.noReason,
     reasonNote: reason ? fill(wording.fragments.reasonNote, { reason }) : "",
-    outcome: describeOutcome({ deleted: facts.deleted, warned: facts.warned, timedOut }, wording.outcomes),
+    outcome,
+    outcomeTitle: outcome.charAt(0).toUpperCase() + outcome.slice(1),
     duration: timedOut && facts.timeoutMs ? describeLength(facts.timeoutMs, wording.time) : "",
   };
 }

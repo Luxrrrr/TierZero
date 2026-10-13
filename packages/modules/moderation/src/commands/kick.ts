@@ -1,11 +1,11 @@
 import { SlashCommandBuilder, PermissionFlagsBits } from "discord.js";
-import { plainReply, type CommandDefinition, type ResponseTemplate } from "@tier0/core";
+import { embedReply, type CommandDefinition, type ResponseTemplate } from "@tier0/core";
 import type { ModerationSettings } from "../settings.js";
 import { answer } from "./answer.js";
 import { runFromCommand } from "./run-action.js";
 
 const KICK_REPLY: ResponseTemplate = {
-  starting: plainReply("Kicked {user}. Case #{case}."),
+  starting: embedReply("Kicked {user}. Case #{case}.", "success"),
   placeholders: [
     { name: "user", description: "The member's username", sample: "spamlord_42" },
     { name: "case", description: "The case number", sample: "118" },

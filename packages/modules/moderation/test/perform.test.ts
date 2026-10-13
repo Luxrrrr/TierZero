@@ -93,8 +93,9 @@ function context(stored: Record<string, unknown> = {}) {
       modLogMessage: {},
     },
     tasks: { schedule: async () => undefined, cancel: async () => 0 },
-    send: async (target: { id: string }, body: { content?: string }) => {
-      world.sent.push({ to: target.id, text: body.content ?? "" });
+    send: async (target: { id: string }, body: { content?: string; embeds?: { description?: string }[] }) => {
+      // The stock messages are embeds, an owner's plain text is content.
+      world.sent.push({ to: target.id, text: body.content || body.embeds?.[0]?.description || "" });
       return {};
     },
   } as never;

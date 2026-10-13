@@ -1,6 +1,6 @@
 import { SlashCommandBuilder, PermissionFlagsBits } from "discord.js";
 import type { ChatInputCommandInteraction } from "discord.js";
-import { plainReply, type CommandDefinition, type ModuleContext, type ResponseTemplate } from "@tier0/core";
+import { embedReply, type CommandDefinition, type ModuleContext, type ResponseTemplate } from "@tier0/core";
 import type { ModerationSettings } from "../settings.js";
 import { parseDuration } from "../duration.js";
 import { say } from "../reply.js";
@@ -10,7 +10,7 @@ import { runFromCommand } from "./run-action.js";
 type Ctx = ModuleContext<ModerationSettings>;
 
 const TIMEOUT_REPLY: ResponseTemplate = {
-  starting: plainReply("Timed out {user} until {until}. Case #{case}."),
+  starting: embedReply("Timed out {user} until {until}. Case #{case}.", "success"),
   placeholders: [
     { name: "user", description: "The member's username", sample: "spamlord_42" },
     { name: "until", description: "When the timeout ends, as a Discord date", sample: "Oct 18, 4:12 PM" },

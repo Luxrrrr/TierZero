@@ -396,8 +396,8 @@ describe("the direct message to the member", () => {
     const { sent } = await trip({ actions: ["delete", "warn"], stored: { dmOnAction: true } });
     const dm = sent.find((s) => s.target === MEMBER);
     assert.ok(dm);
-    assert.equal(dm.body.content, "In {server}, {outcome} ({rule}{reasonNote}).");
-    assert.equal(dm.options.fallback?.content, "In {server}, {outcome} ({rule}{reasonNote}).");
+    assert.equal(dm.body.embeds[0]?.description, "In {server}, {outcome} ({rule}{reasonNote}).");
+    assert.equal(dm.options.fallback?.embeds[0]?.description, "In {server}, {outcome} ({rule}{reasonNote}).");
     assert.equal(dm.values.outcome, "your message was removed and you were warned");
     assert.equal(dm.values.rule, "bannedWords");
     assert.equal(dm.values.reason, "Used a banned word or phrase");
@@ -412,7 +412,7 @@ describe("the direct message to the member", () => {
     for (const value of Object.values(dm.values)) {
       assert.ok(!value.includes("badword") && !value.includes("other thing") && !value.includes("bot.example.com"), value);
     }
-    assert.deepEqual(Object.keys(dm.values).sort(), ["action", "duration", "outcome", "reason", "reasonNote", "rule", "ruleKey", "user", "userId"]);
+    assert.deepEqual(Object.keys(dm.values).sort(), ["action", "duration", "outcome", "outcomeTitle", "reason", "reasonNote", "rule", "ruleKey", "user", "userId"]);
     assert.equal(dm.options.mentions, undefined, "a direct message mentions nobody on its own account");
   });
 
