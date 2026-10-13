@@ -2,6 +2,7 @@ import { Events, type Client, type Guild } from "discord.js";
 import type { EventHandlers, ModuleContext } from "@tier0/core";
 import { parseCustomId } from "@tier0/core";
 import type { GuildState } from "./guild-state.js";
+import { rememberOwnMessage, takeOwnMessage } from "./own-messages.js";
 
 interface Deps {
   client: Client;
@@ -39,6 +40,7 @@ async function deliver(
 
 export function registerEventDispatch({ client, state }: Deps): void {
   client.on(Events.MessageCreate, async (message) => {
+    if (message.author.id === client.user?.id) rememberOwnMessage(message.id);
     if (message.author.bot || !message.guild) return;
     const guild = message.guild;
     await deliver(state, guild, "messageCreate", (handler, ctx) =>
@@ -47,6 +49,8 @@ export function registerEventDispatch({ client, state }: Deps): void {
   });
 
   client.on(Events.MessageDelete, async (message) => {
+    // The bot's own short-lived posts are not worth an entry in any log.
+    if (takeOwnMessage(message.id)) return;
     if (!message.guild) return;
     const guild = message.guild;
     await deliver(state, guild, "messageDelete", (handler, ctx) =>
