@@ -122,7 +122,8 @@ describe("the mod log post", () => {
 });
 
 describe("the link to the case in the dashboard", () => {
-  const entry = { caseNumber: 7, action: "warn", targetId: TARGET, moderatorId: MODERATOR, reason: "Spamming", expiresAt: null };
+  // A fixed time, because the post is stamped with the current one otherwise and two fills a millisecond apart would differ.
+  const entry = { caseNumber: 7, action: "warn", targetId: TARGET, moderatorId: MODERATOR, reason: "Spamming", expiresAt: null, createdAt: new Date("2029-12-30T00:00:00.000Z") };
   const BASE = "https://bot.example.com";
   const GUILD = "333333333333333333";
   const withLinks = (dashboardBase: string) => noticeValues({ ...entry, links: { guildId: GUILD, dashboardBase } });
