@@ -5,18 +5,9 @@
  * calls; this file only ever answers "what, if anything, should happen".
  */
 import { createHash } from "node:crypto";
-import type { AutomodSettings } from "./settings.js";
+import type { AutomodSettings, RuleAction, RuleName } from "./settings.js";
 
-export type RuleAction = "delete" | "warn" | "timeout";
-
-export type RuleName =
-  | "invites"
-  | "links"
-  | "capitals"
-  | "repeatedText"
-  | "mentions"
-  | "bannedWords"
-  | "rateLimit";
+export type { RuleAction, RuleName };
 
 /**
  * What is remembered of an earlier message. Only equality matters for the
@@ -69,7 +60,8 @@ export interface EvaluationInput {
 export interface EvaluationVerdict {
   triggered: boolean;
   rule?: RuleName;
-  action?: RuleAction;
+  /** Everything the winning rule is set to do, in the order delete, warn, timeout. */
+  actions?: RuleAction[];
   /** What was wrong, in words that are safe to show anyone. Never quotes the message. */
   reason?: string;
   /**
@@ -83,7 +75,7 @@ export interface EvaluationVerdict {
    * wrote it. Staff only, like `detail`, which joins them.
    */
   matches?: string[];
-  /** Present only when `action` is "timeout". */
+  /** Present only when `actions` includes "timeout". */
   timeoutMs?: number;
   /** Every rule that tripped, even though only the most severe is acted on. */
   matchedRules: RuleName[];
@@ -91,7 +83,7 @@ export interface EvaluationVerdict {
 
 interface RuleMatch {
   rule: RuleName;
-  action: RuleAction;
+  actions: RuleAction[];
   reason: string;
   detail?: string;
   matches?: string[];
@@ -113,19 +105,21 @@ function isExempt(input: EvaluationInput, rule: Exemptions): boolean {
   return false;
 }
 
+const ACTION_ORDER: readonly RuleAction[] = ["delete", "warn", "timeout"];
+
 function toMatch(
   rule: RuleName,
-  ruleSettings: { action: string; timeoutDuration: number },
+  ruleSettings: { actions: string[]; timeoutDuration: number },
   reason: string,
   detail?: string,
 ): RuleMatch {
-  const action = ruleSettings.action as RuleAction;
+  const actions = ACTION_ORDER.filter((action) => ruleSettings.actions.includes(action));
   return {
     rule,
-    action,
+    actions,
     reason,
     ...(detail ? { detail } : {}),
-    timeoutMs: action === "timeout" ? ruleSettings.timeoutDuration : undefined,
+    timeoutMs: actions.includes("timeout") ? ruleSettings.timeoutDuration : undefined,
   };
 }
 
@@ -397,12 +391,17 @@ const CHECKS: Array<(input: EvaluationInput) => RuleMatch | null> = [
   checkRateLimit,
 ];
 
-const SEVERITY: Record<RuleAction, number> = { warn: 1, delete: 2, timeout: 3 };
+/** A set that times the member out outranks one that warns, which outranks deleting alone. */
+function severity(actions: readonly RuleAction[]): number {
+  if (actions.includes("timeout")) return 3;
+  return actions.includes("warn") ? 2 : 1;
+}
 
 /**
- * Runs every rule against one message and returns the single action to take.
- * A message that trips several rules is acted on once, at the severity of
- * the worst rule it tripped. It never fires once per rule.
+ * Runs every rule against one message and returns what to do about it. A
+ * message that trips several rules is acted on once, with the whole set of the
+ * worst rule it tripped, and ties go to the rule that comes first. Sets from
+ * different rules are never combined.
  */
 export function evaluateMessage(input: EvaluationInput): EvaluationVerdict {
   if (input.authorIsBot) return { triggered: false, matchedRules: [] };
@@ -415,14 +414,14 @@ export function evaluateMessage(input: EvaluationInput): EvaluationVerdict {
 
   if (matches.length === 0) return { triggered: false, matchedRules: [] };
 
-  matches.sort((a, b) => SEVERITY[b.action] - SEVERITY[a.action]);
+  matches.sort((a, b) => severity(b.actions) - severity(a.actions));
   const top = matches[0];
   if (!top) return { triggered: false, matchedRules: [] };
 
   return {
     triggered: true,
     rule: top.rule,
-    action: top.action,
+    actions: top.actions,
     reason: top.reason,
     ...(top.detail ? { detail: top.detail } : {}),
     ...(top.matches ? { matches: top.matches } : {}),

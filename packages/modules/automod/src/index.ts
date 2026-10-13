@@ -11,7 +11,7 @@ import { settings, type AutomodSettings } from "./settings.js";
 import type { EvaluationVerdict } from "./evaluator.js";
 import { carryOut, draftInfraction, judgeMessage, type Outcome } from "./handler.js";
 import { AutomodState } from "./state.js";
-import { LOG_MESSAGES, NOTICE_MESSAGE, logValues, tripValues, type TripFacts } from "./messages.js";
+import { LOG_MESSAGES, NOTICE_MESSAGE, loggedAs, logValues, tripValues, type TripFacts } from "./messages.js";
 
 // One instance for the whole process, not per guild: it is its own map keyed
 // by guild id, and a module definition is only ever loaded once. See state.ts
@@ -98,10 +98,10 @@ async function applyVerdict(
   isEdit: boolean,
   previousContent: string | null,
 ): Promise<void> {
-  const { rule, action, timeoutMs } = verdict;
-  if (!rule || !action) return;
+  const { rule, actions, timeoutMs } = verdict;
+  if (!rule || !actions) return;
 
-  const outcome = await carryOut(action, timeoutMs, {
+  const outcome = await carryOut(actions, timeoutMs, {
     deleteMessage: () => message.delete(),
     timeoutMember: async (ms) => {
       // Discord would refuse an owner, an administrator or anyone above the bot
@@ -117,12 +117,14 @@ async function applyVerdict(
   const facts: TripFacts = {
     userId: member.id,
     rule,
-    action,
+    actions,
     reason: verdict.reason,
     detail: verdict.detail,
     matches: verdict.matches,
     timeoutMs,
     deleted: outcome.deleted,
+    // The case is what carries a warning, so one that could not be recorded was not given.
+    warned: outcome.warned && caseNumber !== undefined,
     timedOut: outcome.timedOut,
     problems: outcome.problems,
     caseNumber,
@@ -223,8 +225,9 @@ async function postLog(ctx: ModuleContext<AutomodSettings>, facts: TripFacts): P
   const channel = ctx.guild.channels.cache.get(channelId);
   if (!channel?.isTextBased()) return;
 
-  await ctx.send(channel, ctx.settings.logMessages[facts.action], logValues(facts), {
-    fallback: LOG_MESSAGES[facts.action],
+  const preset = loggedAs(facts);
+  await ctx.send(channel, ctx.settings.logMessages[preset], logValues(facts), {
+    fallback: LOG_MESSAGES[preset],
     mentions: { users: [], roles: [] },
   });
 }

@@ -451,52 +451,69 @@ describe("rateLimit", () => {
 });
 
 describe("combining rules", () => {
-  test("a message that trips two rules is acted on once, at the higher severity", () => {
-    const base = withRule("bannedWords", { words: ["badword"], action: "warn" });
+  test("a message that trips two rules is acted on once, with the worse rule's actions", () => {
+    const base = withRule("bannedWords", { words: ["badword"], actions: ["warn"] });
     const settingsValue = {
       ...base,
-      rateLimit: { ...base.rateLimit, enabled: true, limit: 1, window: 10_000, action: "timeout" },
+      rateLimit: { ...base.rateLimit, enabled: true, limit: 1, window: 10_000, actions: ["delete", "timeout"] },
     };
     const history = [past("prior message", 999_000)];
     const verdict = evaluateMessage(
       input({ content: "badword", now: 1_000_000, history, settings: settingsValue }),
     );
     assert.equal(verdict.triggered, true);
-    assert.equal(verdict.action, "timeout");
+    assert.deepEqual(verdict.actions, ["delete", "timeout"]);
+    assert.equal(verdict.rule, "rateLimit");
     assert.deepEqual(new Set(verdict.matchedRules), new Set(["bannedWords", "rateLimit"]));
   });
 
-  test("severity picks timeout over delete over warn regardless of check order", () => {
-    const base = withRule("links", { action: "delete", allowlist: [] });
-    const settingsValue = { ...base, invites: { ...base.invites, enabled: true, action: "timeout" } };
-    const verdict = evaluateMessage(
-      input({
-        content: "discord.gg/x and https://sketchy.example",
-        settings: settingsValue,
-      }),
-    );
-    assert.equal(verdict.action, "timeout");
+  test("a set with a timeout outranks one with a warning, which outranks deleting alone, whatever the check order", () => {
+    const content = "discord.gg/x and https://sketchy.example";
+    const run = (invites, links) => {
+      const base = withRule("links", { actions: links, allowlist: [] });
+      return evaluateMessage(input({ content, settings: { ...base, invites: { ...base.invites, enabled: true, actions: invites } } }));
+    };
+    assert.equal(run(["delete", "timeout"], ["delete", "warn"]).rule, "invites");
+    assert.equal(run(["delete"], ["warn", "timeout"]).rule, "links");
+    assert.equal(run(["delete", "warn"], ["delete"]).rule, "invites");
+    assert.equal(run(["delete"], ["warn"]).rule, "links");
+    assert.equal(run(["delete"], ["delete", "warn"]).rule, "links");
+  });
+
+  test("a tie goes to the rule that is checked first, and the sets are never merged", () => {
+    const base = withRule("links", { actions: ["delete", "warn"], allowlist: [] });
+    const settingsValue = { ...base, invites: { ...base.invites, enabled: true, actions: ["warn", "timeout"] }, capitals: { ...base.capitals, enabled: true, actions: ["delete", "timeout"], thresholdPercent: 1, minLength: 1 } };
+    const verdict = evaluateMessage(input({ content: "DISCORD.GG/x https://sketchy.example", settings: settingsValue }));
     assert.equal(verdict.rule, "invites");
+    assert.deepEqual(verdict.actions, ["warn", "timeout"]);
   });
 
   test("a timeout verdict carries the configured timeout duration", () => {
     const settingsValue = withRule("mentions", {
       limit: 1,
-      action: "timeout",
+      actions: ["timeout"],
       timeoutDuration: 60_000,
     });
     const content = "<@111111111111111111> <@222222222222222222>";
     const verdict = evaluateMessage(input({ content, settings: settingsValue }));
-    assert.equal(verdict.action, "timeout");
+    assert.deepEqual(verdict.actions, ["timeout"]);
     assert.equal(verdict.timeoutMs, 60_000);
   });
 
-  test("a warn verdict carries no timeout duration", () => {
-    const settingsValue = withRule("mentions", { limit: 1, action: "warn" });
+  test("a verdict without a timeout carries no timeout duration", () => {
     const content = "<@111111111111111111> <@222222222222222222>";
-    const verdict = evaluateMessage(input({ content, settings: settingsValue }));
-    assert.equal(verdict.action, "warn");
-    assert.equal(verdict.timeoutMs, undefined);
+    for (const actions of [["warn"], ["delete"], ["delete", "warn"]]) {
+      const verdict = evaluateMessage(input({ content, settings: withRule("mentions", { limit: 1, actions }) }));
+      assert.deepEqual(verdict.actions, actions);
+      assert.equal(verdict.timeoutMs, undefined);
+    }
+  });
+
+  test("lists the actions in the order delete, warn, timeout however they were stored", () => {
+    const content = "<@111111111111111111> <@222222222222222222>";
+    const verdict = evaluateMessage(input({ content, settings: withRule("mentions", { limit: 1, actions: ["timeout", "warn", "delete"] }) }));
+    assert.deepEqual(verdict.actions, ["delete", "warn", "timeout"]);
+    assert.equal(verdict.timeoutMs, 600_000);
   });
 });
 
@@ -655,7 +672,7 @@ describe("threads", () => {
 
 describe("edits", () => {
   test("an edit is not counted toward the rate limit", () => {
-    const settingsValue = withRule("rateLimit", { limit: 2, window: 5_000, action: "delete" });
+    const settingsValue = withRule("rateLimit", { limit: 2, window: 5_000, actions: ["delete"] });
     const history = [past("a", 998_000), past("b", 998_500), past("c", 999_000)];
     assert.equal(evaluateMessage(input({ now: 1_000_000, history, settings: settingsValue })).triggered, true);
     assert.equal(evaluateMessage(input({ now: 1_000_000, history, isEdit: true, settings: settingsValue })).triggered, false);

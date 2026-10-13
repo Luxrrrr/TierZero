@@ -89,7 +89,7 @@ describe("judgeMessage", () => {
 
   test("a rate limit counts new messages once each, and never an edit", () => {
     const state = new AutomodState();
-    const limit = withRule("rateLimit", { limit: 2, window: 10_000, action: "delete" });
+    const limit = withRule("rateLimit", { limit: 2, window: 10_000, actions: ["delete"] });
     const send = (id: string, at: number) => judgeMessage(state, incoming({ messageId: id, content: `message ${id}`, now: at, settings: limit }));
     assert.equal(send("a", 1_000_000), null);
     assert.equal(send("b", 1_000_100), null);
@@ -129,32 +129,60 @@ function steps(overrides: { del?: unknown; timeout?: unknown } = {}) {
 }
 
 describe("carryOut", () => {
-  test("a warn touches nothing", async () => {
+  const done = (deleted: boolean, warned: boolean, timedOut: boolean, problems: string[] = []) => ({ deleted, warned, timedOut, problems });
+
+  test("a warn alone touches nothing and leaves the message", async () => {
     const { made, calls } = steps();
-    assert.deepEqual(await carryOut("warn", undefined, made), { deleted: false, timedOut: false, problems: [] });
+    assert.deepEqual(await carryOut(["warn"], undefined, made), done(false, true, false));
     assert.deepEqual(calls, []);
   });
 
-  test("a delete that works is reported as deleted", async () => {
-    const { made } = steps();
-    assert.deepEqual(await carryOut("delete", undefined, made), { deleted: true, timedOut: false, problems: [] });
+  test("a delete alone only deletes", async () => {
+    const { made, calls } = steps();
+    assert.deepEqual(await carryOut(["delete"], undefined, made), done(true, false, false));
+    assert.deepEqual(calls, ["delete"]);
   });
 
-  test("a timeout deletes and times out", async () => {
+  test("a timeout alone times out and leaves the message", async () => {
     const { made, calls } = steps();
-    assert.deepEqual(await carryOut("timeout", 60_000, made), { deleted: true, timedOut: true, problems: [] });
+    assert.deepEqual(await carryOut(["timeout"], 60_000, made), done(false, false, true));
+    assert.deepEqual(calls, ["timeout:60000"]);
+  });
+
+  test("delete and warn", async () => {
+    const { made, calls } = steps();
+    assert.deepEqual(await carryOut(["delete", "warn"], undefined, made), done(true, true, false));
+    assert.deepEqual(calls, ["delete"]);
+  });
+
+  test("delete and timeout", async () => {
+    const { made, calls } = steps();
+    assert.deepEqual(await carryOut(["delete", "timeout"], 60_000, made), done(true, false, true));
+    assert.deepEqual(calls, ["delete", "timeout:60000"]);
+  });
+
+  test("warn and timeout leaves the message", async () => {
+    const { made, calls } = steps();
+    assert.deepEqual(await carryOut(["warn", "timeout"], 60_000, made), done(false, true, true));
+    assert.deepEqual(calls, ["timeout:60000"]);
+  });
+
+  test("all three", async () => {
+    const { made, calls } = steps();
+    assert.deepEqual(await carryOut(["delete", "warn", "timeout"], 60_000, made), done(true, true, true));
     assert.deepEqual(calls, ["delete", "timeout:60000"]);
   });
 
   test("a message that is already gone counts as removed", async () => {
     const { made } = steps({ del: { code: 10008 } });
-    assert.deepEqual(await carryOut("delete", undefined, made), { deleted: true, timedOut: false, problems: [] });
+    assert.deepEqual(await carryOut(["delete"], undefined, made), done(true, false, false));
   });
 
-  test("a refused timeout is not reported as done", async () => {
+  test("a refused timeout is not reported as done, and the rest still is", async () => {
     const { made } = steps({ timeout: { code: 50013 } });
-    const outcome = await carryOut("timeout", 60_000, made);
+    const outcome = await carryOut(["delete", "warn", "timeout"], 60_000, made);
     assert.equal(outcome.deleted, true);
+    assert.equal(outcome.warned, true);
     assert.equal(outcome.timedOut, false);
     assert.equal(outcome.problems.length, 1);
     assert.match(outcome.problems[0] ?? "", /^Could not time out: missing permission/);
@@ -162,7 +190,7 @@ describe("carryOut", () => {
 
   test("a refused delete is not reported as done, and the timeout still goes ahead", async () => {
     const { made, calls } = steps({ del: { code: 50013 } });
-    const outcome = await carryOut("timeout", 60_000, made);
+    const outcome = await carryOut(["delete", "timeout"], 60_000, made);
     assert.equal(outcome.deleted, false);
     assert.equal(outcome.timedOut, true);
     assert.deepEqual(outcome.problems, ["Could not delete the message: missing permission"]);
@@ -171,7 +199,7 @@ describe("carryOut", () => {
 
   test("an unexpected failure is a problem, not a crash", async () => {
     const { made } = steps({ del: "boom", timeout: "boom" });
-    const outcome = await carryOut("timeout", 60_000, made);
+    const outcome = await carryOut(["delete", "timeout"], 60_000, made);
     assert.deepEqual(outcome.problems, [
       "Could not delete the message: Discord refused the request",
       "Could not time out: Discord refused the request",
@@ -180,7 +208,7 @@ describe("carryOut", () => {
 
   test("problems never quote anything from the message", async () => {
     const { made } = steps({ del: new Error("discord.gg/secret"), timeout: { code: 50013, message: "<@123456789012345678>" } });
-    const outcome = await carryOut("timeout", 60_000, made);
+    const outcome = await carryOut(["delete", "timeout"], 60_000, made);
     assert.ok(!outcome.problems.join(" ").includes("secret"));
     assert.ok(!outcome.problems.join(" ").includes("<@"));
   });
@@ -191,40 +219,62 @@ describe("carryOut", () => {
 describe("draftInfraction", () => {
   const verdict = { rule: "links" as const, reason: "Posted a link to a site that isn't allowed", detail: "sketchy.example" };
   const NOW = 5_000_000;
+  const did = (deleted: boolean, warned: boolean, timedOut: boolean, problems: string[] = []) => ({ deleted, warned, timedOut, problems });
 
   test("a timeout that was applied is active, with its expiry", () => {
-    const draft = draftInfraction(verdict, { deleted: true, timedOut: true, problems: [] }, 600_000, NOW);
+    const draft = draftInfraction(verdict, did(true, false, true), 600_000, NOW);
     assert.equal(draft.action, "automod-timeout");
     assert.equal(draft.active, true);
     assert.equal(draft.expiresAt?.getTime(), NOW + 600_000);
   });
 
-  test("a timeout that failed is recorded as the deletion that happened, not active", () => {
-    const draft = draftInfraction(verdict, { deleted: true, timedOut: false, problems: ["Could not time out: missing permission"] }, 600_000, NOW);
-    assert.equal(draft.action, "automod-delete");
-    assert.equal(draft.active, false);
-    assert.equal(draft.expiresAt, null);
-    assert.match(draft.reason, /Could not time out: missing permission/);
+  test("the case is filed under the strongest thing done: timeout, then warn, then delete", () => {
+    const label = (deleted: boolean, warned: boolean, timedOut: boolean) => draftInfraction(verdict, did(deleted, warned, timedOut), timedOut ? 600_000 : undefined, NOW).action;
+    assert.equal(label(true, false, false), "automod-delete");
+    assert.equal(label(false, true, false), "automod-warn");
+    assert.equal(label(true, true, false), "automod-warn");
+    assert.equal(label(false, false, true), "automod-timeout");
+    assert.equal(label(false, true, true), "automod-timeout");
+    assert.equal(label(true, true, true), "automod-timeout");
+  });
+
+  test("only a timeout makes the case active or gives it an expiry", () => {
+    for (const [deleted, warned] of [[true, false], [false, true], [true, true]] as const) {
+      const draft = draftInfraction(verdict, did(deleted, warned, false), undefined, NOW);
+      assert.equal(draft.active, false);
+      assert.equal(draft.expiresAt, null);
+    }
+  });
+
+  test("a timeout that failed is recorded as the warning or deletion that happened, not active", () => {
+    const failed = ["Could not time out: missing permission"];
+    const withDelete = draftInfraction(verdict, did(true, false, false, failed), 600_000, NOW);
+    assert.equal(withDelete.action, "automod-delete");
+    assert.equal(withDelete.active, false);
+    assert.equal(withDelete.expiresAt, null);
+    assert.match(withDelete.reason, /Could not time out: missing permission/);
+    assert.equal(draftInfraction(verdict, did(true, true, false, failed), 600_000, NOW).action, "automod-warn");
+    assert.equal(draftInfraction(verdict, did(false, true, false, failed), 600_000, NOW).action, "automod-warn");
   });
 
   test("a rule that could do nothing is recorded as a warning", () => {
-    const draft = draftInfraction(verdict, { deleted: false, timedOut: false, problems: [] }, undefined, NOW);
+    const draft = draftInfraction(verdict, did(false, false, false), undefined, NOW);
     assert.equal(draft.action, "automod-warn");
   });
 
   test("keeps the match for staff inside a code span, after the generic reason", () => {
-    const draft = draftInfraction(verdict, { deleted: true, timedOut: false, problems: [] }, undefined, NOW);
+    const draft = draftInfraction(verdict, did(true, false, false), undefined, NOW);
     assert.equal(draft.reason, "links: Posted a link to a site that isn't allowed (matched `sketchy.example`)");
   });
 
   test("lists each banned word that matched, not the message around it", () => {
     const banned = { rule: "bannedWords" as const, reason: "Used a banned word or phrase", detail: "badword, other words", matches: ["badword", "other words"] };
-    const draft = draftInfraction(banned, { deleted: true, timedOut: false, problems: [] }, undefined, NOW);
+    const draft = draftInfraction(banned, did(true, false, false), undefined, NOW);
     assert.equal(draft.reason, "bannedWords: Used a banned word or phrase (matched `badword`, `other words`)");
   });
 
   test("a record without detail is just the rule and reason", () => {
-    const draft = draftInfraction({ rule: "capitals", reason: "Message was 90% capital letters" }, { deleted: false, timedOut: false, problems: [] }, undefined, NOW);
+    const draft = draftInfraction({ rule: "capitals", reason: "Message was 90% capital letters" }, did(false, false, false), undefined, NOW);
     assert.equal(draft.reason, "capitals: Message was 90% capital letters");
   });
 });

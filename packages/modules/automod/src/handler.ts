@@ -72,7 +72,7 @@ export function judgeMessage(state: AutomodState, message: IncomingMessage): Eva
     history,
     settings: message.settings,
   });
-  return verdict.triggered && verdict.rule && verdict.action ? verdict : null;
+  return verdict.triggered && verdict.rule && verdict.actions?.length ? verdict : null;
 }
 
 // -- carrying the action out ------------------------------------------------
@@ -86,6 +86,8 @@ export interface Steps {
 export interface Outcome {
   /** The message is gone, whether this module removed it or someone beat it to it. */
   deleted: boolean;
+  /** The rule asked for a warning. Recording it is what carries it out, so this cannot fail here. */
+  warned: boolean;
   timedOut: boolean;
   /** Fixed wording for staff. Never quotes the message. */
   problems: string[];
@@ -100,13 +102,13 @@ function codeOf(error: unknown): unknown {
 }
 
 export async function carryOut(
-  action: RuleAction,
+  actions: readonly RuleAction[],
   timeoutMs: number | undefined,
   steps: Steps,
 ): Promise<Outcome> {
-  const outcome: Outcome = { deleted: false, timedOut: false, problems: [] };
+  const outcome: Outcome = { deleted: false, warned: actions.includes("warn"), timedOut: false, problems: [] };
 
-  if (action === "delete" || action === "timeout") {
+  if (actions.includes("delete")) {
     try {
       await steps.deleteMessage();
       outcome.deleted = true;
@@ -122,7 +124,7 @@ export async function carryOut(
     }
   }
 
-  if (action === "timeout" && timeoutMs) {
+  if (actions.includes("timeout") && timeoutMs) {
     try {
       await steps.timeoutMember(timeoutMs);
       outcome.timedOut = true;
@@ -147,9 +149,17 @@ export interface InfractionDraft {
   active: boolean;
 }
 
+/** The strongest thing that really happened, which is what the case and the log post are filed under. */
+export function strongestDone(done: Pick<Outcome, "deleted" | "warned" | "timedOut">): RuleAction {
+  if (done.timedOut) return "timeout";
+  if (done.warned) return "warn";
+  // A rule that managed nothing at all is still on record as a warning.
+  return done.deleted ? "delete" : "warn";
+}
+
 /**
  * What goes in the permanent record, from what happened. A timeout that was
- * refused is recorded as the deletion or warning that did happen, so the
+ * refused is recorded as the warning or deletion that did happen, so the
  * member does not show as restricted when they are not. The match is kept here
  * because staff read this on the dashboard, in a code span so it stays inert.
  */
@@ -159,7 +169,7 @@ export function draftInfraction(
   timeoutMs: number | undefined,
   now: number,
 ): InfractionDraft {
-  const action = outcome.timedOut ? "timeout" : outcome.deleted ? "delete" : "warn";
+  const action = strongestDone(outcome);
   const rule = verdict.rule ?? "automod";
   let reason = verdict.reason ? `${rule}: ${verdict.reason}` : rule;
   const matched = matchText(verdict);

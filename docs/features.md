@@ -340,13 +340,27 @@ The sidebar shrinks to a strip of icons with the button in its header or Ctrl+B 
 
 ## Automod
 
-Seven rules you switch on separately, each with its own action and exemptions: invites, links, capital letters, repeated text, mention limits, banned words and rate limiting. Every rule starts off, so switching the module on does nothing until you pick some.
+Seven rules you switch on separately, each with its own actions and exemptions: invites, links, capital letters, repeated text, mention limits, banned words and rate limiting. Every rule starts off, so switching the module on does nothing until you pick some.
 
 ![Automod settings with one card per rule](images/automod-settings.png)
 
 Banned word matching is conservative on purpose. Text is lowercased, common letter-for-number swaps are folded back, a letter stretched out three or more times is collapsed, and it matches on word boundaries. So `assassin` doesn't trip a rule for the rude three letters inside it. The cost is that spacing letters out gets past it, since catching that means stripping whitespace, which glues unrelated words together and brings the false positives back. Missing a few real cases beats deleting innocent messages.
 
-Anyone with moderator permissions is exempt by default, and you can turn that off. When several rules trip on one message, you get one action, the most severe. A message in a thread follows the channel the thread is in, so exempting a channel exempts its threads too.
+Anyone with moderator permissions is exempt by default, and you can turn that off. When several rules trip on one message, only one rule acts: the one whose actions are most severe, meaning it times the member out, then warns, then only deletes, and the first rule listed wins a tie. Its actions are used as they are and never added to another rule's. A message in a thread follows the channel the thread is in, so exempting a channel exempts its threads too.
+
+Each rule has a **What to do when it trips** list, and you can pick any combination of three things. **Delete the message** removes it. **Warn the member** adds a warning to their record and leaves the message where it is. **Time the member out** mutes them for the rule's timeout length, which only shows while that is ticked. It leaves the message where it is too. Pick delete as well if the message should go. A rule needs at least one. Each option in the list says what it does, and the suggested ones are marked. They are also what a rule does until you change it:
+
+| Rule | Suggested |
+| --- | --- |
+| Invites | Delete, warn |
+| Links | Delete |
+| Excessive capitals | Delete |
+| Repeated text | Delete, warn |
+| Mass mentions | Delete, time out |
+| Banned words | Delete, warn |
+| Rate limit | Delete, time out |
+
+Rules saved before this was a list keep doing exactly what they did. A rule set to delete still only deletes, one set to warn only warns without deleting, and the old "delete the message and time the member out" became delete plus time out.
 
 What each rule reads:
 
@@ -356,7 +370,7 @@ What each rule reads:
 
 Automod reads edits as well as new messages, since an edit is an easy way past a filter. An edit is only checked when its text changed, and it doesn't count as another message toward rate limiting or repeated text. A message is acted on once, even if Discord sends several updates for it.
 
-Automod only reports what it managed to do. If the bot can't delete a message, or can't time a member out because they're an administrator, the owner, or above the bot, the notice and the record say only what actually happened, and the log post gets a **Not carried out** line saying what failed. A timeout that didn't go through is recorded as the deletion or warning that did, not as a timeout.
+Automod only reports what it managed to do. If the bot can't delete a message, or can't time a member out because they're an administrator, the owner, or above the bot, the notice and the record say only what actually happened, and the log post gets a **Not carried out** line saying what failed. A timeout that didn't go through is recorded as the warning or deletion that did, not as a timeout. Each trip is one case, filed under the strongest thing that happened (time out, then warn, then delete), however many actions the rule has.
 
 Messages never repeat what the member wrote. The reason in the notice, the log and the record is fixed wording such as "Posted a Discord invite link". The specific invite code, domain or banned word that matched goes only to staff, in the **Matched** field of the log post and in the record on the dashboard.
 
@@ -366,8 +380,8 @@ Each trip also keeps the message itself on the case, as a moderator's attached m
 
 Two things automod says are edited with the message editor.
 
-- **Notice in the channel** is posted where the message was removed and deleted again after 8 seconds. Besides the variables every message has, it understands `{user}` (a mention), `{userId}`, `{rule}`, `{action}` (delete, warn or timeout), `{reason}`, `{reasonNote}`, `{outcome}` and `{duration}`. `{reasonNote}` is a colon, a space and the reason, or nothing. `{outcome}` is the sentence the notice has always used, chosen from what actually happened: your message was removed, your message was removed and you were timed out, you were timed out, or that message tripped automod. The default is `{user}, {outcome} ({rule}{reasonNote}).`
-- **Log posts** are the embeds sent to the log channel, one for each thing a rule can do (delete, warn, time out) so that each keeps its own colour. They understand the same variables except `{outcome}` and `{reasonNote}`, plus `{match}` (the invite code, domain or banned words that matched, in code blocks so nothing becomes a link), `{problems}` (what the bot couldn't do), `{case}`, `{caseUrl}` and `{memberUrl}`. The default post shows these as **Matched** and **Not carried out** fields, which are left out when empty. `{match}` and `{problems}` aren't available in the channel notice. `{reason}` is a dash when there is nothing to add.
+- **Notice in the channel** is posted where the message was removed and deleted again after 8 seconds. Besides the variables every message has, it understands `{user}` (a mention), `{userId}`, `{rule}`, `{action}` (what was done: delete, warn, timeout, or several such as delete and warn), `{reason}`, `{reasonNote}`, `{outcome}` and `{duration}`. `{reasonNote}` is a colon, a space and the reason, or nothing. `{outcome}` is chosen from what actually happened, for example your message was removed, you were timed out, your message was removed and you were warned, or your message was removed and you were timed out. When all that happened was a warning, it says that message tripped automod. The default is `{user}, {outcome} ({rule}{reasonNote}).`
+- **Log posts** are the embeds sent to the log channel, one for each thing a rule can do (delete, warn, time out) so that each keeps its own colour. A rule that does several things uses the post for the strongest one that happened. They understand the same variables except `{outcome}` and `{reasonNote}`, plus `{match}` (the invite code, domain or banned words that matched, in code blocks so nothing becomes a link), `{problems}` (what the bot couldn't do), `{case}`, `{caseUrl}` and `{memberUrl}`. The default post shows these as **Matched** and **Not carried out** fields, which are left out when empty. `{match}` and `{problems}` aren't available in the channel notice. `{reason}` is a dash when there is nothing to add.
 
 Both are shown on the module's settings page, and the log posts only when a log channel is set. A message that comes out too long once filled in is replaced by the default.
 

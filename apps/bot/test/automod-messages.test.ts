@@ -34,7 +34,7 @@ function fakeChannel(payloads: Record<string, unknown>[]) {
   };
 }
 
-const facts = { userId: "111111111111111111", rule: "invites", action: "delete", reason: "Spam", timeoutMs: undefined, deleted: true, timedOut: false } as const;
+const facts = { userId: "111111111111111111", rule: "invites", actions: ["delete"], reason: "Spam", timeoutMs: undefined, deleted: true, warned: false, timedOut: false } as const;
 const onlyTheMember = { users: ["111111111111111111"], roles: [] };
 
 describe("the automod notice", () => {

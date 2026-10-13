@@ -8,28 +8,101 @@ import {
   NOTICE_VARIABLES,
 } from "./messages.js";
 
+export type RuleAction = "delete" | "warn" | "timeout";
+
+export type RuleName =
+  | "invites"
+  | "links"
+  | "capitals"
+  | "repeatedText"
+  | "mentions"
+  | "bannedWords"
+  | "rateLimit";
+
+/**
+ * What each rule does out of the box, and what the dashboard marks as the
+ * suggested pick. One table so the choice reads as a decision: the lighter
+ * rules only remove the message, the ones that point at a person or a flood
+ * warn or time out as well. Rules start switched off either way.
+ */
+export const RECOMMENDED_ACTIONS: Record<RuleName, readonly RuleAction[]> = {
+  invites: ["delete", "warn"],
+  links: ["delete"],
+  capitals: ["delete"],
+  repeatedText: ["delete", "warn"],
+  mentions: ["delete", "timeout"],
+  bannedWords: ["delete", "warn"],
+  rateLimit: ["delete", "timeout"],
+};
+
+/**
+ * What a rule did before it could do several things at once. Used only to read
+ * settings saved back then, and for a rule that was switched on but never had
+ * its action saved, so that upgrading changes nothing for a running server.
+ */
+const LEGACY_DEFAULT: Record<RuleName, string> = {
+  invites: "delete",
+  links: "delete",
+  capitals: "warn",
+  repeatedText: "delete",
+  mentions: "timeout",
+  bannedWords: "delete",
+  rateLimit: "timeout",
+};
+
+// The old "timeout" preset deleted the message as well; a plain "warn" never did.
+const LEGACY_ACTIONS: Record<string, RuleAction[]> = {
+  delete: ["delete"],
+  warn: ["warn"],
+  timeout: ["delete", "timeout"],
+};
+
+/**
+ * Turns the single `action` a rule used to store into the `actions` list. It
+ * runs on every read, so a value that already has `actions` is left as it is.
+ */
+export function upgradeRule(rule: RuleName) {
+  return (stored: Record<string, unknown>): Record<string, unknown> => {
+    const { action, ...rest } = stored;
+    if (rest.actions !== undefined) return rest;
+    const legacy = typeof action === "string" ? action : rest.enabled === true ? LEGACY_DEFAULT[rule] : undefined;
+    const actions = legacy === undefined ? undefined : LEGACY_ACTIONS[legacy];
+    return actions ? { ...rest, actions } : rest;
+  };
+}
+
+const ACTION_OPTIONS: Array<{ value: RuleAction; label: string; description: string }> = [
+  { value: "delete", label: "Delete the message", description: "Removes the message from the channel." },
+  { value: "warn", label: "Warn the member", description: "Adds a warning to the member's record." },
+  { value: "timeout", label: "Time the member out", description: "Mutes the member for the timeout length below." },
+];
+
 /**
  * Fields every rule shares: whether it runs, what it does when it trips, and
  * who it leaves alone. Pulled into a function instead of written out seven
  * times, so the rules cannot quietly drift from each other.
  */
-function ruleFields(defaultAction: "delete" | "warn" | "timeout", defaultTimeout: string) {
+function ruleFields(rule: RuleName, defaultTimeout: string) {
+  const recommended = RECOMMENDED_ACTIONS[rule];
   return {
     enabled: s.boolean({ label: "On", default: false, guided: true }),
-    action: s.choice({
-      label: "What to do when it trips",
-      options: [
-        { value: "delete", label: "Delete the message" },
-        { value: "warn", label: "Warn the member" },
-        { value: "timeout", label: "Delete the message and time the member out" },
-      ],
-      default: defaultAction,
-    }),
+    actions: s.array(
+      s.choice({
+        options: ACTION_OPTIONS.map((option) => ({ ...option, recommended: recommended.includes(option.value) })),
+      }),
+      {
+        label: "What to do when it trips",
+        help: "Pick any combination. The suggested ones are marked.",
+        min: 1,
+        unique: true,
+        default: [...recommended],
+      },
+    ),
     timeoutDuration: s.duration({
       label: "Timeout length",
       default: defaultTimeout,
       max: "28d",
-      when: { field: "action", equals: "timeout" },
+      when: { field: "actions", includes: "timeout" },
     }),
     exemptRoles: s.array(s.role(), { label: "Roles exempt from this rule" }),
     exemptChannels: s.array(s.channel({ types: ["text"] }), {
@@ -89,29 +162,29 @@ export const settings = s.object({
 
   invites: s.object(
     {
-      ...ruleFields("delete", "10m"),
+      ...ruleFields("invites", "10m"),
       allowlist: s.array(s.string(), {
         label: "Allowed invite links",
         help: "Invite codes or links that are ignored, such as this server's own invite. Paste the code or the whole link.",
       }),
     },
-    { label: "Invite links" },
+    { label: "Invite links", upgrade: upgradeRule("invites") },
   ),
 
   links: s.object(
     {
-      ...ruleFields("delete", "10m"),
+      ...ruleFields("links", "10m"),
       allowlist: s.array(s.string(), {
         label: "Allowed domains",
         help: "Domains that are ignored, such as youtube.com. A pasted link works too, and a domain also covers its subdomains.",
       }),
     },
-    { label: "Links" },
+    { label: "Links", upgrade: upgradeRule("links") },
   ),
 
   capitals: s.object(
     {
-      ...ruleFields("warn", "10m"),
+      ...ruleFields("capitals", "10m"),
       thresholdPercent: s.integer({
         label: "Percentage of capital letters that trips this rule",
         min: 1,
@@ -125,12 +198,12 @@ export const settings = s.object({
         default: 10,
       }),
     },
-    { label: "Excessive capitals" },
+    { label: "Excessive capitals", upgrade: upgradeRule("capitals") },
   ),
 
   repeatedText: s.object(
     {
-      ...ruleFields("delete", "10m"),
+      ...ruleFields("repeatedText", "10m"),
       maxCharacterRepeat: s.integer({
         label: "Longest run of one repeated character allowed",
         min: 3,
@@ -149,12 +222,12 @@ export const settings = s.object({
         max: "1h",
       }),
     },
-    { label: "Repeated text" },
+    { label: "Repeated text", upgrade: upgradeRule("repeatedText") },
   ),
 
   mentions: s.object(
     {
-      ...ruleFields("timeout", "10m"),
+      ...ruleFields("mentions", "10m"),
       limit: s.integer({
         label: "User and role mentions allowed in one message",
         min: 1,
@@ -162,20 +235,20 @@ export const settings = s.object({
         default: 5,
       }),
     },
-    { label: "Mass mentions" },
+    { label: "Mass mentions", upgrade: upgradeRule("mentions") },
   ),
 
   bannedWords: s.object(
     {
-      ...ruleFields("delete", "10m"),
+      ...ruleFields("bannedWords", "10m"),
       words: s.array(s.string(), { label: "Banned words or phrases" }),
     },
-    { label: "Banned words" },
+    { label: "Banned words", upgrade: upgradeRule("bannedWords") },
   ),
 
   rateLimit: s.object(
     {
-      ...ruleFields("timeout", "5m"),
+      ...ruleFields("rateLimit", "5m"),
       limit: s.integer({
         label: "Messages allowed in the window",
         min: 1,
@@ -188,7 +261,7 @@ export const settings = s.object({
         max: "5m",
       }),
     },
-    { label: "Rate limit" },
+    { label: "Rate limit", upgrade: upgradeRule("rateLimit") },
   ),
 });
 

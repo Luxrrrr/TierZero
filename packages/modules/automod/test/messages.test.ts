@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { ModuleRegistry, applyVariablesToMessage, colorToInt, parseMessage, type MessageBody } from "@tier0/core";
 import type { TripFacts } from "../dist/messages.js";
 import automod from "../dist/index.js";
-import { LOG_MESSAGES, NOTICE_MESSAGE, breakMentions, describeLength, describeOutcome, logValues, matchText, tripValues } from "../dist/messages.js";
+import { LOG_MESSAGES, NOTICE_MESSAGE, breakMentions, describeLength, describeOutcome, effectiveActions, loggedAs, logValues, matchText, tripValues } from "../dist/messages.js";
 
 const registry = new ModuleRegistry();
 registry.register(automod);
@@ -25,11 +25,19 @@ function fill(body: MessageBody, values: Record<string, string>): MessageBody {
   return checked.value;
 }
 
-// By default everything the rule is set to do worked.
-const trip = (action: "delete" | "warn" | "timeout", reason?: string, timeoutMs?: number, more: Partial<TripFacts> = {}) =>
-  tripValues({ userId: "111111111111111111", rule: "invites", action, reason, timeoutMs, deleted: action !== "warn", timedOut: action === "timeout", ...more });
-const tripLog = (action: "delete" | "warn" | "timeout", reason?: string, more: Partial<TripFacts> = {}) =>
-  logValues({ userId: "111111111111111111", rule: "invites", action, reason, timeoutMs: action === "timeout" ? 600_000 : undefined, deleted: action !== "warn", timedOut: action === "timeout", ...more });
+// The three presets a rule used to have. By default everything the rule is set to do worked.
+type Preset = "delete" | "warn" | "timeout";
+const PRESET: Record<Preset, TripFacts["actions"]> = { delete: ["delete"], warn: ["warn"], timeout: ["delete", "timeout"] };
+const trip = (action: Preset, reason?: string, timeoutMs?: number, more: Partial<TripFacts> = {}) =>
+  tripValues({
+    userId: "111111111111111111", rule: "invites", actions: PRESET[action], reason, timeoutMs,
+    deleted: action !== "warn", warned: action === "warn", timedOut: action === "timeout", ...more,
+  });
+const tripLog = (action: Preset, reason?: string, more: Partial<TripFacts> = {}) =>
+  logValues({
+    userId: "111111111111111111", rule: "invites", actions: PRESET[action], reason, timeoutMs: action === "timeout" ? 600_000 : undefined,
+    deleted: action !== "warn", warned: action === "warn", timedOut: action === "timeout", ...more,
+  });
 
 describe("the notice in the channel", () => {
   test("says what it always has, for each action, with and without a reason", () => {
@@ -65,7 +73,7 @@ describe("the notice in the channel", () => {
 
   test("uses the message the owner wrote", () => {
     const own = settings({ noticeMessage: { content: "Careful {user}: {rule} ({action}) for {duration}" } }).noticeMessage;
-    assert.equal(fill(own, trip("timeout", "Spam", 600_000)).content, "Careful <@111111111111111111>: invites (timeout) for 10 minutes");
+    assert.equal(fill(own, trip("timeout", "Spam", 600_000)).content, "Careful <@111111111111111111>: invites (delete and timeout) for 10 minutes");
   });
 
   test("reads a plain string saved as the message", () => {
@@ -82,7 +90,7 @@ describe("the log posts", () => {
       assert.equal(colorToInt(embed?.color ?? ""), colours[action]);
       assert.equal(embed?.description, "<@111111111111111111> tripped **invites**");
       assert.deepEqual(embed?.fields.map((f) => [f.name, f.value, f.inline]), [
-        ["Action", action, true],
+        ["Action", action === "timeout" ? "delete and timeout" : action, true],
         ["Reason", "Spam", true],
       ]);
       assert.equal(embed?.timestamp, "now");
@@ -214,6 +222,60 @@ describe("describeOutcome", () => {
     assert.equal(describeOutcome({ deleted: true, timedOut: true }), "your message was removed and you were timed out");
     assert.equal(describeOutcome({ deleted: false, timedOut: true }), "you were timed out");
     assert.equal(describeOutcome({ deleted: false, timedOut: false }), "that message tripped automod");
+  });
+
+  test("reads naturally for every combination", () => {
+    const say = (deleted: boolean, warned: boolean, timedOut: boolean) => describeOutcome({ deleted, warned, timedOut });
+    assert.equal(say(true, false, false), "your message was removed");
+    assert.equal(say(false, false, true), "you were timed out");
+    assert.equal(say(true, true, false), "your message was removed and you were warned");
+    assert.equal(say(true, false, true), "your message was removed and you were timed out");
+    assert.equal(say(false, true, true), "you were warned and timed out");
+    assert.equal(say(true, true, true), "your message was removed, and you were warned and timed out");
+  });
+
+  test("a warning on its own, or nothing, keeps the line it always had", () => {
+    assert.equal(describeOutcome({ deleted: false, warned: true, timedOut: false }), "that message tripped automod");
+    assert.equal(describeOutcome({ deleted: false, warned: false, timedOut: false }), "that message tripped automod");
+  });
+});
+
+describe("the actions in the notice and the log", () => {
+  const base = { userId: "111111111111111111", rule: "invites", reason: "Spam", timeoutMs: 600_000 } as const;
+  const facts = (actions: TripFacts["actions"], done: { deleted: boolean; warned: boolean; timedOut: boolean }): TripFacts => ({ ...base, actions, ...done });
+
+  test("{action} lists what was done in words", () => {
+    assert.equal(tripValues(facts(["delete"], { deleted: true, warned: false, timedOut: false })).action, "delete");
+    assert.equal(tripValues(facts(["delete", "warn"], { deleted: true, warned: true, timedOut: false })).action, "delete and warn");
+    assert.equal(tripValues(facts(["delete", "warn", "timeout"], { deleted: true, warned: true, timedOut: true })).action, "delete, warn and timeout");
+  });
+
+  test("{action} drops a step that failed, and falls back to what was asked when nothing worked", () => {
+    assert.equal(tripValues(facts(["delete", "timeout"], { deleted: true, warned: false, timedOut: false })).action, "delete");
+    assert.equal(tripValues(facts(["delete", "timeout"], { deleted: false, warned: false, timedOut: false })).action, "delete and timeout");
+  });
+
+  test("the notice names the duration only when the member was timed out", () => {
+    assert.equal(tripValues(facts(["warn", "timeout"], { deleted: false, warned: true, timedOut: true })).duration, "10 minutes");
+    assert.equal(tripValues(facts(["warn", "timeout"], { deleted: false, warned: true, timedOut: false })).duration, "");
+  });
+
+  test("the log post follows the strongest thing done: timeout, then warn, then delete", () => {
+    assert.equal(loggedAs(facts(["delete"], { deleted: true, warned: false, timedOut: false })), "delete");
+    assert.equal(loggedAs(facts(["warn"], { deleted: false, warned: true, timedOut: false })), "warn");
+    assert.equal(loggedAs(facts(["delete", "warn"], { deleted: true, warned: true, timedOut: false })), "warn");
+    assert.equal(loggedAs(facts(["delete", "timeout"], { deleted: true, warned: false, timedOut: true })), "timeout");
+    assert.equal(loggedAs(facts(["delete", "warn", "timeout"], { deleted: true, warned: true, timedOut: true })), "timeout");
+  });
+
+  test("a failed timeout uses the post for what did happen; a rule that managed nothing keeps its own", () => {
+    assert.equal(loggedAs(facts(["delete", "timeout"], { deleted: true, warned: false, timedOut: false })), "delete");
+    assert.equal(loggedAs(facts(["delete"], { deleted: false, warned: false, timedOut: false })), "delete");
+    assert.equal(loggedAs(facts(["delete", "timeout"], { deleted: false, warned: false, timedOut: false })), "timeout");
+  });
+
+  test("effectiveActions keeps the order delete, warn, timeout", () => {
+    assert.deepEqual(effectiveActions(facts(["timeout", "warn", "delete"], { deleted: true, warned: true, timedOut: true })), ["delete", "warn", "timeout"]);
   });
 });
 

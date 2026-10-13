@@ -7,6 +7,7 @@ const db = createTestDatabase();
 const { prisma } = await import("@tier0/db");
 const { default: automod } = await import("../dist/index.js");
 const { settings } = await import("../dist/settings.js");
+const { RECOMMENDED_ACTIONS } = await import("../dist/settings.js");
 
 const GUILD = "100000000000000060";
 const CHANNEL = "100000000000000061";
@@ -28,9 +29,21 @@ interface Sent {
   values: Record<string, string>;
 }
 
-function setup(options: { deleteFails?: boolean; dashboard?: string; content?: string; messageId: string }) {
+function setup(options: {
+  deleteFails?: boolean;
+  timeoutFails?: boolean;
+  moderatable?: boolean;
+  actions?: string[];
+  dashboard?: string;
+  content?: string;
+  messageId: string;
+}) {
   const sent: Sent[] = [];
-  const parsed = settings.parse({ logChannel: LOG_CHANNEL, bannedWords: { enabled: true, action: "delete", words: ["badword", "other thing"] } });
+  const calls: string[] = [];
+  const parsed = settings.parse({
+    logChannel: LOG_CHANNEL,
+    bannedWords: { enabled: true, actions: options.actions ?? ["delete"], words: ["badword", "other thing"] },
+  });
   assert.ok(parsed.ok);
 
   const logChannel = { id: LOG_CHANNEL, isTextBased: () => true };
@@ -39,7 +52,11 @@ function setup(options: { deleteFails?: boolean; dashboard?: string; content?: s
     id: MEMBER,
     roles: { cache: new Map() },
     permissions: { has: () => false },
-    moderatable: true,
+    moderatable: options.moderatable ?? true,
+    timeout: async (ms: number) => {
+      calls.push(`timeout:${ms}`);
+      if (options.timeoutFails) throw Object.assign(new Error("Missing Permissions"), { code: 50013 });
+    },
   };
   const ctx = {
     client: { user: { id: BOT } },
@@ -62,10 +79,11 @@ function setup(options: { deleteFails?: boolean; dashboard?: string; content?: s
     createdTimestamp: Date.now() - 1000,
     attachments: new Map([["a", { name: "evidence.png", url: "https://cdn.example/evidence.png", contentType: "image/png" }]]),
     delete: async () => {
+      calls.push("delete");
       if (options.deleteFails) throw Object.assign(new Error("Missing Permissions"), { code: 50013 });
     },
   };
-  return { ctx, message, sent };
+  return { ctx, message, sent, calls };
 }
 
 const recordFor = (messageId: string) =>
@@ -131,5 +149,125 @@ describe("a message that trips a rule", () => {
     const notice = sent.find((s) => s.target === CHANNEL);
     assert.ok(notice);
     assert.ok(!Object.values(notice.values).some((v) => v.includes("badword") || v.includes("other thing") || v.includes("bot.example.com")));
+  });
+});
+
+describe("a rule set to do several things", () => {
+  const NOTICE = (sent: Sent[]) => sent.find((s) => s.target === CHANNEL)?.values;
+  const LOG = (sent: Sent[]) => sent.find((s) => s.target === LOG_CHANNEL)?.values;
+  let next = 100;
+  const id = () => `1000000000000001${String(next++).padStart(2, "0")}`;
+
+  async function run(options: Omit<Parameters<typeof setup>[0], "messageId">) {
+    const messageId = id();
+    const made = setup({ ...options, messageId });
+    await automod.events!.messageCreate!(made.message as never, made.ctx as never);
+    const row = await recordFor(messageId);
+    assert.ok(row);
+    const [kept] = readEvidence(row.evidence);
+    return { ...made, row, kept, messageId };
+  }
+
+  test("warn alone records a warning and leaves the message", async () => {
+    const { calls, row, kept, sent } = await run({ actions: ["warn"] });
+    assert.deepEqual(calls, []);
+    assert.equal(row.action, "automod-warn");
+    assert.equal(row.active, false);
+    assert.equal(kept?.deleted, false);
+    assert.equal(NOTICE(sent)?.outcome, "that message tripped automod");
+  });
+
+  test("delete alone removes the message", async () => {
+    const { calls, row, kept, sent } = await run({ actions: ["delete"] });
+    assert.deepEqual(calls, ["delete"]);
+    assert.equal(row.action, "automod-delete");
+    assert.equal(kept?.deleted, true);
+    assert.equal(NOTICE(sent)?.outcome, "your message was removed");
+  });
+
+  test("timeout alone times the member out and leaves the message", async () => {
+    const { calls, row, kept, sent } = await run({ actions: ["timeout"] });
+    assert.deepEqual(calls, ["timeout:600000"]);
+    assert.equal(row.action, "automod-timeout");
+    assert.equal(row.active, true);
+    assert.ok(row.expiresAt);
+    assert.equal(kept?.deleted, false);
+    assert.equal(NOTICE(sent)?.outcome, "you were timed out");
+    assert.equal(NOTICE(sent)?.duration, "10 minutes");
+  });
+
+  test("delete and warn removes the message and is filed as a warning", async () => {
+    const { calls, row, sent } = await run({ actions: ["delete", "warn"] });
+    assert.deepEqual(calls, ["delete"]);
+    assert.equal(row.action, "automod-warn");
+    assert.equal(NOTICE(sent)?.outcome, "your message was removed and you were warned");
+    assert.equal(LOG(sent)?.action, "delete and warn");
+  });
+
+  test("delete and timeout does both, as the old timeout preset did", async () => {
+    const { calls, row, sent } = await run({ actions: ["delete", "timeout"] });
+    assert.deepEqual(calls, ["delete", "timeout:600000"]);
+    assert.equal(row.action, "automod-timeout");
+    assert.equal(row.active, true);
+    assert.equal(NOTICE(sent)?.outcome, "your message was removed and you were timed out");
+  });
+
+  test("warn and timeout leaves the message", async () => {
+    const { calls, row, kept, sent } = await run({ actions: ["warn", "timeout"] });
+    assert.deepEqual(calls, ["timeout:600000"]);
+    assert.equal(row.action, "automod-timeout");
+    assert.equal(kept?.deleted, false);
+    assert.equal(NOTICE(sent)?.outcome, "you were warned and timed out");
+  });
+
+  test("all three, with one case for the trip", async () => {
+    const { calls, row, sent, messageId } = await run({ actions: ["delete", "warn", "timeout"] });
+    assert.deepEqual(calls, ["delete", "timeout:600000"]);
+    assert.equal(row.action, "automod-timeout");
+    assert.equal(NOTICE(sent)?.outcome, "your message was removed, and you were warned and timed out");
+    assert.equal(LOG(sent)?.case, String(row.caseNumber));
+    const cases = await prisma.infraction.count({ where: { guildId: GUILD, userId: MEMBER, evidence: { contains: messageId } } });
+    assert.equal(cases, 1);
+  });
+
+  test("a timeout the bot cannot give degrades to what did happen", async () => {
+    const original = console.error;
+    console.error = () => undefined;
+    try {
+      const { row, kept, sent } = await run({ actions: ["delete", "warn", "timeout"], timeoutFails: true });
+      assert.equal(row.action, "automod-warn");
+      assert.equal(row.active, false);
+      assert.equal(row.expiresAt, null);
+      assert.match(row.reason ?? "", /Could not time out: missing permission/);
+      assert.equal(kept?.deleted, true);
+      assert.equal(NOTICE(sent)?.outcome, "your message was removed and you were warned");
+      assert.equal(NOTICE(sent)?.duration, "");
+      assert.match(LOG(sent)?.problems ?? "", /Could not time out/);
+    } finally {
+      console.error = original;
+    }
+  });
+
+  test("a member the bot cannot moderate is not timed out, and is never asked to be", async () => {
+    const { calls, row, sent } = await run({ actions: ["delete", "timeout"], moderatable: false });
+    assert.deepEqual(calls, ["delete"]);
+    assert.equal(row.action, "automod-delete");
+    assert.equal(NOTICE(sent)?.outcome, "your message was removed");
+  });
+
+  test("a warning alone is still recorded when the timeout it came with fails", async () => {
+    const { row, sent } = await run({ actions: ["warn", "timeout"], timeoutFails: true });
+    assert.equal(row.action, "automod-warn");
+    assert.equal(NOTICE(sent)?.outcome, "that message tripped automod");
+  });
+});
+
+describe("the recommended actions", () => {
+  test("every rule has a set, and each is a valid combination", () => {
+    assert.deepEqual(Object.keys(RECOMMENDED_ACTIONS).sort(), ["bannedWords", "capitals", "invites", "links", "mentions", "rateLimit", "repeatedText"]);
+    for (const set of Object.values(RECOMMENDED_ACTIONS)) {
+      assert.ok(set.length >= 1);
+      assert.equal(new Set(set).size, set.length);
+    }
   });
 });

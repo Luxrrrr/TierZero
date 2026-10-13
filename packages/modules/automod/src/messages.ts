@@ -14,7 +14,7 @@ export type LoggedAction = "warn" | "delete" | "timeout";
 const USER: MessageVariable = { name: "user", description: "The member who tripped the rule, as a mention", sample: "@spamlord_42" };
 const USER_ID: MessageVariable = { name: "userId", description: "The member's user ID", sample: "123456789012345678" };
 const RULE: MessageVariable = { name: "rule", description: "The rule that tripped, as it is named in the settings", sample: "invites" };
-const ACTION: MessageVariable = { name: "action", description: "What the rule does: delete, warn or timeout", sample: "delete" };
+const ACTION: MessageVariable = { name: "action", description: "What was done, in words: delete, warn, timeout, or several such as delete and warn", sample: "delete" };
 const REASON: MessageVariable = { name: "reason", description: "What the member did to trip it, worded so it is safe to show anyone, or a dash when there is nothing to add", sample: "Posted a Discord invite link" };
 const DURATION: MessageVariable = { name: "duration", description: "How long the timeout lasts. Empty unless the member was timed out", sample: "10 minutes" };
 const MATCH: MessageVariable = {
@@ -52,7 +52,7 @@ export const NOTICE_VARIABLES: MessageVariable[] = [
   },
   {
     name: "outcome",
-    description: "What actually happened, worded for the member: your message was removed, your message was removed and you were timed out, you were timed out, or that message tripped automod",
+    description: "What actually happened, worded for the member: your message was removed, you were timed out, your message was removed and you were warned, and so on, or that message tripped automod when all that happened was a warning or nothing",
     sample: "your message was removed",
   },
   DURATION,
@@ -112,19 +112,50 @@ export function describeLength(ms: number): string {
   return "1 second";
 }
 
-/** What the member is told, from what was done rather than from what the rule was set to do. */
-export function describeOutcome(done: { deleted: boolean; timedOut: boolean }): string {
+/**
+ * What the member is told, from what was done rather than from what the rule
+ * was set to do. A warning on its own gets the same line as nothing at all, as
+ * it always has: the notice is not where a warning is announced.
+ */
+export function describeOutcome(done: { deleted: boolean; warned?: boolean; timedOut: boolean }): string {
+  const warned = done.warned === true;
+  if (done.deleted && warned && done.timedOut) return "your message was removed, and you were warned and timed out";
+  if (done.deleted && warned) return "your message was removed and you were warned";
   if (done.deleted && done.timedOut) return "your message was removed and you were timed out";
+  if (warned && done.timedOut) return "you were warned and timed out";
   if (done.deleted) return "your message was removed";
   if (done.timedOut) return "you were timed out";
   return "that message tripped automod";
 }
 
+const STRENGTH: readonly LoggedAction[] = ["timeout", "warn", "delete"];
+
+/** What was actually done, in the order delete, warn, timeout. Falls back to what was asked for when nothing worked. */
+export function effectiveActions(facts: Pick<TripFacts, "actions" | "deleted" | "warned" | "timedOut">): LoggedAction[] {
+  const done: LoggedAction[] = [];
+  if (facts.deleted) done.push("delete");
+  if (facts.warned) done.push("warn");
+  if (facts.timedOut) done.push("timeout");
+  return done.length > 0 ? done : [...facts.actions];
+}
+
+/** Which of the three log posts to use: the one for the strongest thing done. */
+export function loggedAs(facts: Pick<TripFacts, "actions" | "deleted" | "warned" | "timedOut">): LoggedAction {
+  const done = effectiveActions(facts);
+  return STRENGTH.find((action) => done.includes(action)) ?? "warn";
+}
+
+/** "delete", "delete and warn", "delete, warn and timeout". */
+function readableList(actions: LoggedAction[]): string {
+  if (actions.length <= 1) return actions[0] ?? "";
+  return `${actions.slice(0, -1).join(", ")} and ${actions[actions.length - 1]}`;
+}
+
 export interface TripFacts {
   userId: string;
   rule: string;
-  /** What the rule is set to do, which picks the log post and its colour. */
-  action: LoggedAction;
+  /** What the rule is set to do. What really happened is in `deleted`, `warned` and `timedOut`. */
+  actions: LoggedAction[];
   /** Safe to show anyone. */
   reason: string | undefined;
   /** What matched. Taken from the member's message, so staff-facing posts only. */
@@ -134,6 +165,8 @@ export interface TripFacts {
   timeoutMs: number | undefined;
   /** Whether the message is gone, whether or not this module is the one that removed it. */
   deleted: boolean;
+  /** The rule asked for a warning and the case that carries it was recorded. */
+  warned: boolean;
   timedOut: boolean;
   /** Things the rule asked for that did not happen. Fixed wording, never the message. */
   problems?: string[];
@@ -171,10 +204,10 @@ export function tripValues(facts: TripFacts): Record<string, string> {
     user: `<@${facts.userId}>`,
     userId: facts.userId,
     rule: facts.rule,
-    action: facts.action,
+    action: readableList(effectiveActions({ ...facts, timedOut })),
     reason: reason ?? "-",
     reasonNote: reason ? `: ${reason}` : "",
-    outcome: describeOutcome({ deleted: facts.deleted, timedOut }),
+    outcome: describeOutcome({ deleted: facts.deleted, warned: facts.warned, timedOut }),
     duration: timedOut && facts.timeoutMs ? describeLength(facts.timeoutMs) : "",
   };
 }
