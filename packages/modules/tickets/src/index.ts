@@ -13,13 +13,16 @@ import {
   type APIInteractionGuildMember,
   type GuildMember,
   type Message,
+  type MessageComponentInteraction,
   type PermissionsBitField,
+  type RepliableInteraction,
   type TextBasedChannel,
 } from "discord.js";
-import { customId, defineModule, s, type Infer, type ModuleContext } from "@tier0/core";
+import { customId, defineModule, s, type Infer, type MessageBody, type ModuleContext, type ReplyValues } from "@tier0/core";
 import { prisma, type Ticket } from "@tier0/db";
-import { canManageTicket, evaluateOpenRequest } from "./policy.js";
+import { canManageTicket, evaluateOpenRequest, type OpenTicketDecision } from "./policy.js";
 import { ticketChannelName } from "./naming.js";
+import { closeReasonOf, labelsGroup, topicOf, transcriptFileName, transcriptTexts } from "./labels.js";
 import {
   ADDED_MESSAGE,
   CLOSING_MESSAGE,
@@ -33,12 +36,15 @@ import {
   PANEL_POSTED_MESSAGE,
   PANEL_POSTED_VARIABLES,
   REMOVED_MESSAGE,
+  REPLIES,
   TRANSCRIPT_MESSAGE,
   TRANSCRIPT_VARIABLES,
   closingValues,
   openedValues,
+  replyField,
   transcriptValues,
   upgradePanel,
+  type ReplyKey,
 } from "./messages.js";
 import { renderTranscript, type TranscriptMessage } from "./transcript.js";
 
@@ -162,8 +168,41 @@ const settingsSchema = s.object({
         components: false,
         compact: true,
       }),
+      refusals: s.object(
+        {
+          notStaff: replyField("notStaff"),
+          cannotClose: replyField("cannotClose"),
+          cannotAdd: replyField("cannotAdd"),
+          notATicket: replyField("notATicket"),
+          alreadyClosed: replyField("alreadyClosed"),
+          channelMissing: replyField("channelMissing"),
+        },
+        { label: "Who may do what" },
+      ),
+      opening: s.object(
+        {
+          categoryGone: replyField("categoryGone"),
+          categoryFull: replyField("categoryFull"),
+          limitOne: replyField("limitOne"),
+          limitMany: replyField("limitMany"),
+          noCategory: replyField("noCategory"),
+          createFailed: replyField("createFailed"),
+        },
+        { label: "Opening a ticket" },
+      ),
+      panel: s.object(
+        {
+          noPanelChannel: replyField("noPanelChannel"),
+          panelFailed: replyField("panelFailed"),
+        },
+        { label: "Posting the panel" },
+      ),
     },
-    { label: "Other messages" },
+    {
+      label: "Replies and errors",
+      help: "What the bot says in and about tickets, including when it has to refuse. Open one to reword it.",
+      collapsible: true,
+    },
   ),
   autoClose: s.object(
     {
@@ -174,9 +213,16 @@ const settingsSchema = s.object({
         max: "7d",
         when: { field: "enabled", equals: true },
       }),
+      notice: s.boolean({
+        label: "Post the closing message first",
+        help: "Posts \"When a ticket is being closed\" in the ticket just before an automatic close, so it appears in the transcript. Off, an inactive ticket closes without a word, as it always has.",
+        default: false,
+        when: { field: "enabled", equals: true },
+      }),
     },
     { label: "Inactivity" },
   ),
+  labels: labelsGroup,
 });
 
 type TicketSettings = Infer<typeof settingsSchema>;
@@ -232,6 +278,21 @@ function canManageThisTicket(
   );
 }
 
+function repliesOf(settings: TicketSettings): Record<ReplyKey, MessageBody> {
+  const { refusals, opening, panel } = settings.messages;
+  return { ...refusals, ...opening, ...panel };
+}
+
+/** Tells one person why something did not happen, in the server's own words. */
+async function refuse(
+  ctx: Ctx,
+  interaction: RepliableInteraction | MessageComponentInteraction,
+  key: ReplyKey,
+  values: ReplyValues = {},
+): Promise<void> {
+  await ctx.reply(interaction, repliesOf(ctx.settings)[key], values, { fallback: REPLIES[key].starting });
+}
+
 async function fetchMessageHistory(channel: TextBasedChannel): Promise<Message[]> {
   const collected: Message[] = [];
   let before: string | undefined;
@@ -261,8 +322,8 @@ async function saveTranscript(ctx: Ctx, ticket: Ticket, closedAt: Date, closedBy
   const opener = await ctx.guild.members.fetch(ticket.openerId).catch(() => null);
 
   const messages: TranscriptMessage[] = history.map((message) => ({
-    authorTag: message.author?.tag ?? "unknown user",
-    authorId: message.author?.id ?? "unknown",
+    authorTag: message.author?.tag ?? ctx.settings.labels.transcript.unknownAuthor,
+    authorId: message.author?.id ?? ctx.settings.labels.transcript.unknownAuthorId,
     timestamp: message.createdTimestamp,
     content: message.content || null,
     attachmentUrls: [...message.attachments.values()].map((attachment) => attachment.url),
@@ -280,6 +341,7 @@ async function saveTranscript(ctx: Ctx, ticket: Ticket, closedAt: Date, closedBy
       closedByTag: closedBy.tag,
     },
     messages,
+    transcriptTexts(ctx.settings.labels),
   );
 
   const posted = await ctx.send(
@@ -288,7 +350,7 @@ async function saveTranscript(ctx: Ctx, ticket: Ticket, closedAt: Date, closedBy
     transcriptValues(ticket, closedBy, "name" in channel ? (channel.name ?? "ticket") : "ticket"),
     {
       fallback: TRANSCRIPT_MESSAGE,
-      files: [new AttachmentBuilder(Buffer.from(transcript, "utf8"), { name: `ticket-${ticket.id}.txt` })],
+      files: [new AttachmentBuilder(Buffer.from(transcript, "utf8"), { name: transcriptFileName(ctx.settings.labels, ticket.id) })],
     },
   );
   if (!posted) console.error(`[tickets] failed to post the transcript for ticket ${ticket.id}`);
@@ -316,10 +378,19 @@ async function closeTicket(ctx: Ctx, ticket: Ticket, closedBy: { id: string; tag
   }
 
   if (channel) {
-    await channel.delete(`Ticket closed by ${closedBy.tag}`).catch((error: unknown) => {
+    await channel.delete(closeReasonOf(ctx.settings.labels, closedBy.tag)).catch((error: unknown) => {
       console.error(`[tickets] failed to delete ticket channel ${ticket.channelId}:`, error);
     });
   }
+}
+
+/** The reply for a refused open request, with the numbers a message may mention. */
+async function refuseOpen(
+  ctx: Ctx,
+  interaction: RepliableInteraction | MessageComponentInteraction,
+  decision: Extract<OpenTicketDecision, { allowed: false }>,
+): Promise<void> {
+  await refuse(ctx, interaction, decision.code, { openCount: decision.openCount, limit: decision.limit });
 }
 
 async function openRequestDecision(ctx: Ctx, openerId: string) {
@@ -389,28 +460,17 @@ export default defineModule({
 
         if (sub === "panel") {
           if (!isSupportStaff(interaction, ctx.settings)) {
-            await interaction.reply({
-              content: "You need a support role or Manage Channels to do that.",
-              flags: MessageFlags.Ephemeral,
-            });
+            await refuse(ctx, interaction, "notStaff");
             return;
           }
           const channel = ctx.guild.channels.cache.get(ctx.settings.panel.channel);
           if (!channel?.isTextBased()) {
-            await interaction.reply({
-              content:
-              "No panel channel is set, or the one configured has been deleted. " +
-              "Set one in the dashboard first.",
-              flags: MessageFlags.Ephemeral,
-            });
+            await refuse(ctx, interaction, "noPanelChannel");
             return;
           }
           const posted = await ctx.send(channel, ctx.settings.panel.message, {}, { fallback: PANEL_MESSAGE, rows: [panelRow(ctx.settings)] });
           if (!posted) {
-            await interaction.reply({
-              content: "I couldn't post the panel there. Check that I can send messages and embed links in that channel.",
-              flags: MessageFlags.Ephemeral,
-            });
+            await refuse(ctx, interaction, "panelFailed");
             return;
           }
           await ctx.reply(
@@ -424,16 +484,13 @@ export default defineModule({
 
         const ticket = await prisma.ticket.findUnique({ where: { channelId: interaction.channelId } });
         if (!ticket || ticket.status !== "open") {
-          await interaction.reply({ content: "This isn't an open ticket channel.", flags: MessageFlags.Ephemeral });
+          await refuse(ctx, interaction, "notATicket");
           return;
         }
 
         if (sub === "close") {
           if (!canManageThisTicket(interaction, ctx.settings, ticket)) {
-            await interaction.reply({
-              content: "You need to be the ticket opener, hold a support role, or have Manage Channels to close this.",
-              flags: MessageFlags.Ephemeral,
-            });
+            await refuse(ctx, interaction, "cannotClose");
             return;
           }
           const reason = interaction.options.getString("reason");
@@ -449,19 +506,14 @@ export default defineModule({
 
         const isAdd = sub === "add";
         if (!canManageThisTicket(interaction, ctx.settings, ticket, !isAdd)) {
-          await interaction.reply({
-            content: isAdd
-              ? "You need to be the ticket opener, hold a support role, or have Manage Channels to do that."
-              : "You need a support role or Manage Channels to do that.",
-            flags: MessageFlags.Ephemeral,
-          });
+          await refuse(ctx, interaction, isAdd ? "cannotAdd" : "notStaff");
           return;
         }
 
         const target = interaction.options.getUser("member", true);
         const channel = ctx.guild.channels.cache.get(ticket.channelId);
         if (channel?.type !== ChannelType.GuildText) {
-          await interaction.reply({ content: "This ticket's channel is missing.", flags: MessageFlags.Ephemeral });
+          await refuse(ctx, interaction, "channelMissing");
           return;
         }
 
@@ -494,18 +546,18 @@ export default defineModule({
     async open(interaction, { ctx }) {
       const decision = await openRequestDecision(ctx, interaction.user.id);
       if (!decision.allowed) {
-        await interaction.reply({ content: decision.reason, flags: MessageFlags.Ephemeral });
+        await refuseOpen(ctx, interaction, decision);
         return;
       }
 
       const modal = new ModalBuilder()
         .setCustomId(customId("tickets", "subject"))
-        .setTitle("Open a ticket")
+        .setTitle(ctx.settings.labels.modalTitle)
         .addComponents(
           new ActionRowBuilder<TextInputBuilder>().addComponents(
             new TextInputBuilder()
               .setCustomId("subject")
-              .setLabel("What do you need help with?")
+              .setLabel(ctx.settings.labels.modalQuestion)
               .setStyle(TextInputStyle.Paragraph)
               .setMaxLength(200)
               .setRequired(false),
@@ -517,14 +569,11 @@ export default defineModule({
     async close(interaction, { ctx }) {
       const ticket = await prisma.ticket.findUnique({ where: { channelId: interaction.channelId ?? "" } });
       if (!ticket || ticket.status !== "open") {
-        await interaction.reply({ content: "This ticket is already closed.", flags: MessageFlags.Ephemeral });
+        await refuse(ctx, interaction, "alreadyClosed");
         return;
       }
       if (!canManageThisTicket(interaction, ctx.settings, ticket)) {
-        await interaction.reply({
-          content: "You need to be the ticket opener, hold a support role, or have Manage Channels to close this.",
-          flags: MessageFlags.Ephemeral,
-        });
+        await refuse(ctx, interaction, "cannotClose");
         return;
       }
       await ctx.reply(
@@ -541,18 +590,13 @@ export default defineModule({
     async subject(interaction, { ctx }) {
       const decision = await openRequestDecision(ctx, interaction.user.id);
       if (!decision.allowed) {
-        await interaction.reply({ content: decision.reason, flags: MessageFlags.Ephemeral });
+        await refuseOpen(ctx, interaction, decision);
         return;
       }
 
       const category = ctx.guild.channels.cache.get(ctx.settings.category);
       if (category?.type !== ChannelType.GuildCategory) {
-        await interaction.reply({
-          content:
-            "No ticket category is set, or the one configured has been deleted. " +
-            "Ask a server admin to set one in the dashboard.",
-          flags: MessageFlags.Ephemeral,
-        });
+        await refuse(ctx, interaction, "noCategory");
         return;
       }
 
@@ -597,17 +641,15 @@ export default defineModule({
       let channel;
       try {
         channel = await ctx.guild.channels.create({
-          name: ticketChannelName(interaction.user.username),
+          name: ticketChannelName(interaction.user.username, ctx.settings.labels.channelName),
           type: ChannelType.GuildText,
           parent: category.id,
           permissionOverwrites: overwrites,
-          topic: subject ? `Opened by ${interaction.user.tag}: ${subject}` : `Opened by ${interaction.user.tag}`,
+          topic: topicOf(ctx.settings.labels, interaction.user.tag, interaction.user.username, subject),
         });
       } catch (error) {
         console.error("[tickets] failed to create ticket channel:", error);
-        await interaction.editReply(
-          "Something went wrong creating your ticket channel. Try again, or tell a server admin if it keeps happening.",
-        );
+        await refuse(ctx, interaction, "createFailed");
         return;
       }
 
@@ -623,7 +665,7 @@ export default defineModule({
       const closeRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
         new ButtonBuilder()
           .setCustomId(customId("tickets", "close", String(ticket.id)))
-          .setLabel("Close ticket")
+          .setLabel(ctx.settings.labels.closeButton)
           .setStyle(ButtonStyle.Danger),
       );
       await ctx.send(
@@ -671,7 +713,14 @@ export default defineModule({
       if (typeof channelId !== "string") return;
       const ticket = await prisma.ticket.findUnique({ where: { channelId } });
       if (!ticket || ticket.status !== "open") return;
-      await closeTicket(ctx, ticket, { id: "auto-close", tag: "Auto-close" });
+      const closer = { id: "auto-close", tag: ctx.settings.labels.autoCloseName };
+      const channel = ctx.guild.channels.cache.get(channelId);
+      if (ctx.settings.autoClose.notice && channel?.isTextBased()) {
+        await ctx.send(channel, ctx.settings.messages.closing, closingValues(closer, ticket, ctx.settings.labels.inactiveReason), {
+          fallback: CLOSING_MESSAGE,
+        });
+      }
+      await closeTicket(ctx, ticket, closer);
     },
   },
 });

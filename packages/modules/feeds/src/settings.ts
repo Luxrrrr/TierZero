@@ -1,4 +1,5 @@
 import { s, type Infer, type ModuleContext } from "@tier0/core";
+import { labelsGroup, replyField } from "./labels.js";
 import { NEWS_MESSAGE, NEWS_VARIABLES, STEAM_MESSAGE, STEAM_VARIABLES } from "./messages.js";
 
 export const settingsSchema = s.object({
@@ -84,6 +85,20 @@ export const settingsSchema = s.object({
     },
     { label: "Steam patch notes" },
   ),
+  replies: s.object(
+    {
+      statusEmpty: replyField("statusEmpty"),
+      status: replyField("status"),
+      noMatch: replyField("noMatch"),
+      ambiguous: replyField("ambiguous"),
+    },
+    {
+      label: "Replies and errors",
+      help: "What /feeds status and /feeds send say. The reply to a successful send is edited from the Commands page.",
+      collapsible: true,
+    },
+  ),
+  labels: labelsGroup,
 });
 
 export type FeedsSettings = Infer<typeof settingsSchema>;

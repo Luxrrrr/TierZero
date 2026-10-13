@@ -1,5 +1,6 @@
 import type { TextBasedChannel } from "discord.js";
 import { discordTimestamp, emptyEmbed, type MessageBody, type MessageVariable, type ReplyValues } from "@tier0/core";
+import { FeedFailure } from "./failures.js";
 import type { FeedItem } from "./parse.js";
 import { cleanSteamBody, logoUrl, type SteamPost } from "./steam.js";
 import type { FeedsContext } from "./settings.js";
@@ -108,5 +109,5 @@ export async function deliver(
   fallback: MessageBody,
 ): Promise<void> {
   const sent = await ctx.send(channel, message, values, { fallback });
-  if (!sent) throw new Error("the post could not be sent. Check that the bot can send messages and embed links in that channel");
+  if (!sent) throw new FeedFailure("postFailed");
 }

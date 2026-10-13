@@ -1,4 +1,4 @@
-import { emptyEmbed, plainReply, type MessageBody, type MessageVariable } from "@tier0/core";
+import { emptyEmbed, plainReply, s, type Field, type MessageBody, type MessageVariable } from "@tier0/core";
 
 /**
  * Wording the ticket messages start with, the values they are filled from, and
@@ -52,7 +52,7 @@ export const OPENED_VARIABLES: MessageVariable[] = [
 ];
 
 export const CLOSING_VARIABLES: MessageVariable[] = [
-  CLOSED_BY,
+  { ...CLOSED_BY, description: "Who closed the ticket, as a mention, or Auto-close when it closed from inactivity" },
   { name: "reason", description: "The reason given when closing with /ticket close, empty otherwise", sample: "Solved" },
   {
     name: "ending",
@@ -105,12 +105,13 @@ export function openedValues(
 }
 
 export function closingValues(
-  closer: { id: string },
+  closer: { id: string; tag?: string },
   ticket: TicketLike,
   reason: string | null,
 ): Record<string, string | number> {
   return {
-    closedBy: `<@${closer.id}>`,
+    // The scheduled close has no member behind it, and a mention of it would not resolve.
+    closedBy: closer.tag === undefined || /^\d+$/.test(closer.id) ? `<@${closer.id}>` : closer.tag,
     reason: reason ?? "",
     ending: reason ? `: ${reason}` : ".",
     number: ticket.id,
@@ -150,3 +151,121 @@ export function upgradePanel(stored: Record<string, unknown>): Record<string, un
     }),
   };
 }
+
+const OPEN_COUNT: MessageVariable = { name: "openCount", description: "How many tickets the member has open", sample: "2" };
+const LIMIT: MessageVariable = { name: "limit", description: "The most tickets one member may have open at once", sample: "2" };
+
+export type ReplyKey =
+  | "notStaff"
+  | "cannotClose"
+  | "cannotAdd"
+  | "notATicket"
+  | "alreadyClosed"
+  | "channelMissing"
+  | "categoryGone"
+  | "categoryFull"
+  | "limitOne"
+  | "limitMany"
+  | "noCategory"
+  | "createFailed"
+  | "noPanelChannel"
+  | "panelFailed";
+
+interface ReplyDefinition {
+  label: string;
+  help: string;
+  starting: MessageBody;
+  variables?: MessageVariable[];
+}
+
+/**
+ * Every refusal and failure a person is told about in private. They go out
+ * through `ctx.reply`, so only the member who pressed the button or ran the
+ * command sees them.
+ */
+export const REPLIES: Record<ReplyKey, ReplyDefinition> = {
+  notStaff: {
+    label: "Support staff only",
+    help: "Shown when someone without a support role or Manage Channels posts the panel or uses /ticket remove.",
+    starting: plainReply("You need a support role or Manage Channels to do that."),
+  },
+  cannotClose: {
+    label: "Not allowed to close",
+    help: "Shown when someone who is not the opener or support staff presses Close ticket or uses /ticket close.",
+    starting: plainReply("You need to be the ticket opener, hold a support role, or have Manage Channels to close this."),
+  },
+  cannotAdd: {
+    label: "Not allowed to add a member",
+    help: "Shown when someone who is not the opener or support staff uses /ticket add.",
+    starting: plainReply("You need to be the ticket opener, hold a support role, or have Manage Channels to do that."),
+  },
+  notATicket: {
+    label: "Not in a ticket",
+    help: "Shown when /ticket close, add or remove is used in a channel that is not an open ticket.",
+    starting: plainReply("This isn't an open ticket channel."),
+  },
+  alreadyClosed: {
+    label: "Ticket already closed",
+    help: "Shown when Close ticket is pressed on a ticket that has already been closed.",
+    starting: plainReply("This ticket is already closed."),
+  },
+  channelMissing: {
+    label: "Ticket channel missing",
+    help: "Shown when /ticket add or remove is used on a ticket whose channel can no longer be found.",
+    starting: plainReply("This ticket's channel is missing."),
+  },
+  categoryGone: {
+    label: "Ticket category deleted",
+    help: "Shown when a member presses the panel button after the ticket category was deleted.",
+    starting: plainReply("The ticket category no longer exists. Ask a server admin to set a new one in the dashboard."),
+  },
+  categoryFull: {
+    label: "Ticket category full",
+    help: "Shown when the ticket category already holds Discord's limit of 50 channels.",
+    starting: plainReply("The ticket category is full. Ask a server admin to close old tickets or choose a different category."),
+  },
+  limitOne: {
+    label: "Already has a ticket (limit of one)",
+    help: "Shown when a member who may only have one ticket open tries to open another.",
+    starting: plainReply("You already have an open ticket. Close it before opening another."),
+    variables: [OPEN_COUNT, LIMIT],
+  },
+  limitMany: {
+    label: "Already has the most tickets allowed",
+    help: "Shown when a member at the limit for open tickets, which is higher than one, tries to open another.",
+    starting: plainReply("You already have {openCount} open tickets, the most this server allows. Close one before opening another."),
+    variables: [OPEN_COUNT, LIMIT],
+  },
+  noCategory: {
+    label: "No ticket category",
+    help: "Shown when the ticket form is sent in but the category is missing or deleted.",
+    starting: plainReply("No ticket category is set, or the one configured has been deleted. Ask a server admin to set one in the dashboard."),
+  },
+  createFailed: {
+    label: "Ticket could not be created",
+    help: "Shown when Discord refuses to create the ticket channel, usually for a missing permission.",
+    starting: plainReply("Something went wrong creating your ticket channel. Try again, or tell a server admin if it keeps happening."),
+  },
+  noPanelChannel: {
+    label: "No panel channel",
+    help: "Shown to someone using /ticket panel when no panel channel is set or it was deleted.",
+    starting: plainReply("No panel channel is set, or the one configured has been deleted. Set one in the dashboard first."),
+  },
+  panelFailed: {
+    label: "Panel could not be posted",
+    help: "Shown to someone using /ticket panel when the bot cannot post in the panel channel.",
+    starting: plainReply("I couldn't post the panel there. Check that I can send messages and embed links in that channel."),
+  },
+};
+
+export const replyField = (key: ReplyKey): Field<MessageBody> =>
+  s.message({
+    label: REPLIES[key].label,
+    help: REPLIES[key].help,
+    note: "Only the person it is shown to sees this.",
+    starting: REPLIES[key].starting,
+    variables: REPLIES[key].variables ?? [],
+    delivery: "dm",
+    components: false,
+    compact: true,
+  });

@@ -2,6 +2,7 @@ import { lookup as dnsLookup } from "node:dns";
 import { isIP } from "node:net";
 import http from "node:http";
 import https from "node:https";
+import { FeedFailure } from "./failures.js";
 
 const MAX_REDIRECTS = 3;
 
@@ -61,7 +62,7 @@ const guardedLookup: typeof dnsLookup = ((hostname: string, options: unknown, ca
     if (error) return done(error);
     const allowed = addresses.filter((entry) => isPublicAddress(entry.address));
     if (allowed.length === 0) {
-      return done(new Error("that address is not on the public internet"));
+      return done(new FeedFailure("notPublic"));
     }
     if (wantsAll) return done(null, allowed);
     const [first] = allowed;
@@ -81,8 +82,6 @@ export interface FetchResult {
   url: string;
 }
 
-export class FetchError extends Error {}
-
 export async function safeFetch(rawUrl: string, options: FetchOptions = {}): Promise<FetchResult> {
   const { maxBytes = 2_000_000, timeoutMs = 10_000, accept = "*/*" } = options;
   let current = rawUrl;
@@ -94,7 +93,7 @@ export async function safeFetch(rawUrl: string, options: FetchOptions = {}): Pro
     }
     current = new URL(result.redirect, current).toString();
   }
-  throw new FetchError("too many redirects");
+  throw new FeedFailure("tooManyRedirects");
 }
 
 interface Hop {
@@ -109,11 +108,11 @@ function once(rawUrl: string, options: Required<FetchOptions>): Promise<Hop> {
     try {
       url = new URL(rawUrl);
     } catch {
-      reject(new FetchError("that is not a valid address"));
+      reject(new FeedFailure("invalidAddress"));
       return;
     }
     if (url.protocol !== "http:" && url.protocol !== "https:") {
-      reject(new FetchError("only http and https addresses are supported"));
+      reject(new FeedFailure("unsupportedScheme"));
       return;
     }
 
@@ -121,7 +120,7 @@ function once(rawUrl: string, options: Required<FetchOptions>): Promise<Hop> {
     // URL is connected to directly, so it has to be checked here.
     const literal = url.hostname.replace(/^\[|\]$/g, "");
     if (isIP(literal) !== 0 && !isPublicAddress(literal)) {
-      reject(new FetchError("that address is not on the public internet"));
+      reject(new FeedFailure("notPublic"));
       return;
     }
 
@@ -151,7 +150,7 @@ function once(rawUrl: string, options: Required<FetchOptions>): Promise<Hop> {
         response.on("data", (chunk: Buffer) => {
           size += chunk.length;
           if (size > options.maxBytes) {
-            request.destroy(new FetchError("the response was larger than the limit"));
+            request.destroy(new FeedFailure("tooLarge"));
             return;
           }
           chunks.push(chunk);
@@ -160,7 +159,7 @@ function once(rawUrl: string, options: Required<FetchOptions>): Promise<Hop> {
         response.on("error", reject);
       },
     );
-    request.on("timeout", () => request.destroy(new FetchError("the server took too long to answer")));
+    request.on("timeout", () => request.destroy(new FeedFailure("timeout")));
     request.on("error", reject);
   });
 }

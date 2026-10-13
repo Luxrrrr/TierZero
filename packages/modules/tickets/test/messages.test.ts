@@ -187,7 +187,10 @@ describe("what the dashboard is told", () => {
   const names = (field: FieldDescriptor | undefined) => (field?.variables as { name: string }[]).map((variable) => variable.name);
 
   test("every message is a message field that cannot carry the module's own buttons", () => {
-    for (const field of [group("panel").message, group("transcript").message, ...Object.values(group("messages"))]) {
+    const nested = Object.values(group("messages")).flatMap((field) =>
+      field.kind === "object" ? Object.values(field.fields as Record<string, FieldDescriptor>) : [field],
+    );
+    for (const field of [group("panel").message, group("transcript").message, ...nested]) {
       assert.equal(field?.kind, "message");
       assert.equal(field?.components, false);
     }

@@ -21,7 +21,7 @@ describe("evaluateOpenRequest", () => {
       categoryChildCount: 3,
     });
     assert.equal(decision.allowed, false);
-    if (!decision.allowed) assert.match(decision.reason, /already have an open ticket/);
+    if (!decision.allowed) assert.deepEqual(decision, { allowed: false, code: "limitOne", openCount: 1, limit: 1 });
   });
 
   test("names the count when the cap is higher than one", () => {
@@ -32,7 +32,7 @@ describe("evaluateOpenRequest", () => {
       categoryChildCount: 3,
     });
     assert.equal(decision.allowed, false);
-    if (!decision.allowed) assert.match(decision.reason, /already have 3 open tickets/);
+    if (!decision.allowed) assert.deepEqual(decision, { allowed: false, code: "limitMany", openCount: 3, limit: 3 });
   });
 
   test("refuses when the category no longer exists", () => {
@@ -43,7 +43,7 @@ describe("evaluateOpenRequest", () => {
       categoryChildCount: 0,
     });
     assert.equal(decision.allowed, false);
-    if (!decision.allowed) assert.match(decision.reason, /category no longer exists/);
+    if (!decision.allowed) assert.equal(decision.code, "categoryGone");
   });
 
   test("refuses when the category is at Discord's 50 channel cap", () => {
@@ -54,7 +54,7 @@ describe("evaluateOpenRequest", () => {
       categoryChildCount: 50,
     });
     assert.equal(decision.allowed, false);
-    if (!decision.allowed) assert.match(decision.reason, /category is full/);
+    if (!decision.allowed) assert.equal(decision.code, "categoryFull");
   });
 
   test("checks the category before the member's own cap", () => {
@@ -65,7 +65,7 @@ describe("evaluateOpenRequest", () => {
       categoryChildCount: 0,
     });
     assert.equal(decision.allowed, false);
-    if (!decision.allowed) assert.match(decision.reason, /category/);
+    if (!decision.allowed) assert.equal(decision.code, "categoryGone");
   });
 });
 

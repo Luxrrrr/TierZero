@@ -1,6 +1,6 @@
-import { SlashCommandBuilder, EmbedBuilder, MessageFlags } from "discord.js";
+import { SlashCommandBuilder } from "discord.js";
 import type { GuildMember } from "discord.js";
-import { defineModule, emptyEmbed, isRoleAssignable, plainReply, s } from "@tier0/core";
+import { defineModule, isRoleAssignable, s } from "@tier0/core";
 import type { Infer, ModuleContext } from "@tier0/core";
 import { prisma } from "@tier0/db";
 import {
@@ -13,8 +13,18 @@ import {
   resolveRewardRoles,
   xpForMessage,
 } from "./curve.js";
-
-const LEVEL_UP_MESSAGE = plainReply("{user} reached level {level}!");
+import {
+  EMPTY_LEADERBOARD,
+  LEADERBOARD_PLACEHOLDERS,
+  LEADERBOARD_STARTING,
+  LEVEL_UP_MESSAGE,
+  PAST_END_LEADERBOARD,
+  RANK_PLACEHOLDERS,
+  RANK_STARTING,
+  labelsGroup,
+  leaderboardLine,
+  replyField,
+} from "./messages.js";
 
 const settingsSchema = s.object({
   xp: s.object(
@@ -77,6 +87,18 @@ const settingsSchema = s.object({
   noXpRoles: s.array(s.role(), {
     label: "Roles that earn no experience",
   }),
+  replies: s.object(
+    {
+      leaderboardEmpty: replyField("leaderboardEmpty"),
+      leaderboardPastEnd: replyField("leaderboardPastEnd"),
+    },
+    {
+      label: "Replies and errors",
+      help: "What /leaderboard says when there is nothing to show. The level-up message is under Level-up announcements.",
+      collapsible: true,
+    },
+  ),
+  labels: labelsGroup,
   multipliers: s.array(
     s.object({
       role: s.role({ label: "Role" }),
@@ -131,33 +153,8 @@ export default defineModule({
       name: "rank",
       publicReply: true,
       response: {
-        starting: {
-          content: "",
-          embeds: [
-            {
-              ...emptyEmbed(),
-              title: "{user} - Level {level}",
-              thumbnailUrl: "{user.avatar}",
-              fields: [
-                { name: "Experience", value: "{xp} / {need}", inline: true },
-                { name: "Rank", value: "{rank}", inline: true },
-                { name: "Progress", value: "{progress}", inline: false },
-              ],
-            },
-          ],
-          buttons: [],
-          selects: [],
-          reactions: [],
-        },
-        placeholders: [
-          { name: "user", description: "The member's username", sample: "spamlord_42" },
-          { name: "user.avatar", description: "The member's picture, for an image or thumbnail", sample: "" },
-          { name: "level", description: "Their level", sample: "12" },
-          { name: "xp", description: "Experience earned toward the next level", sample: "340" },
-          { name: "need", description: "Experience needed for the next level", sample: "620" },
-          { name: "rank", description: "Their place on the leaderboard", sample: "#7" },
-          { name: "progress", description: "A bar showing how far through the level they are", sample: "▰▰▰▰▰▱▱▱▱▱" },
-        ],
+        starting: RANK_STARTING,
+        placeholders: RANK_PLACEHOLDERS,
       },
       description: "Show a member's level and experience.",
       build: () =>
@@ -180,49 +177,26 @@ export default defineModule({
             })) + 1
           : null;
 
-        const embed = new EmbedBuilder()
-          .setTitle(`${target.username} - Level ${level}`)
-          .setThumbnail(target.displayAvatarURL())
-          .addFields(
-            { name: "Experience", value: `${into} / ${need}`, inline: true },
-            { name: "Rank", value: rank ? `#${rank}` : "Unranked", inline: true },
-            { name: "Progress", value: renderProgressBar(into, need) },
-          );
-
-        const custom = ctx.customReply?.({
+        const values = {
           user: target.username,
           "user.avatar": target.displayAvatarURL(),
           level,
           xp: into,
           need,
-          rank: rank ? `#${rank}` : "Unranked",
+          rank: rank ? `#${rank}` : ctx.settings.labels.unranked,
           progress: renderProgressBar(into, need),
-        });
-        await interaction.reply(custom ?? { embeds: [embed] });
+        };
+        const custom = ctx.customReply?.(values);
+        if (custom) await interaction.reply(custom);
+        else await ctx.reply(interaction, RANK_STARTING, values, { ephemeral: false });
       },
     },
     {
       name: "leaderboard",
       publicReply: true,
       response: {
-        starting: {
-          content: "",
-          embeds: [
-            {
-              ...emptyEmbed(),
-              title: "{server} leaderboard",
-              description: "{leaderboard}",
-              footerText: "Page {page}",
-            },
-          ],
-          buttons: [],
-          selects: [],
-          reactions: [],
-        },
-        placeholders: [
-          { name: "leaderboard", description: "The members on this page, one to a line", sample: "**1.** spamlord_42 - level 12 (4,020 xp)\n**2.** quillfeather - level 10 (3,110 xp)" },
-          { name: "page", description: "Which page was asked for", sample: "1" },
-        ],
+        starting: LEADERBOARD_STARTING,
+        placeholders: LEADERBOARD_PLACEHOLDERS,
         note: "Used when there is something to show. An empty leaderboard keeps its own message.",
       },
       description: "Show the server's experience leaderboard.",
@@ -248,13 +222,9 @@ export default defineModule({
         });
 
         if (rows.length === 0) {
-          await interaction.reply({
-            content:
-              page === 1
-                ? "Nobody has earned experience here yet."
-                : "There is no page that far into the leaderboard.",
-            flags: MessageFlags.Ephemeral,
-          });
+          await (page === 1
+            ? ctx.reply(interaction, ctx.settings.replies.leaderboardEmpty, { page }, { fallback: EMPTY_LEADERBOARD })
+            : ctx.reply(interaction, ctx.settings.replies.leaderboardPastEnd, { page }, { fallback: PAST_END_LEADERBOARD }));
           return;
         }
 
@@ -267,16 +237,13 @@ export default defineModule({
         const lines = rows.map((row, index) => {
           const name = members?.get(row.userId)?.displayName ?? `<@${row.userId}>`;
           const position = (page - 1) * LEADERBOARD_PAGE_SIZE + index + 1;
-          return `**${position}.** ${name} - level ${row.level} (${row.xp} xp)`;
+          return leaderboardLine(ctx.settings.labels.leaderboardLine, { position, name, level: row.level, xp: row.xp });
         });
 
-        const embed = new EmbedBuilder()
-          .setTitle(`${ctx.guild.name} leaderboard`)
-          .setDescription(lines.join("\n"))
-          .setFooter({ text: `Page ${page}` });
-
-        const custom = ctx.customReply?.({ leaderboard: lines.join("\n"), page });
-        await interaction.reply(custom ?? { embeds: [embed] });
+        const values = { leaderboard: lines.join("\n"), page };
+        const custom = ctx.customReply?.(values);
+        if (custom) await interaction.reply(custom);
+        else await ctx.reply(interaction, LEADERBOARD_STARTING, values, { ephemeral: false });
       },
     },
   ],

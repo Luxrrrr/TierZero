@@ -1,4 +1,5 @@
 import { XMLParser } from "fast-xml-parser";
+import { FeedFailure } from "./failures.js";
 
 export interface FeedItem {
   id: string;
@@ -156,7 +157,7 @@ export function parseFeed(xml: string): ParsedFeed {
   try {
     document = parser.parse(xml) as Node;
   } catch {
-    throw new Error("the address did not return a readable feed");
+    throw new FeedFailure("notReadable");
   }
 
   const rss = document["rss"] as Node | undefined;
@@ -170,5 +171,5 @@ export function parseFeed(xml: string): ParsedFeed {
   const atom = document["feed"] as Node | undefined;
   if (atom) return fromAtom(atom);
 
-  throw new Error("the address did not return an RSS or Atom feed");
+  throw new FeedFailure("notAFeed");
 }

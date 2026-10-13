@@ -1,6 +1,7 @@
 import { ChannelType, type NewsChannel, type TextChannel } from "discord.js";
 import { prisma } from "@tier0/db";
-import { FetchError, safeFetch } from "./net.js";
+import { FeedFailure, describeFailure, type FailureTexts } from "./failures.js";
+import { safeFetch } from "./net.js";
 import { NEWS_MESSAGE, STEAM_MESSAGE, deliver, newsValues, steamValues } from "./messages.js";
 import { parseFeed, type FeedItem } from "./parse.js";
 import { selectNew } from "./seen.js";
@@ -24,15 +25,6 @@ function readSeen(raw: string | undefined): string[] | null {
   } catch {
     return null;
   }
-}
-
-const truncate = (value: string, max: number): string =>
-  value.length > max ? `${value.slice(0, max - 1).trimEnd()}…` : value;
-
-function describeFailure(error: unknown): string {
-  if (error instanceof FetchError) return error.message;
-  if (error instanceof Error) return truncate(error.message, 200);
-  return "something went wrong";
 }
 
 export async function pollAll(ctx: FeedsContext): Promise<void> {
@@ -63,24 +55,25 @@ async function pollSource(
 
   let remembered = seen ?? [];
   let lastError: string | null;
+  const texts: FailureTexts = ctx.settings.labels.problems;
 
   try {
     if (source.kind === "rss") {
       const items = await fetchFeed(source.row.url);
       const selection = selectNew(items, seen, POSTS_PER_POLL);
       remembered = selection.seen;
-      const failed = await postEach(selection.post, (item) => postFeedItem(ctx, source, item));
+      const failed = await postEach(selection.post, (item) => postFeedItem(ctx, source, item), texts);
       remembered = withoutUnposted(remembered, failed.unposted);
       lastError = failed.error;
     } else {
       const selection = selectNew(await steamPosts(source.appId, source.scope), seen, POSTS_PER_POLL);
       remembered = selection.seen;
-      const failed = await postEach(selection.post, (post) => postSteamPost(ctx, source, post));
+      const failed = await postEach(selection.post, (post) => postSteamPost(ctx, source, post), texts);
       remembered = withoutUnposted(remembered, failed.unposted);
       lastError = failed.error;
     }
   } catch (error) {
-    lastError = describeFailure(error);
+    lastError = describeFailure(error, ctx.settings.labels.problems);
     console.warn(`[feeds] ${ctx.guild.id} ${source.key}: ${lastError}`);
   }
 
@@ -101,12 +94,13 @@ interface PostOutcome {
 async function postEach<T extends { id: string }>(
   items: T[],
   post: (item: T) => Promise<void>,
+  texts: FailureTexts,
 ): Promise<PostOutcome> {
   for (const [index, item] of items.entries()) {
     try {
       await post(item);
     } catch (error) {
-      return { unposted: items.slice(index).map((entry) => entry.id), error: describeFailure(error) };
+      return { unposted: items.slice(index).map((entry) => entry.id), error: describeFailure(error, texts) };
     }
   }
   return { unposted: [], error: null };
@@ -121,9 +115,9 @@ async function fetchFeed(url: string): Promise<FeedItem[]> {
     accept: "application/rss+xml, application/atom+xml, application/xml, text/xml;q=0.9, */*;q=0.5",
   });
   if (response.status === 429) {
-    throw new FetchError("the site is limiting how often it can be checked (status 429). Try a longer check interval");
+    throw new FeedFailure("rateLimited");
   }
-  if (response.status !== 200) throw new FetchError(`the site answered with status ${response.status}`);
+  if (response.status !== 200) throw new FeedFailure("siteStatus", { status: response.status });
 
   const { items } = parseFeed(response.body);
   // Feeds are nearly always newest first, but nothing requires it.
@@ -134,13 +128,13 @@ async function fetchFeed(url: string): Promise<FeedItem[]> {
 
 async function fetchSteam(appId: number, scope: Scope): Promise<SteamPost[]> {
   const response = await safeFetch(steamNewsUrl(appId), { accept: "application/json" });
-  if (response.status !== 200) throw new FetchError(`Steam answered with status ${response.status}`);
+  if (response.status !== 200) throw new FeedFailure("steamStatus", { status: response.status });
 
   let json: unknown;
   try {
     json = JSON.parse(response.body);
   } catch {
-    throw new FetchError("Steam answered with something that was not JSON");
+    throw new FeedFailure("steamNotJson");
   }
   const posts = parseSteamNews(json).sort((a, b) => b.publishedAt.getTime() - a.publishedAt.getTime());
   return scope === "all" ? posts : posts.filter(isPatchNotes);
@@ -149,7 +143,7 @@ async function fetchSteam(appId: number, scope: Scope): Promise<SteamPost[]> {
 function textChannel(ctx: FeedsContext, id: string): TextChannel | NewsChannel {
   const channel = ctx.guild.channels.cache.get(id);
   if (!channel || (channel.type !== ChannelType.GuildText && channel.type !== ChannelType.GuildAnnouncement)) {
-    throw new Error("the channel it posts in no longer exists, or is not a text channel");
+    throw new FeedFailure("channelGone");
   }
   return channel;
 }
@@ -190,7 +184,7 @@ export async function sendLatest(ctx: FeedsContext, source: Source, count: numbe
       items = (await fetchSteam(source.appId, source.scope)).slice(0, count);
     }
   } catch (error) {
-    return { posted: 0, error: describeFailure(error) };
+    return { posted: 0, error: describeFailure(error, ctx.settings.labels.problems) };
   }
 
   // Newest first from the source; the channel should read oldest to newest.
@@ -199,6 +193,7 @@ export async function sendLatest(ctx: FeedsContext, source: Source, count: numbe
     source.kind === "rss"
       ? postFeedItem(ctx, source, item as FeedItem)
       : postSteamPost(ctx, source, item as SteamPost),
+    ctx.settings.labels.problems,
   );
 
   const cursor = await prisma.feedCursor.findUnique({ where });

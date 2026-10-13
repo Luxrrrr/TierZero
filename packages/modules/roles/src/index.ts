@@ -2,10 +2,11 @@ import {
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
-  MessageFlags,
   PermissionFlagsBits, SlashCommandBuilder,
+  type MessageComponentInteraction,
+  type RepliableInteraction,
 } from "discord.js";
-import { customId, defineModule, isRoleAssignable, s, type Infer, type ModuleContext } from "@tier0/core";
+import { customId, defineModule, isRoleAssignable, s, type Infer, type ModuleContext, type ReplyValues } from "@tier0/core";
 import { prisma } from "@tier0/db";
 import { computeToggle } from "./toggle.js";
 import { parseMapping, serializeMapping, type MenuMapping } from "./mapping.js";
@@ -13,11 +14,14 @@ import {
   GAVE_MESSAGE,
   MENU_MESSAGE,
   MENU_VARIABLES,
+  PROBLEMS,
   PUBLISHED_MESSAGE,
   PUBLISHED_VARIABLES,
   REMOVED_MESSAGE,
   TOGGLE_VARIABLES,
+  problemField,
   upgradeMenu,
+  type ProblemKey,
 } from "./messages.js";
 
 const MAX_BUTTONS_PER_ROW = 5;
@@ -70,7 +74,7 @@ function buildRows(options: OptionSettings[]): ActionRowBuilder<ButtonBuilder>[]
   return rows;
 }
 
-type PublishResult = { ok: true } | { ok: false; reason: string };
+type PublishResult = { ok: true } | { ok: false; problem: ProblemKey };
 
 /**
  * Posts a menu, or edits its existing message when one is already published.
@@ -82,7 +86,7 @@ async function publishMenu(ctx: ModuleContext, menu: MenuSettings): Promise<Publ
   const guild = ctx.guild;
   const channel = guild.channels.cache.get(menu.channel);
   if (!channel || !channel.isTextBased()) {
-    return { ok: false, reason: "The channel configured for this menu no longer exists." };
+    return { ok: false, problem: "channelGone" };
   }
 
   const mapping: MenuMapping = {
@@ -106,7 +110,7 @@ async function publishMenu(ctx: ModuleContext, menu: MenuSettings): Promise<Publ
     if (message) {
       const edited = await ctx.edit(message, menu.message, values, options);
       // Not falling through to a repost: that would delete the live menu over a message that cannot be built.
-      if (!edited) return { ok: false, reason: "I couldn't update the menu message. Check that I can still edit it." };
+      if (!edited) return { ok: false, problem: "editFailed" };
       await prisma.reactionRoleMenu.update({
         where: { id: existing.id },
         data: { mapping: serializeMapping(mapping) },
@@ -127,7 +131,7 @@ async function publishMenu(ctx: ModuleContext, menu: MenuSettings): Promise<Publ
 
   const posted = await ctx.send(channel, menu.message, values, options);
   if (!posted) {
-    return { ok: false, reason: "I couldn't post the menu there. Check that I can send messages and embed links in that channel." };
+    return { ok: false, problem: "postFailed" };
   }
   await prisma.reactionRoleMenu.create({
     data: {
@@ -140,47 +144,71 @@ async function publishMenu(ctx: ModuleContext, menu: MenuSettings): Promise<Publ
   return { ok: true };
 }
 
+const settingsSchema = s.object({
+  menus: s.array(menuField, { label: "Role menus" }),
+  replies: s.object(
+    {
+      gave: s.message({
+        label: "When a role is given",
+        starting: GAVE_MESSAGE,
+        variables: TOGGLE_VARIABLES,
+        delivery: "dm",
+        components: false,
+        compact: true,
+        note: "Only the member who pressed the button sees this.",
+      }),
+      removed: s.message({
+        label: "When a role is taken away",
+        starting: REMOVED_MESSAGE,
+        variables: TOGGLE_VARIABLES,
+        delivery: "dm",
+        components: false,
+        compact: true,
+        note: "Only the member who pressed the button sees this.",
+      }),
+      published: s.message({
+        label: "After /rolemenu publishes a menu",
+        starting: PUBLISHED_MESSAGE,
+        variables: PUBLISHED_VARIABLES,
+        delivery: "dm",
+        components: false,
+        compact: true,
+        note: "Only the moderator who ran the command sees this.",
+      }),
+      noMenu: problemField("noMenu"),
+      channelGone: problemField("channelGone"),
+      editFailed: problemField("editFailed"),
+      postFailed: problemField("postFailed"),
+      inactive: problemField("inactive"),
+      optionGone: problemField("optionGone"),
+      cannotAssign: problemField("cannotAssign"),
+    },
+    {
+      label: "Replies and errors",
+      help: "What the bot says to members and moderators, including when it has to refuse. Open one to reword it.",
+      collapsible: true,
+    },
+  ),
+});
+
+type RolesSettings = Infer<typeof settingsSchema>;
+
+async function tell(
+  ctx: ModuleContext<RolesSettings>,
+  interaction: RepliableInteraction | MessageComponentInteraction,
+  key: ProblemKey,
+  values: ReplyValues = {},
+): Promise<void> {
+  await ctx.reply(interaction, ctx.settings.replies[key], values, { fallback: PROBLEMS[key].starting });
+}
+
 export default defineModule({
   id: "roles",
   name: "Self-service roles",
   summary: "Button-driven role menus members can use to opt into roles.",
   category: "members",
 
-  settings: s.object({
-    menus: s.array(menuField, { label: "Role menus" }),
-    replies: s.object(
-      {
-        gave: s.message({
-          label: "When a role is given",
-          starting: GAVE_MESSAGE,
-          variables: TOGGLE_VARIABLES,
-          delivery: "dm",
-          components: false,
-          compact: true,
-          note: "Only the member who pressed the button sees this.",
-        }),
-        removed: s.message({
-          label: "When a role is taken away",
-          starting: REMOVED_MESSAGE,
-          variables: TOGGLE_VARIABLES,
-          delivery: "dm",
-          components: false,
-          compact: true,
-          note: "Only the member who pressed the button sees this.",
-        }),
-        published: s.message({
-          label: "After /rolemenu publishes a menu",
-          starting: PUBLISHED_MESSAGE,
-          variables: PUBLISHED_VARIABLES,
-          delivery: "dm",
-          components: false,
-          compact: true,
-          note: "Only the moderator who ran the command sees this.",
-        }),
-      },
-      { label: "Replies" },
-    ),
-  }),
+  settings: settingsSchema,
 
   commands: [
     {
@@ -201,16 +229,13 @@ export default defineModule({
         const name = interaction.options.getString("name", true);
         const menu = ctx.settings.menus.find((candidate) => candidate.name === name);
         if (!menu) {
-          await interaction.reply({
-            content: `No role menu named "${name}" is configured. Add one on the dashboard first.`,
-            flags: MessageFlags.Ephemeral,
-          });
+          await tell(ctx, interaction, "noMenu", { name });
           return;
         }
 
         const result = await publishMenu(ctx, menu);
         if (!result.ok) {
-          await interaction.reply({ content: result.reason, flags: MessageFlags.Ephemeral });
+          await tell(ctx, interaction, result.problem);
           return;
         }
         await ctx.reply(
@@ -232,10 +257,7 @@ export default defineModule({
         where: { messageId: interaction.message.id },
       });
       if (!row) {
-        await interaction.reply({
-          content: "This menu is no longer active. Ask a moderator to republish it.",
-          flags: MessageFlags.Ephemeral,
-        });
+        await tell(ctx, interaction, "inactive");
         return;
       }
 
@@ -243,10 +265,7 @@ export default defineModule({
       const option = mapping.options.find((candidate) => candidate.role === roleId);
       const role = ctx.guild.roles.cache.get(roleId);
       if (!option || !role) {
-        await interaction.reply({
-          content: "That option is no longer part of this menu.",
-          flags: MessageFlags.Ephemeral,
-        });
+        await tell(ctx, interaction, "optionGone");
         return;
       }
 
@@ -257,10 +276,7 @@ export default defineModule({
 
       const botHighest = ctx.guild.members.me?.roles.highest.position ?? 0;
       if (willGrant && !isRoleAssignable(role.position, botHighest)) {
-        await interaction.reply({
-          content: `I can't give you **${role.name}** because that role sits above my own highest role. Ask an admin to move my role above it.`,
-          flags: MessageFlags.Ephemeral,
-        });
+        await tell(ctx, interaction, "cannotAssign", { role: role.name, menu: mapping.name });
         return;
       }
 

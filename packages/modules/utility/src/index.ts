@@ -1,13 +1,20 @@
-import { SlashCommandBuilder, EmbedBuilder, MessageFlags } from "discord.js";
-import { defineModule, emptyEmbed, plainReply, s } from "@tier0/core";
+import { MessageFlags, SlashCommandBuilder } from "discord.js";
+import { defineModule, s } from "@tier0/core";
+import {
+  PING_PLACEHOLDERS,
+  PING_STARTING,
+  SERVERINFO_PLACEHOLDERS,
+  USERINFO_PLACEHOLDERS,
+  labelsGroup,
+  serverinfoBody,
+  userinfoBody,
+} from "./messages.js";
 
 /**
  * The proving module for the runtime. It exists to exercise every part of the
  * pipeline end to end: schema, dashboard form, command registration, and hot
  * reload on a settings change. Keep it small.
  */
-const PING_REPLY = "Responding in {roundtrip}ms, gateway at {gateway}ms.";
-
 export default defineModule({
   id: "utility",
   name: "Utility",
@@ -17,6 +24,7 @@ export default defineModule({
   settings: s.object({
     accent: s.choice({
       label: "Embed color",
+      help: "The colour of the standard /serverinfo and /userinfo replies. A reply you wrote on the Commands page sets its own colour.",
       options: [
         { value: "blurple", label: "Blurple" },
         { value: "grey", label: "Grey" },
@@ -26,19 +34,18 @@ export default defineModule({
     }),
     showJoinDate: s.boolean({
       label: "Show join dates on /userinfo",
+      help: "Applies to the standard reply. A reply you wrote on the Commands page decides for itself.",
       default: true,
     }),
+    labels: labelsGroup,
   }),
 
   commands: [
     {
       name: "ping",
       response: {
-        starting: plainReply(PING_REPLY),
-        placeholders: [
-          { name: "roundtrip", description: "Milliseconds from your command to the bot", sample: "84" },
-          { name: "gateway", description: "The bot's gateway latency in milliseconds", sample: "61" },
-        ],
+        starting: PING_STARTING,
+        placeholders: PING_PLACEHOLDERS,
       },
       description: "Check whether the bot is responding, and how quickly.",
       build: () =>
@@ -46,43 +53,18 @@ export default defineModule({
           .setName("ping")
           .setDescription("Check whether the bot is responding, and how quickly."),
       async run(interaction, ctx) {
-        const roundTrip = Date.now() - interaction.createdTimestamp;
-        const custom = ctx.customReply?.({ roundtrip: roundTrip, gateway: ctx.client.ws.ping });
-        await interaction.reply({
-          ...(custom ?? { content: `Responding in ${roundTrip}ms, gateway at ${ctx.client.ws.ping}ms.` }),
-          flags: MessageFlags.Ephemeral,
-        });
+        const values = { roundtrip: Date.now() - interaction.createdTimestamp, gateway: ctx.client.ws.ping };
+        const custom = ctx.customReply?.(values);
+        if (custom) await interaction.reply({ ...custom, flags: MessageFlags.Ephemeral });
+        else await ctx.reply(interaction, PING_STARTING, values);
       },
     },
     {
       name: "serverinfo",
       publicReply: true,
       response: {
-        starting: {
-          content: "",
-          embeds: [
-            {
-              ...emptyEmbed(),
-              title: "{server}",
-              color: "#5865f2",
-              thumbnailUrl: "{server.icon}",
-              fields: [
-                { name: "Members", value: "{members}", inline: true },
-                { name: "Channels", value: "{channels}", inline: true },
-                { name: "Roles", value: "{roles}", inline: true },
-                { name: "Created", value: "{created}", inline: false },
-              ],
-            },
-          ],
-          buttons: [],
-          selects: [],
-          reactions: [],
-        },
-        placeholders: [
-          { name: "channels", description: "How many channels the server has", sample: "34" },
-          { name: "roles", description: "How many roles the server has", sample: "18" },
-          { name: "created", description: "The day the server was created", sample: "March 3, 2021" },
-        ],
+        starting: serverinfoBody(),
+        placeholders: SERVERINFO_PLACEHOLDERS,
       },
       description: "Show information about this server.",
       build: () =>
@@ -91,55 +73,31 @@ export default defineModule({
           .setDescription("Show information about this server."),
       async run(interaction, ctx) {
         const { guild } = ctx;
-        const embed = new EmbedBuilder()
-          .setTitle(guild.name)
-          .setColor(accentOf(ctx.settings.accent))
-          .setThumbnail(guild.iconURL())
-          .addFields(
-            { name: "Members", value: String(guild.memberCount), inline: true },
-            { name: "Channels", value: String(guild.channels.cache.size), inline: true },
-            { name: "Roles", value: String(guild.roles.cache.size), inline: true },
-            {
-              name: "Created",
-              value: `<t:${Math.floor(guild.createdTimestamp / 1000)}:D>`,
-            },
-          );
-        const custom = ctx.customReply?.({
+        const values = {
           channels: guild.channels.cache.size,
           roles: guild.roles.cache.size,
           created: `<t:${Math.floor(guild.createdTimestamp / 1000)}:D>`,
-        });
-        await interaction.reply(custom ?? { embeds: [embed] });
+        };
+        const custom = ctx.customReply?.(values);
+        if (custom) {
+          await interaction.reply(custom);
+          return;
+        }
+        // These two keep the plain forms the standard reply has always shown: no thousands separator, the icon at Discord's own size.
+        await ctx.reply(
+          interaction,
+          serverinfoBody(ctx.settings.accent),
+          { ...values, members: guild.memberCount, "server.icon": guild.iconURL() ?? "" },
+          { ephemeral: false },
+        );
       },
     },
     {
       name: "userinfo",
       publicReply: true,
       response: {
-        starting: {
-          content: "",
-          embeds: [
-            {
-              ...emptyEmbed(),
-              title: "{user}",
-              color: "#5865f2",
-              thumbnailUrl: "{user.avatar}",
-              fields: [
-                { name: "Account created", value: "{created}", inline: true },
-                { name: "Joined server", value: "{joined}", inline: true },
-              ],
-            },
-          ],
-          buttons: [],
-          selects: [],
-          reactions: [],
-        },
-        placeholders: [
-          { name: "user", description: "The member's username", sample: "spamlord_42" },
-          { name: "user.avatar", description: "The member's picture, for an image or thumbnail", sample: "" },
-          { name: "created", description: "The day their account was created", sample: "June 9, 2019" },
-          { name: "joined", description: "The day they joined this server", sample: "January 14, 2023" },
-        ],
+        starting: userinfoBody(),
+        placeholders: USERINFO_PLACEHOLDERS,
       },
       description: "Show information about a member.",
       build: () =>
@@ -153,46 +111,25 @@ export default defineModule({
         const target = interaction.options.getUser("member") ?? interaction.user;
         const member = await ctx.guild.members.fetch(target.id).catch(() => null);
 
-        const embed = new EmbedBuilder()
-          .setTitle(target.username)
-          .setColor(accentOf(ctx.settings.accent))
-          .setThumbnail(target.displayAvatarURL())
-          .addFields({
-            name: "Account created",
-            value: `<t:${Math.floor(target.createdTimestamp / 1000)}:D>`,
-            inline: true,
-          });
-
-        if (member?.joinedTimestamp && ctx.settings.showJoinDate) {
-          embed.addFields({
-            name: "Joined server",
-            value: `<t:${Math.floor(member.joinedTimestamp / 1000)}:D>`,
-            inline: true,
-          });
-        }
-
-        const custom = ctx.customReply?.({
+        const joined = member?.joinedTimestamp ? `<t:${Math.floor(member.joinedTimestamp / 1000)}:D>` : null;
+        const values = {
           user: target.username,
           "user.avatar": target.displayAvatarURL(),
           created: `<t:${Math.floor(target.createdTimestamp / 1000)}:D>`,
-          joined: member?.joinedTimestamp ? `<t:${Math.floor(member.joinedTimestamp / 1000)}:D>` : "Unknown",
-        });
-        await interaction.reply(custom ?? { embeds: [embed] });
+        };
+        const custom = ctx.customReply?.({ ...values, joined: joined ?? ctx.settings.labels.unknown });
+        if (custom) {
+          await interaction.reply(custom);
+          return;
+        }
+        // A join date that is not known leaves the line out of the standard reply, as an empty value does.
+        await ctx.reply(
+          interaction,
+          userinfoBody(ctx.settings.accent, ctx.settings.showJoinDate),
+          { ...values, joined: joined ?? "" },
+          { ephemeral: false },
+        );
       },
     },
   ],
 });
-
-const BLURPLE = 0x5865f2;
-
-const ACCENTS: Record<string, number> = {
-  blurple: BLURPLE,
-  grey: 0x99aab5,
-  green: 0x57f287,
-};
-
-// A guild can hold an accent from a choice list that has since changed, so
-// this falls back instead of handing discord.js undefined.
-function accentOf(name: string): number {
-  return ACCENTS[name] ?? BLURPLE;
-}

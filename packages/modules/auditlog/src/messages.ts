@@ -1,4 +1,4 @@
-import { emptyEmbed, type MessageBody, type MessageEmbed, type MessageVariable, type ReplyValues } from "@tier0/core";
+import { emptyEmbed, s, type Infer, type MessageBody, type MessageEmbed, type MessageVariable, type ReplyValues } from "@tier0/core";
 import type { MemberDiff } from "./diff.js";
 
 const FIELD_LIMIT = 1024;
@@ -70,10 +70,61 @@ export const STARTING: Record<AuditEvent, MessageBody> = {
   banRemove: post("Member unbanned", COLOR_ADD, [field("Member", "{member}")]),
 };
 
+/** The stand-ins used when something is not known. The defaults are the words the log has always used. */
+export const DEFAULT_LABELS = {
+  authorUnknown: "Unknown (not cached)",
+  deletedContent: "Unavailable (message was not cached)",
+  editBefore: "Unavailable (not cached)",
+  editAfter: "Unavailable",
+  noNickname: "(none)",
+} as const;
+
+export const labelsGroup = s.object(
+  {
+    authorUnknown: s.string({
+      label: "Author the bot never saw",
+      help: "Fills {author} when the message was sent before the bot started watching.",
+      default: DEFAULT_LABELS.authorUnknown,
+      max: 200,
+    }),
+    deletedContent: s.string({
+      label: "Deleted message the bot never saw",
+      help: "Fills {content} on a deleted message the bot could not read.",
+      default: DEFAULT_LABELS.deletedContent,
+      max: 200,
+    }),
+    editBefore: s.string({
+      label: "Text before an edit the bot never saw",
+      help: "Fills {before} on an edited message the bot had not seen the original of.",
+      default: DEFAULT_LABELS.editBefore,
+      max: 200,
+    }),
+    editAfter: s.string({
+      label: "Text after an edit that cannot be read",
+      help: "Fills {after} when the edited message has no readable text.",
+      default: DEFAULT_LABELS.editAfter,
+      max: 200,
+    }),
+    noNickname: s.string({
+      label: "Member with no nickname",
+      help: "Fills {nickname.before} and {nickname.after} when a member had no nickname, or removed theirs.",
+      default: DEFAULT_LABELS.noNickname,
+      max: 200,
+    }),
+  },
+  {
+    label: "Labels and text",
+    help: "The stand-ins written into an entry when the bot does not know something.",
+    collapsible: true,
+  },
+);
+
+export type AuditLabels = Infer<typeof labelsGroup>;
+
 const MEMBER: MessageVariable = { name: "member", description: "The member, as a mention followed by their username", sample: "@Ada (ada)" };
 const AUTHOR: MessageVariable = {
   name: "author",
-  description: "Who wrote the message, as a mention followed by their username. Reads Unknown (not cached) when the bot never saw it",
+  description: "Who wrote the message, as a mention followed by their username. A stand-in from Labels and text when the bot never saw it",
   sample: "@Ada (ada)",
 };
 const MESSAGE_CHANNEL: MessageVariable = { name: "message.channel", description: "The channel the message was in, as a link", sample: "#general" };
@@ -88,7 +139,7 @@ export const ENTRIES: Record<AuditEvent, { label: string; help: string; variable
       MESSAGE_CHANNEL,
       {
         name: "content",
-        description: "What the message said, cut to 1024 characters. Reads Unavailable (message was not cached) when the bot never saw it",
+        description: "What the message said, cut to 1024 characters. A stand-in from Labels and text when the bot never saw it",
         sample: "Anyone up for a game tonight?",
       },
     ],
@@ -101,7 +152,7 @@ export const ENTRIES: Record<AuditEvent, { label: string; help: string; variable
       MESSAGE_CHANNEL,
       {
         name: "before",
-        description: "The text before the edit, cut to 1024 characters. Reads Unavailable (not cached) when the bot never saw it",
+        description: "The text before the edit, cut to 1024 characters. A stand-in from Labels and text when the bot never saw it",
         sample: "Anyone up for a game tonight?",
       },
       { name: "after", description: "The text after the edit, cut to 1024 characters", sample: "Anyone up for a game tomorrow?" },
@@ -123,8 +174,8 @@ export const ENTRIES: Record<AuditEvent, { label: string; help: string; variable
     help: "Posted when a member's nickname or roles change. One entry covers both. A line with nothing to show is left out, so it only appears for what changed and is switched on above.",
     variables: [
       MEMBER,
-      { name: "nickname.before", description: "Their nickname before, or (none). Empty unless the nickname changed", sample: "Ada" },
-      { name: "nickname.after", description: "Their nickname now, or (none). Empty unless the nickname changed", sample: "Ada L." },
+      { name: "nickname.before", description: "Their nickname before, or a stand-in from Labels and text. Empty unless the nickname changed", sample: "Ada" },
+      { name: "nickname.after", description: "Their nickname now, or a stand-in from Labels and text. Empty unless the nickname changed", sample: "Ada L." },
       { name: "roles.added", description: "The roles they gained, as mentions. Empty when none were added", sample: "@Member" },
       { name: "roles.removed", description: "The roles they lost, as mentions. Empty when none were removed", sample: "@Guest" },
     ],
@@ -174,13 +225,14 @@ interface MessageLike {
   content?: string | null;
 }
 
-const authorOf = (message: MessageLike): string => (message.author ? person(message.author) : "Unknown (not cached)");
+const authorOf = (message: MessageLike, labels: AuditLabels): string =>
+  message.author ? person(message.author) : labels.authorUnknown;
 
-export function deleteValues(message: MessageLike): ReplyValues {
+export function deleteValues(message: MessageLike, labels: AuditLabels = DEFAULT_LABELS): ReplyValues {
   return {
-    author: authorOf(message),
+    author: authorOf(message, labels),
     "message.channel": `<#${message.channelId}>`,
-    content: message.content ? truncate(message.content) : "Unavailable (message was not cached)",
+    content: message.content ? truncate(message.content) : labels.deletedContent,
   };
 }
 
@@ -189,12 +241,13 @@ export function editValues(
   contentBefore: string | null,
   contentAfter: string | null,
   link: string | null,
+  labels: AuditLabels = DEFAULT_LABELS,
 ): ReplyValues {
   return {
-    author: authorOf(message),
+    author: authorOf(message, labels),
     "message.channel": `<#${message.channelId}>`,
-    before: contentBefore ? truncate(contentBefore) : "Unavailable (not cached)",
-    after: contentAfter ? truncate(contentAfter) : "Unavailable",
+    before: contentBefore ? truncate(contentBefore) : labels.editBefore,
+    after: contentAfter ? truncate(contentAfter) : labels.editAfter,
     "message.link": link ?? "",
   };
 }
@@ -206,12 +259,17 @@ export const joinValues = (user: Tagged & { createdTimestamp: number }): ReplyVa
   "member.created": `<t:${Math.floor(user.createdTimestamp / 1000)}:R>`,
 });
 
-export function updateValues(user: Tagged, diff: MemberDiff, show: { nickname: boolean; roles: boolean }): ReplyValues {
+export function updateValues(
+  user: Tagged,
+  diff: MemberDiff,
+  show: { nickname: boolean; roles: boolean },
+  labels: AuditLabels = DEFAULT_LABELS,
+): ReplyValues {
   const mentions = (ids: string[]) => truncate(ids.map((id) => `<@&${id}>`).join(", "));
   return {
     member: person(user),
-    "nickname.before": show.nickname ? (diff.nicknameBefore ?? "(none)") : "",
-    "nickname.after": show.nickname ? (diff.nicknameAfter ?? "(none)") : "",
+    "nickname.before": show.nickname ? (diff.nicknameBefore ?? labels.noNickname) : "",
+    "nickname.after": show.nickname ? (diff.nicknameAfter ?? labels.noNickname) : "",
     "roles.added": show.roles ? mentions(diff.rolesAdded) : "",
     "roles.removed": show.roles ? mentions(diff.rolesRemoved) : "",
   };

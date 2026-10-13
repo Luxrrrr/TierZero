@@ -1,6 +1,7 @@
 import { MessageFlags, PermissionFlagsBits, SlashCommandBuilder, type ChatInputCommandInteraction } from "discord.js";
-import { defineModule, plainReply } from "@tier0/core";
+import { applyVariables, defineModule, plainReply } from "@tier0/core";
 import { prisma } from "@tier0/db";
+import { AMBIGUOUS, NO_MATCH, STATUS_EMPTY, STATUS_REPLY } from "./labels.js";
 import { MAX_SEND, clampCount, matchSources } from "./match.js";
 import { MIN_POLL_MS, pollAll, sendLatest } from "./poll.js";
 import { sourcesOf } from "./sources.js";
@@ -25,29 +26,35 @@ const SEND_REPLY = plainReply("Sent {posted} of the latest {count} from {source}
 
 const intervalOf = (ctx: FeedsContext): number => Math.max(ctx.settings.pollEvery, MIN_POLL_MS);
 
+/** Discord stops a message at 2000 characters; lists are cut here so the text around them still fits. */
+const LIST_LIMIT = 1900;
+
 async function runStatus(interaction: ChatInputCommandInteraction, ctx: FeedsContext): Promise<void> {
   const sources = sourcesOf(ctx.settings);
   if (sources.length === 0) {
-    await interaction.reply({
-      content: "Nothing is being watched yet. Add a feed or a game in the dashboard.",
-      flags: MessageFlags.Ephemeral,
-    });
+    await ctx.reply(interaction, ctx.settings.replies.statusEmpty, {}, { fallback: STATUS_EMPTY });
     return;
   }
 
   const cursors = await prisma.feedCursor.findMany({ where: { guildId: ctx.guild.id } });
   const byKey = new Map(cursors.map((cursor) => [cursor.sourceKey, cursor]));
 
+  const { labels } = ctx.settings;
   const lines = sources.map((source) => {
     const cursor = byKey.get(source.key);
-    if (!cursor?.checkedAt) return `${source.label}: not checked yet`;
-    const when = `<t:${Math.floor(cursor.checkedAt.getTime() / 1000)}:R>`;
+    if (!cursor?.checkedAt) return applyVariables(labels.statusNever, { source: source.label });
+    const checked = `<t:${Math.floor(cursor.checkedAt.getTime() / 1000)}:R>`;
     return cursor.lastError
-      ? `${source.label}: checked ${when}, problem: ${cursor.lastError}`
-      : `${source.label}: checked ${when}, working`;
+      ? applyVariables(labels.statusProblem, { source: source.label, checked, problem: cursor.lastError })
+      : applyVariables(labels.statusWorking, { source: source.label, checked });
   });
 
-  await interaction.reply({ content: lines.join("\n").slice(0, 1900), flags: MessageFlags.Ephemeral });
+  await ctx.reply(
+    interaction,
+    ctx.settings.replies.status,
+    { lines: lines.join("\n").slice(0, LIST_LIMIT), count: sources.length },
+    { fallback: STATUS_REPLY },
+  );
 }
 
 async function runSend(interaction: ChatInputCommandInteraction, ctx: FeedsContext): Promise<void> {
@@ -56,18 +63,14 @@ async function runSend(interaction: ChatInputCommandInteraction, ctx: FeedsConte
 
   const matches = matchSources(sourcesOf(ctx.settings), query);
   if (matches.length === 0) {
-    await interaction.reply({
-      content: `Nothing being watched matches "${query}". /feeds status lists everything.`,
-      flags: MessageFlags.Ephemeral,
-    });
+    await ctx.reply(interaction, ctx.settings.replies.noMatch, { query }, { fallback: NO_MATCH });
     return;
   }
   if (matches.length > 1) {
-    const names = matches.map((source) => source.label).join("\n");
-    await interaction.reply({
-      content: `"${query}" matches more than one source. Use a more specific name:\n${names}`.slice(0, 1900),
-      flags: MessageFlags.Ephemeral,
-    });
+    // The list gets whatever room the sentence around it leaves, as a message cut after the fact would lose its end.
+    const room = LIST_LIMIT - applyVariables(AMBIGUOUS.content, { query, sources: "" }).length;
+    const names = matches.map((source) => source.label).join("\n").slice(0, Math.max(0, room));
+    await ctx.reply(interaction, ctx.settings.replies.ambiguous, { query, sources: names }, { fallback: AMBIGUOUS });
     return;
   }
 
@@ -78,16 +81,20 @@ async function runSend(interaction: ChatInputCommandInteraction, ctx: FeedsConte
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
   const result = await sendLatest(ctx, source, count);
 
-  const sent = `Sent ${result.posted} of the latest ${count} from ${source.label}.`;
-  const custom = ctx.customReply?.({
+  const values = {
     posted: result.posted,
     count,
     source: source.label,
-    problem: result.error ? `Stopped because: ${result.error}.` : "",
-  });
+    problem: result.error ? applyVariables(ctx.settings.labels.stopped, { error: result.error }) : "",
+  };
+  const custom = ctx.customReply?.(values);
+  if (!custom) {
+    await ctx.reply(interaction, SEND_REPLY, values);
+    return;
+  }
   // Visibility was fixed when the reply was deferred, so the flags an owner reply might carry do not apply.
-  const { flags: _flags, ...editable } = custom ?? {};
-  await interaction.editReply(custom ? editable : (result.error ? `${sent} Stopped because: ${result.error}.` : sent));
+  const { flags: _flags, ...editable } = custom;
+  await interaction.editReply(editable);
 }
 
 export default defineModule({
@@ -110,7 +117,7 @@ export default defineModule({
           { name: "source", description: "The feed or game they came from", sample: "Example Gazette" },
           { name: "problem", description: "Why it stopped early, as a sentence. Empty when everything was sent", sample: "" },
         ],
-        note: "Used for the answer to /feeds send. /feeds status, and the answers that say nothing matched, keep their own wording.",
+        note: "Used for the answer to /feeds send. /feeds status, and the answers that say nothing matched, are reworded under Replies and errors on the module's page.",
       },
       build: () =>
         new SlashCommandBuilder()

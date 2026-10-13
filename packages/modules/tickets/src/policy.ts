@@ -5,9 +5,15 @@
 
 const CATEGORY_CHILD_LIMIT = 50;
 
+/**
+ * Why a ticket cannot be opened. It is a code rather than a sentence: the
+ * wording belongs to the server's settings, and the caller looks it up there.
+ */
+export type OpenRefusal = "categoryGone" | "categoryFull" | "limitOne" | "limitMany";
+
 export type OpenTicketDecision =
   | { allowed: true }
-  | { allowed: false; reason: string };
+  | { allowed: false; code: OpenRefusal; openCount: number; limit: number };
 
 export interface OpenTicketRequest {
   /** How many tickets this member already has open. */
@@ -26,29 +32,15 @@ export interface OpenTicketRequest {
  * interaction.
  */
 export function evaluateOpenRequest(request: OpenTicketRequest): OpenTicketDecision {
-  if (!request.categoryExists) {
-    return {
-      allowed: false,
-      reason:
-        "The ticket category no longer exists. Ask a server admin to set a new one in the dashboard.",
-    };
-  }
-  if (request.categoryChildCount >= CATEGORY_CHILD_LIMIT) {
-    return {
-      allowed: false,
-      reason:
-        "The ticket category is full. Ask a server admin to close old tickets or choose a different category.",
-    };
-  }
-  if (request.openCount >= request.limit) {
-    return {
-      allowed: false,
-      reason:
-        request.limit === 1
-          ? "You already have an open ticket. Close it before opening another."
-          : `You already have ${request.openCount} open tickets, the most this server allows. Close one before opening another.`,
-    };
-  }
+  const refuse = (code: OpenRefusal): OpenTicketDecision => ({
+    allowed: false,
+    code,
+    openCount: request.openCount,
+    limit: request.limit,
+  });
+  if (!request.categoryExists) return refuse("categoryGone");
+  if (request.categoryChildCount >= CATEGORY_CHILD_LIMIT) return refuse("categoryFull");
+  if (request.openCount >= request.limit) return refuse(request.limit === 1 ? "limitOne" : "limitMany");
   return { allowed: true };
 }
 

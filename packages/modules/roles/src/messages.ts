@@ -1,4 +1,4 @@
-import { emptyEmbed, plainReply, type MessageBody } from "@tier0/core";
+import { emptyEmbed, plainReply, s, type Field, type MessageBody, type MessageVariable } from "@tier0/core";
 
 /**
  * Wording the role menus start with, and the upgrade for menus saved when a
@@ -26,6 +26,75 @@ export const PUBLISHED_VARIABLES = [
   { name: "menu", description: "The menu's name", sample: "Platforms" },
   { name: "menuChannel", description: "The channel the menu is posted in, as a link", sample: "#roles" },
 ];
+
+export type ProblemKey =
+  | "noMenu"
+  | "channelGone"
+  | "editFailed"
+  | "postFailed"
+  | "inactive"
+  | "optionGone"
+  | "cannotAssign";
+
+interface ProblemDefinition {
+  label: string;
+  help: string;
+  starting: MessageBody;
+  variables?: MessageVariable[];
+}
+
+/** The refusals and failures a member or moderator is told about in private. */
+export const PROBLEMS: Record<ProblemKey, ProblemDefinition> = {
+  noMenu: {
+    label: "Menu not found",
+    help: "Shown to a moderator who runs /rolemenu with a name that is not on the list of menus.",
+    starting: plainReply('No role menu named "{name}" is configured. Add one on the dashboard first.'),
+    variables: [{ name: "name", description: "The name that was typed", sample: "Platforms" }],
+  },
+  channelGone: {
+    label: "Menu channel deleted",
+    help: "Shown when a menu is published but the channel it should go in no longer exists.",
+    starting: plainReply("The channel configured for this menu no longer exists."),
+  },
+  editFailed: {
+    label: "Menu could not be updated",
+    help: "Shown when a menu that is already posted cannot be edited, for example because the bot lost access to the channel.",
+    starting: plainReply("I couldn't update the menu message. Check that I can still edit it."),
+  },
+  postFailed: {
+    label: "Menu could not be posted",
+    help: "Shown when the bot cannot post a new menu in its channel.",
+    starting: plainReply("I couldn't post the menu there. Check that I can send messages and embed links in that channel."),
+  },
+  inactive: {
+    label: "Menu no longer active",
+    help: "Shown to a member who presses a button on a menu that was removed or replaced.",
+    starting: plainReply("This menu is no longer active. Ask a moderator to republish it."),
+  },
+  optionGone: {
+    label: "Option removed from the menu",
+    help: "Shown to a member who presses a button whose role was taken off the menu or deleted.",
+    starting: plainReply("That option is no longer part of this menu."),
+  },
+  cannotAssign: {
+    label: "Role is above the bot",
+    help: "Shown to a member who presses a button for a role the bot is not allowed to give because it sits above the bot's own highest role.",
+    starting: plainReply("I can't give you **{role}** because that role sits above my own highest role. Ask an admin to move my role above it."),
+    variables: TOGGLE_VARIABLES,
+  },
+};
+
+export const problemField = (key: ProblemKey): Field<MessageBody> =>
+  s.message({
+    label: PROBLEMS[key].label,
+    help: PROBLEMS[key].help,
+    note: "Only the person it is shown to sees this.",
+    starting: PROBLEMS[key].starting,
+    variables: PROBLEMS[key].variables ?? [],
+    delivery: "dm",
+    components: false,
+    compact: true,
+  });
 
 const filled = (value: unknown): value is string => typeof value === "string" && value.trim() !== "";
 

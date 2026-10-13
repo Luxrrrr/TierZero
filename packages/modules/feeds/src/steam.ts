@@ -1,3 +1,5 @@
+import { FeedFailure } from "./failures.js";
+
 export interface SteamPost {
   id: string;
   title: string;
@@ -59,7 +61,7 @@ export function cleanSteamBody(raw: string): string {
 
 export function parseSteamNews(json: unknown): SteamPost[] {
   const items = (json as { appnews?: { newsitems?: unknown } } | null)?.appnews?.newsitems;
-  if (!Array.isArray(items)) throw new Error("Steam answered with something unexpected");
+  if (!Array.isArray(items)) throw new FeedFailure("steamUnexpected");
 
   const posts: SteamPost[] = [];
   for (const raw of items) {

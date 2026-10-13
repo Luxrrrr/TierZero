@@ -13,6 +13,7 @@ import {
   roleCreateValues,
   roleDeleteValues,
   updateValues,
+  labelsGroup,
   type AuditEvent,
 } from "./messages.js";
 import { shouldIgnoreChannel, shouldLogMessageEdit, shouldLogMessageEvent, type AuditSettings } from "./policy.js";
@@ -74,8 +75,10 @@ const settingsSchema = s.object({
     {
       label: "How each entry looks",
       help: "The wording of what is posted for each kind of event. Which events are posted is chosen above. A line left empty by what is known, such as a deleted message the bot never saw, is left out.",
+      collapsible: true,
     },
   ),
+  labels: labelsGroup,
 });
 
 type AuditModuleSettings = Infer<typeof settingsSchema>;
@@ -114,7 +117,7 @@ export default defineModule({
       if (!shouldLogMessageEvent("messageDelete", settings, { channelId: message.channelId, authorIsBot })) {
         return;
       }
-      await send(ctx, "messageDelete", deleteValues(message));
+      await send(ctx, "messageDelete", deleteValues(message, ctx.settings.labels));
     },
 
     async messageUpdate(before, after, ctx) {
@@ -133,7 +136,7 @@ export default defineModule({
         return;
       }
       const link = !after.partial && after.url ? after.url : null;
-      await send(ctx, "messageEdit", editValues(after, contentBefore, contentAfter, link));
+      await send(ctx, "messageEdit", editValues(after, contentBefore, contentAfter, link, ctx.settings.labels));
     },
 
     async memberJoin(member, ctx) {
@@ -157,10 +160,15 @@ export default defineModule({
       await send(
         ctx,
         "memberUpdate",
-        updateValues(after.user, diff, {
-          nickname: categories.includes("nicknameChange"),
-          roles: categories.includes("roleChange"),
-        }),
+        updateValues(
+          after.user,
+          diff,
+          {
+            nickname: categories.includes("nicknameChange"),
+            roles: categories.includes("roleChange"),
+          },
+          ctx.settings.labels,
+        ),
       );
     },
 
