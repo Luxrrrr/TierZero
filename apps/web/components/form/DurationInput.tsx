@@ -8,6 +8,7 @@ import {
   unitMilliseconds,
   type DurationUnit,
 } from "../../lib/duration";
+import { Select } from "./Select";
 
 interface Props {
   id: string;
@@ -78,18 +79,14 @@ export function DurationInput({
         aria-describedby={describedBy}
         onChange={(event) => update(event.target.value.replace(/\D/g, ""), unit)}
       />
-      <select
+      <Select
+        className="select-unit"
         aria-label={`Unit for ${label}`}
+        options={DURATION_UNITS.map((option) => ({ value: option.value, label: option.label }))}
         value={unit}
         disabled={disabled}
-        onChange={(event) => update(amount, event.target.value as DurationUnit)}
-      >
-        {DURATION_UNITS.map((option) => (
-          <option key={option.value} value={option.value}>
-            {option.label}
-          </option>
-        ))}
-      </select>
+        onChange={(next) => update(amount, next as DurationUnit)}
+      />
     </div>
   );
 }

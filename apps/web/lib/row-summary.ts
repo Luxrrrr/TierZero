@@ -109,6 +109,9 @@ function detailFor(
       return isFilled(value) ? labels.role(value) : undefined;
     case "array": {
       const of = field.of as FieldDescriptor | undefined;
+      if (of?.kind === "choice") {
+        return Array.isArray(value) ? summarizeChoices(value, (of.options ?? []) as Option[]) : undefined;
+      }
       if (of?.kind !== "object" || !Array.isArray(value) || value.length === 0) return undefined;
       return `${value.length} ${value.length === 1 ? singularLabel(label) : label.toLowerCase()}`;
     }
@@ -134,6 +137,39 @@ function choiceLabel(field: FieldDescriptor, value: unknown): string | undefined
   if (typeof value !== "string" || value === "") return undefined;
   const options = (field.options ?? []) as Option[];
   return options.find((option) => option.value === value)?.label ?? value;
+}
+
+/**
+ * The picked options of a multi-select as their labels, in the order the
+ * options are declared. When they do not all fit, the ones that do are shown
+ * with a count of the rest.
+ */
+export function summarizeChoices(
+  values: readonly unknown[],
+  options: readonly Option[],
+  longest: number = LONGEST_TEXT_DETAIL,
+): string | undefined {
+  const picked = new Set(values.filter((entry): entry is string => typeof entry === "string"));
+  const known = new Set(options.map((option) => option.value));
+  const labels = [
+    ...options.filter((option) => picked.has(option.value)).map((option) => option.label),
+    ...[...picked].filter((value) => !known.has(value)),
+  ];
+  if (labels.length === 0) return undefined;
+
+  const all = labels.join(", ");
+  if (all.length <= longest) return all;
+
+  const shown: string[] = [];
+  for (const label of labels) {
+    const rest = labels.length - shown.length - 1;
+    const candidate = [...shown, label].join(", ") + (rest > 0 ? ` +${rest}` : "");
+    if (candidate.length > longest && shown.length > 0) break;
+    shown.push(label);
+  }
+  const hidden = labels.length - shown.length;
+  const text = shown.join(", ") + (hidden > 0 ? ` +${hidden}` : "");
+  return text.length > longest ? truncate(text) : text;
 }
 
 function truncate(text: string): string {

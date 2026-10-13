@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useId, useRef, useState } from "react";
 import type { EvidenceRef, ModActionKind } from "@tier0/core";
 import { AlertIcon, ShieldIcon } from "../../../../../../components/Icons";
+import { Select } from "../../../../../../components/form/Select";
 import { StateIcon } from "../../../../../../components/mod/ModUi";
 import {
   ACTION_REASON_LIMIT,
@@ -425,21 +426,17 @@ function ActionForm({
 
         {kind === "ban" ? (
           <div className="pf-field">
-            <label className="pf-field-label" htmlFor={deleteId}>
+            <label className="pf-field-label" id={`${deleteId}-label`} htmlFor={deleteId}>
               Delete their recent messages
             </label>
-            <select
+            <Select
               id={deleteId}
-              className="select ta-select"
-              value={deleteDays}
-              onChange={(event) => !busy && setDeleteDays(clampDeleteDays(Number(event.target.value)))}
-            >
-              {DELETE_DAY_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
+              className="ta-select"
+              aria-labelledby={`${deleteId}-label`}
+              value={String(deleteDays)}
+              options={DELETE_DAY_OPTIONS.map((option) => ({ value: String(option.value), label: option.label }))}
+              onChange={(next) => !busy && setDeleteDays(clampDeleteDays(Number(next)))}
+            />
           </div>
         ) : null}
 
@@ -653,18 +650,13 @@ function LengthField({ label, presets, value, max, until, lengthMs, error, busy,
             onChange={(event) => onChange({ ...value, amount: event.target.value.replace(/[^0-9]/g, "").slice(0, 6) })}
             data-length-field="true"
           />
-          <select
-            className="select ta-unit"
+          <Select
+            className="ta-unit"
             aria-label="Unit"
             value={value.unit}
-            onChange={(event) => !busy && onChange({ ...value, unit: event.target.value as DurationUnit })}
-          >
-            {UNIT_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
+            options={UNIT_OPTIONS}
+            onChange={(next) => !busy && onChange({ ...value, unit: next as DurationUnit })}
+          />
         </div>
       ) : null}
 

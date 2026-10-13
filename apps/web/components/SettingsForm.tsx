@@ -1,9 +1,9 @@
 "use client";
 
 import type { ReactNode } from "react";
-import type { FieldCondition, FieldDescriptor, MessageBody, RowDescription } from "@tier0/core";
+import type { FieldDescriptor, MessageBody, RowDescription } from "@tier0/core";
 import { describeDuration } from "../lib/duration";
-import { isBlank } from "../lib/module-status";
+import { conditionMet, type Condition } from "../lib/field-condition";
 import { humanize } from "../lib/row-summary";
 import { arrayItemPath, objectChildPath } from "../lib/schema-paths";
 // Imported one file at a time rather than through the barrel, which re-exports
@@ -12,8 +12,10 @@ import { ChannelPicker, MultiChannelPicker } from "./form/ChannelPicker";
 import { DurationInput } from "./form/DurationInput";
 import { Field, type FieldChrome } from "./form/Field";
 import { MessageControl } from "./form/MessageControl";
+import { MultiChoice } from "./form/MultiChoice";
 import { ObjectArray, type RowsContext } from "./form/ObjectArray";
 import { MultiRolePicker, RolePicker } from "./form/RolePicker";
+import { Select, type SelectOption } from "./form/Select";
 import { Switch } from "./form/Switch";
 import { TagInput } from "./form/TagInput";
 import { TemplateEditor } from "./form/TemplateEditor";
@@ -210,7 +212,7 @@ function renderChild(
   onChange: (next: Record<string, unknown>) => void,
 ): ReactNode {
   const path = objectChildPath(parentPath, key);
-  const condition = field.when as FieldCondition | undefined;
+  const condition = field.when as Condition | undefined;
   const met = conditionMet(condition, values);
   const dependency = met ? undefined : dependencySentence(condition, siblings);
   const setValue = (next: unknown) => onChange({ ...values, [key]: next });
@@ -387,27 +389,18 @@ function control(chrome: FieldChrome, props: ControlProps): ReactNode {
         />
       );
 
-    case "choice": {
-      const options = (field.options ?? []) as { value: string; label: string }[];
-      const current = typeof value === "string" ? value : "";
+    case "choice":
       return (
-        <select
-          {...common}
-          className="select"
-          value={current}
-          onChange={(event) => onChange(event.target.value || undefined)}
-        >
-          {options.some((option) => option.value === current) ? null : (
-            <option value="">Choose an option</option>
-          )}
-          {options.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
+        <Select
+          id={common.id}
+          disabled={common.disabled}
+          aria-describedby={common["aria-describedby"]}
+          aria-labelledby={chrome.labelId}
+          options={(field.options ?? []) as SelectOption[]}
+          value={typeof value === "string" ? value : undefined}
+          onChange={onChange}
+        />
       );
-    }
 
     case "emoji":
       return (
@@ -509,6 +502,23 @@ function arrayControl(chrome: FieldChrome, props: ControlProps): ReactNode {
         id={chrome.id}
         guildId={ctx.guildId}
         values={items.filter(isString)}
+        max={max}
+        disabled={chrome.disabled}
+        aria-labelledby={chrome.labelId}
+        aria-describedby={chrome.describedBy}
+        onChange={onChange}
+      />
+    );
+  }
+
+  if (item.kind === "choice") {
+    return (
+      <MultiChoice
+        id={chrome.id}
+        options={(item.options ?? []) as SelectOption[]}
+        values={items.filter(isString)}
+        defaults={Array.isArray(field.default) ? field.default.filter(isString) : undefined}
+        min={min}
         max={max}
         disabled={chrome.disabled}
         aria-labelledby={chrome.labelId}
@@ -703,24 +713,21 @@ function wantsWholeRow(field: FieldDescriptor): boolean {
   return field.kind === "string" && field.multiline === true;
 }
 
-function conditionMet(
-  condition: FieldCondition | undefined,
-  values: Record<string, unknown>,
-): boolean {
-  if (!condition) return true;
-  const actual = values[condition.field];
-  if (condition.equals === undefined) return !isBlank(actual);
-  return actual === condition.equals;
-}
-
 /** Explains a disabled control in terms of the setting it waits on. */
 function dependencySentence(
-  condition: FieldCondition | undefined,
+  condition: Condition | undefined,
   siblings: Fields,
 ): string | undefined {
   if (!condition) return undefined;
   const sibling = siblings[condition.field];
   const label = sibling?.label ?? humanize(condition.field);
+
+  if (condition.includes !== undefined) {
+    const of = (sibling?.of ?? {}) as FieldDescriptor;
+    const options = (of.options ?? []) as { value: string; label: string }[];
+    const chosen = options.find((option) => option.value === condition.includes);
+    return `Only used when ${label} includes ${chosen?.label ?? String(condition.includes)}.`;
+  }
 
   if (condition.equals === undefined) return `Only used when ${label} is set.`;
   if (sibling?.kind === "boolean") {
@@ -738,7 +745,11 @@ function dependencySentence(
 function defaultsFor(fields: Fields): Record<string, unknown> {
   const item: Record<string, unknown> = {};
   for (const [key, field] of Object.entries(fields)) {
-    if (field.kind === "array") item[key] = [];
+    if (field.kind === "array") {
+      // A list that needs at least one entry would otherwise start out invalid.
+      const of = (field.of ?? {}) as FieldDescriptor;
+      item[key] = of.kind === "choice" && Array.isArray(field.default) ? field.default : [];
+    }
     else if (field.kind === "object") item[key] = defaultsFor((field.fields ?? {}) as Fields);
     else if (field.default !== undefined) item[key] = field.default;
   }

@@ -129,6 +129,21 @@ describe("choice", () => {
   test("falls back to its default", () => {
     assert.equal(value(field.parse(undefined)), "a");
   });
+
+  test("passes an option's description and recommended flag through to the dashboard", () => {
+    const described = s
+      .choice({
+        options: [
+          { value: "a", label: "A", description: "The first", recommended: true },
+          { value: "b", label: "B" },
+        ],
+      })
+      .describe();
+    assert.deepEqual(JSON.parse(JSON.stringify(described.options)), [
+      { value: "a", label: "A", description: "The first", recommended: true },
+      { value: "b", label: "B" },
+    ]);
+  });
 });
 
 describe("array", () => {
@@ -149,6 +164,72 @@ describe("array", () => {
 
   test("rejects a non-array", () => {
     assert.equal(s.array(s.channel()).parse("nope").ok, false);
+  });
+
+  test("allows a repeated entry unless it is unique", () => {
+    assert.deepEqual(value(s.array(s.channel()).parse([CHANNEL, CHANNEL])), [CHANNEL, CHANNEL]);
+  });
+
+  test("a unique list refuses the same value twice and points at the second", () => {
+    const list = s.array(s.channel(), { unique: true });
+    assert.deepEqual(value(list.parse([CHANNEL, "223456789012345678"])), [CHANNEL, "223456789012345678"]);
+    const [first] = errors(list.parse([CHANNEL, "223456789012345678", CHANNEL], "ignore"));
+    assert.equal(first?.path, "ignore[2]");
+  });
+
+  test("falls back to its declared default when absent, and gives each read its own copy", () => {
+    const list = s.array(s.channel(), { default: [CHANNEL] });
+    const first = value(list.parse(undefined));
+    assert.deepEqual(first, [CHANNEL]);
+    first.push("x");
+    assert.deepEqual(value(list.parse(undefined)), [CHANNEL]);
+  });
+
+  test("a stored empty list is not replaced by the default", () => {
+    assert.deepEqual(value(s.array(s.channel(), { default: [CHANNEL] }).parse([])), []);
+  });
+
+  describe("as a multi-select", () => {
+    const picks = s.array(
+      s.choice({
+        options: [
+          { value: "a", label: "A", recommended: true },
+          { value: "b", label: "B" },
+          { value: "c", label: "C" },
+        ],
+      }),
+      { min: 1, unique: true, default: ["a"] },
+    );
+
+    test("takes any combination of the options", () => {
+      assert.deepEqual(value(picks.parse(["c", "a"])), ["c", "a"]);
+    });
+
+    test("refuses an empty list, a repeat and an unknown option", () => {
+      assert.equal(picks.parse([]).ok, false);
+      assert.equal(picks.parse(["a", "a"]).ok, false);
+      assert.equal(picks.parse(["a", "z"]).ok, false);
+    });
+
+    test("describes itself with the item options, the limits, unique and the default", () => {
+      const described = JSON.parse(JSON.stringify(picks.describe()));
+      assert.equal(described.kind, "array");
+      assert.equal(described.min, 1);
+      assert.equal(described.unique, true);
+      assert.deepEqual(described.default, ["a"]);
+      assert.equal(described.of.kind, "choice");
+      assert.deepEqual(described.of.options, [
+        { value: "a", label: "A", recommended: true },
+        { value: "b", label: "B" },
+        { value: "c", label: "C" },
+      ]);
+    });
+  });
+
+  test("describes as before when neither unique nor a default is set", () => {
+    const described = s.array(s.channel()).describe();
+    assert.equal("unique" in described, false);
+    assert.equal("default" in described, false);
   });
 });
 
@@ -241,6 +322,11 @@ describe("when", () => {
 
   test("is absent from a field that does not declare it", () => {
     assert.equal("when" in s.template().describe(), false);
+  });
+
+  test("carries the value a sibling list must contain", () => {
+    const described = s.duration({ when: { field: "actions", includes: "timeout" } }).describe();
+    assert.deepEqual(described.when, { field: "actions", includes: "timeout" });
   });
 
   test("does not change what parses", () => {

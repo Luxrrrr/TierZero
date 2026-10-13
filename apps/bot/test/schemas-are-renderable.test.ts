@@ -54,11 +54,20 @@ function checkConditions(field: FieldDescriptor, path: string, fail: (message: s
   const fields = field.fields as Record<string, FieldDescriptor>;
   for (const [key, child] of Object.entries(fields)) {
     const childPath = path ? `${path}.${key}` : key;
-    const condition = child.when as { field?: unknown } | undefined;
+    const condition = child.when as { field?: unknown; includes?: unknown } | undefined;
     if (condition !== undefined) {
       const sibling = condition.field;
       if (typeof sibling !== "string" || !(sibling in fields)) {
         fail(`${childPath} depends on ${String(sibling)}, which is not a field beside it`);
+      } else if (condition.includes !== undefined) {
+        // The dashboard meets `includes` only against a list, and the sentence
+        // that explains the dependency names the option by its label.
+        const target = fields[sibling] as FieldDescriptor;
+        const item = target.kind === "array" ? (target.of as FieldDescriptor) : undefined;
+        const values = ((item?.options ?? []) as { value: string }[]).map((o) => o.value);
+        if (item?.kind !== "choice" || !values.includes(String(condition.includes))) {
+          fail(`${childPath} needs ${sibling} to include ${String(condition.includes)}, which it cannot`);
+        }
       }
     }
     checkConditions(child, childPath, fail);
@@ -96,6 +105,29 @@ describe("every registered module", () => {
 
     test(`${module.id} only makes a setting depend on one of its siblings`, () => {
       checkConditions(module.schema, "", (message) => assert.fail(`${module.id}: ${message}`));
+    });
+
+    test(`${module.id} lists of choices have options and a default drawn from them`, () => {
+      walk(module.schema, "", (field, path) => {
+        const item = field.kind === "array" ? (field.of as FieldDescriptor) : undefined;
+        if (item?.kind !== "choice") return;
+
+        const values = ((item.options ?? []) as { value: string }[]).map((o) => o.value);
+        assert.ok(values.length > 0, `${module.id}.${path} offers no options to pick from`);
+        assert.equal(new Set(values).size, values.length, `${module.id}.${path} repeats an option`);
+
+        const fallback = field.default;
+        if (!Array.isArray(fallback)) return;
+        for (const entry of fallback) {
+          assert.ok(values.includes(entry), `${module.id}.${path} defaults to ${String(entry)}, which is not an option`);
+        }
+        if (typeof field.min === "number") {
+          assert.ok(fallback.length >= field.min, `${module.id}.${path} defaults to fewer than its minimum`);
+        }
+        if (typeof field.max === "number") {
+          assert.ok(fallback.length <= field.max, `${module.id}.${path} defaults to more than its maximum`);
+        }
+      });
     });
 
     test(`${module.id} settings resolve from an empty stored value`, () => {
@@ -165,6 +197,22 @@ describe("the modules the quick setup relies on", () => {
 });
 
 describe("the sibling check", () => {
+  test("an includes condition must name an option of a list of choices", () => {
+    const schema = {
+      kind: "object",
+      fields: {
+        actions: { kind: "array", of: { kind: "choice", options: [{ value: "timeout", label: "Time out" }] } },
+        timeoutDuration: { kind: "duration", when: { field: "actions", includes: "timeout" } },
+        banDuration: { kind: "duration", when: { field: "actions", includes: "ban" } },
+      },
+    } as unknown as FieldDescriptor;
+
+    const failures: string[] = [];
+    checkConditions(schema, "", (message) => failures.push(message));
+    assert.equal(failures.length, 1);
+    assert.match(failures[0] ?? "", /banDuration/);
+  });
+
   test("catches a condition that names a field which is not there", () => {
     const schema = {
       kind: "object",

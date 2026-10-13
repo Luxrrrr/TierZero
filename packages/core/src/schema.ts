@@ -31,12 +31,14 @@ export type ChannelType = "text" | "voice" | "category" | "forum";
 
 /**
  * A condition on a sibling field, meaning "this setting only matters when the
- * other one says so". With `equals` left out the condition is met whenever the
- * sibling holds anything at all.
+ * other one says so". With neither `equals` nor `includes` the condition is met
+ * whenever the sibling holds anything at all.
  */
 export interface FieldCondition {
   field: string;
   equals?: unknown;
+  /** The sibling is a list, and the condition is met while it contains this value. */
+  includes?: unknown;
 }
 
 export interface FieldMeta {
@@ -266,6 +268,10 @@ function role(options: FieldMeta = {}): Field<string> {
 interface Choice {
   value: string;
   label: string;
+  /** One line under the label, for options that need more than a name. */
+  description?: string;
+  /** Flagged as the suggested pick. Display only; it does not select anything. */
+  recommended?: boolean;
 }
 
 function choice(options: FieldMeta & { options: Choice[]; default?: string }): Field<string> {
@@ -422,17 +428,23 @@ function message(options: MessageFieldOptions): Field<MessageBody> {
 
 // -- composites ------------------------------------------------------------
 
-function array<T>(
-  inner: Field<T>,
-  options: FieldMeta & { min?: number; max?: number } = {},
-): Field<T[]> {
-  const { min, max, ...meta } = options;
+interface ArrayOptions<T> extends FieldMeta {
+  min?: number;
+  max?: number;
+  /** Refuse a list that holds the same value twice. Together with a choice this is a multi-select. */
+  unique?: boolean;
+  /** What an absent list becomes. Without one it is empty. */
+  default?: T[];
+}
+
+function array<T>(inner: Field<T>, options: ArrayOptions<T> = {}): Field<T[]> {
+  const { min, max, unique = false, default: def, ...meta } = options;
   return {
     kind: "array",
     meta,
-    defaultValue: [],
+    defaultValue: def ?? [],
     parse(input, path = "") {
-      if (input === undefined || input === null) return { ok: true, value: [] };
+      if (input === undefined || input === null) return { ok: true, value: [...(def ?? [])] };
       if (!Array.isArray(input)) return fail(path, "must be a list");
       if (min !== undefined && input.length < min) {
         return fail(path, `needs at least ${min} entries`);
@@ -447,9 +459,25 @@ function array<T>(
         if (result.ok) value.push(result.value);
         else errors.push(...result.errors);
       });
+      if (unique && errors.length === 0) {
+        const seen = new Set<string>();
+        value.forEach((item, index) => {
+          const key = JSON.stringify(item);
+          if (seen.has(key)) errors.push({ path: `${path}[${index}]`, message: "is listed more than once" });
+          seen.add(key);
+        });
+      }
       return errors.length ? { ok: false, errors } : { ok: true, value };
     },
-    describe: () => ({ kind: "array", ...meta, min, max, of: inner.describe() }),
+    describe: () => ({
+      kind: "array",
+      ...meta,
+      min,
+      max,
+      ...(unique ? { unique: true } : {}),
+      ...(def !== undefined ? { default: def } : {}),
+      of: inner.describe(),
+    }),
   };
 }
 

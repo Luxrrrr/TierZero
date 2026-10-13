@@ -1,5 +1,7 @@
 export { Field, type FieldChrome } from "./Field";
 export { Switch } from "./Switch";
+export { Select, type SelectOption } from "./Select";
+export { MultiChoice } from "./MultiChoice";
 export { Combobox, MultiCombobox, type ComboboxOption } from "./Combobox";
 export {
   ChannelPicker,

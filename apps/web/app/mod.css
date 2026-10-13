@@ -358,45 +358,6 @@ a.mod-chip:hover {
   color: inherit;
 }
 
-.mod-select {
-  appearance: none;
-  -webkit-appearance: none;
-  height: 2rem;
-  padding: 0 2rem 0 var(--space-3);
-  border-radius: var(--radius-md);
-  border: 1px solid var(--mod-control-border);
-  background-color: var(--surface-2);
-  background-image:
-    linear-gradient(45deg, transparent 50%, var(--text-tertiary) 50%),
-    linear-gradient(135deg, var(--text-tertiary) 50%, transparent 50%);
-  background-position:
-    calc(100% - 0.95rem) 50%,
-    calc(100% - 0.65rem) 50%;
-  background-size:
-    0.3rem 0.3rem,
-    0.3rem 0.3rem;
-  background-repeat: no-repeat;
-  color: var(--text);
-  font-size: var(--text-sm);
-  cursor: pointer;
-  transition: border-color var(--mod-motion) var(--ease-out);
-}
-
-.mod-select:hover {
-  border-color: var(--text-secondary);
-}
-
-.mod-select:focus-visible {
-  outline: none;
-  border-color: var(--focus);
-  box-shadow: 0 0 0 1px var(--focus);
-}
-
-.mod-select option {
-  color: var(--text);
-  background: var(--surface);
-}
-
 .mod-kbd {
   display: inline-flex;
   align-items: center;
@@ -1732,7 +1693,7 @@ a.mod-user:hover {
   color: var(--text-secondary);
 }
 
-.ev-which .mod-select {
+.ev-which .select-root {
   max-width: 100%;
 }
 

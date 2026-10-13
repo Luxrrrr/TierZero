@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useRef, useState } from "react";
 import { EVIDENCE_LIMITS, evidenceRefFromLink, type EvidenceMessage, type EvidenceRef } from "@tier0/core";
+import { Select } from "../../../../../../components/form/Select";
 import { When } from "../../../../../../components/mod/ModUi";
 import { DeletedTag, Versions, versionLabel } from "../../../../../../components/mod/Evidence";
 
@@ -158,21 +159,19 @@ export function EvidencePicker({ guildId, userId, selected, onChange, disabled, 
                   </label>
                   {isPicked(message.id) && message.versions && message.versions.length > 1 ? (
                     <div className="ev-which">
-                      <label htmlFor={`${id}-v-${message.id}`}>Which version broke the rules?</label>
-                      <select
+                      <label id={`${id}-v-${message.id}-label`} htmlFor={`${id}-v-${message.id}`}>Which version broke the rules?</label>
+                      <Select
                         id={`${id}-v-${message.id}`}
-                        className="mod-select"
+                        size="sm"
                         disabled={disabled}
+                        aria-labelledby={`${id}-v-${message.id}-label`}
                         value={String(selected.find((ref) => ref.messageId === message.id)?.version ?? message.versions.length - 1)}
-                        onChange={(event) => chooseVersion(message.id, event.target.value)}
-                      >
-                        {message.versions.map((version, index) => (
-                          <option key={index} value={index}>
-                            {versionLabel(index, message.versions!.length)}: {version.content.slice(0, 50) || "No text"}
-                            {version.content.length > 50 ? "…" : ""}
-                          </option>
-                        ))}
-                      </select>
+                        options={message.versions.map((version, index) => ({
+                          value: String(index),
+                          label: `${versionLabel(index, message.versions!.length)}: ${version.content.slice(0, 50) || "No text"}${version.content.length > 50 ? "…" : ""}`,
+                        }))}
+                        onChange={(next) => chooseVersion(message.id, next)}
+                      />
                     </div>
                   ) : null}
                   <Versions versions={message.versions} />

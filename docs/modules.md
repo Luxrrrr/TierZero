@@ -49,7 +49,7 @@ The settings page is generated from `settings`, and `ctx.settings` is typed from
 | `s.emoji()` | string | text input for a unicode or `<:name:id>` emoji |
 | `s.template({ placeholders })` | string | textarea with insertable placeholders and a preview |
 | `s.message({ starting, variables, delivery })` | message body | a preview and an Edit message button that opens the message editor |
-| `s.array(field, { min, max })` | array | chips, tags or removable rows, depending on the item |
+| `s.array(field, { min, max, unique, default })` | array | chips, tags or removable rows, depending on the item. A list of choices with `unique: true` is a multi-select |
 | `s.object({ ... })` | object | a card at the top level, a subgroup inside one |
 
 Every builder takes `label`, `help` and `optional`. A field with a `default` falls back to it when the stored settings lack the key, so adding a setting needs no migration.
@@ -64,23 +64,26 @@ These don't change parsing. The dashboard reads them.
 channel: s.channel({ types: ["text"], optional: true, essential: true, label: "Log channel" }),
 ```
 
-`when: { field, equals }` makes a field apply only when a sibling has a value. Leave out `equals` to mean "any value". The dashboard greys the field out and explains why using the sibling's label, so don't repeat that in `help`. Naming a sibling that doesn't exist fails the tests.
+`when: { field, equals }` makes a field apply only when a sibling has a value. Leave out `equals` to mean "any value". Use `includes` instead when the sibling is a list: `when: { field: "actions", includes: "timeout" }` applies while that list contains the value. The dashboard greys the field out and explains why using the sibling's label, so don't repeat that in `help`. Naming a sibling that doesn't exist fails the tests.
 
 ```ts
-action: s.choice({
-  label: "What to do when it trips",
-  options: [
-    { value: "delete", label: "Delete the message" },
-    { value: "timeout", label: "Delete the message and time the member out" },
-  ],
-  default: "delete",
-}),
+actions: s.array(
+  s.choice({
+    options: [
+      { value: "delete", label: "Delete the message", description: "Removes it from the channel.", recommended: true },
+      { value: "timeout", label: "Time the member out", description: "Mutes them for the length below." },
+    ],
+  }),
+  { label: "What to do when it trips", min: 1, unique: true, default: ["delete"] },
+),
 timeoutDuration: s.duration({
   label: "Timeout length",
   default: "10m",
-  when: { field: "action", equals: "timeout" },
+  when: { field: "actions", includes: "timeout" },
 }),
 ```
+
+The `actions` field above is a multi-select. Each choice option may carry a `description`, shown under its label, and `recommended: true`, which only marks it as the suggested pick; the `default` is what is actually selected. `unique: true` makes the list refuse the same value twice, and `default` on an array is what an absent list becomes (without it, an empty list).
 
 `guided: true` includes a setting in the quick setup. The quick setup shows the fields tagged `guided` plus every `essential` one, through the normal form renderer. Tag only what someone has to decide before the feature works. A module that tags nothing has no quick setup. Settings it doesn't show keep their values, and a tagged field's `when` sibling is pulled in too.
 

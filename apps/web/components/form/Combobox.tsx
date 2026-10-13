@@ -497,7 +497,7 @@ function optionId(base: string, position: number): string {
 }
 
 /** Closes the list when the next press of a pointer lands anywhere else. */
-function useOutsideClose(
+export function useOutsideClose(
   ref: RefObject<HTMLElement | null>,
   open: boolean,
   onOutside: () => void,

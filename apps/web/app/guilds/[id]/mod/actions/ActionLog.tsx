@@ -1,5 +1,6 @@
 import { EvidenceList } from "../../../../../components/mod/Evidence";
 import Link from "next/link";
+import { Select } from "../../../../../components/form/Select";
 import { LogSwitch } from "../../../../../components/mod/LogSwitch";
 import type { InfractionDto, Page, UserRef } from "@tier0/core";
 import {
@@ -77,19 +78,17 @@ export function ActionLog({ guildId, query, data, staff, canExport }: Props) {
             />
           </div>
 
-          <select
+          <Select
             name="moderatorId"
-            className="mod-select actions-select"
+            size="sm"
+            className="actions-select"
             defaultValue={query.moderatorId}
             aria-label="Moderator"
-          >
-            <option value="">All moderators</option>
-            {moderators.map((user) => (
-              <option key={user.userId} value={user.userId}>
-                {displayName(user)}
-              </option>
-            ))}
-          </select>
+            options={[
+              { value: "", label: "All moderators" },
+              ...moderators.map((user) => ({ value: user.userId, label: displayName(user) })),
+            ]}
+          />
 
           <button type="submit" className="btn btn-secondary btn-sm">
             Apply

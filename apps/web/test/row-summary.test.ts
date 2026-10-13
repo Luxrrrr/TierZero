@@ -6,6 +6,7 @@ import {
   expandedWith,
   expandedWithout,
   stripIndices,
+  summarizeChoices,
   summarizeRow,
   type RowLabels,
 } from "../lib/row-summary.ts";
@@ -207,5 +208,42 @@ describe("summarizeRow with a message field", () => {
     const result = summarizeRow(row, menu, labels);
     assert.equal(result.title, "Platforms");
     assert.ok(result.detail.includes("Where do you play?"));
+  });
+});
+
+describe("summarizeChoices", () => {
+  const options = [
+    { value: "delete", label: "Delete the message" },
+    { value: "warn", label: "Warn" },
+    { value: "timeout", label: "Time out" },
+  ];
+
+  test("joins the picked labels in option order", () => {
+    assert.equal(summarizeChoices(["timeout", "delete"], options), "Delete the message, Time out");
+  });
+
+  test("shows what fits and counts the rest", () => {
+    assert.equal(summarizeChoices(["delete", "warn", "timeout"], options, 24), "Delete the message +2");
+  });
+
+  test("returns nothing for an empty set", () => {
+    assert.equal(summarizeChoices([], options), undefined);
+  });
+
+  test("keeps a value that is no longer an option rather than hiding it", () => {
+    assert.equal(summarizeChoices(["warn", "old"], options), "Warn, old");
+  });
+
+  test("a single label that is too long is cut", () => {
+    const long = [{ value: "a", label: "A".repeat(60) }];
+    assert.ok((summarizeChoices(["a"], long) ?? "").length <= 40);
+  });
+
+  test("a list of choices is summarised inside a row", () => {
+    const shape = fields({
+      actions: { kind: "array", label: "Actions", of: { kind: "choice", options } },
+    });
+    const result = summarizeRow({ actions: ["delete", "warn"] }, shape, labels);
+    assert.equal(result.detail, "Delete the message, Warn");
   });
 });

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Select } from "../../../../../components/form/Select";
 import { LogSwitch } from "../../../../../components/mod/LogSwitch";
 import type { AuditDto, Page, UserRef } from "@tier0/core";
 import { Avatar, Pager, RoleBadge, UserChip, When } from "../../../../../components/mod/ModUi";
@@ -88,15 +89,20 @@ export function AuditLog({ guildId, query, data, actors: known, narrowedHere }: 
             />
           </div>
 
-          <select name="actorId" className="mod-select audit-select" defaultValue={query.actorId} aria-label="Staff member">
-            <option value="">Any staff member</option>
-            {actors.map(({ userId, name, role }) => (
-              <option key={userId} value={userId}>
-                {name ?? `User ${userId.slice(-4)}`}
-                {role ? ` (${role})` : ""}
-              </option>
-            ))}
-          </select>
+          <Select
+            name="actorId"
+            size="sm"
+            className="audit-select"
+            defaultValue={query.actorId}
+            aria-label="Staff member"
+            options={[
+              { value: "", label: "Any staff member" },
+              ...actors.map(({ userId, name, role }) => ({
+                value: userId,
+                label: `${name ?? `User ${userId.slice(-4)}`}${role ? ` (${role})` : ""}`,
+              })),
+            ]}
+          />
 
           <input
             name="targetUserId"

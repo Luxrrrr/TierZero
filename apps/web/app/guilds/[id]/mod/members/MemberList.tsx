@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { MemberSummary, Page } from "@tier0/core";
+import { Select } from "../../../../../components/form/Select";
 import {
   ArrowDownIcon,
   ArrowUpIcon,
@@ -122,13 +123,13 @@ export function MemberToolbar({ guildId, query, total }: { guildId: string; quer
           />
         </label>
         {query.filter !== "all" ? <input type="hidden" name="filter" value={query.filter} /> : null}
-        <select name="sort" className="mod-select" defaultValue={query.sort} aria-label="Sort members by">
-          {MEMBER_SORTS.map((entry) => (
-            <option key={entry.value} value={entry.value}>
-              {entry.label}
-            </option>
-          ))}
-        </select>
+        <Select
+          name="sort"
+          size="sm"
+          defaultValue={query.sort}
+          aria-label="Sort members by"
+          options={MEMBER_SORTS.map((entry) => ({ value: entry.value, label: entry.label }))}
+        />
         <button type="submit" className="btn btn-secondary btn-sm">
           Apply
         </button>

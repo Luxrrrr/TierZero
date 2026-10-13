@@ -163,7 +163,7 @@
 
 /* Form fields edge at 3:1 against the dialog, which the hairline border is not. */
 .pf-dialog[data-layout="form"] .input,
-.pf-dialog[data-layout="form"] .select,
+.pf-dialog[data-layout="form"] .select-trigger,
 .pf-dialog[data-layout="form"] .textarea {
   border-color: var(--mod-control-border);
 }
@@ -174,7 +174,7 @@
 }
 
 .pf-dialog[data-layout="form"] .input:focus-visible,
-.pf-dialog[data-layout="form"] .select:focus-visible,
+.pf-dialog[data-layout="form"] .select-trigger:focus-visible,
 .pf-dialog[data-layout="form"] .textarea:focus-visible {
   border-color: var(--focus);
   box-shadow: 0 0 0 3px var(--accent-ring);
@@ -398,6 +398,7 @@
 
 .ta-unit {
   width: 8.5rem;
+  flex: none;
 }
 
 .ta-until {

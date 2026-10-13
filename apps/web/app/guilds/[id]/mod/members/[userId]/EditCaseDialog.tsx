@@ -3,6 +3,7 @@
 import { useId, useRef, useState } from "react";
 import type { EvidenceRef, InfractionDto } from "@tier0/core";
 import { PencilIcon } from "../../../../../../components/Icons";
+import { Select } from "../../../../../../components/form/Select";
 import { ACTION_REASON_LIMIT, BAN_PRESETS, TIMEOUT_PRESETS } from "./actions";
 import { CharacterCount } from "./CharacterCount";
 import { DialogShell, type FocusFallback } from "./Dialog";
@@ -130,18 +131,22 @@ export function EditCaseDialog({ guildId, infraction, now, timeZone, run, fallba
 
           {running ? (
             <div className="pf-field">
-              <label className="pf-field-label" htmlFor={lengthId}>
+              <label className="pf-field-label" id={`${lengthId}-label`} htmlFor={lengthId}>
                 How long it lasts
               </label>
-              <select id={lengthId} className="mod-select" value={length} disabled={busy} onChange={(event) => setLength(event.target.value)}>
-                <option value={KEEP}>Keep it as it is ({currentEnd})</option>
-                {presets.map((preset) => (
-                  <option key={preset.ms} value={String(preset.ms)}>
-                    {preset.label} from now
-                  </option>
-                ))}
-                {infraction.action === "ban" ? <option value={PERMANENT}>Make it permanent</option> : null}
-              </select>
+              <Select
+                id={lengthId}
+                size="sm"
+                disabled={busy}
+                aria-labelledby={`${lengthId}-label`}
+                value={length}
+                options={[
+                  { value: KEEP, label: `Keep it as it is (${currentEnd})` },
+                  ...presets.map((preset) => ({ value: String(preset.ms), label: `${preset.label} from now` })),
+                  ...(infraction.action === "ban" ? [{ value: PERMANENT, label: "Make it permanent" }] : []),
+                ]}
+                onChange={setLength}
+              />
               <p className="pf-field-hint">
                 A new length counts from now and is applied in Discord straight away.
                 {infraction.action === "timeout" ? " Discord allows timeouts of up to 28 days." : ""}
