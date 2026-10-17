@@ -9,7 +9,7 @@ export interface ModuleSummary {
   summary: string;
   category: ModuleCategory;
   /** Where the dashboard hosts this module's settings, when not on its own page. */
-  area: "moderation" | null;
+  area: "moderation" | "tickets" | null;
   /** On in every server with no switch, as the bot's own built-in settings are. */
   alwaysOn: boolean;
   requires: string[];
@@ -34,6 +34,56 @@ export interface CommandSummary {
   repliesVary: boolean;
   /** Null when the command's reply is not plain text an owner can reword. */
   response: ResponseTemplate | null;
+  /**
+   * The parts of a slash command that has them, such as `/ticket close`.
+   * Empty for a command without parts. Each part can be switched off and
+   * limited on its own, under the override key in `key`.
+   */
+  subcommands: SubcommandSummary[];
+}
+
+export interface SubcommandSummary {
+  /** As members type it after the command: `close`, or `group close` inside a group. */
+  name: string;
+  /** The command and the part, as the override is stored: `ticket close`. */
+  key: string;
+  description: string;
+}
+
+/** The override key of one part of a command, the way Discord names it: words separated by spaces. */
+export function subcommandKey(command: string, group: string | null, subcommand: string): string {
+  return [command, group, subcommand].filter((part): part is string => typeof part === "string" && part !== "").join(" ");
+}
+
+interface CommandOptionJson {
+  type?: number;
+  name?: string;
+  description?: string;
+  options?: CommandOptionJson[];
+}
+
+const SUB_COMMAND = 1;
+const SUB_COMMAND_GROUP = 2;
+
+/** The parts of a slash command, read from what it registers with Discord. */
+export function subcommandsOf(command: string, json: unknown): SubcommandSummary[] {
+  const options = ((json as { options?: CommandOptionJson[] } | null)?.options ?? []).filter((option) => typeof option?.name === "string");
+  const parts: SubcommandSummary[] = [];
+  for (const option of options) {
+    if (option.type === SUB_COMMAND) {
+      parts.push({ name: option.name!, key: subcommandKey(command, null, option.name!), description: option.description ?? "" });
+    } else if (option.type === SUB_COMMAND_GROUP) {
+      for (const inner of option.options ?? []) {
+        if (inner.type !== SUB_COMMAND || typeof inner.name !== "string") continue;
+        parts.push({
+          name: `${option.name} ${inner.name}`,
+          key: subcommandKey(command, option.name!, inner.name),
+          description: inner.description ?? "",
+        });
+      }
+    }
+  }
+  return parts;
 }
 
 /** A slash command, or an entry in the right-click menu of a member or a message. */
@@ -113,6 +163,7 @@ export class ModuleRegistry {
           response: c.response ?? null,
           privateByDefault: c.publicReply !== true,
           repliesVary: c.variedReply === true,
+          subcommands: subcommandsOf(c.name, c.build().toJSON()),
         })),
         ...(module.contextCommands ?? []).map((c) => ({
           name: c.name,
@@ -122,6 +173,7 @@ export class ModuleRegistry {
           response: c.response ?? null,
           privateByDefault: c.publicReply !== true,
           repliesVary: false,
+          subcommands: [],
         })),
       ],
       schema: module.settings.describe(),

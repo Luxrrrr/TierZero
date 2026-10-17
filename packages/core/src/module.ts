@@ -1,6 +1,7 @@
 import type {
   ActionRowBuilder,
   AttachmentBuilder,
+  AutocompleteInteraction,
   ChatInputCommandInteraction,
   Client,
   ReadonlyCollection,
@@ -9,6 +10,7 @@ import type {
   Guild,
   GuildBan,
   GuildChannel,
+  GuildAuditLogsEntry,
   GuildEmoji,
   GuildMember,
   InteractionReplyOptions,
@@ -27,6 +29,7 @@ import type {
   SlashCommandBuilder,
   SlashCommandOptionsOnlyBuilder,
   SlashCommandSubcommandsOnlyBuilder,
+  Sticker,
   ThreadChannel,
   VoiceState,
 } from "discord.js";
@@ -86,6 +89,13 @@ export interface ModuleContext<T = unknown> {
    * owner last opened the dashboard at. Cached for a few seconds.
    */
   dashboardUrl(): Promise<string>;
+  /**
+   * Another module's context in this server, or null while that module is off
+   * or its settings cannot be read. For a feature that hands work to another,
+   * as automod's warnings are counted by moderation's escalation rules. Absent
+   * where no runtime provides it, such as in tests.
+   */
+  peer?(moduleId: string): Promise<ModuleContext | null>;
 }
 
 export interface EditMessageOptions {
@@ -138,6 +148,12 @@ export interface ScheduledWork {
    * early, such as an unban issued before the temporary ban expires.
    */
   cancel(kind: string, match?: TaskPayload): Promise<number>;
+  /**
+   * Moves pending work of this kind whose payload is exactly `payload` to
+   * `runAt`, or schedules it when there is none. One statement in the usual
+   * case, for work that is pushed back often, such as an inactivity close.
+   */
+  reschedule(kind: string, runAt: Date, payload?: TaskPayload): Promise<void>;
 }
 
 export type TaskHandler<T = unknown> = (
@@ -170,6 +186,12 @@ export interface CommandDefinition<T = unknown> {
   /** Present when the owner may rewrite the reply from the dashboard. */
   response?: ResponseTemplate;
   run(interaction: ChatInputCommandInteraction, ctx: ModuleContext<T>): Promise<void>;
+  /**
+   * Suggestions for an option built with `setAutocomplete(true)`, answered with
+   * `interaction.respond`. Called only while the module is on in that server;
+   * the role and channel rules are not checked, since nothing runs.
+   */
+  autocomplete?(interaction: AutocompleteInteraction, ctx: ModuleContext<T>): Promise<void>;
 }
 
 /**
@@ -228,6 +250,8 @@ export interface EventHandlers<T = unknown> {
   channelUpdate(before: GuildChannel, after: GuildChannel, ctx: ModuleContext<T>): Promise<void>;
   threadCreate(thread: ThreadChannel, ctx: ModuleContext<T>): Promise<void>;
   threadDelete(thread: ThreadChannel, ctx: ModuleContext<T>): Promise<void>;
+  /** Fires for archiving, locking and renaming alike; compare `before` and `after` to tell which. */
+  threadUpdate(before: ThreadChannel, after: ThreadChannel, ctx: ModuleContext<T>): Promise<void>;
   roleUpdate(before: Role, after: Role, ctx: ModuleContext<T>): Promise<void>;
   guildUpdate(before: Guild, after: Guild, ctx: ModuleContext<T>): Promise<void>;
   voiceStateUpdate(before: VoiceState, after: VoiceState, ctx: ModuleContext<T>): Promise<void>;
@@ -236,6 +260,14 @@ export interface EventHandlers<T = unknown> {
   emojiCreate(emoji: GuildEmoji, ctx: ModuleContext<T>): Promise<void>;
   emojiUpdate(before: GuildEmoji, after: GuildEmoji, ctx: ModuleContext<T>): Promise<void>;
   emojiDelete(emoji: GuildEmoji, ctx: ModuleContext<T>): Promise<void>;
+  stickerCreate(sticker: Sticker, ctx: ModuleContext<T>): Promise<void>;
+  stickerUpdate(before: Sticker, after: Sticker, ctx: ModuleContext<T>): Promise<void>;
+  stickerDelete(sticker: Sticker, ctx: ModuleContext<T>): Promise<void>;
+  /**
+   * A new line in the server's audit log, which is the only way to learn of a
+   * kick. Needs the bot to have View Audit Log; without it this never fires.
+   */
+  auditLogEntry(entry: GuildAuditLogsEntry, ctx: ModuleContext<T>): Promise<void>;
   banAdd(ban: GuildBan, ctx: ModuleContext<T>): Promise<void>;
   banRemove(ban: GuildBan, ctx: ModuleContext<T>): Promise<void>;
 }
@@ -333,6 +365,14 @@ export interface RowHooks<T = unknown> {
   actions?: Record<string, RowAction<T>>;
 }
 
+/** One line from a module's `notices` hook. */
+export interface ModuleNotice {
+  tone: "info" | "attention";
+  text: string;
+  /** A dashboard path such as `/guilds/1/commands`, or a full http(s) address. */
+  link?: { href: string; label: string };
+}
+
 /**
  * Which section of the dashboard a module is configured under. The list is
  * closed: a module picking its own section name would leave the navigation
@@ -360,7 +400,7 @@ export interface ModuleDefinition<S extends Shape = Shape> {
    * schema; only where it sits changes. Left out, the settings live on the
    * module's own page.
    */
-  area?: "moderation";
+  area?: "moderation" | "tickets";
   /**
    * The module is part of the bot rather than a feature an owner chooses: it is
    * on in every server, has no switch, and needs no row to say so. Its settings
@@ -385,10 +425,23 @@ export interface ModuleDefinition<S extends Shape = Shape> {
   /** Modal submission handlers, keyed by the action in their custom id. */
   modals?: Record<string, ModalHandler<ShapeValues<S>>>;
   /**
+   * Actions of `components` and `modals` that may also arrive from a direct
+   * message, where Discord names no server. Their custom id's rest starts with
+   * the server's id and a colon, which is how the router finds the server; the
+   * handler still checks that the person may act there.
+   */
+  directMessage?: string[];
+  /**
    * Status lines and actions for the rows of a list setting, keyed by the
    * list's path in the schema without indices, such as `news.feeds`.
    */
   rows?: Record<string, RowHooks<ShapeValues<S>>>;
+  /**
+   * Lines shown above the settings form that depend on this server's saved
+   * state rather than on the schema, such as the address of a page the module
+   * serves. Read each time the settings page is opened or saved.
+   */
+  notices?(ctx: ModuleContext<ShapeValues<S>>): Promise<ModuleNotice[]>;
   /** Discord permissions the module cannot work without. Surfaced in setup. */
   requires?: string[];
   onEnable?(ctx: ModuleContext<ShapeValues<S>>): Promise<void>;

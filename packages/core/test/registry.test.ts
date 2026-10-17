@@ -7,6 +7,8 @@ import {
   isRoleAssignable,
   parseCustomId,
   s,
+  subcommandKey,
+  subcommandsOf,
 } from "../dist/index.js";
 
 const CHANNEL = "123456789012345678";
@@ -147,6 +149,7 @@ describe("describe", () => {
         privateByDefault: true,
         repliesVary: false,
         response: null,
+        subcommands: [],
       },
     ]);
     assert.equal(described?.schema.kind, "object");
@@ -327,5 +330,47 @@ describe("built-in modules", () => {
     registry.register(builtIn());
     const resolved = registry.resolveSettings("system", undefined);
     assert.deepEqual(resolved, { ok: true, value: { note: "hello" } });
+  });
+});
+
+describe("subcommands", () => {
+  const json = {
+    name: "ticket",
+    options: [
+      { type: 1, name: "close", description: "Closes the ticket." },
+      { type: 2, name: "tag", description: "Tags.", options: [{ type: 1, name: "add", description: "Adds a tag." }] },
+      { type: 3, name: "reason", description: "Not a part, an option." },
+    ],
+  };
+
+  test("are read from what the command registers, groups included", () => {
+    assert.deepEqual(subcommandsOf("ticket", json), [
+      { name: "close", key: "ticket close", description: "Closes the ticket." },
+      { name: "tag add", key: "ticket tag add", description: "Adds a tag." },
+    ]);
+  });
+
+  test("a command without parts has none", () => {
+    assert.deepEqual(subcommandsOf("ping", { name: "ping", options: [{ type: 3, name: "text" }] }), []);
+    assert.deepEqual(subcommandsOf("ping", { name: "ping" }), []);
+  });
+
+  test("keys are the words Discord shows, separated by spaces", () => {
+    assert.equal(subcommandKey("ticket", null, "close"), "ticket close");
+    assert.equal(subcommandKey("ticket", "tag", "add"), "ticket tag add");
+  });
+
+  test("describe lists them on the command", () => {
+    const registry = new ModuleRegistry();
+    registry.register(
+      defineModule({
+        id: "tickets",
+        name: "Tickets",
+        summary: "",
+        settings: s.object({}),
+        commands: [{ ...command("ticket"), build: () => ({ toJSON: () => json }) }],
+      }),
+    );
+    assert.deepEqual(registry.describe()[0]?.commands[0]?.subcommands.map((part) => part.key), ["ticket close", "ticket tag add"]);
   });
 });

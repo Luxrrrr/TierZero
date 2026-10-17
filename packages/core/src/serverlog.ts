@@ -67,13 +67,15 @@ export const SERVER_LOG_CATEGORIES = [
   {
     id: "channels",
     label: "Channels",
-    description: "Channels and threads created, changed and deleted.",
+    description: "Channels and threads created, changed, archived and deleted.",
     types: [
       { id: "channel.create", label: "Channel created" },
       { id: "channel.update", label: "Channel changed" },
       { id: "channel.delete", label: "Channel deleted" },
       { id: "thread.create", label: "Thread created" },
       { id: "thread.delete", label: "Thread deleted" },
+      { id: "thread.archive", label: "Thread archived" },
+      { id: "thread.unarchive", label: "Thread reopened" },
     ],
   },
   {
@@ -90,7 +92,7 @@ export const SERVER_LOG_CATEGORIES = [
   {
     id: "server",
     label: "Server",
-    description: "Server settings, invites and emojis.",
+    description: "Server settings, invites, emojis and stickers.",
     types: [
       { id: "server.update", label: "Server settings changed" },
       { id: "invite.create", label: "Invite created" },
@@ -98,6 +100,9 @@ export const SERVER_LOG_CATEGORIES = [
       { id: "emoji.create", label: "Emoji added" },
       { id: "emoji.update", label: "Emoji renamed" },
       { id: "emoji.delete", label: "Emoji removed" },
+      { id: "sticker.create", label: "Sticker added" },
+      { id: "sticker.update", label: "Sticker changed" },
+      { id: "sticker.delete", label: "Sticker removed" },
     ],
   },
 ] as const satisfies readonly ServerLogCategory[];

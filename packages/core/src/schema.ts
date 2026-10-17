@@ -50,8 +50,13 @@ export interface FieldMeta {
    * tell a server owner that a feature is switched on but idle. Validation
    * ignores it: an essential setting is still usually `optional`, because a
    * module has to load unconfigured before anyone can configure it.
+   *
+   * A string names a set instead: the module needs at least one setting of the
+   * set filled in, anywhere in its schema, as a welcome feature needs a
+   * greeting channel or a farewell channel or a direct message, but not all
+   * three. A switch counts as filled while it is on.
    */
-  essential?: boolean;
+  essential?: boolean | string;
   /**
    * Marks a setting the quick setup asks about. Essential fields are included
    * whether or not they carry this, since nothing works until they are set;
@@ -67,7 +72,43 @@ export interface FieldMeta {
    * It has no effect on any other field.
    */
   collapsible?: boolean;
+  /**
+   * On a role field: the bot gives this role to members, so a role above the bot's
+   * own cannot work. The role picker greys those out only where this is set. A role
+   * chosen to exempt, limit or notify is selectable whatever its position.
+   */
+  assigns?: boolean;
+  /**
+   * Dashboard-only. Names the part of a module's settings page a top-level
+   * setting belongs to, for a module with enough settings to split the page.
+   * Settings that share a value are drawn together, in schema order.
+   */
+  section?: string;
+  /**
+   * Dashboard-only. The id of the heading this setting is listed under in a
+   * group with a `layout`, one of that group's `topics`. On a nested group it is
+   * what the group's own settings are listed under, unless they name another.
+   * A message elsewhere in the module that names a topic of a `layout: "messages"`
+   * group is listed there as well as in its own place.
+   */
+  topic?: string;
 }
+
+/** A heading a group with a `layout` lists some of its settings under. */
+export interface FieldTopic {
+  id: string;
+  label: string;
+  /** One line under the heading. */
+  help?: string;
+  /**
+   * The id of another topic this one is drawn inside of, closed until opened,
+   * for a long run of messages few owners need, such as refusals.
+   */
+  within?: string;
+}
+
+/** Who sees a message, as a message list says it. */
+export type MessageAudience = "public" | "private" | "dm";
 
 export type ParseResult<T> =
   | { ok: true; value: T }
@@ -93,6 +134,9 @@ export interface FieldDescriptor {
   help?: string;
   optional?: boolean;
   default?: unknown;
+  section?: string;
+  /** A string the dashboard fills in itself and never shows. See `s.string({ generated })`. */
+  generated?: boolean;
   [extra: string]: unknown;
 }
 
@@ -125,10 +169,33 @@ interface StringOptions extends FieldMeta {
    * is stored as `https://bot.example.com`. Anything that is not an http(s) address is refused.
    */
   origin?: boolean;
+  /**
+   * The value is a whole http(s) address, such as a feed's, kept as written
+   * apart from surrounding spaces. Anything else is refused. The dashboard
+   * gives it a whole row, since addresses are long.
+   */
+  url?: boolean;
+  /**
+   * A stable id for a row in a list, which other records point at. The
+   * dashboard draws nothing for it and fills it with `generatedId()` when a
+   * row is added, so renaming or reordering rows never breaks those links.
+   * It is optional to parse: a module whose old data has no ids fills them in
+   * from an `upgrade`.
+   */
+  generated?: boolean;
+}
+
+/** What a generated id may look like: short, and safe in a custom id or a URL. */
+export const GENERATED_ID = /^[A-Za-z0-9_-]{1,32}$/;
+
+/** A new id for a `generated` string, eight characters as the dashboard makes them. */
+export function generatedId(): string {
+  return globalThis.crypto.randomUUID().slice(0, 8);
 }
 
 function string(options: StringOptions = {}): Field<string> {
-  const { min, max, multiline, origin, default: def, ...meta } = options;
+  const { min, max, multiline, origin, url, generated, default: def, ...rest } = options;
+  const meta: FieldMeta = generated ? { ...rest, optional: true } : rest;
   return {
     kind: "string",
     meta,
@@ -138,6 +205,7 @@ function string(options: StringOptions = {}): Field<string> {
         return missing(this, path);
       }
       if (typeof input !== "string") return fail(path, "must be text");
+      if (generated && !GENERATED_ID.test(input)) return fail(path, "is not a valid id");
       if (min !== undefined && input.length < min) {
         return fail(path, `must be at least ${min} characters`);
       }
@@ -148,10 +216,34 @@ function string(options: StringOptions = {}): Field<string> {
         const normalized = normalizeOrigin(input);
         return normalized === null ? fail(path, "must be a web address starting with http:// or https://") : { ok: true, value: normalized };
       }
+      if (url) {
+        const trimmed = input.trim();
+        return isHttpAddress(trimmed) ? { ok: true, value: trimmed } : fail(path, "must be a web address starting with http:// or https://");
+      }
       return { ok: true, value: input };
     },
-    describe: () => ({ kind: "string", ...meta, default: def, min, max, multiline, ...(origin ? { origin: true } : {}) }),
+    describe: () => ({
+      kind: "string",
+      ...meta,
+      default: def,
+      min,
+      max,
+      multiline,
+      ...(origin ? { origin: true } : {}),
+      ...(url ? { url: true } : {}),
+      ...(generated ? { generated: true } : {}),
+    }),
   };
+}
+
+function isHttpAddress(text: string): boolean {
+  if (/\s/.test(text)) return false;
+  try {
+    const parsed = new URL(text);
+    return (parsed.protocol === "http:" || parsed.protocol === "https:") && parsed.hostname !== "";
+  } catch {
+    return false;
+  }
 }
 
 interface IntegerOptions extends FieldMeta {
@@ -205,34 +297,67 @@ const UNIT_MS: Record<string, number> = {
   d: 86_400_000,
 };
 
+const UNIT_NAME: Record<string, string> = { s: "second", m: "minute", h: "hour", d: "day" };
+
+function durationToMs(text: string): number | null {
+  const match = DURATION.exec(text.trim());
+  if (!match) return null;
+  const [, amount, unit] = match;
+  const factor = unit === undefined ? undefined : UNIT_MS[unit];
+  if (amount === undefined || factor === undefined) return null;
+  return Number(amount) * factor;
+}
+
+/** "28d" as "28 days", for a validation message someone reads. */
+export function spokenDuration(text: string): string {
+  const match = DURATION.exec(text.trim());
+  if (!match) return text;
+  const [, amount, unit] = match;
+  const name = unit === undefined ? undefined : UNIT_NAME[unit];
+  if (amount === undefined || name === undefined) return text;
+  return `${amount} ${name}${amount === "1" ? "" : "s"}`;
+}
+
+interface DurationOptions extends FieldMeta {
+  default?: string;
+  /** The longest allowed, written like "28d". */
+  max?: string;
+  /** The shortest allowed, written like "1m". Without it, zero is allowed. */
+  min?: string;
+}
+
 /** Stored as milliseconds, written and displayed as "30s", "15m", "7d". */
-function duration(options: FieldMeta & { default?: string; max?: string } = {}): Field<number> {
-  const { default: def, max, ...meta } = options;
-  const toMs = (text: string): number | null => {
-    const match = DURATION.exec(text.trim());
-    if (!match) return null;
-    const [, amount, unit] = match;
-    const factor = unit === undefined ? undefined : UNIT_MS[unit];
-    if (amount === undefined || factor === undefined) return null;
-    return Number(amount) * factor;
-  };
-  const ceiling = max ? toMs(max) : null;
+function duration(options: DurationOptions = {}): Field<number> {
+  const { default: def, max, min, ...meta } = options;
+  const ceiling = max ? durationToMs(max) : null;
+  const floor = min ? durationToMs(min) : null;
   return {
     kind: "duration",
     meta,
-    defaultValue: def ? (toMs(def) ?? undefined) : undefined,
+    defaultValue: def ? (durationToMs(def) ?? undefined) : undefined,
     parse(input, path = "") {
       if (input === undefined || input === null || input === "") {
         return missing(this, path);
       }
-      if (typeof input === "number") return { ok: true, value: input };
+      if (typeof input === "number") {
+        if (!Number.isFinite(input)) return fail(path, "must be a duration");
+        // Milliseconds are the stored form, so this is also what every read of
+        // saved settings goes through. A value saved before a limit existed is
+        // pulled inside it rather than refused, since a refusal on read leaves
+        // the whole feature unconfigured.
+        let value = Math.max(0, Math.round(input));
+        if (floor !== null && value < floor) value = floor;
+        if (ceiling !== null && value > ceiling) value = ceiling;
+        return { ok: true, value };
+      }
       if (typeof input !== "string") return fail(path, "must be a duration");
-      const ms = toMs(input);
+      const ms = durationToMs(input);
       if (ms === null) return fail(path, "must look like 30s, 15m, 2h or 7d");
-      if (ceiling !== null && ms > ceiling) return fail(path, `must be ${max} or less`);
+      if (floor !== null && ms < floor) return fail(path, `must be at least ${spokenDuration(min ?? "")}`);
+      if (ceiling !== null && ms > ceiling) return fail(path, `must be ${spokenDuration(max ?? "")} or less`);
       return { ok: true, value: ms };
     },
-    describe: () => ({ kind: "duration", ...meta, default: def, max }),
+    describe: () => ({ kind: "duration", ...meta, default: def, max, min }),
   };
 }
 
@@ -266,7 +391,10 @@ function channel(options: FieldMeta & { types?: ChannelType[] } = {}): Field<str
   return snowflakeField("channel", { types }, meta);
 }
 
-/** Rendered as a role picker. The dashboard filters roles above the bot's own. */
+/**
+ * Rendered as a role picker. Every role can be picked unless `assigns` is set,
+ * in which case roles above the bot's own are greyed out.
+ */
 function role(options: FieldMeta = {}): Field<string> {
   return snowflakeField("role", {}, options);
 }
@@ -301,10 +429,26 @@ function choice(options: FieldMeta & { options: Choice[]; default?: string }): F
 }
 
 const CUSTOM_EMOJI = /^<a?:[A-Za-z0-9_]{2,32}:\d{17,20}>$/;
+const PICTOGRAPHIC = /\p{Extended_Pictographic}|\p{Regional_Indicator}|\u20E3/u;
+
+/** One emoji as a person sees it, which can be several code points joined together. */
+function isSingleUnicodeEmoji(value: string): boolean {
+  if (!PICTOGRAPHIC.test(value)) return false;
+  if (typeof Intl.Segmenter === "function") {
+    const segments = [...new Intl.Segmenter(undefined, { granularity: "grapheme" }).segment(value)];
+    return segments.length === 1;
+  }
+  return [...value].length <= 8;
+}
+
+/** The message every emoji field shows when what it holds is not one. */
+export const EMOJI_ERROR = "must be one emoji, or a custom emoji from this server written as <:name:id>";
 
 /**
  * Either a unicode emoji or Discord's custom form, `<:name:id>`. Stored as
- * written so it can go straight into a reaction or a message.
+ * written so it can go straight into a reaction or a message. The dashboard
+ * turns a pasted `:name:` into the custom form when the server has an emoji of
+ * that name, since only it knows the server's emoji.
  */
 function emoji(options: FieldMeta & { default?: string } = {}): Field<string> {
   const { default: def, ...meta } = options;
@@ -316,15 +460,16 @@ function emoji(options: FieldMeta & { default?: string } = {}): Field<string> {
       if (input === undefined || input === null || input === "") {
         return missing(this, path);
       }
-      if (typeof input !== "string") return fail(path, "must be an emoji");
+      if (typeof input !== "string") return fail(path, EMOJI_ERROR);
       const value = input.trim();
       if (CUSTOM_EMOJI.test(value)) return { ok: true, value };
-      // Unicode emoji arrive as one to four code points; anything longer is
-      // text somebody typed into the wrong box.
+      if (isSingleUnicodeEmoji(value)) return { ok: true, value };
+      // The rule before joined emoji were understood, kept so nothing saved
+      // under it stops validating: up to four code points that are not words.
       if ([...value].length <= 4 && !/^[\w\s]+$/.test(value)) {
         return { ok: true, value };
       }
-      return fail(path, "must be an emoji, either unicode or :custom:");
+      return fail(path, EMOJI_ERROR);
     },
     describe: () => ({ kind: "emoji", ...meta, default: def }),
   };
@@ -335,6 +480,13 @@ interface TemplateOptions extends FieldMeta {
   default?: string;
   /** Substitutions the module makes, so the dashboard can offer them. */
   placeholders?: string[];
+  /** Dashboard-only. What the preview shows for each placeholder, as in `{ position: "1" }`. */
+  samples?: Record<string, string>;
+  /**
+   * Dashboard-only. `channel` previews the text as the channel name Discord
+   * would make of it, lower case with hyphens, instead of as a message.
+   */
+  preview?: "message" | "channel";
 }
 
 /**
@@ -373,6 +525,65 @@ export interface MessageVariable {
   sample: string;
 }
 
+/**
+ * A setting a message preview reads or edits: a path from the object that
+ * holds the message, or from the root of the module's settings when it starts
+ * with `/`. Dots step into objects, as in `appearance.buttonLabel`.
+ */
+export type AttachRef = string;
+
+export type AttachButtonStyle = "primary" | "secondary" | "success" | "danger";
+
+/**
+ * One button per row of a sibling list, or one menu holding them all, as a
+ * ticket panel has one button per ticket type. The paths inside `label`,
+ * `labelFallback`, `emoji`, `style` and `description` are read in each row.
+ */
+export interface MessageAttachList {
+  kind: "list";
+  /** The sibling list. */
+  list: AttachRef;
+  label: string;
+  /** Read when `label` is empty, such as the type's name. */
+  labelFallback?: string;
+  emoji?: string;
+  /** A choice holding one of the button colours. */
+  style?: string;
+  /** A menu option's second line. */
+  description?: string;
+  /** A sibling choice that makes the rows one menu while it holds `menu`. */
+  mode?: { field: AttachRef; menu: string };
+  /** The menu's grey text before anything is picked. */
+  placeholder?: AttachRef;
+  /** What one row is, for "Add a ticket type": singular and lower case. */
+  noun: string;
+}
+
+/** A button the feature always adds under the message, its text and colour kept in other settings. */
+export interface MessageAttachButton {
+  /** What it does, for the editor's heading. */
+  name: string;
+  label: AttachRef;
+  style?: AttachRef;
+  /** The colour when there is no `style` setting. */
+  defaultStyle?: AttachButtonStyle;
+  /** A switch the button is only added while it is on. */
+  when?: AttachRef;
+}
+
+export interface MessageAttachButtons {
+  kind: "buttons";
+  buttons: MessageAttachButton[];
+}
+
+/**
+ * Dashboard-only. The buttons or menu the feature itself adds under a message
+ * it sends, so the preview shows what members see and each one can be edited
+ * where it is drawn. Every path must name an existing setting; the schema
+ * check in the bot's tests holds modules to that.
+ */
+export type MessageAttach = MessageAttachList | MessageAttachButtons;
+
 export interface MessageFieldOptions extends FieldMeta {
   /** What is particular to this message. The variables every message has are always on offer too. */
   variables?: MessageVariable[];
@@ -394,6 +605,14 @@ export interface MessageFieldOptions extends FieldMeta {
    * minor messages; a message that is the point of its page keeps the preview.
    */
   compact?: boolean;
+  /** What the feature adds under the message. See `MessageAttach`. */
+  attach?: MessageAttach;
+  /**
+   * Dashboard-only. Who sees it: everyone in the channel, only the person it
+   * answers, or the person it is sent to by direct message. Shown beside the
+   * message in a message list.
+   */
+  audience?: MessageAudience;
 }
 
 /**
@@ -403,7 +622,7 @@ export interface MessageFieldOptions extends FieldMeta {
  * changing a setting's kind does not lose what owners already wrote.
  */
 function message(options: MessageFieldOptions): Field<MessageBody> {
-  const { variables = [], starting, delivery = "channel", components = true, note, ...meta } = options;
+  const { variables = [], starting, delivery = "channel", components = true, note, attach, audience, ...meta } = options;
   const fit = (body: MessageBody) => restrictMessage(body, delivery, components);
   const defaultValue = fit(starting);
   return {
@@ -434,6 +653,8 @@ function message(options: MessageFieldOptions): Field<MessageBody> {
       delivery,
       components,
       note,
+      ...(attach ? { attach } : {}),
+      ...(audience ? { audience } : {}),
     }),
   };
 }
@@ -454,6 +675,15 @@ interface ArrayOptions<T> extends FieldMeta {
    * options or fewer are chips and more are rows.
    */
   layout?: "chips" | "rows";
+  /**
+   * Dashboard-only. What one entry of a list of rows is called, singular and
+   * lower case, as in "Add a game". Without it the list's label is guessed at.
+   */
+  item?: string;
+}
+
+function entries(count: number): string {
+  return `${count} ${count === 1 ? "entry" : "entries"}`;
 }
 
 function array<T>(inner: Field<T>, options: ArrayOptions<T> = {}): Field<T[]> {
@@ -466,10 +696,10 @@ function array<T>(inner: Field<T>, options: ArrayOptions<T> = {}): Field<T[]> {
       if (input === undefined || input === null) return { ok: true, value: [...(def ?? [])] };
       if (!Array.isArray(input)) return fail(path, "must be a list");
       if (min !== undefined && input.length < min) {
-        return fail(path, `needs at least ${min} entries`);
+        return fail(path, `needs at least ${entries(min)}`);
       }
       if (max !== undefined && input.length > max) {
-        return fail(path, `allows at most ${max} entries`);
+        return fail(path, `allows at most ${entries(max)}`);
       }
       const value: T[] = [];
       const errors: FieldError[] = [];
@@ -524,6 +754,16 @@ interface ObjectOptions extends FieldMeta {
    * It runs on every read, so it must leave an already-current value alone.
    */
   upgrade?: (stored: Record<string, unknown>) => Record<string, unknown>;
+  /**
+   * Dashboard-only, for a top-level group. `messages` draws every message in it
+   * as one searchable list of rows, each opening the message editor, under
+   * headings from `topics`. `fields` draws its settings as labelled inputs in
+   * two columns under those headings, each with a link back to its default.
+   * Settings name their heading with `topic`.
+   */
+  layout?: "messages" | "fields";
+  /** The headings of a `layout` group, in the order they are drawn. */
+  topics?: FieldTopic[];
 }
 
 function object<S extends Shape>(shape: S, options: ObjectOptions = {}): ObjectField<S> {

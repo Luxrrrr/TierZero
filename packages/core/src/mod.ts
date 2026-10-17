@@ -38,8 +38,14 @@ export type ModPermission =
   | "action.ban"
   | "action.unban"
   | "purge"
-  | "staff.manage";
+  | "staff.manage"
+  | "appeals.manage"
+  | "raid.lockdown"
+  | "raid.mass";
 
+// Deleting the server logs is the owner's alone, like the Danger zone that offers it, so admins do not hold messages.purge.
+// Appeals, lockdowns and mass actions undo or widen bans and change the whole server, so they start at admin: a
+// moderator cannot ban, and lifting a ban through an appeal or banning a crowd at once would go past that.
 const GRANTS: Record<StaffRole, ModPermission[]> = {
   mod: ["view", "stats.view", "messages.view", "note.add", "infraction.void", "infraction.edit", "action.warn", "action.timeout"],
   admin: [
@@ -47,7 +53,6 @@ const GRANTS: Record<StaffRole, ModPermission[]> = {
     "stats.view",
     "audit.view",
     "messages.view",
-    "messages.purge",
     "note.add",
     "note.edit.any",
     "note.delete.any",
@@ -60,6 +65,9 @@ const GRANTS: Record<StaffRole, ModPermission[]> = {
     "action.kick",
     "action.ban",
     "action.unban",
+    "appeals.manage",
+    "raid.lockdown",
+    "raid.mass",
   ],
   owner: [
     "view",
@@ -82,6 +90,9 @@ const GRANTS: Record<StaffRole, ModPermission[]> = {
     "action.unban",
     "purge",
     "staff.manage",
+    "appeals.manage",
+    "raid.lockdown",
+    "raid.mass",
   ],
 };
 
@@ -122,6 +133,43 @@ export interface RestrictionState {
   expiresAt: Date | string | null;
   /** Taken off the record by staff. */
   removed: boolean;
+  /**
+   * For a warning, when it stops counting under the server's warn expiry, from
+   * `warnExpiresAt`. Null or absent when warnings never expire there.
+   */
+  warnExpiresAt?: Date | string | null;
+}
+
+/** Warnings, a moderator's and automod's. These are what warn expiry and escalation count. */
+const WARNINGS = new Set(["warn", "automod-warn"]);
+
+export const isWarning = (action: string): boolean => WARNINGS.has(action);
+
+/**
+ * When a warning stops counting, given the server's warn expiry in milliseconds
+ * (null for never). Every other kind of case gives null: it never expires this way.
+ */
+export function warnExpiresAt(action: string, createdAt: Date | string, expiryMs: number | null | undefined): Date | null {
+  if (!isWarning(action) || !expiryMs || expiryMs <= 0) return null;
+  return new Date(new Date(createdAt).getTime() + expiryMs);
+}
+
+/** Whether a warning's expiry, from `warnExpiresAt`, has passed. */
+function warningExpired(entry: RestrictionState, now: Date): boolean {
+  if (!isWarning(entry.action) || !entry.warnExpiresAt) return false;
+  return new Date(entry.warnExpiresAt).getTime() <= now.getTime();
+}
+
+/**
+ * Whether a case still counts toward a member's totals: the warn count on the
+ * Members list and the profile, and the warnings an escalation rule counts. A
+ * removed case never does, an expired warning no longer does, and everything
+ * else always does. It stays on the record either way. This and `isInForce`
+ * are the two rules every count and state is read through.
+ */
+export function isCounting(entry: RestrictionState, now: Date = new Date()): boolean {
+  if (entry.removed) return false;
+  return !warningExpired(entry, now);
 }
 
 /**
@@ -130,11 +178,34 @@ export interface RestrictionState {
  * clears it when a timeout simply runs out, so the action and the end time
  * have to be read as well. The member list's "restricted" marker, the action
  * log's "in force" state and the profile's standing all use this one rule.
+ * A warning never restricts, so it is never in force; whether it still counts
+ * is `isCounting`.
  */
 export function isInForce(entry: RestrictionState, now: Date = new Date()): boolean {
   if (entry.removed || !entry.active || !RESTRICTIONS.has(entry.action)) return false;
   if (entry.expiresAt === null) return true;
   return new Date(entry.expiresAt).getTime() > now.getTime();
+}
+
+/** Where a case stands, in the words Member actions and its CSV export both use. */
+export type CaseState = "removed" | "in force" | "expired" | "on record";
+
+/** Entries that have an end time of their own and can run out. */
+const EXPIRING = new Set(["timeout", "automod-timeout"]);
+
+/**
+ * Removal wins over everything else. After that `isInForce` decides whether a
+ * restriction is biting now. A timeout whose end has passed is expired, and so
+ * is a warning past the server's warn expiry. Everything else, including warns
+ * that still count, kicks, lifted bans and reversals, is simply on the record:
+ * the stored `active` flag says nothing about those.
+ */
+export function caseStateOf(entry: RestrictionState, now: Date = new Date()): CaseState {
+  if (entry.removed) return "removed";
+  if (isInForce(entry, now)) return "in force";
+  if (EXPIRING.has(entry.action) && entry.expiresAt !== null && new Date(entry.expiresAt).getTime() <= now.getTime()) return "expired";
+  if (warningExpired(entry, now)) return "expired";
+  return "on record";
 }
 
 /** Anyone may change their own note; changing someone else's takes more. */
@@ -199,7 +270,12 @@ export type AuditKind =
   | "logs.purge"
   | "staff.add"
   | "staff.update"
-  | "staff.remove";
+  | "staff.remove"
+  | "appeal.accept"
+  | "appeal.deny"
+  | "raid.lockdown"
+  | "raid.unlock"
+  | "raid.mass";
 
 export const AUDIT_KIND_LABEL: Record<AuditKind, string> = {
   "note.add": "Added a note",
@@ -216,6 +292,11 @@ export const AUDIT_KIND_LABEL: Record<AuditKind, string> = {
   "staff.add": "Added staff",
   "staff.update": "Changed a staff role",
   "staff.remove": "Removed staff",
+  "appeal.accept": "Accepted a ban appeal",
+  "appeal.deny": "Denied a ban appeal",
+  "raid.lockdown": "Locked channels",
+  "raid.unlock": "Unlocked channels",
+  "raid.mass": "Took a mass action",
 };
 
 /** What the dashboard shows for a Discord user, wherever one appears. */
@@ -238,6 +319,84 @@ export function isAutomodActor(actor: { userId: string; role?: string | null }, 
 /** How the bot's own account appears in every place a person would: named Automod, with no Discord avatar. */
 export function automodRef(botUserId: string): UserRef {
   return { userId: botUserId, name: AUTOMOD_NAME, avatarUrl: null, inServer: true, automod: true };
+}
+
+/*
+ * Automod's cases store their reason as `<rule key>: <wording>`, such as
+ * `rateLimit: Sent 8 messages...`. The key is what the code knows a rule by and
+ * must never be shown to a person, so everything that displays a reason reads
+ * it through these. Stored rows are left as they are and mapped when read.
+ */
+
+/** Keyed by the lower-cased rule key. The same names the automod settings give each rule. */
+const AUTOMOD_RULE_LABEL: Record<string, string> = {
+  invites: "Invite links",
+  links: "Links",
+  capitals: "Excessive capitals",
+  repeatedtext: "Repeated text",
+  mentions: "Mass mentions",
+  bannedwords: "Banned words",
+  ratelimit: "Rate limit",
+  unknown: "Unknown rule",
+  other: "Other rules",
+};
+
+/** A readable name for an automod rule key, including one this version has never heard of. */
+export function automodRuleLabel(rule: string): string {
+  const key = rule.trim().toLowerCase();
+  const known = AUTOMOD_RULE_LABEL[key];
+  if (known) return known;
+  const words = rule
+    .trim()
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/[-_]+/g, " ")
+    .toLowerCase();
+  return words === "" ? AUTOMOD_RULE_LABEL.unknown! : words.charAt(0).toUpperCase() + words.slice(1);
+}
+
+export interface AutomodReason {
+  /** Lower-cased rule key, or null when the reason does not start with something that looks like one. */
+  rule: string | null;
+  /** The text after the rule, or the whole reason when no rule was found. Null when there is nothing left. */
+  detail: string | null;
+}
+
+/** Longest text before a colon that is still taken to be a rule key rather than a sentence. */
+const RULE_KEY_MAX = 32;
+
+export function parseAutomodReason(reason: string | null | undefined): AutomodReason {
+  const text = (reason ?? "").trim();
+  if (text === "") return { rule: null, detail: null };
+
+  const colon = text.indexOf(":");
+  const head = (colon === -1 ? text : text.slice(0, colon)).trim();
+  const key = head.toLowerCase();
+  const looksLikeRule = head !== "" && head.length <= RULE_KEY_MAX && /^[A-Za-z][A-Za-z0-9_-]*$/.test(head);
+
+  if (!looksLikeRule && !(key in AUTOMOD_RULE_LABEL)) return { rule: null, detail: text };
+  const detail = colon === -1 ? "" : text.slice(colon + 1).trim();
+  return { rule: key, detail: detail === "" ? null : detail };
+}
+
+/** The wording after the rule, without the code marks Discord needs and a web page does not. */
+export function automodDetailText(detail: string | null): string | null {
+  if (detail === null) return null;
+  const plain = detail.replace(/`/g, "").trim();
+  return plain === "" ? null : plain;
+}
+
+/**
+ * A case's reason as one line a person can read: an automod case's rule key
+ * becomes the rule's name ("Rate limit: Sent 8 messages..."), and any other
+ * case's reason is returned as it is.
+ */
+export function readableReason(action: string, reason: string | null): string | null {
+  if (reason === null || !action.startsWith("automod-")) return reason;
+  const parsed = parseAutomodReason(reason);
+  if (!parsed.rule) return automodDetailText(parsed.detail);
+  const detail = automodDetailText(parsed.detail);
+  const label = automodRuleLabel(parsed.rule);
+  return detail ? `${label}: ${detail}` : label;
 }
 
 export interface Page<T> {
@@ -384,6 +543,51 @@ export interface InfractionDto {
   edited: null | { at: string; by: UserRef };
   /** Messages a moderator attached, as they read when the action was taken. */
   evidence: EvidenceMessage[];
+  /** Set when the bot took this case by itself because an escalation rule fired. Absent from an older bot. */
+  automatic?: AutomaticCase | null;
+  /** For a warning, when it stops counting under the server's warn expiry. Null when it never does. Absent from an older bot. */
+  warnExpiresAt?: string | null;
+}
+
+/** Why the bot took a case by itself: which escalation rule fired, on how many warnings. */
+export interface AutomaticCase {
+  ruleId: string;
+  /** The rule's name as it was when it fired. */
+  rule: string;
+  /** How many warnings were counted. */
+  warns: number;
+  /** The window they were counted over, or null for all time. */
+  windowMs: number | null;
+  /** The warning that made the count, by case number. */
+  fromCase: number | null;
+}
+
+/** Reads the stored `automatic` column back. A damaged value reads as none. */
+export function readAutomatic(stored: string | null | undefined): AutomaticCase | null {
+  if (!stored) return null;
+  try {
+    const value = JSON.parse(stored) as Partial<AutomaticCase> | null;
+    if (!value || typeof value !== "object" || typeof value.rule !== "string") return null;
+    return {
+      ruleId: typeof value.ruleId === "string" ? value.ruleId : "",
+      rule: value.rule,
+      warns: typeof value.warns === "number" ? value.warns : 0,
+      windowMs: typeof value.windowMs === "number" ? value.windowMs : null,
+      fromCase: typeof value.fromCase === "number" ? value.fromCase : null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/** "3 warnings in 30 days", for the line that says why an automatic case was taken. */
+export function describeAutomatic(automatic: AutomaticCase): string {
+  const warns = `${automatic.warns} ${automatic.warns === 1 ? "warning" : "warnings"}`;
+  if (automatic.windowMs === null) return warns;
+  const days = automatic.windowMs / 86_400_000;
+  if (Number.isInteger(days)) return `${warns} in ${days} ${days === 1 ? "day" : "days"}`;
+  const hours = Math.max(1, Math.round(automatic.windowMs / 3_600_000));
+  return `${warns} in ${hours} ${hours === 1 ? "hour" : "hours"}`;
 }
 
 export interface NoteDto {
@@ -418,10 +622,15 @@ export interface MemberSummary {
   user: UserRef;
   /** Entries on their record, not counting removed ones. */
   infractionCount: number;
+  /** Warnings that still count: removed ones and ones past the server's warn expiry are left out. */
   warnCount: number;
+  /** Warnings on the record that have stopped counting under the warn expiry. Absent from an older bot. */
+  expiredWarnCount?: number;
   timeoutCount: number;
   banCount: number;
   kickCount: number;
+  /** Entries automod recorded, of any kind. Absent from an older bot. */
+  automodCount?: number;
   noteCount: number;
   lastActionAt: string | null;
   /** A timeout or ban that is still in force. */
@@ -461,13 +670,24 @@ export interface StatsTotals {
 }
 
 export interface StatsDto {
+  /** Whole UTC days the range covers. */
   days: number;
   since: string;
+  /** Last day in the range, `YYYY-MM-DD`. Missing from an older bot, where the range always ends today. */
+  until?: string;
+  /** How the range was chosen: the last `days` days, all time, or two dates. Missing means "days". */
+  range?: "days" | "all" | "custom";
+  /** What one entry of `perDay` covers. Missing means "day". */
+  bucket?: "day" | "week" | "month";
   totals: StatsTotals;
-  /** The same counts for the period of equal length just before this one, for comparison. Null when it cannot be worked out. */
+  /** The same counts for the period of equal length just before this one, for comparison. Null when it cannot be worked out, and always for all time. */
   previous: StatsTotals | null;
-  /** One entry per day across the range, oldest first, zeros included. */
-  perDay: { date: string; warn: number; timeout: number; kick: number; ban: number; other: number }[];
+  /**
+   * One entry per day across the range, oldest first, zeros included; one per
+   * week or month instead when `bucket` says so. `end` is the last day an entry
+   * covers, set only for weeks and months.
+   */
+  perDay: { date: string; end?: string; warn: number; timeout: number; kick: number; ban: number; other: number }[];
   byAction: { action: string; count: number }[];
   /** Busiest first. */
   moderators: {
@@ -561,4 +781,169 @@ export interface ActionContextDto {
   maxBanDays: number;
   /** Actions whose slash command is switched off on the Commands page; the bot refuses them from here too. */
   disabledActions: ModActionKind[];
+  /** The server's reason presets, in the order the owner listed them. Absent from an older bot. */
+  reasonPresets?: ReasonPresetDto[];
+}
+
+/** A common reason a server keeps ready, picked in the action form, the right-click forms and the slash commands. */
+export interface ReasonPresetDto {
+  name: string;
+  reason: string;
+  /** A length a timeout or temporary ban starts at when this is picked, or null. */
+  durationMs: number | null;
+}
+
+/**
+ * The preset a typed reason names, matched on its name ignoring case and the
+ * spaces around it, or null. The slash commands' autocomplete fills the name in,
+ * and the right-click forms take it typed, so both arrive here as the name.
+ */
+export function presetNamed<T extends { name: string }>(typed: string | null | undefined, presets: readonly T[]): T | null {
+  const key = (typed ?? "").trim().toLowerCase();
+  if (key === "") return null;
+  return presets.find((preset) => preset.name.trim().toLowerCase() === key) ?? null;
+}
+
+/* Appeals ------------------------------------------------------------------------ */
+
+export const APPEAL_STATUSES = ["pending", "accepted", "denied"] as const;
+export type AppealStatus = (typeof APPEAL_STATUSES)[number];
+
+export const isAppealStatus = (value: unknown): value is AppealStatus =>
+  typeof value === "string" && (APPEAL_STATUSES as readonly string[]).includes(value);
+
+/** The longest appeal a member can send, and the longest answer staff can send back. Discord's modal limit is 4000. */
+export const APPEAL_LIMITS = { text: 2000, response: 1000 } as const;
+
+export interface AppealDto {
+  id: number;
+  user: UserRef;
+  caseNumber: number;
+  infractionId: number;
+  status: AppealStatus;
+  /** What the member wrote. */
+  text: string;
+  createdAt: string;
+  decided: null | { at: string; by: UserRef; response: string | null };
+  /** The ban the appeal is about, as the record has it now. */
+  ban: {
+    reason: string | null;
+    createdAt: string;
+    expiresAt: string | null;
+    moderator: UserRef;
+    /** The case was removed from the record since. */
+    removed: boolean;
+  };
+}
+
+export interface AppealListDto extends Page<AppealDto> {
+  /** Pending appeals, whatever the filter, for the count on the tab. */
+  pending: number;
+}
+
+/** One appeal with what staff need to decide it: the member's whole record and their notes. */
+export interface AppealDetailDto {
+  appeal: AppealDto;
+  /** Whether Discord has the member banned now, or null when it could not be asked. */
+  stillBanned: boolean | null;
+  infractions: InfractionDto[];
+  notes: NoteDto[];
+  /** The member's other appeals here, newest first. */
+  others: AppealDto[];
+}
+
+/* Raid tools ----------------------------------------------------------------------- */
+
+export interface LockedChannelDto {
+  channelId: string;
+  /** The channel's name now, or null when it was deleted while locked. */
+  name: string | null;
+  lockedAt: string;
+  lockedBy: UserRef;
+  reason: string | null;
+  endsAt: string | null;
+}
+
+export interface LockableChannelDto {
+  id: string;
+  name: string;
+  /** The category it sits in, for grouping in the picker. */
+  parent: string | null;
+  locked: boolean;
+  /** Left out of "all channels" by the server's settings. */
+  exempt: boolean;
+}
+
+export interface RaidStatusDto {
+  moduleEnabled: boolean;
+  locked: LockedChannelDto[];
+  channels: LockableChannelDto[];
+  /** The join-rate alert as set in the Moderation settings. */
+  joinAlert: { enabled: boolean; joins: number; seconds: number; lockdown: boolean };
+  /** Members who joined in the last ten minutes, as the bot counted them since it started. */
+  recentJoins: number;
+  /** Whether the bot can change channel permissions, which a lockdown needs. */
+  canManageChannels: boolean;
+}
+
+export type MassActionKind = "ban" | "kick";
+
+/** Who a mass action is aimed at: pasted ids, or everyone who joined between two times. */
+export interface MassActionRequest {
+  action: MassActionKind;
+  ids?: string[];
+  joinedAfter?: string;
+  joinedBefore?: string;
+  reason: string | null;
+  /** A ban's days of messages to delete. */
+  deleteDays?: number | null;
+}
+
+export interface MassTargetDto {
+  user: UserRef;
+  joinedAt: string | null;
+  accountCreatedAt: string | null;
+  /** Why this one would be left alone, or null when the action would go ahead. */
+  skip: string | null;
+}
+
+export interface MassPreviewDto {
+  action: MassActionKind;
+  targets: MassTargetDto[];
+  /** How many would be acted on. */
+  count: number;
+  skipped: number;
+  /** Names exactly who would be acted on. The run must send it back, and is refused if the set has changed. */
+  token: string;
+}
+
+export interface MassJobDto {
+  id: string;
+  action: MassActionKind;
+  status: "running" | "done";
+  total: number;
+  /** Members processed so far, the failed ones included, so it reaches `total` when the job is done. */
+  done: number;
+  /** How many of `done` could not be actioned. */
+  failed: number;
+  /** One line per id that failed, for the person who started it. */
+  failures: string[];
+}
+
+/** The most a mass action can name at once. Discord's own bulk ban takes 200. */
+export const MASS_ACTION_LIMIT = 200;
+
+/**
+ * Where one member stands in Discord right now, for the person asking, read
+ * by the bot rather than from the record. The record can disagree with
+ * Discord: a ban case removed from it, or a ban made outside the bot.
+ */
+export interface ActionTargetDto {
+  inServer: boolean;
+  /** Whether Discord has them banned, or null when Discord could not be asked. */
+  banned: boolean | null;
+  /** When their Discord timeout ends, or null when they are not timed out. */
+  timedOutUntil: string | null;
+  /** The actions the bot would refuse for this person on this target, each with a short reason. */
+  blocked: Partial<Record<ModActionKind, string>>;
 }

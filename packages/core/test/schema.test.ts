@@ -1,6 +1,7 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { s } from "../dist/index.js";
+import { GENERATED_ID, generatedId, layoutProblems, messageAttachProblems, plainReply, s } from "../dist/index.js";
+import type { FieldDescriptor } from "../dist/index.js";
 
 const CHANNEL = "123456789012345678";
 
@@ -92,6 +93,38 @@ describe("duration", () => {
   test("passes through a value already stored as milliseconds", () => {
     assert.equal(value(s.duration().parse(45_000)), 45_000);
   });
+
+  test("enforces a floor on written input and says it in words", () => {
+    const field = s.duration({ min: "1m", max: "28d" });
+    const below = field.parse("30s");
+    assert.equal(below.ok, false);
+    assert.equal(errors(below)[0]?.message, "must be at least 1 minute");
+    assert.equal(errors(field.parse("0m"))[0]?.message, "must be at least 1 minute");
+    assert.equal(errors(field.parse("29d"))[0]?.message, "must be 28 days or less");
+    assert.equal(value(field.parse("1m")), 60_000);
+  });
+
+  test("pulls a stored number inside its limits rather than refusing it", () => {
+    const field = s.duration({ min: "1m", max: "1h" });
+    assert.equal(value(field.parse(0)), 60_000);
+    assert.equal(value(field.parse(-5)), 60_000);
+    assert.equal(value(field.parse(7_200_000)), 3_600_000);
+    assert.equal(value(field.parse(90_000)), 90_000);
+  });
+
+  test("never stores a negative or fractional number of milliseconds", () => {
+    assert.equal(value(s.duration().parse(-1000)), 0);
+    assert.equal(value(s.duration().parse(1500.4)), 1500);
+  });
+
+  test("refuses a number that is not one", () => {
+    assert.equal(s.duration().parse(Number.NaN).ok, false);
+    assert.equal(s.duration().parse(Number.POSITIVE_INFINITY).ok, false);
+  });
+
+  test("describes its floor for the dashboard", () => {
+    assert.equal(s.duration({ min: "5m" }).describe().min, "5m");
+  });
 });
 
 describe("snowflake fields", () => {
@@ -160,6 +193,16 @@ describe("array", () => {
   test("enforces min and max entries", () => {
     assert.equal(s.array(s.channel(), { min: 1 }).parse([]).ok, false);
     assert.equal(s.array(s.channel(), { max: 1 }).parse([CHANNEL, CHANNEL]).ok, false);
+  });
+
+  test("counts entries in the singular and the plural", () => {
+    assert.equal(errors(s.array(s.channel(), { min: 1 }).parse([]))[0]?.message, "needs at least 1 entry");
+    assert.equal(errors(s.array(s.channel(), { min: 2 }).parse([]))[0]?.message, "needs at least 2 entries");
+    assert.equal(errors(s.array(s.channel(), { max: 1 }).parse([CHANNEL, CHANNEL]))[0]?.message, "allows at most 1 entry");
+  });
+
+  test("names what one entry is for the dashboard", () => {
+    assert.equal(s.array(s.object({}), { item: "game" }).describe().item, "game");
   });
 
   test("rejects a non-array", () => {
@@ -353,6 +396,26 @@ describe("optional", () => {
   });
 });
 
+describe("string with url", () => {
+  const field = s.string({ url: true });
+
+  test("accepts a whole http or https address, trimmed", () => {
+    assert.equal(value(field.parse(" https://retro-corner.example/feed.xml ")), "https://retro-corner.example/feed.xml");
+    assert.equal(value(field.parse("http://localhost:8080/rss")), "http://localhost:8080/rss");
+  });
+
+  test("refuses anything that is not one", () => {
+    assert.equal(field.parse("retro-corner.example/feed").ok, false);
+    assert.equal(field.parse("ftp://example.com/feed").ok, false);
+    assert.equal(field.parse("https://exa mple.com").ok, false);
+    assert.equal(errors(field.parse("nope"))[0]?.message, "must be a web address starting with http:// or https://");
+  });
+
+  test("says so in its description for the dashboard", () => {
+    assert.equal(field.describe().url, true);
+  });
+});
+
 describe("emoji", () => {
   test("accepts a unicode emoji", () => {
     assert.equal(value(s.emoji().parse("🎉")), "🎉");
@@ -372,6 +435,22 @@ describe("emoji", () => {
 
   test("trims surrounding whitespace", () => {
     assert.equal(value(s.emoji().parse(" 🎉 ")), "🎉");
+  });
+
+  test("accepts an emoji joined from several code points", () => {
+    assert.equal(s.emoji().parse("👨‍👩‍👧‍👦").ok, true);
+    assert.equal(s.emoji().parse("🏳️‍🌈").ok, true);
+    assert.equal(s.emoji().parse("1️⃣").ok, true);
+    assert.equal(s.emoji().parse("🇬🇧").ok, true);
+  });
+
+  test("refuses two emoji in one box", () => {
+    assert.equal(s.emoji().parse("🎉🎉🎉🎉🎉").ok, false);
+  });
+
+  test("says what it accepts in words that match the dashboard hint", () => {
+    const [problem] = errors(s.emoji().parse("smile"));
+    assert.equal(problem?.message, "must be one emoji, or a custom emoji from this server written as <:name:id>");
   });
 });
 
@@ -537,5 +616,151 @@ describe("dashboard layout metadata", () => {
     const options = [{ value: "a", label: "A" }];
     assert.equal(s.array(s.choice({ options }), { layout: "rows" }).describe().layout, "rows");
     assert.equal(s.array(s.choice({ options })).describe().layout, undefined);
+  });
+});
+
+describe("a generated id", () => {
+  const id = s.string({ generated: true });
+
+  test("is described as generated, so the dashboard draws nothing for it", () => {
+    assert.equal(id.describe().generated, true);
+    assert.equal(s.string().describe().generated, undefined);
+  });
+
+  test("may be missing, for old rows an upgrade fills in", () => {
+    assert.equal(value(id.parse(undefined)), undefined);
+    assert.equal(value(id.parse("")), undefined);
+  });
+
+  test("must be short and safe in a custom id", () => {
+    assert.equal(value(id.parse("a1b2-c3_d")), "a1b2-c3_d");
+    assert.equal(id.parse("has space").ok, false);
+    assert.equal(id.parse("x:y").ok, false);
+    assert.equal(id.parse("x".repeat(33)).ok, false);
+  });
+
+  test("is made eight characters long", () => {
+    const made = generatedId();
+    assert.equal(made.length, 8);
+    assert.match(made, GENERATED_ID);
+    assert.notEqual(generatedId(), made);
+  });
+});
+
+describe("section", () => {
+  test("is carried to the dashboard and changes nothing about parsing", () => {
+    const group = s.object({ on: s.boolean({ default: true }) }, { label: "Group", section: "general" });
+    assert.equal(group.describe().section, "general");
+    assert.equal(s.array(s.role(), { section: "panels" }).describe().section, "panels");
+    assert.deepEqual(value(group.parse({})), { on: true });
+  });
+});
+
+describe("messageAttachProblems", () => {
+  const row = s.object({ name: s.string(), emoji: s.emoji({ optional: true }), look: s.object({ text: s.string({ optional: true }), colour: s.choice({ options: [{ value: "primary", label: "Blurple" }], default: "primary" }) }) });
+  const parent = s.object({ items: s.array(row), mode: s.choice({ options: [{ value: "menu", label: "Menu" }], default: "menu" }), hint: s.string({ optional: true }), on: s.boolean() }).describe().fields as Record<string, FieldDescriptor>;
+  const root = s.object({ labels: s.object({ close: s.string(), closeColour: s.choice({ options: [{ value: "danger", label: "Red" }], default: "danger" }) }) }).describe().fields as Record<string, FieldDescriptor>;
+
+  test("accepts paths that name settings of the right kind", () => {
+    assert.deepEqual(
+      messageAttachProblems(
+        { kind: "list", list: "items", label: "look.text", labelFallback: "name", emoji: "emoji", style: "look.colour", mode: { field: "mode", menu: "menu" }, placeholder: "hint", noun: "item" },
+        parent,
+        root,
+      ),
+      [],
+    );
+    assert.deepEqual(
+      messageAttachProblems({ kind: "buttons", buttons: [{ name: "Close", label: "/labels.close", style: "/labels.closeColour", when: "on" }] }, parent, root),
+      [],
+    );
+  });
+
+  test("names every path that does not exist or is the wrong kind", () => {
+    const problems = messageAttachProblems(
+      { kind: "buttons", buttons: [{ name: "Close", label: "/labels.missing", style: "/labels.close", when: "nope" }] },
+      parent,
+      root,
+    );
+    assert.equal(problems.length, 3);
+    assert.match(problems.join(" | "), /labels\.missing.*not a setting/);
+    assert.match(problems.join(" | "), /string rather than a choice/);
+    assert.equal(messageAttachProblems({ kind: "list", list: "mode", label: "x", noun: "x" }, parent, root).length, 1);
+  });
+});
+
+describe("layout metadata", () => {
+  const reply = (topic?: string) =>
+    s.message({ label: "Reply", starting: plainReply("Hi"), ...(topic ? { topic } : {}) });
+
+  test("is carried by describe on groups, settings and messages", () => {
+    const group = s.object(
+      { claimed: s.message({ label: "Claimed", starting: plainReply("Claimed"), topic: "open", audience: "public" }) },
+      { label: "What the bot says", layout: "messages", topics: [{ id: "open", label: "While a ticket is open" }] },
+    ).describe();
+    assert.equal(group.layout, "messages");
+    assert.deepEqual(group.topics, [{ id: "open", label: "While a ticket is open" }]);
+    const claimed = (group.fields as Record<string, FieldDescriptor>).claimed;
+    assert.equal(claimed?.topic, "open");
+    assert.equal(claimed?.audience, "public");
+    assert.equal(s.string({ topic: "buttons" }).describe().topic, "buttons");
+  });
+
+  const schema = (fields: Parameters<typeof s.object>[0]) => s.object(fields).describe();
+
+  test("finds nothing wrong with headings that exist and nest once", () => {
+    const problems = layoutProblems(
+      schema({
+        messages: s.object(
+          { a: reply("open"), wrong: s.object({ b: reply() }, { topic: "denied" }) },
+          {
+            layout: "messages",
+            topics: [
+              { id: "open", label: "Open" },
+              { id: "wrong", label: "Wrong" },
+              { id: "denied", label: "Denied", within: "wrong" },
+            ],
+          },
+        ),
+        ratings: s.object({ thanks: reply("open") }),
+      }),
+    );
+    assert.deepEqual(problems, []);
+  });
+
+  test("names a topic no group declares, a heading nested twice and a layout below the top", () => {
+    const problems = layoutProblems(
+      schema({
+        messages: s.object(
+          { a: reply("closed"), inner: s.object({ b: reply() }, { layout: "fields", topics: [{ id: "x", label: "X" }] }) },
+          {
+            layout: "messages",
+            topics: [
+              { id: "a", label: "A" },
+              { id: "b", label: "B", within: "a" },
+              { id: "c", label: "C", within: "b" },
+            ],
+          },
+        ),
+        other: s.object({ c: reply("nowhere") }),
+      }),
+    ).join(" | ");
+    assert.match(problems, /messages\.a names the topic closed/);
+    assert.match(problems, /topic c is within b, which is itself within another/);
+    assert.match(problems, /messages\.inner has a layout but is not a top-level group/);
+    assert.match(problems, /other\.c names the topic nowhere, which no messages list declares/);
+  });
+
+  test("keeps settings that are not messages out of a messages list, and messages out of a fields list", () => {
+    const problems = layoutProblems(
+      s.object({
+        messages: s.object({ count: s.integer({ topic: "a" }) }, { layout: "messages", topics: [{ id: "a", label: "A" }] }),
+        labels: s.object({ msg: reply("b") }, { layout: "fields", topics: [{ id: "b", label: "B" }] }),
+        loose: s.object({ name: s.string({ topic: "a" }) }),
+      }).describe(),
+    ).join(" | ");
+    assert.match(problems, /messages.count is not a message/);
+    assert.match(problems, /labels\.msg is a message in a fields list/);
+    assert.match(problems, /loose\.name names a topic but is neither in a layout group nor a message/);
   });
 });
