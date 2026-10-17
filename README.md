@@ -10,7 +10,7 @@ Your server's data stays on the machine you run it on.
 
 ## Status
 
-[v0.1.0](https://github.com/Luxrrrr/TierZero/releases) is the first release, and it's a beta. Everything listed below works, but settings and the database can still change between releases. If you're going to build on the internals, read [docs/architecture.md](docs/architecture.md) first.
+TierZero is in beta. Everything listed below works, but settings and the database can still change between releases, and each [release](https://github.com/Luxrrrr/TierZero/releases) says what changed. If you're going to build on the internals, read [docs/architecture.md](docs/architecture.md) first.
 
 ## Requirements
 
@@ -50,14 +50,14 @@ Every feature is a module and every module starts off. You switch them on and of
 | Feature | What it does |
 | --- | --- |
 | Moderation | Warn, timeout, kick, ban and temporary bans. Each action gets a numbered case, and role hierarchy is checked first. |
-| Moderation dashboard | Member records with staff notes, actions from a member's profile, an exportable action log, statistics and an audit trail of staff changes. You control who has access, separately from Discord's Manage Server permission. Warns and timeouts can be removed from a record while the history stays. Staff can also act from Discord's right-click menu on a member or a message. |
+| Moderation dashboard | Member records with staff notes, actions from a member's profile, an exportable action log, statistics and an audit trail of staff changes. You control who has access, separately from Discord's Manage Server permission. Warns and timeouts can be removed from a record while the history stays. Staff can also act from Discord's right-click menu on a member or a message. It also covers reason presets, escalation rules such as three warns leading to a timeout, warns that expire, channel lockdown and bulk actions for raids, and ban appeals. |
 | Automod | Invites, links, capitals, repeated text, mention limits, banned words and rate limiting. Seven rules, each with its own action and exemptions. All off by default. |
-| Tickets | A button opens a private channel between a member and your staff. Optional transcripts and auto-close. |
+| Tickets | Panels with several ticket types, each with its own handlers, questions and rules. A ticket is a private channel or thread. Staff can work tickets from the dashboard and reply from there. Transcripts are stored and look like Discord, and tickets have ratings, auto-close and saved replies. |
 | Welcome messages | Greetings, farewells and roles on join. |
-| Role menus | Members pick their own roles from buttons. |
-| Audit logging | Edits, deletions, joins, departures, nickname and role changes, channels, roles and bans. Twelve categories, each with its own switch. |
-| Leveling | XP for activity, role rewards and a leaderboard. No image rank cards, on purpose. |
-| News and patch notes | Posts new items from RSS feeds and Steam patch notes as embeds with the game's logo. For sources Discord's Follow button can't handle. |
+| Role menus | Members pick their own roles from buttons or a dropdown. You post and update a menu from the dashboard. |
+| Audit logging | Edits, deletions, joins, departures, nicknames, roles, channels, bans, kicks, timeouts, voice, invites, threads and emoji. Each kind has its own switch and can go to its own channel. |
+| Leveling | XP for activity, role rewards and a leaderboard, with an optional public leaderboard page. No image rank cards, on purpose. |
+| News and patch notes | Posts new items from RSS feeds, YouTube channels and Steam patch notes as embeds with the game's logo. For sources Discord's Follow button can't handle. |
 | Utility | Server and member info. |
 
 ![The moderation overview: statistics, actions per day and what automod did](docs/images/moderation-overview.png)
