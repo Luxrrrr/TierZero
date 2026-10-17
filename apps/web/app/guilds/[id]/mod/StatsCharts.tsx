@@ -18,12 +18,14 @@ import {
   plural,
   presentSeries,
   seriesTotals,
-  shortDate,
   stepIndex,
   toggled,
   tooltipFor,
   tooltipSentence,
   visibleTotal,
+  pointLabel,
+  pointTitle,
+  type Bucket,
   type DayCounts,
   type Series,
 } from "./stats-logic";
@@ -35,7 +37,7 @@ import {
  * non-visual equivalent.
  */
 
-function useCursor(length: number) {
+export function useCursor(length: number) {
   const [index, setIndex] = useState<number | null>(null);
   const [fromKeyboard, setFromKeyboard] = useState(false);
 
@@ -62,14 +64,14 @@ function useCursor(length: number) {
 
 const VIEW_W = 1000;
 
-type Point = [number, number];
+export type Point = [number, number];
 
 /**
  * A smooth curve through the points that never dips below or above its
  * neighbours (monotone cubic), so a quiet day between two busy ones does not
  * draw a negative count. `start` is "M" for a fresh path and "L" to continue one.
  */
-function smoothPath(points: Point[], start: "M" | "L"): string {
+export function smoothPath(points: Point[], start: "M" | "L"): string {
   const n = points.length;
   if (n === 0) return "";
   const first = points[0]!;
@@ -135,7 +137,8 @@ function buildLayers(perDay: DayCounts[], hidden: Series[], axisMax: number): La
   return [{ series: "total", tops, line, area: `${line} L${last[0].toFixed(2)} 100 L${first[0].toFixed(2)} 100 Z` }];
 }
 
-export function DayChart({ perDay }: { perDay: DayCounts[] }) {
+/** `bucket` says whether each point is a day, a week or a month, which changes only the wording. */
+export function DayChart({ perDay, bucket = "day" }: { perDay: DayCounts[]; bucket?: Bucket }) {
   const [hidden, setHidden] = useState<Series[]>([]);
   const cursor = useCursor(perDay.length);
 
@@ -147,7 +150,7 @@ export function DayChart({ perDay }: { perDay: DayCounts[] }) {
   const labels = labelIndexes(perDay.length, perDay.length <= 10 ? 4 : 5);
   const last = perDay.length - 1;
   const active = cursor.index !== null ? perDay[cursor.index] : undefined;
-  const tip = active ? tooltipFor(active, hidden) : null;
+  const tip = active ? tooltipFor(active, hidden, bucket) : null;
   const centre = cursor.index !== null ? ((cursor.index + 0.5) / perDay.length) * 100 : 0;
   const flip = centre > 55;
   const allOff = present.length > 0 && present.every((series) => hidden.includes(series));
@@ -187,7 +190,7 @@ export function DayChart({ perDay }: { perDay: DayCounts[] }) {
           tabIndex={0}
           role="application"
           aria-roledescription="chart"
-          aria-label={`Actions per day. ${chartSummary({ perDay })} Use the left and right arrow keys to read each day, Home and End to jump, Escape to clear. A table of every day follows the chart.`}
+          aria-label={`Actions per ${bucket}. ${chartSummary({ perDay, bucket })} Use the left and right arrow keys to read each ${bucket}, Home and End to jump, Escape to clear. A table of every ${bucket} follows the chart.`}
           onKeyDown={cursor.onKeyDown}
           onPointerMove={cursor.onPointerMove}
           onPointerLeave={cursor.clear}
@@ -234,7 +237,7 @@ export function DayChart({ perDay }: { perDay: DayCounts[] }) {
               data-flip={flip ? "true" : undefined}
               style={{ left: `${centre}%` }}
             >
-              <div className="dc-tip-title">{fullDate(active.date)}</div>
+              <div className="dc-tip-title">{bucket === "day" ? fullDate(active.date) : pointTitle(active, bucket)}</div>
               <div className="dc-tip-total">{plural(tip.total, "action")}</div>
               {tip.lines.map((line) => (
                 <div key={line.series} className="dc-tip-line" data-series={line.series}>
@@ -254,21 +257,21 @@ export function DayChart({ perDay }: { perDay: DayCounts[] }) {
               data-edge={index === 0 ? "start" : index === last ? "end" : undefined}
               style={{ left: `${((index + 0.5) / perDay.length) * 100}%` }}
             >
-              {shortDate(perDay[index]!.date)}
+              {pointLabel(perDay[index]!, bucket)}
             </span>
           ))}
         </div>
       </div>
 
       <p className="visually-hidden" aria-live="polite">
-        {cursor.fromKeyboard && active ? tooltipSentence(active, hidden) : ""}
+        {cursor.fromKeyboard && active ? tooltipSentence(active, hidden, bucket) : ""}
       </p>
 
       <table className="visually-hidden">
-        <caption>Actions per day</caption>
+        <caption>Actions per {bucket}</caption>
         <thead>
           <tr>
-            <th scope="col">Day</th>
+            <th scope="col">{bucket === "day" ? "Day" : bucket === "week" ? "Week" : "Month"}</th>
             {SERIES.map((series) => (
               <th key={series} scope="col">
                 {SERIES_LABEL[series]}
@@ -280,7 +283,7 @@ export function DayChart({ perDay }: { perDay: DayCounts[] }) {
         <tbody>
           {perDay.map((day) => (
             <tr key={day.date}>
-              <th scope="row">{day.date}</th>
+              <th scope="row">{day.end && day.end !== day.date ? `${day.date} to ${day.end}` : day.date}</th>
               {SERIES.map((series) => (
                 <td key={series}>{day[series]}</td>
               ))}
@@ -293,17 +296,20 @@ export function DayChart({ perDay }: { perDay: DayCounts[] }) {
   );
 }
 
-export function HourStrip({ byHour }: { byHour: number[] }) {
+/** `noun` names what is counted, singular, for a page that counts something other than actions. */
+export function HourStrip({ byHour, noun = "action" }: { byHour: number[]; noun?: string }) {
   const cells = hourCells(byHour);
   const cursor = useCursor(24);
   const peak = peakHourText(byHour);
   const active = cursor.index !== null ? cells[cursor.index] : undefined;
+  const nouns = `${noun}s`;
+  const Nouns = nouns.charAt(0).toUpperCase() + nouns.slice(1);
 
   const readout = active
-    ? `${hourRange(active.hour)}: ${plural(active.count, "action")}`
+    ? `${hourRange(active.hour)}: ${plural(active.count, noun)}`
     : peak
       ? `Busiest around ${peak}.`
-      : "No actions yet, so there is no busy hour.";
+      : `No ${nouns} yet, so there is no busy hour.`;
 
   return (
     <div>
@@ -312,7 +318,7 @@ export function HourStrip({ byHour }: { byHour: number[] }) {
         tabIndex={0}
         role="application"
         aria-roledescription="chart"
-        aria-label={`Actions by hour of the day, in UTC. ${peak ? `Busiest around ${peak}.` : "No actions yet."} Use the left and right arrow keys to read each hour, Home and End to jump, Escape to clear. A table of every hour follows the chart.`}
+        aria-label={`${Nouns} by hour of the day, in UTC. ${peak ? `Busiest around ${peak}.` : `No ${nouns} yet.`} Use the left and right arrow keys to read each hour, Home and End to jump, Escape to clear. A table of every hour follows the chart.`}
         onKeyDown={cursor.onKeyDown}
         onPointerMove={cursor.onPointerMove}
         onPointerLeave={cursor.clear}
@@ -353,11 +359,11 @@ export function HourStrip({ byHour }: { byHour: number[] }) {
         </div>
       </div>
       <table className="visually-hidden">
-        <caption>Actions by hour of the day (UTC)</caption>
+        <caption>{Nouns} by hour of the day (UTC)</caption>
         <thead>
           <tr>
             <th scope="col">Hour</th>
-            <th scope="col">Actions</th>
+            <th scope="col">{Nouns}</th>
           </tr>
         </thead>
         <tbody>

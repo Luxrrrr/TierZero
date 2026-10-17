@@ -1,7 +1,7 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 import { can } from "@tier0/core";
-import { isProfileRead, isSameOriginWrite, modProxyPermission, utf8Length } from "../lib/mod-proxy.ts";
+import { isMemberMessagesRead, isProfileRead, isSameOriginWrite, modProxyPermission, utf8Length } from "../lib/mod-proxy.ts";
 
 describe("modProxyPermission", () => {
   test("paths outside the allowlist are not served", () => {
@@ -32,12 +32,22 @@ describe("modProxyPermission", () => {
   test("audit and stats carry their own permissions", () => {
     assert.equal(modProxyPermission("GET", ["audit"]), "audit.view");
     assert.equal(modProxyPermission("GET", ["stats"]), "stats.view");
+    assert.equal(modProxyPermission("GET", ["stats", "export"]), "stats.view");
   });
 
-  test("reading staff is open, changing it is owner only", () => {
-    assert.equal(modProxyPermission("GET", ["staff"]), "view");
+  test("the staff list, read or changed, is the owner's, like the Access tab", () => {
+    assert.equal(modProxyPermission("GET", ["staff"]), "staff.manage");
+    assert.equal(can("mod", "staff.manage"), false);
+    assert.equal(can("admin", "staff.manage"), false);
     assert.equal(modProxyPermission("POST", ["staff"]), "staff.manage");
     assert.equal(modProxyPermission("DELETE", ["staff", "123"]), "staff.manage");
+  });
+
+  test("a member's standing is open to staff and only as a read", () => {
+    assert.equal(modProxyPermission("GET", ["members", "123", "standing"]), "view");
+    assert.equal(modProxyPermission("POST", ["members", "123", "standing"]), null);
+    assert.equal(modProxyPermission("GET", ["members", "123", "standing", "x"]), null);
+    assert.equal(isMemberMessagesRead("GET", ["members", "123", "standing"]), true, "the bot is told who is asking");
   });
 
   test("member search is open to staff", () => {
@@ -155,9 +165,9 @@ describe("isProfileRead", () => {
 });
 
 describe("the danger zone", () => {
-  test("only a DELETE is served, and it needs the owner-only purge permission", () => {
+  test("the delete and its counts need the owner-only purge permission", () => {
     assert.equal(modProxyPermission("DELETE", ["danger"]), "purge");
-    assert.equal(modProxyPermission("GET", ["danger"]), null);
+    assert.equal(modProxyPermission("GET", ["danger"]), "purge", "the counts beside each box are the owner's too");
     assert.equal(modProxyPermission("DELETE", ["danger", "mod-logs"]), null);
     assert.equal(can("admin", "purge"), false);
     assert.equal(can("owner", "purge"), true);
@@ -185,9 +195,12 @@ describe("the message log", () => {
     assert.equal(modProxyPermission("DELETE", ["messages", "1"]), null);
   });
 
-  test("moderators can read it, and only the owner and admins can delete it", () => {
+  test("moderators can read it, and only the owner can delete it, as the Danger zone says", () => {
     assert.equal(can("mod", "messages.view"), true);
     assert.equal(can("mod", "messages.purge"), false);
-    assert.equal(can("admin", "messages.purge"), true);
+    assert.equal(can("admin", "messages.view"), true);
+    assert.equal(can("admin", "messages.purge"), false);
+    assert.equal(can("owner", "messages.purge"), true);
+    assert.equal(can("owner", "purge"), true);
   });
 });

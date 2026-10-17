@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { ROLE_LABEL, type ListedRole, type StaffDto } from "@tier0/core";
 import { useToast } from "../../../../../components/Toaster";
+import { useUnsavedGuard } from "../../../../../lib/unsaved-guard";
 import { AlertIcon, CheckIcon, PlusIcon, TrashIcon, UserIcon } from "../../../../../components/Icons";
 import { RoleBadge, displayName, fmtDate, fmtDateTime } from "../../../../../components/mod/ModUi";
 import { Person } from "./Person";
@@ -167,9 +168,13 @@ export function StaffTable({ staff, staffUrl, freshId }: StaffTableProps) {
   }
 
   const ordered = sortStaff(staff);
+  // A level picked but not saved is lost by leaving, so leaving asks first. Saving can need a confirmation, so the
+  // guard offers only Stay and Discard.
+  const guard = useUnsavedGuard({ dirty: Object.keys(drafts).length > 0, onDiscard: () => setDrafts({}) });
 
   return (
     <section className="mod-card" aria-labelledby="access-staff-title">
+      {guard.host}
       <div className="mod-card-head">
         <div>
           <h2 className="mod-card-title" id="access-staff-title" ref={headingRef} tabIndex={-1}>

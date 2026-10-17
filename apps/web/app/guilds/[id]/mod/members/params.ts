@@ -56,6 +56,21 @@ export function memberListHref(guildId: string, query: Partial<MemberListQuery>)
   return `/guilds/${guildId}/mod/members${text ? `?${text}` : ""}`;
 }
 
+/**
+ * The query string for the toolbar's fields, without empty values or the
+ * defaults, so a submitted search reads like a link built by memberListHref.
+ */
+export function cleanQuery(fields: Iterable<[string, FormDataEntryValue]>): string {
+  const search = new URLSearchParams();
+  for (const [key, raw] of fields) {
+    if (typeof raw !== "string") continue;
+    const value = raw.trim();
+    if (value === "" || (key === "sort" && value === "recent") || (key === "filter" && value === "all") || key === "page") continue;
+    search.set(key, value);
+  }
+  return search.toString();
+}
+
 export function memberProfileHref(guildId: string, userId: string): string {
   return `/guilds/${guildId}/mod/members/${encodeURIComponent(userId)}`;
 }

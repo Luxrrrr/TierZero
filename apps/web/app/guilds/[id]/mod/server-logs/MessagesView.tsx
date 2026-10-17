@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { MessageLogResult } from "../../../../../lib/mod-api";
 import { HistoryIcon } from "../../../../../components/Icons";
-import { Pager } from "../../../../../components/mod/ModUi";
+import { Pager, PastEnd, isPastEnd } from "../../../../../components/mod/ModUi";
 import { MessageFilters } from "./MessageFilters";
 import { MessageList } from "./MessageList";
 import { hasMessageLogFilters, messageLogHref, type MessageLogQuery } from "./message-params";
@@ -23,11 +23,15 @@ export function MessagesView({ guildId, query, data }: { guildId: string; query:
 
       <p className="ml-count" role="status">
         <strong>{data.total.toLocaleString("en")}</strong> {data.total === 1 ? "message" : "messages"}
-        {filtered ? " match" : ` from the last ${data.days} ${data.days === 1 ? "day" : "days"}`}
+        {filtered ? (data.total === 1 ? " matches" : " match") : ` from the last ${data.days} ${data.days === 1 ? "day" : "days"}`}
         <span className="ml-tz"> · Dates are in UTC</span>
       </p>
 
-      {data.items.length === 0 ? (
+      {data.items.length === 0 && isPastEnd(data.page, data.pageSize, data.total) ? (
+        <div className="mod-card">
+          <PastEnd total={data.total} pageSize={data.pageSize} noun="messages" hrefFor={(page) => messageLogHref(guildId, { ...query, page })} />
+        </div>
+      ) : data.items.length === 0 ? (
         <div className="mod-card">
           <div className="mod-empty">
             <span className="mod-empty-icon">

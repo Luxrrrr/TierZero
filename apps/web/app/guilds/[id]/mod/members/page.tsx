@@ -1,4 +1,4 @@
-import { forbidden, redirect } from "next/navigation";
+import { denyStaffPage } from "../../../../../lib/mod-deny";
 import type { Metadata } from "next";
 import { ControlApiError } from "../../../../../lib/control-api";
 import { requireStaff } from "../../../../../lib/mod-access";
@@ -22,8 +22,7 @@ export default async function MembersPage({
   const { id } = await params;
   const access = await requireStaff(id);
   if (!access.ok) {
-    if (access.status === 401) redirect("/login");
-    forbidden();
+    return denyStaffPage(id, access.status);
   }
 
   const query = parseMemberQuery(await searchParams);

@@ -15,7 +15,10 @@ import {
   TIMEOUT_PRESETS,
   UNIT_OPTIONS,
   actionTitle,
+  applyPreset,
   banMax,
+  clampedPresetText,
+  presetDescription,
   buildRequest,
   busyLabel,
   clampDeleteDays,
@@ -24,6 +27,7 @@ import {
   describeMs,
   draftMs,
   durationProblem,
+  earlierEndWarning,
   endsAt,
   enterKeyAction,
   failureLead,
@@ -33,6 +37,7 @@ import {
   readResult,
   splitMs,
   timeoutMax,
+  unchosenDuration,
   usesDuration,
   type BanLength,
   type DraftErrors,
@@ -48,6 +53,7 @@ import { CharacterCount } from "./CharacterCount";
 import { EvidencePicker } from "./EvidencePicker";
 import { clearAttach, readAttach } from "../../../../../../lib/attach-handoff";
 import { formatDateTime } from "./timeline";
+import { useUnsavedGuard } from "../../../../../../lib/unsaved-guard";
 import type { ContextState } from "./useActionContext";
 
 interface DialogProps {
@@ -73,6 +79,7 @@ interface DialogProps {
  */
 export function ActionFormDialog(props: DialogProps) {
   const { kind, name, contextState, onClose, onRetry, fallbackFocus } = props;
+  const changing = kind === "timeout" && props.member.timedOut;
   const [busy, setBusy] = useState(false);
   const descriptionId = useId();
   const content = useRef<HTMLDivElement>(null);
@@ -101,7 +108,7 @@ export function ActionFormDialog(props: DialogProps) {
 
   return (
     <DialogShell
-      title={actionTitle(kind, name)}
+      title={actionTitle(kind, name, changing)}
       layout="form"
       icon={<StateIcon action={kind} />}
       tone={isHeavy(kind) && view !== "off" && view !== "switched-off" ? "danger" : "default"}
@@ -240,13 +247,17 @@ function ActionForm({
   const ceiling = kind === "timeout" ? timeoutMax(context) : banCeiling;
   const presets = presetsWithin(kind === "timeout" ? TIMEOUT_PRESETS : BAN_PRESETS, ceiling);
   const what = kind === "timeout" ? "timeout" : "ban";
+  // A timeout on someone already timed out replaces the running one, so it opens with no length picked.
+  const changing = kind === "timeout" && member.timedOut;
 
   const [reason, setReason] = useState("");
   // Messages picked in the message log wait in session storage until this form opens.
   const [seed] = useState(() => readAttach(guildId, userId));
   const [evidence, setEvidence] = useState<EvidenceRef[]>(() => seed.map((m) => ({ channelId: m.channelId, messageId: m.id })));
   const [duration, setDuration] = useState<DurationDraft>(() =>
-    initialDuration(presets, kind === "timeout" ? context.defaultTimeoutMs : BAN_START_MS, Math.max(ceiling, 1)),
+    changing
+      ? unchosenDuration()
+      : initialDuration(presets, kind === "timeout" ? context.defaultTimeoutMs : BAN_START_MS, Math.max(ceiling, 1)),
   );
   const [banLength, setBanLength] = useState<BanLength>("permanent");
   const [deleteDays, setDeleteDays] = useState(() => clampDeleteDays(context.deleteMessageDays));
@@ -260,18 +271,54 @@ function ActionForm({
   const submitting = useRef(false);
   const form = useRef<HTMLFormElement>(null);
 
+  const reasonPresets = context.reasonPresets ?? [];
+  const [presetPick, setPresetPick] = useState("");
+  const [presetNote, setPresetNote] = useState<string | null>(null);
+  const presetId = useId();
+  const presetNoteId = useId();
+
+  function pickPreset(next: string) {
+    if (busy) return;
+    setPresetPick(next);
+    const preset = next === "" ? undefined : reasonPresets[Number(next)];
+    if (!preset) {
+      setPresetNote(null);
+      return;
+    }
+    const applied = applyPreset(preset, kind, { timeoutMax: timeoutMax(context), banMax: banCeiling, presets });
+    setReason(applied.reason);
+    clearError("reason");
+    if (applied.banLength) setBanLength(applied.banLength);
+    if (applied.duration) {
+      setDuration(applied.duration);
+      setAnchor(new Date());
+      clearError("duration");
+    }
+    setPresetNote(
+      applied.clampedTo !== null && preset.durationMs !== null
+        ? clampedPresetText(preset.durationMs, applied.clampedTo, kind === "timeout" ? "timeout" : "ban")
+        : null,
+    );
+  }
+
   const reasonId = useId();
   const reasonHintId = useId();
   const reasonErrorId = useId();
   const errorId = useId();
   const deleteId = useId();
 
+  // A typed reason or picked messages are lost by leaving the page, so leaving asks first.
+  const guard = useUnsavedGuard({ dirty: !busy && (reason.trim() !== "" || evidence.length !== seed.length), onDiscard: () => setReason("") });
+
   const heavy = isHeavy(kind);
   const timed = usesDuration({ kind, banLength });
   const lengthMs = timed ? draftMs(duration) : null;
   const lengthOk = lengthMs !== null && durationProblem(duration, ceiling, what) === null;
-  const until = timed && lengthOk ? formatDateTime(endsAt(lengthMs, anchor), timeZone) : null;
-  const lines = consequences({ kind, dmOnAction: context.dmOnAction, banLength, deleteDays, until });
+  const newEnd = timed && lengthOk ? endsAt(lengthMs, anchor) : null;
+  const until = newEnd ? formatDateTime(newEnd, timeZone) : null;
+  const current = changing && member.timeoutUntil ? formatDateTime(member.timeoutUntil, timeZone) : null;
+  const lines = consequences({ kind, dmOnAction: context.dmOnAction, banLength, deleteDays, until, replacing: current });
+  const sooner = current ? earlierEndWarning(member.timeoutUntil, newEnd, current) : null;
 
   useEffect(() => {
     onBusy(busy);
@@ -366,11 +413,19 @@ function ActionForm({
         if (action === "submit") void submit();
       }}
     >
+      {guard.host}
       <div className="pf-dialog-body">
         {kind === "timeout-clear" && member.timeoutUntil ? (
           <p className="ta-intro">
             Their timeout was due to run until{" "}
             <time dateTime={member.timeoutUntil}>{formatDateTime(member.timeoutUntil, timeZone)}</time>.
+          </p>
+        ) : null}
+
+        {changing && member.timeoutUntil ? (
+          <p className="ta-intro">
+            Timed out now until <strong><time dateTime={member.timeoutUntil}>{current}</time></strong>. Pick a new length,
+            counted from now. It replaces the current one.
           </p>
         ) : null}
 
@@ -440,6 +495,35 @@ function ActionForm({
           </div>
         ) : null}
 
+        {reasonPresets.length > 0 ? (
+          <div className="pf-field">
+            <label className="pf-field-label" id={`${presetId}-label`} htmlFor={presetId}>
+              Preset
+            </label>
+            <Select
+              id={presetId}
+              className="ta-select"
+              aria-labelledby={`${presetId}-label`}
+              aria-describedby={presetNote ? presetNoteId : undefined}
+              value={presetPick}
+              options={[
+                { value: "", label: "None" },
+                ...reasonPresets.map((preset, index) => ({
+                  value: String(index),
+                  label: preset.name,
+                  description: presetDescription(preset, kind),
+                })),
+              ]}
+              onChange={pickPreset}
+            />
+            {presetNote ? (
+              <p className="pf-field-hint" id={presetNoteId} role="status">
+                {presetNote}
+              </p>
+            ) : null}
+          </div>
+        ) : null}
+
         <div className="pf-field">
           <div className="pf-field-row">
             <label className="pf-field-label ta-label" htmlFor={reasonId}>
@@ -493,6 +577,12 @@ function ActionForm({
               <li key={line}>{line}</li>
             ))}
           </ul>
+          {sooner ? (
+            <p className="ta-sooner" role="status">
+              <AlertIcon />
+              {sooner}
+            </p>
+          ) : null}
         </div>
 
         {serverError ? (
@@ -520,7 +610,7 @@ function ActionForm({
           aria-disabled={busy || undefined}
           aria-describedby={serverError ? errorId : undefined}
         >
-          {busy ? busyLabel(kind) : confirmLabel(kind, name)}
+          {busy ? busyLabel(kind, changing) : confirmLabel(kind, name, changing)}
         </button>
       </div>
     </form>
@@ -603,8 +693,10 @@ function LengthField({ label, presets, value, max, until, lengthMs, error, busy,
     <fieldset className="ta-fieldset" aria-describedby={describedBy}>
       <legend className="pf-field-label">{label}</legend>
       <div className="ta-presets">
-        {presets.map((preset) => {
+        {presets.map((preset, index) => {
           const checked = value.choice === preset.ms;
+          // With nothing picked yet, focus starts on the first choice instead of on none.
+          const focusHere = checked || (value.choice === null && index === 0);
           return (
             <label key={preset.ms} className="ta-chip" data-checked={checked ? "true" : undefined}>
               <input
@@ -613,7 +705,7 @@ function LengthField({ label, presets, value, max, until, lengthMs, error, busy,
                 className="ta-chip-input"
                 checked={checked}
                 onChange={() => pick(preset.ms)}
-                {...(checked && autoFocus ? { "data-autofocus": true } : {})}
+                {...(focusHere && autoFocus ? { "data-autofocus": true } : {})}
               />
               <span>{preset.label}</span>
             </label>

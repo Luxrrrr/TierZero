@@ -30,8 +30,8 @@ export function ServerLogs({ guildId, role, view, events, messages, refused }: P
   const base = `/guilds/${guildId}/mod/server-logs`;
   const settings = `/guilds/${guildId}/mod/settings/serverlog`;
   const data = view === "events" ? events?.data : messages?.data;
-  // Deleting logs lives in the Danger zone tab, which only the owner can open.
-  const canPurge = can(role, "purge");
+  // Deleting logs lives in the Danger zone tab, which only the owner can open; the bot holds admins to the same rule.
+  const canPurge = can(role, "messages.purge") && can(role, "purge");
 
   return (
     <div className="mod-root mod-page sl-page">

@@ -1,5 +1,15 @@
 import { canTakeAction, isInForce, isModActionKind } from "@tier0/core";
-import type { ActionContextDto, ActionRequest, ActionResult, InfractionDto, ModActionKind, StaffRole, EvidenceRef } from "@tier0/core";
+import type {
+  ActionContextDto,
+  ActionRequest,
+  ActionResult,
+  ActionTargetDto,
+  InfractionDto,
+  ModActionKind,
+  ReasonPresetDto,
+  StaffRole,
+  EvidenceRef,
+} from "@tier0/core";
 
 /**
  * The rules behind the profile's "Take action" control: which actions a role
@@ -29,13 +39,16 @@ export interface MemberState {
 }
 
 /**
- * Where the member stands, read from their record by the same rule the
- * standing and the member list use. Automod timeouts count: they are real
- * Discord timeouts and can be cleared the same way.
+ * Where the member stands. The record is read by the same rule the standing
+ * and the member list use, and automod timeouts count: they are real Discord
+ * timeouts and can be cleared the same way. When the bot has said what Discord
+ * itself holds, that wins, because the record can disagree: a ban made in
+ * Discord leaves no case, and a case can be removed from the record.
  */
 export function memberState(
   profile: { user: { inServer: boolean }; infractions: InfractionDto[] },
   now: Date,
+  discord: Pick<ActionTargetDto, "inServer" | "banned" | "timedOutUntil"> | null = null,
 ): MemberState {
   const live = profile.infractions.filter((entry) =>
     isInForce(
@@ -44,11 +57,19 @@ export function memberState(
     ),
   );
   const timeout = live.find((entry) => entry.action === "timeout" || entry.action === "automod-timeout");
-  return {
+  const recorded: MemberState = {
     inServer: profile.user.inServer,
     banned: live.some((entry) => entry.action === "ban"),
     timedOut: timeout !== undefined,
     timeoutUntil: timeout?.expiresAt ?? null,
+  };
+  if (!discord) return recorded;
+  const until = discord.inServer ? discord.timedOutUntil : null;
+  return {
+    inServer: discord.inServer,
+    banned: discord.banned ?? recorded.banned,
+    timedOut: until !== null && Date.parse(until) > now.getTime(),
+    timeoutUntil: until,
   };
 }
 
@@ -69,31 +90,35 @@ const NOT_IN_SERVER = "Not possible while they are out of the server";
 /**
  * The actions the menu lists, in a fixed order. A role's missing permissions
  * are left out entirely. Actions that do not fit the member's state are left
- * out too (Unban for someone who is not banned), except where the member has
- * only left: those stay listed with the reason, so nobody hunts for a kick
- * that is missing without explanation.
+ * out too (Unban for someone who is not banned). Actions the bot would refuse
+ * for this target (the server owner, the bot, yourself, someone who outranks
+ * you or the bot, or someone who has left) stay listed, greyed out with the
+ * reason, so nobody hunts for a missing kick or fills in a form for nothing.
+ * `blocked` comes from the bot, which applies the same rules when it acts.
  */
 export function actionOptions(
   role: StaffRole,
   state: MemberState,
   switchedOff: readonly ModActionKind[] = [],
+  blocked: Partial<Record<ModActionKind, string>> = {},
 ): ActionOption[] {
   const options: ActionOption[] = [];
   // An action the operator switched off is left out like one the role lacks:
   // there is nothing this person can do about it from the profile.
   const allowed = (kind: ModActionKind) => canTakeAction(role, kind) && !switchedOff.includes(kind);
   const away = state.inServer ? null : NOT_IN_SERVER;
+  const why = (kind: ModActionKind, fallback: string | null = null) => blocked[kind] ?? fallback;
 
   if (allowed("warn")) {
-    options.push({ kind: "warn", label: "Warn", description: "Add a warning to their record", heavy: false, unavailable: null });
+    options.push({ kind: "warn", label: "Warn", description: "Add a warning to their record", heavy: false, unavailable: why("warn") });
   }
   if (allowed("timeout")) {
     options.push({
       kind: "timeout",
       label: state.timedOut ? "Change timeout" : "Timeout",
-      description: state.timedOut ? "Replace the current timeout with a new length" : "Stop them talking for a set time",
+      description: state.timedOut ? "Set a new end for the current timeout" : "Stop them talking for a set time",
       heavy: false,
-      unavailable: away,
+      unavailable: why("timeout", away),
     });
   }
   if (allowed("timeout-clear") && state.timedOut) {
@@ -102,11 +127,11 @@ export function actionOptions(
       label: "Clear timeout",
       description: "Let them talk again straight away",
       heavy: false,
-      unavailable: away,
+      unavailable: why("timeout-clear", away),
     });
   }
   if (allowed("kick")) {
-    options.push({ kind: "kick", label: "Kick", description: "Remove them from the server", heavy: true, unavailable: away });
+    options.push({ kind: "kick", label: "Kick", description: "Remove them from the server", heavy: true, unavailable: why("kick", away) });
   }
   if (allowed("ban") && !state.banned) {
     options.push({
@@ -114,13 +139,32 @@ export function actionOptions(
       label: "Ban",
       description: "Remove them and stop them rejoining",
       heavy: true,
-      unavailable: null,
+      unavailable: why("ban"),
     });
   }
   if (allowed("unban") && state.banned) {
-    options.push({ kind: "unban", label: "Unban", description: "Let them rejoin the server", heavy: false, unavailable: null });
+    options.push({ kind: "unban", label: "Unban", description: "Let them rejoin the server", heavy: false, unavailable: why("unban") });
   }
   return options;
+}
+
+/** Reads the bot's answer about where a member stands. Anything malformed reads as no answer, so the record decides. */
+export function readStanding(raw: unknown): ActionTargetDto | null {
+  if (raw === null || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const value = raw as Record<string, unknown>;
+  if (typeof value.inServer !== "boolean") return null;
+  const blocked: Partial<Record<ModActionKind, string>> = {};
+  if (value.blocked && typeof value.blocked === "object") {
+    for (const [kind, reason] of Object.entries(value.blocked as Record<string, unknown>)) {
+      if (isModActionKind(kind) && typeof reason === "string" && reason.trim() !== "") blocked[kind] = reason;
+    }
+  }
+  return {
+    inServer: value.inServer,
+    banned: typeof value.banned === "boolean" ? value.banned : null,
+    timedOutUntil: typeof value.timedOutUntil === "string" && !Number.isNaN(Date.parse(value.timedOutUntil)) ? value.timedOutUntil : null,
+    blocked,
+  };
 }
 
 /* Wording ------------------------------------------------------------------------- */
@@ -135,13 +179,16 @@ function possessive(name: string): string {
   return `${name}’s`;
 }
 
-/** The dialog title, which also names the member for the reader. */
-export function actionTitle(kind: ModActionKind, name: string): string {
+/**
+ * The dialog title, which also names the member for the reader. `changing` is
+ * a timeout on someone already timed out, which replaces the one running.
+ */
+export function actionTitle(kind: ModActionKind, name: string, changing = false): string {
   switch (kind) {
     case "warn":
       return `Warn ${name}`;
     case "timeout":
-      return `Time out ${name}`;
+      return changing ? `Change ${possessive(name)} timeout` : `Time out ${name}`;
     case "timeout-clear":
       return `Clear ${possessive(name)} timeout`;
     case "kick":
@@ -154,16 +201,16 @@ export function actionTitle(kind: ModActionKind, name: string): string {
 }
 
 /** The confirm button: the action and the person, so a destructive click is never ambiguous. */
-export function confirmLabel(kind: ModActionKind, name: string): string {
-  return actionTitle(kind, shortName(name));
+export function confirmLabel(kind: ModActionKind, name: string, changing = false): string {
+  return actionTitle(kind, shortName(name), changing);
 }
 
-export function busyLabel(kind: ModActionKind): string {
+export function busyLabel(kind: ModActionKind, changing = false): string {
   switch (kind) {
     case "warn":
       return "Warning…";
     case "timeout":
-      return "Timing out…";
+      return changing ? "Changing…" : "Timing out…";
     case "timeout-clear":
       return "Clearing…";
     case "kick":
@@ -185,8 +232,8 @@ const DONE: Record<ModActionKind, (name: string) => string> = {
 };
 
 /** "Banned Priya. Case #61." */
-export function successTitle(kind: ModActionKind, name: string, caseNumber: number | null): string {
-  const done = DONE[kind](shortName(name));
+export function successTitle(kind: ModActionKind, name: string, caseNumber: number | null, changing = false): string {
+  const done = changing && kind === "timeout" ? `Changed ${possessive(shortName(name))} timeout.` : DONE[kind](shortName(name));
   return caseNumber !== null && Number.isFinite(caseNumber) ? `${done} Case #${caseNumber}.` : done;
 }
 
@@ -285,11 +332,20 @@ export function presetsWithin(presets: DurationPreset[], max: number): DurationP
   return presets.filter((preset) => preset.ms <= max);
 }
 
-/** Either one of the presets, by its length, or a custom number and unit. */
+/** Either one of the presets, by its length, or a custom number and unit. Null until one is picked. */
 export interface DurationDraft {
-  choice: number | "custom";
+  choice: number | "custom" | null;
   amount: string;
   unit: DurationUnit;
+}
+
+/**
+ * Nothing picked. Changing a running timeout opens like this, because any
+ * preset would be a guess at a new end, and one click on it could cut a
+ * two-day timeout to an hour.
+ */
+export function unchosenDuration(): DurationDraft {
+  return { choice: null, amount: "", unit: "h" };
 }
 
 /**
@@ -306,6 +362,7 @@ export function initialDuration(presets: DurationPreset[], value: number, max: n
 
 /** Milliseconds for the draft, or null while the custom number is missing or not a whole number. */
 export function draftMs(draft: DurationDraft): number | null {
+  if (draft.choice === null) return null;
   if (draft.choice !== "custom") return draft.choice;
   if (!/^\d+$/.test(draft.amount.trim())) return null;
   return Number(draft.amount.trim()) * UNIT_MS[draft.unit];
@@ -313,6 +370,7 @@ export function draftMs(draft: DurationDraft): number | null {
 
 /** Why a length cannot be used, or null when it can. */
 export function durationProblem(draft: DurationDraft, max: number, what: "timeout" | "ban"): string | null {
+  if (draft.choice === null) return `Choose how long the new ${what} lasts.`;
   if (draft.choice === "custom" && draft.amount.trim() === "") {
     return `Enter how long the ${what} lasts.`;
   }
@@ -420,6 +478,20 @@ export interface ConsequenceInput {
   deleteDays: number;
   /** The formatted end of a timeout or temporary ban, when the length is valid. */
   until: string | null;
+  /** For a change to a running timeout, when that one is due to end, formatted. */
+  replacing?: string | null;
+}
+
+/**
+ * The warning shown when a new timeout would end before the one running now,
+ * which is easy to do by accident with a short preset. Null when it ends later
+ * or the new end is not known yet.
+ */
+export function earlierEndWarning(currentUntil: string | null, newEnd: string | null, currentText: string): string | null {
+  if (!currentUntil || !newEnd) return null;
+  return Date.parse(newEnd) < Date.parse(currentUntil)
+    ? `This ends the timeout sooner. It is set to run until ${currentText} now.`
+    : null;
 }
 
 /**
@@ -434,6 +506,7 @@ export function consequences(input: ConsequenceInput): string[] {
       lines.push("A warning is added to their record.");
       break;
     case "timeout":
+      if (input.replacing) lines.push(`The timeout running until ${input.replacing} is replaced by this one.`);
       lines.push(
         input.until
           ? `They cannot send messages, react or speak in voice until ${input.until}.`
@@ -535,7 +608,75 @@ export function readContext(raw: unknown): FormContext | null {
     deleteMessageDays: clampDeleteDays(finiteNumber(value.deleteMessageDays, 0)),
     maxBanDays: finiteNumber(value.maxBanDays, 0),
     disabledActions: Array.isArray(value.disabledActions) ? value.disabledActions.filter(isModActionKind) : [],
+    reasonPresets: readPresets(value.reasonPresets),
   };
+}
+
+/** The presets an older bot leaves out read as none, and a damaged entry is dropped rather than shown half-filled. */
+export function readPresets(raw: unknown): ReasonPresetDto[] {
+  if (!Array.isArray(raw)) return [];
+  const presets: ReasonPresetDto[] = [];
+  for (const entry of raw) {
+    if (entry === null || typeof entry !== "object") continue;
+    const value = entry as Record<string, unknown>;
+    const name = typeof value.name === "string" ? value.name.trim() : "";
+    const reason = typeof value.reason === "string" ? value.reason : "";
+    if (name === "" || reason.trim() === "") continue;
+    const ms = value.durationMs;
+    presets.push({ name, reason, durationMs: typeof ms === "number" && Number.isFinite(ms) && ms > 0 ? ms : null });
+  }
+  return presets;
+}
+
+/* Reason presets ------------------------------------------------------------------------------ */
+
+export interface PresetApplied {
+  reason: string;
+  /** The length to switch to, or null to leave the length as it is. */
+  duration: DurationDraft | null;
+  /** For a ban, set when the preset's length turns it into a temporary one. */
+  banLength: BanLength | null;
+  /** Set when the preset's length was longer than this server allows and was cut to the ceiling. */
+  clampedTo: number | null;
+}
+
+/**
+ * What picking a preset changes in the form. The reason is always replaced:
+ * picking a preset is the moderator choosing that wording. A preset's length
+ * applies to a timeout and to a ban, and only when the server allows a length
+ * at all; one longer than the ceiling is cut to the ceiling rather than
+ * ignored, and the form says so, because the preset clearly meant "long".
+ */
+export function applyPreset(
+  preset: ReasonPresetDto,
+  kind: ModActionKind,
+  limits: { timeoutMax: number; banMax: number; presets: DurationPreset[] },
+): PresetApplied {
+  const reason = preset.reason.slice(0, ACTION_REASON_LIMIT);
+  const result: PresetApplied = { reason, duration: null, banLength: null, clampedTo: null };
+  const ms = preset.durationMs;
+  if (ms === null || ms <= 0) return result;
+  const ceiling = kind === "timeout" ? limits.timeoutMax : kind === "ban" ? limits.banMax : 0;
+  if (ceiling <= 0) return result;
+  const length = Math.min(ms, ceiling);
+  const match = limits.presets.find((entry) => entry.ms === length);
+  result.duration = match ? { choice: match.ms, ...splitMs(match.ms) } : { choice: "custom", ...splitMs(length) };
+  if (kind === "ban") result.banLength = "temporary";
+  if (length < ms) result.clampedTo = length;
+  return result;
+}
+
+/** The line under a preset's name in the picker: its reason, cut short, and its length where this action uses one. */
+export function presetDescription(preset: ReasonPresetDto, kind: ModActionKind, max = 80): string {
+  const text = preset.reason.replace(/\s+/g, " ").trim();
+  const short = text.length <= max ? text : `${text.slice(0, max - 1).trimEnd()}…`;
+  const timed = (kind === "timeout" || kind === "ban") && preset.durationMs !== null;
+  return timed ? `${short} (${describeMs(preset.durationMs!)})` : short;
+}
+
+/** The note under the preset picker when its length had to be cut. */
+export function clampedPresetText(presetMs: number, clampedTo: number, what: "timeout" | "ban"): string {
+  return `The preset asks for ${describeMs(presetMs)}, longer than this server allows for a ${what}, so the length is set to ${describeMs(clampedTo)}.`;
 }
 
 /** The case number and notes from a successful reply. A reply missing them still counts as done. */

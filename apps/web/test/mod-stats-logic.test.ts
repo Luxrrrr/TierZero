@@ -38,6 +38,18 @@ import {
   segmentsFor,
   shortDate,
   sharePercent,
+  bucketOf,
+  dayMs,
+  longDate,
+  monthLabel,
+  parseRangeSpec,
+  pointLabel,
+  pointTitle,
+  rangeHref,
+  rangeParams,
+  rangePhrase,
+  rangeQuery,
+  statsExportHref,
 } from "../app/guilds/[id]/mod/stats-logic.ts";
 
 const day = (date: string, warn = 0, timeout = 0, kick = 0, ban = 0, other = 0) => ({
@@ -405,9 +417,12 @@ describe("wording helpers", () => {
     assert.equal(hourRange(23), "23:00 to 00:00 UTC");
   });
 
-  test("actionVerb falls back for unknown actions", () => {
+  test("actionVerb words automod's actions and never shows an action's code name", () => {
     assert.equal(actionVerb("timeout"), "timed out");
-    assert.equal(actionVerb("mute"), "acted on (mute)");
+    assert.equal(actionVerb("automod-timeout"), "timed out");
+    assert.equal(actionVerb("automod-warn"), "warned");
+    assert.equal(actionVerb("automod-delete"), "deleted a message from");
+    assert.equal(actionVerb("mute"), "acted on");
   });
 
   test("repeatPercent rejects anything that is not a share", () => {
@@ -470,5 +485,129 @@ describe("automodView", () => {
 
   test("links to the automod filter of the action log", () => {
     assert.equal(automodLogHref("42"), "/guilds/42/mod/actions?source=automod");
+  });
+});
+
+describe("parseRangeSpec", () => {
+  const TODAY = "2026-10-17";
+
+  test("keeps the preset days and defaults to 30", () => {
+    assert.deepEqual(parseRangeSpec({ days: "7" }, TODAY), { kind: "days", days: 7 });
+    assert.deepEqual(parseRangeSpec({}, TODAY), { kind: "days", days: 30 });
+  });
+
+  test("reads all time", () => {
+    assert.deepEqual(parseRangeSpec({ range: "all", days: "7" }, TODAY), { kind: "all" });
+    assert.deepEqual(parseRangeSpec({ range: "everything" }, TODAY), { kind: "days", days: 30 });
+  });
+
+  test("accepts a valid custom range and pulls a future end back to today", () => {
+    assert.deepEqual(parseRangeSpec({ from: "2026-09-01", to: "2026-09-30" }, TODAY), {
+      kind: "custom",
+      from: "2026-09-01",
+      to: "2026-09-30",
+    });
+    assert.deepEqual(parseRangeSpec({ from: "2026-10-01", to: "2026-12-25" }, TODAY), {
+      kind: "custom",
+      from: "2026-10-01",
+      to: "2026-10-17",
+    });
+  });
+
+  test("falls back for bad, reversed, future or too long ranges", () => {
+    const fallback = { kind: "days", days: 30 };
+    assert.deepEqual(parseRangeSpec({ from: "2026-02-30", to: "2026-03-05" }, TODAY), fallback);
+    assert.deepEqual(parseRangeSpec({ from: "yesterday", to: "2026-03-05" }, TODAY), fallback);
+    assert.deepEqual(parseRangeSpec({ from: "2026-09-30", to: "2026-09-01" }, TODAY), fallback);
+    assert.deepEqual(parseRangeSpec({ from: "2026-11-01", to: "2026-11-05" }, TODAY), fallback);
+    assert.deepEqual(parseRangeSpec({ from: "2024-01-01", to: "2026-10-01" }, TODAY), fallback);
+    assert.deepEqual(parseRangeSpec({ to: "2026-10-01" }, TODAY), fallback);
+    assert.deepEqual(parseRangeSpec({ from: "2026-09-30", to: "2026-09-01", days: "90" }, TODAY), { kind: "days", days: 90 });
+  });
+
+  test("allows exactly two years", () => {
+    assert.equal(parseRangeSpec({ from: "2024-10-17", to: "2026-10-17" }, TODAY).kind, "custom");
+    assert.equal(parseRangeSpec({ from: "2024-10-16", to: "2026-10-17" }, TODAY).kind, "days");
+  });
+
+  test("dayMs only takes real calendar dates", () => {
+    assert.equal(dayMs("2028-02-29"), Date.UTC(2028, 1, 29));
+    assert.equal(dayMs("2026-02-29"), null);
+    assert.equal(dayMs(undefined), null);
+  });
+});
+
+describe("range links", () => {
+  test("each kind has its own query", () => {
+    assert.equal(rangeQuery({ kind: "days", days: 7 }), "days=7");
+    assert.equal(rangeQuery({ kind: "all" }), "range=all");
+    assert.equal(rangeQuery({ kind: "custom", from: "2026-09-01", to: "2026-09-30" }), "from=2026-09-01&to=2026-09-30");
+    assert.deepEqual(rangeParams({ kind: "all" }), { range: "all" });
+  });
+
+  test("the page and the export use the same range", () => {
+    const spec = { kind: "custom", from: "2026-09-01", to: "2026-09-30" } as const;
+    assert.equal(rangeHref("42", spec), "/guilds/42/mod?from=2026-09-01&to=2026-09-30");
+    assert.equal(statsExportHref("42", spec), "/api/guilds/42/mod/stats/export?from=2026-09-01&to=2026-09-30");
+    assert.equal(statsExportHref("42", { kind: "days", days: 30 }), "/api/guilds/42/mod/stats/export?days=30");
+  });
+
+  test("an unknown bucket reads as days", () => {
+    assert.equal(bucketOf(undefined), "day");
+    assert.equal(bucketOf("week"), "week");
+    assert.equal(bucketOf("year"), "day");
+  });
+});
+
+describe("range wording", () => {
+  test("rangePhrase finishes a sentence for each kind of range", () => {
+    assert.equal(rangePhrase({ days: 30, since: "2026-09-18T00:00:00.000Z" }), "in the last 30 days");
+    assert.equal(rangePhrase({ days: 1, since: "2026-10-17T00:00:00.000Z", range: "days" }), "in the last 1 day");
+    assert.equal(rangePhrase({ days: 400, since: "2025-03-14T00:00:00.000Z", until: "2026-10-17", range: "all" }), "since 14 Mar 2025");
+    assert.equal(
+      rangePhrase({ days: 30, since: "2026-09-01T00:00:00.000Z", until: "2026-09-30", range: "custom" }),
+      "from 1 Sep to 30 Sep 2026",
+    );
+    assert.equal(
+      rangePhrase({ days: 60, since: "2025-12-01T00:00:00.000Z", until: "2026-01-29", range: "custom" }),
+      "from 1 Dec 2025 to 29 Jan 2026",
+    );
+    assert.equal(rangePhrase({ days: 1, since: "2026-09-01T00:00:00.000Z", until: "2026-09-01", range: "custom" }), "on 1 Sep 2026");
+  });
+
+  test("periodText ends on the last day of the last bucket and shows both years when needed", () => {
+    assert.equal(
+      periodText([{ ...day("2025-03-14"), end: "2025-03-31" }, { ...day("2026-10-01"), end: "2026-10-17" }]),
+      "14 Mar 2025 to 17 Oct 2026",
+    );
+  });
+
+  test("automodView words other ranges from the phrase it is given", () => {
+    const view = automodView({ total: 3, previousTotal: null, byRule: [] }, (rule) => rule, "since 14 Mar 2025")!;
+    assert.equal(view.summary, "Automod acted 3 times since 14 Mar 2025.");
+  });
+});
+
+describe("week and month points", () => {
+  const week = { ...day("2026-10-05", 2, 1), end: "2026-10-11" };
+  const month = { ...day("2026-03-01", 4), end: "2026-03-31" };
+
+  test("labels and titles", () => {
+    assert.equal(pointLabel(week, "week"), "5 Oct");
+    assert.equal(pointTitle(week, "week"), "5 Oct to 11 Oct");
+    assert.equal(pointTitle({ ...week, end: "2026-10-05" }, "week"), "5 Oct");
+    assert.equal(pointLabel(month, "month"), "Mar 2026");
+    assert.equal(pointTitle(month, "month"), "Mar 2026");
+    assert.equal(monthLabel("2026-12-01"), "Dec 2026");
+    assert.equal(longDate("2026-10-05"), "5 Oct 2026");
+  });
+
+  test("tooltip and chart summary name the bucket", () => {
+    assert.equal(tooltipSentence(week, [], "week"), "5 Oct to 11 Oct: 3 actions (2 warns, 1 timeouts)");
+    assert.equal(
+      chartSummary({ perDay: [week, { ...day("2026-10-12", 1), end: "2026-10-17" }], bucket: "week" }),
+      "4 actions across 2 weeks. The busiest week was 5 Oct to 11 Oct with 3.",
+    );
+    assert.equal(chartSummary({ perDay: [month], bucket: "month" }), "4 actions across 1 month. The busiest month was Mar 2026 with 4.");
   });
 });

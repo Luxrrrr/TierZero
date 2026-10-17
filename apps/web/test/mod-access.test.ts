@@ -70,11 +70,31 @@ describe("matrix grouping", () => {
     assert.equal(new Set(flat).size, flat.length);
   });
 
-  test("names the five groups the owner reads", () => {
+  test("names the six groups the owner reads", () => {
     assert.deepEqual(
       PERMISSION_GROUPS.map((group) => group.title),
-      ["Viewing", "Notes", "Taking action", "Removing from records", "Administration"],
+      ["Viewing", "Notes", "Taking action", "Removing from records", "Appeals and raids", "Administration"],
     );
+  });
+
+  test("lists appeals and the raid tools as admin and owner only, as the bot enforces", () => {
+    const group = matrixGroups().find((entry) => entry.title === "Appeals and raids")!;
+    assert.deepEqual(
+      group.rows.map((row) => row.permission),
+      ["appeals.manage", "raid.lockdown", "raid.mass"],
+    );
+    for (const row of group.rows) {
+      assert.deepEqual(row.allowed, [false, true, true], row.permission);
+      MATRIX_ROLES.forEach((role, index) => assert.equal(row.allowed[index], can(role, row.permission), `${row.permission} ${role}`));
+    }
+  });
+
+  test("lists every permission the bot knows about", () => {
+    const listed = new Set(PERMISSION_ROWS.map((row) => row.permission));
+    // timeout-clear shares the timeout permission, so the matrix has one row for both.
+    for (const permission of [...MOD_ACTION_KINDS.map(permissionForAction), "appeals.manage", "raid.lockdown", "raid.mass"]) {
+      assert.ok(listed.has(permission as never), permission);
+    }
   });
 
   test("lists every action a moderator can take, with clearing a timeout under the timeout row", () => {

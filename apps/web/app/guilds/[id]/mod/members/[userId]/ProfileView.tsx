@@ -4,7 +4,7 @@ import Link from "next/link";
 import { forwardRef, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import type { MemberProfile, StaffRole, UserRef } from "@tier0/core";
+import type { ActionTargetDto, MemberProfile, StaffRole, UserRef } from "@tier0/core";
 import { Avatar, StateIcon, displayName, timeAgo } from "../../../../../../components/mod/ModUi";
 import { CheckIcon, ChevronRightIcon, NoteIcon, PlusIcon } from "../../../../../../components/Icons";
 import { AuditRow, InfractionRow, NOTE_LIMIT, NoteRow } from "./TimelineRows";
@@ -18,6 +18,7 @@ import {
   focusDomId,
   focusLabel,
   focusRequest,
+  missingText,
   parseCaseHash,
   parseNoteHash,
   type FocusRequest,
@@ -31,7 +32,10 @@ import {
   recordCounts,
   sparkPoints,
   standingOf,
+  standingWithDiscord,
+  limitToShow,
   RECENT_DAYS,
+  TIMELINE_PAGE,
   TREND_DAYS,
   type PendingOp,
   type Standing,
@@ -41,6 +45,8 @@ import {
 import { useModAction, type ModCall, type ModResult, type Run } from "./useModAction";
 import { isComposerShortcut } from "./a11y";
 import { TakeAction } from "./TakeAction";
+import { useStanding } from "./useStanding";
+import { useUnsavedGuard } from "../../../../../../lib/unsaved-guard";
 import { CharacterCount } from "./CharacterCount";
 import "../../../../../mod.css";
 import "./profile.css";
@@ -66,6 +72,8 @@ interface Props {
   focusCase?: number | null;
   /** A note id from `?note=`, opened the same way. */
   focusNote?: number | null;
+  /** A `?case=` or `?note=` that is not a number, as it was given, so the page can say it was ignored. */
+  badLink?: string | null;
 }
 
 const FILTERS: { id: TimelineFilter; label: string }[] = [
@@ -92,9 +100,26 @@ interface Tracked {
 /** A confirmed change whose refresh never arrives is dropped after this long rather than shown forever. */
 const SETTLED_TIMEOUT_MS = 10_000;
 
-export function ProfileView({ guildId, profile, role, viewerId, viewerName, renderedAt, canConfigure = false, focusCase = null, focusNote = null }: Props) {
+export function ProfileView({ guildId, profile, role, viewerId, viewerName, renderedAt, canConfigure = false, focusCase = null, focusNote = null, badLink = null }: Props) {
   const send = useModAction(guildId);
-  const [filter, setFilter] = useState<TimelineFilter>("all");
+  const { standing: discord, reload: reloadStanding } = useStanding(guildId, profile.user.userId);
+  const [filter, setFilterState] = useState<TimelineFilter>("all");
+  const [limit, setLimit] = useState(() => {
+    const items = buildTimeline(profile, seesAudit(role));
+    const target = findFocusItem(items, focusRequest(focusCase, focusNote));
+    return limitToShow(target ? items.findIndex((item) => item.key === target.key) : -1, TIMELINE_PAGE);
+  });
+  const filterRef = useRef(filter);
+  filterRef.current = filter;
+  // Each filter starts from its newest entries again.
+  const setFilter = useCallback((next: TimelineFilter | ((current: TimelineFilter) => TimelineFilter)) => {
+    const current = filterRef.current;
+    const value = typeof next === "function" ? next(current) : next;
+    if (value === current) return;
+    filterRef.current = value;
+    setLimit(TIMELINE_PAGE);
+    setFilterState(value);
+  }, []);
   // A linked case starts open, so the first paint already matches what the
   // scroll effect below lands on and the page does not jump afterwards.
   const [expanded, setExpanded] = useState<Set<string>>(() => {
@@ -103,6 +128,7 @@ export function ProfileView({ guildId, profile, role, viewerId, viewerName, rend
   });
   const [spotlight, setSpotlight] = useState<{ key: string; request: FocusRequest } | null>(null);
   const [missing, setMissing] = useState<FocusRequest | null>(null);
+  const [badLinkDismissed, setBadLinkDismissed] = useState(false);
   const [tracked, setTracked] = useState<Tracked[]>([]);
   const [now, setNow] = useState(() => (renderedAt ? new Date(renderedAt) : new Date()));
   // The server renders in UTC; the browser switches to its own zone once mounted,
@@ -135,6 +161,8 @@ export function ProfileView({ guildId, profile, role, viewerId, viewerName, rend
       const id = Math.random();
       if (op && when === "now") setTracked((current) => [...current, { id, op, settledOn: null }]);
       const result = await send(call);
+      // Removing or restoring a case can lift a ban or timeout in Discord, so the menu reads Discord again.
+      if (result === true && op?.type.startsWith("infraction.")) reloadStanding();
       if (!op) return result;
       if (result !== true) {
         setTracked((current) => current.filter((entry) => entry.id !== id));
@@ -149,7 +177,7 @@ export function ProfileView({ guildId, profile, role, viewerId, viewerName, rend
       setTimeout(() => setTracked((current) => current.filter((entry) => entry.id !== id)), SETTLED_TIMEOUT_MS);
       return result;
     },
-    [send],
+    [send, reloadStanding],
   );
 
   const shown = useMemo(() => applyPending(profile, tracked.map((entry) => entry.op)), [profile, tracked]);
@@ -157,7 +185,9 @@ export function ProfileView({ guildId, profile, role, viewerId, viewerName, rend
 
   const all = useMemo(() => buildTimeline(shown, audit), [shown, audit]);
   const counts = useMemo(() => countByFilter(all), [all]);
-  const visible = useMemo(() => filterTimeline(all, filter), [all, filter]);
+  const filtered = useMemo(() => filterTimeline(all, filter), [all, filter]);
+  const visible = useMemo(() => filtered.slice(0, limit), [filtered, limit]);
+  const hiddenOlder = filtered.length - visible.length;
   const groups = useMemo(() => groupByDay(visible, now, timeZone), [visible, now, timeZone]);
   const filters = audit ? FILTERS : FILTERS.filter((entry) => entry.id !== "staff");
 
@@ -176,7 +206,11 @@ export function ProfileView({ guildId, profile, role, viewerId, viewerName, rend
       return;
     }
     setMissing(null);
-    setFilter((current) => filterShowing(allRef.current, current, target));
+    const nextFilter = filterShowing(allRef.current, filterRef.current, target);
+    setFilter(nextFilter);
+    // A linked entry older than the first page is shown, with everything newer than it.
+    const index = filterTimeline(allRef.current, nextFilter).findIndex((item) => item.key === target.key);
+    setLimit((current) => limitToShow(index, current));
     setExpanded((current) => (current.has(target.key) ? current : new Set(current).add(target.key)));
     setSpotlight({ key: target.key, request });
   }, [focusCase, focusNote]);
@@ -294,6 +328,7 @@ export function ProfileView({ guildId, profile, role, viewerId, viewerName, rend
         profile={shown}
         now={now}
         timeZone={timeZone}
+        discord={discord}
         action={
           <TakeAction
             guildId={guildId}
@@ -303,8 +338,12 @@ export function ProfileView({ guildId, profile, role, viewerId, viewerName, rend
             now={now}
             timeZone={timeZone}
             canConfigure={canConfigure}
-            // A new action lands in the timeline, so a filter that would hide it is lifted.
-            onActed={() => setFilter((current) => (current === "notes" || current === "staff" ? "all" : current))}
+            standing={discord}
+            onActed={() => {
+              reloadStanding();
+              // A new action lands in the timeline, so a filter that would hide it is lifted.
+              setFilter((current) => (current === "notes" || current === "staff" ? "all" : current));
+            }}
           />
         }
       />
@@ -312,7 +351,7 @@ export function ProfileView({ guildId, profile, role, viewerId, viewerName, rend
       <div className="pf-grid">
         <aside className="pf-side" aria-label="Add a note and record summary">
           {canAddNote(role) ? <NoteComposer ref={composer} onSubmit={addNote} /> : null}
-          <RecordCard profile={shown} />
+          <RecordCard profile={shown} now={now} />
           {seesQuickFacts(role) ? <FactsCard profile={shown} timeZone={timeZone} /> : null}
         </aside>
 
@@ -320,10 +359,21 @@ export function ProfileView({ guildId, profile, role, viewerId, viewerName, rend
           <h2 className="pf-main-title" id="pf-timeline-title" tabIndex={-1}>
             Timeline
           </h2>
-          {missing !== null ? (
+          {missing !== null || (badLink && !badLinkDismissed) ? (
             <p className="pf-case-notice" role="status">
-              <span>{focusLabel(missing)} isn&apos;t on this member&apos;s record, or you can&apos;t see it.</span>
-              <button type="button" className="btn btn-ghost btn-sm" onClick={() => setMissing(null)}>
+              <span>
+                {missing !== null
+                  ? missingText(missing)
+                  : `The link asked for "${badLink}", which is not a case or note number, so the whole record is shown.`}
+              </span>
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm"
+                onClick={() => {
+                  setMissing(null);
+                  setBadLinkDismissed(true);
+                }}
+              >
                 Dismiss
               </button>
             </p>
@@ -402,6 +452,16 @@ export function ProfileView({ guildId, profile, role, viewerId, viewerName, rend
                   <ol className="pf-events">{group.items.map(renderItem)}</ol>
                 </div>
               ))}
+              {hiddenOlder > 0 ? (
+                <div className="pf-more">
+                  <button type="button" className="btn btn-secondary btn-sm" onClick={() => setLimit((current) => current + TIMELINE_PAGE)}>
+                    Show {Math.min(hiddenOlder, TIMELINE_PAGE)} older
+                  </button>
+                  <span className="pf-dim">
+                    {visible.length} of {filtered.length} shown
+                  </span>
+                </div>
+              ) : null}
             </div>
           )}
         </section>
@@ -414,8 +474,13 @@ export function ProfileView({ guildId, profile, role, viewerId, viewerName, rend
 
 function standingText(standing: Standing, hasRecord: boolean, now: Date, timeZone: string): { tone: string; label: string; detail: string } {
   if (standing.kind === "restricted") {
-    const label = standing.action === "ban" ? "Banned" : standing.action === "timeout" ? "Timed out" : "Restricted";
-    const caseText = standing.caseNumber !== null ? `Case #${standing.caseNumber}, ` : "";
+    const timedOut = standing.action === "timeout" || standing.action === "automod-timeout";
+    const label = standing.action === "ban" ? "Banned" : timedOut ? "Timed out" : "Restricted";
+    const caseText = standing.inDiscordOnly
+      ? "In Discord, with no case on this record, "
+      : standing.caseNumber !== null
+        ? `Case #${standing.caseNumber}, `
+        : "";
     const detail = standing.until ? `${caseText}until ${formatDateTime(standing.until, timeZone)}` : `${caseText}no end date`;
     return { tone: standing.action === "ban" ? "danger" : "active", label, detail };
   }
@@ -434,14 +499,16 @@ function ProfileHeader({
   now,
   timeZone,
   action,
+  discord,
 }: {
   profile: MemberProfile;
   now: Date;
   timeZone: string;
   action?: ReactNode;
+  discord: ActionTargetDto | null;
 }) {
   const { user, summary } = profile;
-  const standing = standingOf(profile, now);
+  const standing = standingWithDiscord(standingOf(profile, now), discord, now);
   const { tone, label, detail } = standingText(standing, profile.infractions.some((entry) => !entry.voided), now, timeZone);
   const series = activitySeries(profile, now);
   const total = series.reduce((sum, value) => sum + value, 0);
@@ -629,8 +696,8 @@ function RoleList({ roles }: { roles: MemberProfile["roles"] }) {
 
 /* Side column --------------------------------------------------------------- */
 
-function RecordCard({ profile }: { profile: MemberProfile }) {
-  const counts = recordCounts(profile);
+function RecordCard({ profile, now }: { profile: MemberProfile; now: Date }) {
+  const counts = recordCounts(profile, now);
   const rows: { key: string; action: string; label: string; value: number }[] = [
     { key: "warn", action: "warn", label: "Warns", value: counts.warn },
     { key: "timeout", action: "timeout", label: "Timeouts", value: counts.timeout },
@@ -639,7 +706,8 @@ function RecordCard({ profile }: { profile: MemberProfile }) {
   ];
   if (counts.other > 0) rows.push({ key: "other", action: "other", label: "Other actions", value: counts.other });
   rows.push({ key: "notes", action: "note", label: "Notes", value: counts.notes });
-  const onRecord = counts.warn + counts.timeout + counts.kick + counts.ban + counts.other;
+  // Expired warnings stop counting as warns but are still on the record.
+  const onRecord = counts.warn + counts.timeout + counts.kick + counts.ban + counts.other + counts.expired;
 
   return (
     <div className="mod-card pf-panel">
@@ -671,6 +739,13 @@ function RecordCard({ profile }: { profile: MemberProfile }) {
         ) : (
           "Removed entries stay on the timeline but are left out of these totals."
         )}
+        {counts.expired > 0 ? (
+          <>
+            {" "}
+            <span className="pf-num">{counts.expired}</span> {counts.expired === 1 ? "warning has" : "warnings have"} expired
+            and no longer {counts.expired === 1 ? "counts" : "count"} as a warn.
+          </>
+        ) : null}
       </p>
     </div>
   );
@@ -728,9 +803,11 @@ const NoteComposer = forwardRef<HTMLTextAreaElement, { onSubmit(content: string)
   const fieldId = useId();
   const hintId = useId();
   const trimmed = text.trim();
+  // A note written but not added is lost by leaving the page, so leaving asks first.
+  const guard = useUnsavedGuard({ dirty: trimmed !== "" && !busy, onSave: () => submit(), onDiscard: () => setText("") });
 
-  async function submit() {
-    if (lock.current || trimmed === "") return;
+  async function submit(): Promise<boolean> {
+    if (lock.current || trimmed === "") return false;
     lock.current = true;
     setBusy(true);
     const content = trimmed;
@@ -740,6 +817,7 @@ const NoteComposer = forwardRef<HTMLTextAreaElement, { onSubmit(content: string)
     try {
       const result = await onSubmit(content);
       if (result !== true) setText(content);
+      return result === true;
     } finally {
       lock.current = false;
       setBusy(false);
@@ -747,6 +825,8 @@ const NoteComposer = forwardRef<HTMLTextAreaElement, { onSubmit(content: string)
   }
 
   return (
+    <>
+    {guard.host}
     <form
       className="mod-card pf-composer"
       onSubmit={(event) => {
@@ -792,6 +872,7 @@ const NoteComposer = forwardRef<HTMLTextAreaElement, { onSubmit(content: string)
         </button>
       </div>
     </form>
+    </>
   );
 });
 

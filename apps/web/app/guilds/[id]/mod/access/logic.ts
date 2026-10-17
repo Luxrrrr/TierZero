@@ -81,6 +81,14 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
     ],
   },
   {
+    title: "Appeals and raids",
+    rows: [
+      { permission: "appeals.manage", label: "Read ban appeals and accept or deny them" },
+      { permission: "raid.lockdown", label: "Lock and unlock channels" },
+      { permission: "raid.mass", label: "Ban or kick many members at once from the Raid tools" },
+    ],
+  },
+  {
     title: "Administration",
     rows: [
       { permission: "purge", label: "Permanently erase an action or note, with its history" },

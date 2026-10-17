@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Select } from "../../../../../components/form/Select";
 import { LogSwitch } from "../../../../../components/mod/LogSwitch";
 import { isAutomodRole, type AuditDto, type Page, type UserRef } from "@tier0/core";
-import { Avatar, Pager, RoleBadge, UserChip, When } from "../../../../../components/mod/ModUi";
+import { Avatar, Pager, PastEnd, RoleBadge, UserChip, When, dayCountText, isPastEnd } from "../../../../../components/mod/ModUi";
 import { ArrowRightIcon, NoteIcon, PencilIcon, SearchIcon, TrashIcon, UndoIcon, UserIcon, HistoryIcon } from "../../../../../components/Icons";
 import { ExpandableRow } from "./ExpandableRow";
 import { SnapshotDiff } from "./SnapshotDiff";
@@ -170,12 +170,16 @@ export function AuditLog({ guildId, query, data, actors: known, narrowedHere }: 
 
         <p className="audit-count" role="status">
           <strong>{total.toLocaleString()}</strong> {total === 1 ? "entry" : "entries"}
-          {filtered ? " match these filters" : " in total"}
+          {filtered ? (total === 1 ? " matches these filters" : " match these filters") : " in total"}
           {narrowedHere ? " on this page" : ""}
           <span className="audit-tz"> · Days and dates are in UTC</span>
         </p>
 
-        {data.items.length === 0 ? (
+        {data.items.length === 0 && isPastEnd(data.page, data.pageSize, data.total) ? (
+          <div className="mod-card">
+            <PastEnd total={data.total} pageSize={data.pageSize} hrefFor={(page) => auditHref(guildId, { ...query, page })} />
+          </div>
+        ) : data.items.length === 0 ? (
           <div className="mod-card">
             <div className="mod-empty">
               <span className="mod-empty-icon">
@@ -205,12 +209,17 @@ export function AuditLog({ guildId, query, data, actors: known, narrowedHere }: 
           </div>
         ) : (
           <div className="mod-card">
-            {groups.map((group) => (
+            {groups.map((group, index) => (
               <div className="audit-day" key={group.key} role="group" aria-labelledby={`audit-day-${group.key}`}>
                 <h3 className="audit-day-title" id={`audit-day-${group.key}`}>
                   {group.label}
                   <span className="audit-day-count">
-                    {group.items.length} {group.items.length === 1 ? "entry" : "entries"}
+                    {dayCountText(group.items.length, {
+                      index,
+                      groups: groups.length,
+                      page: data.page,
+                      pages: Math.ceil(data.total / data.pageSize),
+                    })}
                   </span>
                 </h3>
                 <ol className="audit-list">

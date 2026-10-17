@@ -345,6 +345,16 @@ html:has(.pf) {
   line-height: 1.5;
 }
 
+.pf-dialog-warn {
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  border-left: 3px solid var(--danger);
+  background: var(--danger-soft);
+  color: var(--text);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+}
+
 .pf-field-error {
   display: flex;
   align-items: flex-start;
@@ -955,11 +965,11 @@ html:has(.pf) {
 }
 
 .pf-act[data-danger="true"] {
-  color: var(--danger);
+  color: var(--mod-danger-text);
 }
 
 .pf-act[data-danger="true"]:hover:not(:disabled) {
-  color: var(--danger);
+  color: var(--mod-danger-text);
   background: var(--danger-soft);
 }
 
@@ -1024,7 +1034,7 @@ html:has(.pf) {
 }
 
 .pf-counter[data-tone="full"] {
-  color: var(--danger);
+  color: var(--mod-danger-text);
   font-weight: 600;
 }
 
@@ -1238,7 +1248,7 @@ html:has(.pf) {
 
 .pf-dialog[data-tone="danger"] .pf-dialog-icon {
   background: var(--danger-soft);
-  color: var(--danger);
+  color: var(--mod-danger-text);
 }
 
 .pf-dialog-title {
@@ -1263,7 +1273,7 @@ html:has(.pf) {
   padding: 0 0.3rem;
   border-radius: var(--radius-xs);
   background: var(--danger-soft);
-  color: var(--danger);
+  color: var(--mod-danger-text);
   font-family: var(--font-mono);
 }
 
@@ -1443,4 +1453,26 @@ html:has(.pf) {
 .pf-edit-tip svg {
   width: 12px;
   height: 12px;
+}
+
+/* The end of a long timeline that is shown a page at a time. */
+.pf-more {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+  font-size: var(--text-sm);
+}
+
+/* Why the bot took a case by itself, and how long a warning keeps counting. */
+.pf-automatic,
+.pf-warn-expiry {
+  margin: var(--space-1) 0 0;
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+}
+
+.pf-warn-expiry[data-state="expired"] {
+  color: var(--text-tertiary);
 }

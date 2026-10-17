@@ -7,13 +7,26 @@ import type { ReactNode } from "react";
 import type { AuditDto, InfractionDto, NoteDto, StaffRole, UserRef } from "@tier0/core";
 import { actorRoleWord } from "@tier0/core";
 import { BanIcon, ChevronDownIcon, HistoryIcon, NoteIcon, PencilIcon, TrashIcon, UndoIcon } from "../../../../../../components/Icons";
-import { ActionBadge, Avatar, StateIcon, actionLabel, displayName, moderatorOf, timeAgo } from "../../../../../../components/mod/ModUi";
+import { ActionBadge, Avatar, CaseReason, StateIcon, actionLabel, displayName, moderatorOf, timeAgo } from "../../../../../../components/mod/ModUi";
 import { changeSubject, controlName, infractionSubject, noteSubject, toggleName } from "./a11y";
 import { CharacterCount } from "./CharacterCount";
 import { ActionDialog } from "./Dialog";
 import { EditCaseDialog } from "./EditCaseDialog";
 import { canRestoreOwnRemoval, infractionControls, noteControls } from "./permissions";
-import { caseDomId, noteDomId, diffSnapshots, expiryState, formatDate, formatDateTime, historyFor, type SnapshotDiff } from "./timeline";
+import {
+  automaticFromHref,
+  caseDomId,
+  noteDomId,
+  diffSnapshots,
+  expiryState,
+  formatDate,
+  formatDateTime,
+  historyFor,
+  removalLifts,
+  warnExpiry,
+  type SnapshotDiff,
+} from "./timeline";
+import { automaticLine } from "../../../../../../components/mod/format";
 import type { Run } from "./useModAction";
 
 const REASON_LIMIT = 500;
@@ -227,6 +240,8 @@ export function InfractionRow({
   const controls = infractionControls(role, infraction, viewer.userId);
   const removed = infraction.voided;
   const expiry = expiryState(infraction, now);
+  const warning = warnExpiry(infraction, now);
+  const removalLift = removalLifts(infraction, now);
   const entries = showHistory ? historyFor(audit, { infractionId: infraction.id }) : [];
   const base = `infractions/${infraction.id}`;
   const label = `case ${infraction.caseNumber}`;
@@ -268,6 +283,16 @@ export function InfractionRow({
                   {expiry.at ? "Ended" : "Lifted"}
                 </span>
               ) : null}
+              {warning?.state === "expired" ? (
+                <span className="mod-pill" data-tone="expired" title={`Stopped counting on ${formatDateTime(warning.at, timeZone)}`}>
+                  Expired
+                </span>
+              ) : null}
+              {infraction.automatic ? (
+                <span className="mod-pill" data-tone="neutral" title="The bot took this case by itself when an escalation rule fired">
+                  Automatic
+                </span>
+              ) : null}
             </span>
             <span className="pf-card-end">
               {pending ? <span className="pf-saving">Saving</span> : <Stamp iso={infraction.createdAt} now={now} timeZone={timeZone} />}
@@ -275,8 +300,34 @@ export function InfractionRow({
             </span>
           </div>
           <p className="pf-text pf-reason" data-clamp={expanded ? undefined : "true"} data-removed={removed ? "true" : undefined}>
-            {infraction.reason ?? <span className="pf-dim">No reason given.</span>}
+            <CaseReason action={infraction.action} reason={infraction.reason} empty={<span className="pf-dim">No reason given.</span>} />
           </p>
+          {infraction.automatic ? (
+            <p className="pf-automatic">
+              {automaticLine(infraction.automatic)}
+              {infraction.automatic.fromCase !== null ? (
+                <>
+                  , after{" "}
+                  <Link href={automaticFromHref(guildId, infraction.user.userId, infraction.automatic.fromCase)}>
+                    case #{infraction.automatic.fromCase}
+                  </Link>
+                </>
+              ) : null}
+            </p>
+          ) : null}
+          {warning ? (
+            <p className="pf-warn-expiry" data-state={warning.state}>
+              {warning.state === "counting" ? (
+                <>
+                  Counts until <time dateTime={warning.until}>{formatDate(warning.until, timeZone)}</time>
+                </>
+              ) : (
+                <>
+                  Stopped counting on <time dateTime={warning.at}>{formatDate(warning.at, timeZone)}</time>. It stays on the record.
+                </>
+              )}
+            </p>
+          ) : null}
           {infraction.edited ? (
             <p className="pf-edit-tip" title="A staff member changed this case after it was made. Staff activity has what it said before.">
               <PencilIcon />
@@ -382,11 +433,22 @@ export function InfractionRow({
           title={`Remove ${label} from the record?`}
           icon={<TrashIcon />}
           body={
-            <p>
-              The {actionLabel(infraction.action).toLowerCase()} stays visible on the record, struck through and marked
-              with your name, the time and your reason. It stops counting toward the member&apos;s totals.{" "}
-              {canRestoreOwnRemoval(role) ? "It can be restored later." : "An admin or the owner can restore it."}
-            </p>
+            <>
+              <p>
+                The {actionLabel(infraction.action).toLowerCase()} stays visible on the record, struck through and marked
+                with your name, the time and your reason. It stops counting toward the member&apos;s totals.{" "}
+                {canRestoreOwnRemoval(role) ? "It can be restored later." : "An admin or the owner can restore it."}
+              </p>
+              {removalLift === "ban" ? (
+                <p className="pf-dialog-warn">
+                  This ban is still in force, so removing it also lifts the ban in Discord and the member can rejoin with
+                  a new invite. Restoring the case later does not ban them again. If another ban case on them is still in
+                  force, the Discord ban stays.
+                </p>
+              ) : removalLift === "timeout" ? (
+                <p>This timeout is still running, so removing it also lifts it in Discord.</p>
+              ) : null}
+            </>
           }
           reason={{
             label: "Reason",
@@ -394,7 +456,8 @@ export function InfractionRow({
             maxLength: REASON_LIMIT,
             hint: "Shown to staff next to the entry and kept in the audit log.",
           }}
-          confirmLabel="Remove from record"
+          confirmLabel={removalLift === "ban" ? "Remove and lift the ban" : "Remove from record"}
+          danger={removalLift === "ban"}
           fallbackFocus={fallbackFocus}
           onClose={() => setDialog(null)}
           onConfirm={(reason) =>
@@ -402,8 +465,9 @@ export function InfractionRow({
               {
                 method: "POST",
                 path: `${base}/void`,
-                body: { reason },
-                success: `Removed ${label} from the record.`,
+                // The bot refuses to lift a ban unless the request says the person was told it would.
+                body: removalLift === "ban" ? { reason, liftBan: true } : { reason },
+                success: removalLift === "ban" ? `Removed ${label} from the record and lifted the ban.` : `Removed ${label} from the record.`,
                 failure: "Could not remove the entry",
                 inline: true,
               },
@@ -421,7 +485,7 @@ export function InfractionRow({
           body={
             <p>
               The entry goes back on the member&apos;s record and counts toward their totals again. The restore is
-              recorded in the audit log.
+              recorded in the audit log. Nothing changes in Discord: a ban or timeout that was lifted stays lifted.
             </p>
           }
           confirmLabel="Restore"

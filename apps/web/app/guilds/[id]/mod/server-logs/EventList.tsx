@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { ServerLogResult } from "../../../../../lib/mod-api";
 import { HistoryIcon } from "../../../../../components/Icons";
-import { Pager } from "../../../../../components/mod/ModUi";
+import { Pager, PastEnd, dayCountText, isPastEnd } from "../../../../../components/mod/ModUi";
 import { groupByDay } from "../audit/params";
 import { EventRow } from "./EventRow";
 import { hasServerLogFilters, serverLogHref, type ServerLogQuery } from "./params";
@@ -16,11 +16,15 @@ export function EventList({ guildId, query, data }: { guildId: string; query: Se
     <>
       <p className="sl-count-line" role="status">
         <strong>{data.total.toLocaleString("en")}</strong> {data.total === 1 ? "entry" : "entries"}
-        {filtered ? " match these filters" : ` from the last ${data.days} ${data.days === 1 ? "day" : "days"}`}
+        {filtered ? (data.total === 1 ? " matches these filters" : " match these filters") : ` from the last ${data.days} ${data.days === 1 ? "day" : "days"}`}
         <span className="sl-tz"> · Dates are in UTC</span>
       </p>
 
-      {data.items.length === 0 ? (
+      {data.items.length === 0 && isPastEnd(data.page, data.pageSize, data.total) ? (
+        <div className="mod-card">
+          <PastEnd total={data.total} pageSize={data.pageSize} hrefFor={(page) => serverLogHref(guildId, { ...query, page })} />
+        </div>
+      ) : data.items.length === 0 ? (
         <div className="mod-card">
           <div className="mod-empty">
             <span className="mod-empty-icon">
@@ -50,12 +54,12 @@ export function EventList({ guildId, query, data }: { guildId: string; query: Se
         </div>
       ) : (
         <div className="mod-card">
-          {groups.map((group) => (
+          {groups.map((group, index) => (
             <div className="audit-day" key={group.key} role="group" aria-labelledby={`sl-day-${group.key}`}>
               <h3 className="audit-day-title" id={`sl-day-${group.key}`}>
                 {group.label}
                 <span className="audit-day-count">
-                  {group.items.length} {group.items.length === 1 ? "entry" : "entries"}
+                  {dayCountText(group.items.length, { index, groups: groups.length, page: data.page, pages: Math.ceil(data.total / data.pageSize) })}
                 </span>
               </h3>
               <ol className="sl-list">

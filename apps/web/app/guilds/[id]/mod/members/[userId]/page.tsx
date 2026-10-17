@@ -1,6 +1,6 @@
 import Link from "next/link";
+import { denyStaffPage } from "../../../../../../lib/mod-deny";
 import { cache } from "react";
-import { forbidden, redirect } from "next/navigation";
 import type { Metadata } from "next";
 import type { MemberProfile } from "@tier0/core";
 import { ControlApiError } from "../../../../../../lib/control-api";
@@ -11,7 +11,7 @@ import { redactProfile } from "../../../../../../lib/profile-redact";
 import { AlertIcon, UserIcon } from "../../../../../../components/Icons";
 import { displayName } from "../../../../../../components/mod/ModUi";
 import { ProfileView, RetryButton } from "./ProfileView";
-import { parseCaseParam, parseNoteParam } from "./timeline";
+import { badFocusParam, parseCaseParam, parseNoteParam } from "./timeline";
 import "../../../../../mod.css";
 import "./profile.css";
 
@@ -55,11 +55,12 @@ export default async function MemberProfilePage({
   const query = await searchParams;
   const focusCase = parseCaseParam(query.case);
   const focusNote = parseNoteParam(query.note);
+  // A link whose case or note is not a number at all still gets a word, rather than a page that ignores it.
+  const badLink = badFocusParam(query.case, focusCase) ?? badFocusParam(query.note, focusNote);
 
   const access = await requireStaff(id);
   if (!access.ok) {
-    if (access.status === 401) redirect("/login");
-    forbidden();
+    return denyStaffPage(id, access.status);
   }
 
   const result = await load(id, userId);
@@ -106,6 +107,7 @@ export default async function MemberProfilePage({
       canConfigure={canConfigure}
       focusCase={focusCase}
       focusNote={focusNote}
+      badLink={badLink}
     />
   );
 }

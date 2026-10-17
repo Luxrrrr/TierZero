@@ -14,11 +14,85 @@ export function parseRange(raw: string | string[] | undefined): Range {
   return (RANGES as readonly number[]).includes(days) ? (days as Range) : DEFAULT_RANGE;
 }
 
+/** The range the Overview shows: one of the preset lengths ending today, everything on record, or two UTC dates. */
+export type RangeSpec = { kind: "days"; days: Range } | { kind: "all" } | { kind: "custom"; from: string; to: string };
+
+export const DEFAULT_SPEC: RangeSpec = { kind: "days", days: DEFAULT_RANGE };
+
+/** Two years, the same cap the bot applies. All time covers anything longer. */
+export const MAX_CUSTOM_DAYS = 731;
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** Midnight UTC of a `YYYY-MM-DD` day, or null for anything that is not a real calendar date. */
+export function dayMs(text: string | null | undefined): number | null {
+  if (typeof text !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(text)) return null;
+  const [year, month, day] = text.split("-").map(Number) as [number, number, number];
+  const ms = Date.UTC(year, month - 1, day);
+  return new Date(ms).toISOString().slice(0, 10) === text ? ms : null;
+}
+
+type SearchValue = string | string[] | undefined;
+const first = (value: SearchValue): string | undefined => (Array.isArray(value) ? value[0] : value);
+
+/**
+ * Reads `?range=all`, `?from=&to=` or `?days=` from the page URL. A custom
+ * range that is malformed, reversed, starts after `today` or runs longer than
+ * MAX_CUSTOM_DAYS falls back to the days reading, so a hand-edited URL still
+ * shows a page. An end after today is pulled back to today.
+ */
+export function parseRangeSpec(
+  params: { days?: SearchValue; range?: SearchValue; from?: SearchValue; to?: SearchValue },
+  today: string,
+): RangeSpec {
+  if (first(params.range) === "all") return { kind: "all" };
+  const fromMs = dayMs(first(params.from));
+  const toRaw = dayMs(first(params.to));
+  const todayMs = dayMs(today);
+  if (fromMs !== null && toRaw !== null && todayMs !== null) {
+    const toMs = Math.min(toRaw, todayMs);
+    if (fromMs <= toMs && (toMs - fromMs) / DAY_MS + 1 <= MAX_CUSTOM_DAYS) {
+      return { kind: "custom", from: first(params.from)!, to: new Date(toMs).toISOString().slice(0, 10) };
+    }
+  }
+  return { kind: "days", days: parseRange(params.days) };
+}
+
+/** The query the bot and the page both read for a range. */
+export function rangeParams(spec: RangeSpec): { days?: number; range?: "all"; from?: string; to?: string } {
+  if (spec.kind === "all") return { range: "all" };
+  if (spec.kind === "custom") return { from: spec.from, to: spec.to };
+  return { days: spec.days };
+}
+
+export function rangeQuery(spec: RangeSpec): string {
+  const search = new URLSearchParams();
+  for (const [key, value] of Object.entries(rangeParams(spec))) search.set(key, String(value));
+  return search.toString();
+}
+
+export function rangeHref(guildId: string, spec: RangeSpec): string {
+  return `/guilds/${guildId}/mod?${rangeQuery(spec)}`;
+}
+
+/** The Overview's CSV, through the dashboard proxy, for the same range the page shows. */
+export function statsExportHref(guildId: string, spec: RangeSpec): string {
+  return `/api/guilds/${guildId}/mod/stats/export?${rangeQuery(spec)}`;
+}
+
+export type Bucket = "day" | "week" | "month";
+
+export function bucketOf(value: unknown): Bucket {
+  return value === "week" || value === "month" ? value : "day";
+}
+
 export const SERIES = ["warn", "timeout", "kick", "ban", "other"] as const;
 export type Series = (typeof SERIES)[number];
 
 export interface DayCounts {
   date: string;
+  /** Last day covered, when the point is a week or a month. */
+  end?: string;
   warn: number;
   timeout: number;
   kick: number;
@@ -90,18 +164,51 @@ export function plural(count: number, word: string, many = `${word}s`): string {
   return `${count.toLocaleString("en")} ${count === 1 ? word : many}`;
 }
 
+/** "Mar 2025", for a month point. */
+export function monthLabel(date: string): string {
+  const [year, month] = date.split("-").map(Number);
+  if (!year || !month) return date;
+  return `${MONTHS[month - 1] ?? ""} ${year}`.trim();
+}
+
+/** "8 Sep 2026". */
+export function longDate(date: string): string {
+  const year = date.split("-")[0];
+  return year ? `${shortDate(date)} ${year}` : date;
+}
+
+/** What a point is called under the chart: its first day, or its month. */
+export function pointLabel(point: DayCounts, bucket: Bucket = "day"): string {
+  return bucket === "month" ? monthLabel(point.date) : shortDate(point.date);
+}
+
+/**
+ * The days a point covers, for tooltips and summaries. A week reads as its
+ * first and last day, which the bot clips to the range, so the first and last
+ * weeks can be shorter than seven days.
+ */
+export function pointTitle(point: DayCounts, bucket: Bucket = "day"): string {
+  if (bucket === "month") return monthLabel(point.date);
+  if (bucket === "week") {
+    const end = point.end ?? point.date;
+    return end === point.date ? shortDate(point.date) : `${shortDate(point.date)} to ${shortDate(end)}`;
+  }
+  return shortDate(point.date);
+}
+
 export interface ChartSummaryInput {
   perDay: DayCounts[];
+  bucket?: Bucket;
 }
 
 /** One sentence for the chart's accessible name. */
-export function chartSummary({ perDay }: ChartSummaryInput): string {
+export function chartSummary({ perDay, bucket = "day" }: ChartSummaryInput): string {
   if (perDay.length === 0) return "No days in this range.";
   const total = perDay.reduce((sum, day) => sum + dayTotal(day), 0);
-  if (total === 0) return `No actions across ${plural(perDay.length, "day")}.`;
+  if (total === 0) return `No actions across ${plural(perDay.length, bucket)}.`;
   let busiest = perDay[0]!;
   for (const day of perDay) if (dayTotal(day) > dayTotal(busiest)) busiest = day;
-  return `${plural(total, "action")} across ${plural(perDay.length, "day")}. The busiest day was ${shortDate(busiest.date)} with ${dayTotal(busiest)}.`;
+  return `${plural(total, "action")} across ${plural(perDay.length, bucket)}. The busiest ${bucket} was ${pointTitle(busiest, bucket)} with ${dayTotal(busiest)}.`;
 }
 
 export function dayTooltip(day: DayCounts): string {
@@ -317,11 +424,39 @@ export function sparkPaths(
 
 /** "12 Sep to 10 Oct 2026", from the first and last day the bot reported. */
 export function periodText(perDay: DayCounts[]): string | null {
-  const first = perDay[0]?.date;
-  const last = perDay[perDay.length - 1]?.date;
-  if (!first || !last) return null;
-  const year = last.split("-")[0];
-  return first === last ? `${shortDate(last)} ${year}` : `${shortDate(first)} to ${shortDate(last)} ${year}`;
+  const start = perDay[0]?.date;
+  const lastPoint = perDay[perDay.length - 1];
+  const last = lastPoint?.end ?? lastPoint?.date;
+  if (!start || !last) return null;
+  return spanText(start, last);
+}
+
+/** "12 Sep to 10 Oct 2026", with both years when the span crosses one. */
+export function spanText(start: string, last: string): string {
+  if (start === last) return longDate(last);
+  const sameYear = start.slice(0, 4) === last.slice(0, 4);
+  return `${sameYear ? shortDate(start) : longDate(start)} to ${longDate(last)}`;
+}
+
+export interface RangeWordsInput {
+  days: number;
+  since: string;
+  until?: string;
+  range?: string;
+}
+
+/**
+ * The range as words that finish a sentence: "in the last 30 days", "since
+ * 14 Mar 2025" or "from 1 Sep to 3 Oct 2026". Read from the stats reply, so
+ * it describes what the bot actually counted.
+ */
+export function rangePhrase(stats: RangeWordsInput): string {
+  const start = stats.since.slice(0, 10);
+  if (stats.range === "all") return `since ${longDate(start)}`;
+  if (stats.range === "custom" && stats.until) {
+    return start === stats.until ? `on ${longDate(start)}` : `from ${spanText(start, stats.until)}`;
+  }
+  return `in the last ${plural(stats.days, "day")}`;
 }
 
 /** The next longer range, offered when the current one is empty. */
@@ -371,16 +506,16 @@ export interface TooltipContent {
   lines: { series: Series; count: number }[];
 }
 
-export function tooltipFor(day: DayCounts, hidden: readonly Series[]): TooltipContent {
+export function tooltipFor(day: DayCounts, hidden: readonly Series[], bucket: Bucket = "day"): TooltipContent {
   const lines = SERIES.filter((series) => day[series] > 0 && !hidden.includes(series)).map((series) => ({
     series,
     count: day[series],
   }));
-  return { title: shortDate(day.date), total: visibleTotal(day, hidden), lines };
+  return { title: pointTitle(day, bucket), total: visibleTotal(day, hidden), lines };
 }
 
-export function tooltipSentence(day: DayCounts, hidden: readonly Series[]): string {
-  const tip = tooltipFor(day, hidden);
+export function tooltipSentence(day: DayCounts, hidden: readonly Series[], bucket: Bucket = "day"): string {
+  const tip = tooltipFor(day, hidden, bucket);
   if (tip.total === 0) return `${tip.title}: no actions`;
   const parts = tip.lines.map((line) => `${line.count} ${SERIES_LABEL[line.series].toLowerCase()}`);
   return `${tip.title}: ${plural(tip.total, "action")} (${parts.join(", ")})`;
@@ -510,7 +645,8 @@ const finiteCount = (value: unknown): number =>
 export function automodView(
   automod: AutomodInput | null | undefined,
   label: (rule: string) => string,
-  days: number,
+  /** A day count for "in the last N days", or words from rangePhrase for any other range. */
+  when: number | string,
 ): AutomodView | null {
   if (!automod || typeof automod !== "object") return null;
   const total = finiteCount(automod.total);
@@ -529,7 +665,8 @@ export function automodView(
     share: sum > 0 ? row.count / sum : 0,
   }));
 
-  let summary = `Automod acted ${plural(total, "time")} in the last ${plural(days, "day")}.`;
+  const span = typeof when === "number" ? `in the last ${plural(when, "day")}` : when;
+  let summary = `Automod acted ${plural(total, "time")} ${span}.`;
   if (bars.length > 0) {
     const top = bars[0]!;
     summary += ` The rule that fired most was ${top.label.toLowerCase()} with ${top.count.toLocaleString("en")}.`;
@@ -565,10 +702,14 @@ const ACTION_VERB: Record<string, string> = {
   kick: "kicked",
   ban: "banned",
   unban: "unbanned",
+  "automod-warn": "warned",
+  "automod-timeout": "timed out",
+  "automod-delete": "deleted a message from",
 };
 
+/** The verb in "Automod timed out lootpanda". An action this version does not know reads as a plain "acted on", never its code name. */
 export function actionVerb(action: string): string {
-  return ACTION_VERB[action] ?? `acted on (${action})`;
+  return ACTION_VERB[action] ?? "acted on";
 }
 
 /** The repeat rate as a whole percentage, or null when the backend had too few members to say. */

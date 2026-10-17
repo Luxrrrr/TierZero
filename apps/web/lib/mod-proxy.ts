@@ -18,6 +18,8 @@ export const MOD_PROXY_ROOTS: readonly string[] = [
   "messages",
   "server-logs",
   "danger",
+  "appeals",
+  "raid",
 ];
 
 export const MOD_PROXY_MAX_BODY_BYTES = 32 * 1024;
@@ -51,6 +53,11 @@ export function modProxyPermission(method: string, path: readonly string[]): Mod
     return path.length === 3 && (method === "GET" || method === "HEAD") ? "action.warn" : null;
   }
 
+  // Where the member stands in Discord and which actions the bot would refuse the viewer, for the Take action menu.
+  if (first === "members" && path[2] === "standing") {
+    return path.length === 3 && (method === "GET" || method === "HEAD") ? "view" : null;
+  }
+
   // The server logs are read through these two paths, the events and the saved messages. Reads, and the
   // purge of everything, are the only calls that exist.
   if (first === "messages" || first === "server-logs") {
@@ -59,18 +66,42 @@ export function modProxyPermission(method: string, path: readonly string[]): Mod
     return method === "DELETE" && first === "server-logs" ? "messages.purge" : null;
   }
 
+  // Ban appeals: the list and one appeal are reads, and deciding one is a POST of accept or deny. Reading an
+  // appeal shows the member's whole record and notes, so it needs the same level as deciding it.
+  if (first === "appeals") {
+    if (path.length <= 2 && (method === "GET" || method === "HEAD")) return "appeals.manage";
+    if (path.length === 3 && method === "POST" && (path[2] === "accept" || path[2] === "deny")) return "appeals.manage";
+    return null;
+  }
+
+  // Raid tools. Locking and unlocking channels is one level; acting on many members at once is its own, since
+  // it bans or kicks. The preview is a POST because it carries the pasted list, and changes nothing.
+  if (first === "raid") {
+    if (path.length === 1) return method === "GET" || method === "HEAD" ? "raid.lockdown" : null;
+    if (path.length === 2 && (second === "lock" || second === "unlock")) return method === "POST" ? "raid.lockdown" : null;
+    if (second === "mass") {
+      if (path.length === 2 && method === "POST") return "raid.mass";
+      if (path.length === 3 && path[2] === "preview" && method === "POST") return "raid.mass";
+      if (path.length === 3 && path[2] !== "preview" && (method === "GET" || method === "HEAD")) return "raid.mass";
+    }
+    return null;
+  }
+
   // Changing a case's reason. Only a PATCH of one case exists; the bot decides whose cases a moderator may edit.
   if (first === "infractions" && path.length === 2 && method === "PATCH") return "infraction.edit";
 
   // Deleting a whole log for good. Only a DELETE of one named log exists, and only the owner holds this.
-  if (first === "danger") return path.length === 1 && method === "DELETE" ? "purge" : null;
+  // Reading how much each log holds is for the same page, so it needs the same permission.
+  if (first === "danger") return path.length === 1 && (method === "DELETE" || method === "GET" || method === "HEAD") ? "purge" : null;
 
   // The export is the whole action log in one file, which is an
   // admin's view of the server rather than a moderator's.
   if (first === "infractions" && second === "export") return "audit.view";
   if (first === "audit") return "audit.view";
   if (first === "stats") return "stats.view";
-  if (first === "staff") return method === "GET" || method === "HEAD" ? "view" : "staff.manage";
+  // The staff list with who added whom is the Access tab's, which only the owner sees. The pages that need
+  // staff names read them on the server, so no browser read of it is needed below that level.
+  if (first === "staff") return "staff.manage";
   return "view";
 }
 
@@ -109,6 +140,16 @@ export function isSameOriginWrite(method: string, headers: OriginHeaders): boole
   return hosts.includes(originHost);
 }
 
+/** The same check, read from a request, for the routes that do not need the rest of this file. */
+export function isSameOriginRequest(request: { method: string; headers: { get(name: string): string | null } }): boolean {
+  return isSameOriginWrite(request.method, {
+    origin: request.headers.get("origin"),
+    secFetchSite: request.headers.get("sec-fetch-site"),
+    host: request.headers.get("host"),
+    forwardedHost: request.headers.get("x-forwarded-host"),
+  });
+}
+
 /** Byte length of a UTF-8 string, which is what the body cap is measured in. */
 export function utf8Length(text: string): number {
   return new TextEncoder().encode(text).length;
@@ -125,7 +166,12 @@ export function isProfileRead(method: string, path: string[]): boolean {
  */
 export function isMemberMessagesRead(method: string, path: readonly string[]): boolean {
   if (method !== "GET") return false;
-  return (path.length === 3 && path[0] === "members" && path[2] === "messages") || isMessageLogRead(method, path);
+  return (path.length === 3 && path[0] === "members" && path[2] === "messages") || isMessageLogRead(method, path) || isStandingRead(method, path);
+}
+
+/** One member's standing, which depends on who asks because it weighs their roles against the member's. */
+export function isStandingRead(method: string, path: readonly string[]): boolean {
+  return method === "GET" && path.length === 3 && path[0] === "members" && path[2] === "standing";
 }
 
 /** Whether the read is one of the server logs, which also needs to be limited by the viewer's role. */

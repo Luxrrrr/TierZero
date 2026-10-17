@@ -26,6 +26,9 @@ import {
   presetsWithin,
   readContext,
   readResult,
+  readStanding,
+  earlierEndWarning,
+  unchosenDuration,
   reasonProblem,
   shortName,
   splitMs,
@@ -452,7 +455,7 @@ describe("confirmationProblem", () => {
 
 describe("reading replies", () => {
   test("accepts a full context, with no actions switched off when the bot does not say", () => {
-    assert.deepEqual(readContext(context), { ...context, disabledActions: [] });
+    assert.deepEqual(readContext(context), { ...context, disabledActions: [], reasonPresets: [] });
   });
 
   test("keeps only real action names from the switched-off list", () => {
@@ -484,5 +487,77 @@ describe("reading replies", () => {
   test("falls back to the infraction's case number, or none", () => {
     assert.equal(readResult({ infraction: { caseNumber: 9 } }).caseNumber, 9);
     assert.deepEqual(readResult(null), { caseNumber: null, notes: [] });
+  });
+});
+
+describe("Discord's word on where a member stands", () => {
+  const clear: MemberState = { inServer: true, banned: false, timedOut: false, timeoutUntil: null };
+
+  test("a ban Discord holds wins over a record that lost its ban case, so Unban is offered", () => {
+    const record = { user: { inServer: false }, infractions: [entry("ban", { voided: { at: "2026-10-09T13:00:00Z", by: ref("2"), reason: "mistake" } })] };
+    assert.equal(memberState(record, NOW).banned, false);
+    const state = memberState(record, NOW, { inServer: false, banned: true, timedOutUntil: null });
+    assert.equal(state.banned, true);
+    const kinds = actionOptions("owner", state).map((option) => option.kind);
+    assert.ok(kinds.includes("unban"));
+    assert.ok(!kinds.includes("ban"));
+  });
+
+  test("when Discord could not be asked about a ban, the record decides", () => {
+    const record = { user: { inServer: false }, infractions: [entry("ban")] };
+    assert.equal(memberState(record, NOW, { inServer: false, banned: null, timedOutUntil: null }).banned, true);
+  });
+
+  test("the timeout end comes from Discord when it says one", () => {
+    const until = "2026-10-12T12:00:00.000Z";
+    const state = memberState({ user: { inServer: true }, infractions: [] }, NOW, { inServer: true, banned: false, timedOutUntil: until });
+    assert.deepEqual(state, { inServer: true, banned: false, timedOut: true, timeoutUntil: until });
+  });
+
+  test("an action the bot would refuse stays listed, greyed with the bot's reason", () => {
+    const blocked = { warn: "The server owner can't be actioned", timeout: "The server owner can't be actioned" };
+    const options = actionOptions("mod", clear, [], blocked);
+    assert.deepEqual(options.map((option) => [option.kind, option.unavailable]), [
+      ["warn", "The server owner can't be actioned"],
+      ["timeout", "The server owner can't be actioned"],
+    ]);
+  });
+
+  test("a malformed answer reads as none, and stray keys are dropped", () => {
+    assert.equal(readStanding(null), null);
+    assert.equal(readStanding({ banned: true }), null);
+    assert.deepEqual(readStanding({ inServer: true, banned: "yes", timedOutUntil: "soon", blocked: { kick: "Their top role is level with or above yours", nuke: "x", ban: 3 } }), {
+      inServer: true,
+      banned: null,
+      timedOutUntil: null,
+      blocked: { kick: "Their top role is level with or above yours" },
+    });
+  });
+});
+
+describe("changing a running timeout", () => {
+  test("has its own title, button and toast", () => {
+    assert.equal(actionTitle("timeout", "ToxicTuna", true), "Change ToxicTuna’s timeout");
+    assert.equal(confirmLabel("timeout", "ToxicTuna", true), "Change ToxicTuna’s timeout");
+    assert.equal(successTitle("timeout", "ToxicTuna", 200, true), "Changed ToxicTuna’s timeout. Case #200.");
+    assert.equal(actionTitle("timeout", "ToxicTuna"), "Time out ToxicTuna");
+  });
+
+  test("opens with no length picked, and will not send until one is", () => {
+    const draft = unchosenDuration();
+    assert.equal(draftMs(draft), null);
+    assert.match(durationProblem(draft, DISCORD_TIMEOUT_MAX_MS, "timeout") ?? "", /Choose how long the new timeout lasts/);
+  });
+
+  test("warns only when the new end comes before the current one", () => {
+    const current = "2026-10-18T16:34:00.000Z";
+    assert.match(earlierEndWarning(current, endsAt(HOUR_MS, NOW), "Oct 18, 04:34 PM UTC") ?? "", /ends the timeout sooner/);
+    assert.equal(earlierEndWarning(current, endsAt(9 * DAY_MS, NOW), "Oct 18"), null);
+    assert.equal(earlierEndWarning(current, null, "Oct 18"), null);
+  });
+
+  test("says the running timeout is replaced", () => {
+    const lines = consequences({ kind: "timeout", dmOnAction: false, banLength: "permanent", deleteDays: 0, until: "Oct 10, 2026, 01:00 PM UTC", replacing: "Oct 18, 2026, 04:34 PM UTC" });
+    assert.match(lines[0]!, /running until Oct 18, 2026, 04:34 PM UTC is replaced/);
   });
 });

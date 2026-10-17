@@ -1,6 +1,5 @@
 import Link from "next/link";
 import type { MemberSummary, Page } from "@tier0/core";
-import { Select } from "../../../../../components/form/Select";
 import {
   ArrowDownIcon,
   ArrowUpIcon,
@@ -9,14 +8,15 @@ import {
   DoorIcon,
   NoteIcon,
   SearchIcon,
+  ShieldIcon,
   UserIcon,
   WarnTriangleIcon,
   XIcon,
 } from "../../../../../components/Icons";
-import { Avatar, Pager, displayName } from "../../../../../components/mod/ModUi";
+import { Avatar, Pager, PastEnd, displayName, isPastEnd } from "../../../../../components/mod/ModUi";
 import { RelativeTime } from "../../../../../components/mod/RelativeTime";
 import { fmtDateUtc } from "../../../../../components/mod/format";
-import { ClickableRow } from "./MemberControls";
+import { ClickableRow, MemberSearchForm, SortSelect } from "./MemberControls";
 import {
   MEMBER_FILTERS,
   MEMBER_SORTS,
@@ -41,8 +41,17 @@ function CountPills({ member }: { member: MemberSummary }) {
     { action: "timeout", count: member.timeoutCount, one: "timeout", many: "timeouts", icon: <ClockIcon /> },
     { action: "kick", count: member.kickCount, one: "kick", many: "kicks", icon: <DoorIcon /> },
     { action: "ban", count: member.banCount, one: "ban", many: "bans", icon: <BanIcon /> },
+    // Automod's entries are on the record too and count toward "Last 14 days", so the column shows them.
+    { action: "automod", count: member.automodCount ?? 0, one: "automod action", many: "automod actions", icon: <ShieldIcon /> },
   ].filter((entry) => entry.count > 0);
-  if (entries.length === 0) return <span className="members-dash">None</span>;
+  const expired = member.expiredWarnCount ?? 0;
+  const expiredNote =
+    expired > 0 ? (
+      <span className="members-expired" title={`${expired} ${expired === 1 ? "warning has" : "warnings have"} passed the warn expiry and no longer count`}>
+        +{expired} expired
+      </span>
+    ) : null;
+  if (entries.length === 0) return expiredNote ?? <span className="members-dash">None</span>;
   return (
     <span className="members-pills">
       {entries.map((entry) => {
@@ -55,6 +64,7 @@ function CountPills({ member }: { member: MemberSummary }) {
           </span>
         );
       })}
+      {expiredNote}
     </span>
   );
 }
@@ -110,7 +120,7 @@ export function MemberToolbar({ guildId, query, total }: { guildId: string; quer
   const current = MEMBER_FILTERS.find((entry) => entry.value === query.filter);
   return (
     <div className="members-controls">
-      <form className="mod-toolbar" method="get" action={memberListHref(guildId, {})} role="search">
+      <MemberSearchForm className="mod-toolbar" action={memberListHref(guildId, {})}>
         <label className="mod-search">
           <SearchIcon />
           <input
@@ -123,21 +133,20 @@ export function MemberToolbar({ guildId, query, total }: { guildId: string; quer
           />
         </label>
         {query.filter !== "all" ? <input type="hidden" name="filter" value={query.filter} /> : null}
-        <Select
+        <SortSelect
           name="sort"
-          size="sm"
           defaultValue={query.sort}
-          aria-label="Sort members by"
+          label="Sort members by"
           options={MEMBER_SORTS.map((entry) => ({ value: entry.value, label: entry.label }))}
         />
         <button type="submit" className="btn btn-secondary btn-sm">
-          Apply
+          Search
         </button>
         <span className="mod-toolbar-spacer" />
         <span className="members-total" role="status">
           {total.toLocaleString()} {total === 1 ? "member" : "members"}
         </span>
-      </form>
+      </MemberSearchForm>
       <nav className="mod-toolbar-group" aria-label="Filter by status">
         {MEMBER_FILTERS.map((entry) => {
           const active = entry.value === query.filter;
@@ -161,6 +170,7 @@ export function MemberToolbar({ guildId, query, total }: { guildId: string; quer
           <li><ClockIcon /> Timeout</li>
           <li><DoorIcon /> Kick</li>
           <li><BanIcon /> Ban</li>
+          <li><ShieldIcon /> Automod</li>
           <li><NoteIcon /> Note</li>
         </ul>
       </div>
@@ -219,7 +229,9 @@ export function MemberList({
       </h2>
       <MemberToolbar guildId={guildId} query={query} total={data.total} />
       <div className="mod-card members-card">
-        {data.items.length === 0 ? (
+        {data.items.length === 0 && isPastEnd(data.page, data.pageSize, data.total) ? (
+          <PastEnd total={data.total} pageSize={data.pageSize} noun="members" hrefFor={(page) => memberListHref(guildId, { ...query, page })} />
+        ) : data.items.length === 0 ? (
           <EmptyState guildId={guildId} query={query} />
         ) : (
           <div className="mod-table-wrap members-wrap">
@@ -287,7 +299,8 @@ export function MemberList({
                             Restricted
                           </span>
                         ) : (
-                          <span className="mod-pill">Clear</span>
+                          // Plain text rather than a pill, which read like a "Clear" button.
+                          <span className="members-dash">Not restricted</span>
                         )}
                       </td>
                     </ClickableRow>

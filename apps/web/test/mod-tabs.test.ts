@@ -9,18 +9,25 @@ describe("modTabsFor", () => {
     assert.deepEqual(ids("mod"), ["overview", "members", "logs", "serverlogs"]);
   });
 
-  test("an admin sees the same tabs", () => {
-    assert.deepEqual(ids("admin"), ["overview", "members", "logs", "serverlogs"]);
+  test("an admin adds appeals and the raid tools", () => {
+    assert.deepEqual(ids("admin"), ["overview", "members", "logs", "serverlogs", "appeals", "raid"]);
   });
 
   test("only the owner sees access", () => {
-    assert.deepEqual(ids("owner"), ["overview", "members", "logs", "serverlogs", "access", "danger"]);
+    assert.deepEqual(ids("owner"), ["overview", "members", "logs", "serverlogs", "appeals", "raid", "access", "danger"]);
+  });
+
+  test("appeals and raid tools link to their pages", () => {
+    const tabs = modTabsFor("7", "admin");
+    assert.equal(tabs.find((tab) => tab.id === "appeals")?.href, "/guilds/7/mod/appeals");
+    assert.equal(tabs.find((tab) => tab.id === "raid")?.href, "/guilds/7/mod/raid");
+    assert.equal(tabs.find((tab) => tab.id === "raid")?.label, "Raid tools");
   });
 
   test("settings appears only for someone who can manage the server", () => {
     assert.deepEqual(
       modTabsFor("1", "owner", true).map((tab) => tab.id),
-      ["overview", "members", "logs", "serverlogs", "access", "settings", "danger"],
+      ["overview", "members", "logs", "serverlogs", "appeals", "raid", "access", "settings", "danger"],
     );
     assert.deepEqual(
       modTabsFor("1", "mod", true).map((tab) => tab.id),

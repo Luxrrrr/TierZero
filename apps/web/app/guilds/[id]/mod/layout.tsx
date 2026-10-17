@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import type { Metadata } from "next";
 import { forbidden, redirect } from "next/navigation";
 import { guildAccess } from "../../../../lib/guild-access";
+import { gateModPage } from "../../../../lib/page-gate-apply";
 import { modTabsFor } from "../../../../lib/mod-tabs";
 import { ControlApiError } from "../../../../lib/control-api";
 import { botGuilds } from "../../../../lib/guild-data";
@@ -36,6 +37,8 @@ export default async function ModLayout({
     if (access.status === 401) redirect("/login");
     forbidden();
   }
+  // The pages below check again; this is what gives a refusal its 403 despite the loading screen.
+  await gateModPage(id, access.staffRole, access.manager);
 
   let serverName = "Server";
   try {

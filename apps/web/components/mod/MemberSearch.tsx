@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
 import { useRouter } from "next/navigation";
+import { confirmLeave } from "../../lib/unsaved-guard";
 import type { MemberSearchHit, MemberSummary, Page } from "@tier0/core";
 import { ChevronRightIcon, SearchIcon } from "../Icons";
 import { Avatar, displayName } from "./ModUi";
@@ -147,7 +148,8 @@ export function MemberSearch({ guildId }: { guildId: string }) {
 
   function go(result: PaletteResult) {
     close();
-    router.push(`/guilds/${guildId}/mod/members/${result.user.userId}`);
+    // The search is in the header of every Moderation page, settings forms included, so an unsaved draft asks first.
+    confirmLeave(() => router.push(`/guilds/${guildId}/mod/members/${result.user.userId}`));
   }
 
   // On the dialog rather than the input, so Escape and the arrows still work

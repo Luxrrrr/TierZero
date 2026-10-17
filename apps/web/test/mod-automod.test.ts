@@ -4,8 +4,25 @@ import {
   automodActionLabel,
   isAutomodAction,
   parseAutomodReason,
+  readableReason,
   ruleLabel,
 } from "../components/mod/automod.ts";
+
+describe("readableReason", () => {
+  test("names the rule and drops the code marks from what matched", () => {
+    assert.equal(
+      readableReason("automod-delete", "bannedWords: Used a banned word or phrase (matched `crypto airdrop`)"),
+      "Banned words: Used a banned word or phrase (matched crypto airdrop)",
+    );
+    assert.equal(readableReason("automod-timeout", "rateLimit: Sent 8 messages in 5s, more than the limit of 5"), "Rate limit: Sent 8 messages in 5s, more than the limit of 5");
+    assert.equal(readableReason("automod-warn", "invites"), "Invite links");
+  });
+
+  test("leaves a moderator's reason alone, colons and all", () => {
+    assert.equal(readableReason("warn", "spam: posted in #lfg ten times"), "spam: posted in #lfg ten times");
+    assert.equal(readableReason("ban", null), null);
+  });
+});
 
 describe("isAutomodAction", () => {
   test("matches the three automod kinds and nothing else", () => {
@@ -54,9 +71,17 @@ describe("ruleLabel", () => {
   test("labels the rules the bot ships", () => {
     assert.equal(ruleLabel("repeatedtext"), "Repeated text");
     assert.equal(ruleLabel("bannedWords"), "Banned words");
-    assert.equal(ruleLabel("ratelimit"), "Message rate");
+    assert.equal(ruleLabel("ratelimit"), "Rate limit");
+    assert.equal(ruleLabel("invites"), "Invite links");
     assert.equal(ruleLabel("other"), "Other rules");
     assert.equal(ruleLabel("unknown"), "Unknown rule");
+  });
+
+  test("never returns a rule key as written in code", () => {
+    for (const key of ["rateLimit", "bannedWords", "repeatedText", "invites", "mentions", "capitals", "links"]) {
+      assert.notEqual(ruleLabel(key), key);
+      assert.match(ruleLabel(key), /^[A-Z][a-z]+( [a-z]+)*$/);
+    }
   });
 
   test("makes a readable name from one it does not know", () => {

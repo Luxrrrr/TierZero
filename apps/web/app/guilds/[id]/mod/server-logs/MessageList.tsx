@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { confirmLeave } from "../../../../../lib/unsaved-guard";
 import type { EvidenceMessage, LoggedMessageDto } from "@tier0/core";
 import { EVIDENCE_LIMITS } from "@tier0/core";
 import { noTextLabel } from "../../../../../lib/deleted-by";
@@ -44,7 +45,7 @@ export function MessageList({ guildId, items }: { guildId: string; items: Logged
   function takeAction() {
     if (!author || tooMany) return;
     saveAttach(guildId, author.userId, chosen.map(asEvidence));
-    router.push(`/guilds/${guildId}/mod/members/${author.userId}`);
+    confirmLeave(() => router.push(`/guilds/${guildId}/mod/members/${author.userId}`));
   }
 
   return (

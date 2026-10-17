@@ -1,4 +1,4 @@
-import { isInForce } from "@tier0/core";
+import { isCounting, isInForce, isWarning } from "@tier0/core";
 import type { AuditDto, InfractionDto, MemberProfile, NoteDto, UserRef } from "@tier0/core";
 
 /**
@@ -25,6 +25,16 @@ export function isStaffActivity(entry: AuditDto): boolean {
 
 const KIND_RANK: Record<TimelineItem["kind"], number> = { infraction: 0, note: 1, audit: 2 };
 
+/**
+ * Whether a staff activity entry belongs to a case or note already on the
+ * timeline. Those are folded into that card's history rather than listed a
+ * second time beside it ("Timed out ToxicTuna (case #198)" right under the case).
+ */
+export function foldsIntoCard(entry: AuditDto, infractionIds: ReadonlySet<number>, noteIds: ReadonlySet<number>): boolean {
+  if (entry.infractionId !== null && infractionIds.has(entry.infractionId)) return true;
+  return entry.noteId !== null && noteIds.has(entry.noteId);
+}
+
 export function buildTimeline(
   profile: Pick<MemberProfile, "infractions" | "notes" | "audit">,
   includeAudit: boolean,
@@ -37,8 +47,12 @@ export function buildTimeline(
     items.push({ kind: "note", key: `n${note.id}`, at: note.createdAt, note });
   }
   if (includeAudit) {
+    const infractionIds = new Set(profile.infractions.map((entry) => entry.id));
+    const noteIds = new Set(profile.notes.map((entry) => entry.id));
     for (const audit of profile.audit) {
-      if (isStaffActivity(audit)) items.push({ kind: "audit", key: `a${audit.id}`, at: audit.at, audit });
+      if (isStaffActivity(audit) && !foldsIntoCard(audit, infractionIds, noteIds)) {
+        items.push({ kind: "audit", key: `a${audit.id}`, at: audit.at, audit });
+      }
     }
   }
   // Equal timestamps happen when one action writes several rows; ordering them
@@ -49,6 +63,15 @@ export function buildTimeline(
     if (a.kind !== b.kind) return KIND_RANK[a.kind] - KIND_RANK[b.kind];
     return a.key < b.key ? 1 : a.key > b.key ? -1 : 0;
   });
+}
+
+/** How many entries the timeline shows at first, and adds with each "Show older". A long record stays quick to open. */
+export const TIMELINE_PAGE = 30;
+
+/** How many entries to show so that the one at `index` is on screen, in whole steps of the page size. */
+export function limitToShow(index: number, current: number, step: number = TIMELINE_PAGE): number {
+  if (index < current) return current;
+  return Math.ceil((index + 1) / step) * step;
 }
 
 export function filterTimeline(items: TimelineItem[], filter: TimelineFilter): TimelineItem[] {
@@ -122,9 +145,31 @@ export function groupByDay(items: TimelineItem[], now: Date, timeZone: string): 
 /* Standing ------------------------------------------------------------------ */
 
 export type Standing =
-  | { kind: "restricted"; action: string; caseNumber: number | null; until: string | null }
+  | { kind: "restricted"; action: string; caseNumber: number | null; until: string | null; inDiscordOnly?: boolean }
   | { kind: "recent"; at: string }
   | { kind: "clear" };
+
+/**
+ * The standing, corrected by what Discord holds. A ban or timeout made in
+ * Discord itself leaves no case on the record, and the profile should not call
+ * such a member clear. Discord can only add a restriction here, never take one
+ * the record has away: the record's own state already follows lifts the bot made.
+ */
+export function standingWithDiscord(
+  record: Standing,
+  discord: { banned: boolean | null; timedOutUntil: string | null } | null,
+  now: Date,
+): Standing {
+  if (!discord) return record;
+  const restricted = record.kind === "restricted";
+  if (discord.banned === true && !(restricted && record.action === "ban")) {
+    return { kind: "restricted", action: "ban", caseNumber: null, until: null, inDiscordOnly: true };
+  }
+  if (!restricted && discord.timedOutUntil && Date.parse(discord.timedOutUntil) > now.getTime()) {
+    return { kind: "restricted", action: "timeout", caseNumber: null, until: discord.timedOutUntil, inDiscordOnly: true };
+  }
+  return record;
+}
 
 /** How far back an action still counts as recent. */
 export const RECENT_DAYS = 30;
@@ -221,14 +266,23 @@ export interface RecordCounts {
   other: number;
   notes: number;
   removed: number;
+  /** Warnings past the server's warn expiry: on the record, but no longer counted as warns. */
+  expired: number;
 }
 
-/** Live entries by type, with removed and deleted entries counted once, apart. */
-export function recordCounts(profile: Pick<MemberProfile, "infractions" | "notes">): RecordCounts {
-  const counts: RecordCounts = { warn: 0, timeout: 0, kick: 0, ban: 0, other: 0, notes: 0, removed: 0 };
+/**
+ * Live entries by type, with removed and deleted entries counted once, apart.
+ * An expired warning is counted apart too, so "Warns" matches the Members list.
+ */
+export function recordCounts(profile: Pick<MemberProfile, "infractions" | "notes">, now: Date = new Date()): RecordCounts {
+  const counts: RecordCounts = { warn: 0, timeout: 0, kick: 0, ban: 0, other: 0, notes: 0, removed: 0, expired: 0 };
   for (const entry of profile.infractions) {
     if (entry.voided) {
       counts.removed += 1;
+      continue;
+    }
+    if (warnExpiry(entry, now)?.state === "expired") {
+      counts.expired += 1;
       continue;
     }
     if (entry.action === "warn" || entry.action === "timeout" || entry.action === "kick" || entry.action === "ban") {
@@ -453,6 +507,38 @@ export function expiryState(infraction: InfractionDto, now: Date): ExpiryState {
   return infraction.active ? { state: "none" } : { state: "ended", at: null };
 }
 
+export type WarnExpiry = { state: "counting"; until: string } | { state: "expired"; at: string } | null;
+
+/**
+ * Where a warning stands under the server's warn expiry. Null for anything
+ * that is not a warning, a removed one, and a warning on a server where
+ * warnings never expire. Read through `isCounting` so the card agrees with
+ * the Members list and the escalation rules.
+ */
+export function warnExpiry(infraction: InfractionDto, now: Date): WarnExpiry {
+  if (infraction.voided || !isWarning(infraction.action) || !infraction.warnExpiresAt) return null;
+  const counting = isCounting(
+    { action: infraction.action, active: infraction.active, expiresAt: infraction.expiresAt, removed: false, warnExpiresAt: infraction.warnExpiresAt },
+    now,
+  );
+  return counting ? { state: "counting", until: infraction.warnExpiresAt } : { state: "expired", at: infraction.warnExpiresAt };
+}
+
+/** The profile link to the warning an automatic case was counted from. */
+export function automaticFromHref(guildId: string, userId: string, fromCase: number): string {
+  return `/guilds/${guildId}/mod/members/${encodeURIComponent(userId)}?case=${fromCase}`;
+}
+
+/**
+ * What removing this case also undoes in Discord, so the dialog can say so:
+ * a ban or timeout still in force is lifted, the same rule the bot applies.
+ */
+export function removalLifts(infraction: InfractionDto, now: Date): "ban" | "timeout" | null {
+  if (infraction.voided || !inForce(infraction, now)) return null;
+  if (infraction.action === "ban") return "ban";
+  return infraction.action === "timeout" || infraction.action === "automod-timeout" ? "timeout" : null;
+}
+
 /* Dates --------------------------------------------------------------------- */
 
 const dateFormats = new Map<string, Intl.DateTimeFormat>();
@@ -466,7 +552,8 @@ function formatter(timeZone: string, withTime: boolean): Intl.DateTimeFormat {
       year: "numeric",
       month: "short",
       day: "numeric",
-      ...(withTime ? { hour: "2-digit", minute: "2-digit" } : {}),
+      // A time names its zone, because Mod logs and Staff activity print UTC and the same moment must not look like two.
+      ...(withTime ? { hour: "2-digit", minute: "2-digit", ...(timeZone === "UTC" ? {} : { timeZoneName: "short" }) } : {}),
     });
     dateFormats.set(key, format);
   }
@@ -624,6 +711,14 @@ export function parseCaseParam(raw: string | string[] | undefined): number | nul
   return parsed > 0 ? parsed : null;
 }
 
+/** The raw value of a `?case=` or `?note=` that was given but is not a number, clipped for display, or null. */
+export function badFocusParam(raw: string | string[] | undefined, parsed: number | null): string | null {
+  if (parsed !== null) return null;
+  const value = (Array.isArray(raw) ? raw[0] : raw)?.trim();
+  if (!value) return null;
+  return value.length > 24 ? `${value.slice(0, 23)}…` : value;
+}
+
 /** A case number from a `#case-196` fragment. */
 export function parseCaseHash(hash: string): number | null {
   const match = /^#case-(\d{1,9})$/.exec(hash);
@@ -677,7 +772,14 @@ export function focusDomId(request: FocusRequest): string {
 
 /** How the page names the entry to a reader, such as "Case 196" or "Note 7". */
 export function focusLabel(request: FocusRequest): string {
-  return `${request.kind === "case" ? "Case" : "Note"} ${request.number}`;
+  return `${request.kind === "case" ? "Case" : "Note"} ${request.kind === "case" ? "#" : ""}${request.number}`;
+}
+
+/** What the page says when a linked case or note is not on the record this viewer can see. */
+export function missingText(request: FocusRequest): string {
+  return request.kind === "case"
+    ? `${focusLabel(request)} is not on this member's record. It may have been purged, or the link is for another member.`
+    : `${focusLabel(request)} is not on this member's record, or you can't see it.`;
 }
 
 /**

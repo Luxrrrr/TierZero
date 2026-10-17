@@ -1,4 +1,4 @@
-import { AUTOMOD_NAME, isInForce, type InfractionDto, type UserRef } from "@tier0/core";
+import { AUTOMOD_NAME, caseStateOf, describeAutomatic, isInForce, type AutomaticCase, type InfractionDto, type UserRef } from "@tier0/core";
 
 /**
  * The plain logic behind the mod dashboard's shared pieces. No React here, so
@@ -71,14 +71,32 @@ export type InfractionStatus = "active" | "expired" | "removed" | "recorded";
  * bot also sets on warns and never clears when a timeout runs out.
  */
 export function infractionStatus(
-  infraction: Pick<InfractionDto, "action" | "active" | "expiresAt" | "voided">,
+  infraction: Pick<InfractionDto, "action" | "active" | "expiresAt" | "voided" | "warnExpiresAt">,
   now: Date = new Date(),
 ): InfractionStatus {
   if (infraction.voided) return "removed";
-  const state = { action: infraction.action, active: infraction.active, expiresAt: infraction.expiresAt, removed: false };
+  const state = {
+    action: infraction.action,
+    active: infraction.active,
+    expiresAt: infraction.expiresAt,
+    removed: false,
+    warnExpiresAt: infraction.warnExpiresAt ?? null,
+  };
   if (isInForce(state, now)) return "active";
   if (infraction.expiresAt && new Date(infraction.expiresAt).getTime() <= now.getTime()) return "expired";
+  // A warning past the server's warn expiry stays on the record but no longer counts.
+  if (caseStateOf(state, now) === "expired") return "expired";
   return "recorded";
+}
+
+/**
+ * Why the bot took a case on its own, as one line: "Rule: Three strikes,
+ * 3 warnings in 30 days". The warning that tipped it over is linked
+ * separately, so it is left out here.
+ */
+export function automaticLine(automatic: AutomaticCase): string {
+  const rule = automatic.rule.trim() === "" ? "Escalation" : automatic.rule.trim();
+  return `Rule: ${rule}, ${describeAutomatic(automatic)}`;
 }
 
 export const STATUS_LABEL: Record<InfractionStatus, string> = {
@@ -220,4 +238,24 @@ export function describeLoadError(status: number | undefined, what = "this page"
     tone: "danger",
     retry: true,
   };
+}
+
+/** Whether a page number is beyond the last page of a list that does have entries, as from an old link or a hand-edited URL. */
+export function isPastEnd(page: number, pageSize: number, total: number): boolean {
+  return total > 0 && pageSize > 0 && page > Math.ceil(total / pageSize);
+}
+
+/**
+ * The count beside a day heading in a paged list. The first day on a page may
+ * have begun on the page before and the last may go on to the next, so those
+ * say they count only this page rather than claiming a whole day.
+ */
+export function dayCountText(
+  count: number,
+  where: { index: number; groups: number; page: number; pages: number },
+  one = "entry",
+  many = "entries",
+): string {
+  const split = (where.index === 0 && where.page > 1) || (where.index === where.groups - 1 && where.page < where.pages);
+  return `${count.toLocaleString("en")} ${count === 1 ? one : many}${split ? " on this page" : ""}`;
 }

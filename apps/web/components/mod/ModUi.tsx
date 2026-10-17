@@ -16,7 +16,7 @@ import {
   WarnTriangleIcon,
 } from "../Icons";
 import { RelativeTime } from "./RelativeTime";
-import { automodActionLabel } from "./automod";
+import { automodActionLabel, automodDetailText, isAutomodAction, parseAutomodReason, ruleLabel } from "./automod";
 import {
   describeLoadError,
   displayName,
@@ -39,9 +39,11 @@ export {
   fmtLocal,
   timeAgo,
   describeLoadError,
+  dayCountText,
+  isPastEnd,
 } from "./format";
 export { LocalTime, RelativeTime } from "./RelativeTime";
-export { automodActionLabel, isAutomodAction, parseAutomodReason, ruleLabel } from "./automod";
+export { automodActionLabel, automodDetailText, isAutomodAction, parseAutomodReason, readableReason, ruleLabel } from "./automod";
 
 /**
  * The small pieces every mod page repeats, kept in one place so a warn looks
@@ -105,6 +107,26 @@ export function ActionBadge({
       {icon ? <StateIcon action={action} /> : null}
       {actionLabel(action)}
     </span>
+  );
+}
+
+/**
+ * A case's reason. An automod case shows its rule by name in a tag, then the
+ * wording, so the rule key it is stored under never reaches the page.
+ */
+export function CaseReason({ action, reason, empty = "No reason given." }: { action: string; reason: string | null; empty?: ReactNode }) {
+  if (!isAutomodAction(action)) return <>{reason ?? empty}</>;
+  const parsed = parseAutomodReason(reason);
+  const detail = automodDetailText(parsed.detail);
+  if (!parsed.rule) return <>{detail ?? empty}</>;
+  return (
+    <>
+      <span className="mod-rule">
+        <span className="visually-hidden">Rule: </span>
+        {ruleLabel(parsed.rule)}
+      </span>
+      {detail}
+    </>
   );
 }
 
@@ -279,6 +301,27 @@ export function LoadFailure({
   );
 }
 
+/**
+ * Shown in place of a list's "nothing yet" message when the page asked for is
+ * past the end, which would otherwise claim the list is empty.
+ */
+export function PastEnd({ total, pageSize, hrefFor, noun = "entries" }: { total: number; pageSize: number; hrefFor(page: number): string; noun?: string }) {
+  const last = Math.max(1, Math.ceil(total / pageSize));
+  return (
+    <EmptyState
+      icon={<HistoryIcon />}
+      title="This page is past the end of the list"
+      action={
+        <Link className="btn btn-secondary btn-sm" href={hrefFor(last)}>
+          Go to the last page
+        </Link>
+      }
+    >
+      {`There ${total === 1 ? "is" : "are"} ${total.toLocaleString("en")} ${noun}, on ${last === 1 ? "one page" : `pages 1 to ${last.toLocaleString("en")}`}.`}
+    </EmptyState>
+  );
+}
+
 /** Previous and next links for a paged list. `hrefFor` builds the URL for a page number. */
 export function Pager({
   page,
@@ -292,7 +335,8 @@ export function Pager({
   hrefFor(page: number): string;
 }) {
   const pages = Math.max(1, Math.ceil(total / pageSize));
-  if (pages <= 1) return null;
+  // Past the last page there is no range to show; the list says so and links back instead.
+  if (pages <= 1 || page > pages) return null;
   const first = (page - 1) * pageSize + 1;
   const last = Math.min(total, page * pageSize);
   return (

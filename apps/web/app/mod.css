@@ -1006,7 +1006,7 @@ a.mod-user:hover {
 
 .mod-empty[data-tone="danger"] .mod-empty-icon {
   background: var(--danger-soft);
-  color: var(--danger);
+  color: var(--mod-danger-text);
 }
 
 .mod-empty[data-tone="attention"] .mod-empty-icon {
@@ -1453,7 +1453,7 @@ a.mod-user:hover {
   background: var(--danger-soft);
   font-size: var(--text-2xs);
   font-weight: 500;
-  color: var(--danger);
+  color: var(--mod-danger-text);
 }
 
 .ev-open {
@@ -1711,7 +1711,7 @@ a.mod-user:hover {
 .ev-tag[data-kind="flagged"] {
   border-color: transparent;
   background: var(--danger-soft);
-  color: var(--danger);
+  color: var(--mod-danger-text);
 }
 
 .ev-flagged {
@@ -1782,7 +1782,7 @@ a.mod-user:hover {
   padding: 0 var(--space-2);
   border-radius: var(--radius-full);
   background: var(--info-soft);
-  color: var(--info, var(--accent-text));
+  color: var(--mod-info-text);
   font-size: var(--text-2xs);
   font-weight: 500;
   white-space: nowrap;
@@ -2057,3 +2057,59 @@ a.mod-user:hover {
     width: auto;
   }
 }
+
+
+/* The automod rule an entry came from, as a quiet tag before its wording. */
+.mod-rule {
+  display: inline-block;
+  flex: none;
+  margin-right: var(--space-2);
+  padding: 0 var(--space-2);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  line-height: 1.5;
+  white-space: nowrap;
+  vertical-align: baseline;
+}
+
+/* A row that scrolls sideways fades at an edge with more past it (set by ScrollCues), so hidden tabs and chips are findable on a phone. */
+:is(.mod-tabs, .mod-toolbar-group, .log-switch, .settings-switch)[data-cue-end="true"] {
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 40px), transparent);
+  mask-image: linear-gradient(to right, #000 calc(100% - 40px), transparent);
+}
+
+:is(.mod-tabs, .mod-toolbar-group, .log-switch, .settings-switch)[data-cue-start="true"] {
+  -webkit-mask-image: linear-gradient(to left, #000 calc(100% - 40px), transparent);
+  mask-image: linear-gradient(to left, #000 calc(100% - 40px), transparent);
+}
+
+:is(.mod-tabs, .mod-toolbar-group, .log-switch, .settings-switch)[data-cue-start="true"][data-cue-end="true"] {
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 40px, #000 calc(100% - 40px), transparent);
+  mask-image: linear-gradient(to right, transparent, #000 40px, #000 calc(100% - 40px), transparent);
+}
+
+/* The Moderation, Automod and Server logs switch scrolls instead of wrapping a name past the screen edge at 320px. */
+.settings-switch {
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.settings-switch::-webkit-scrollbar {
+  display: none;
+}
+
+.settings-switch a {
+  flex: none;
+  white-space: nowrap;
+}
+
+@media (max-width: 360px) {
+  .settings-switch a {
+    padding: 0 var(--space-3);
+  }
+}
+

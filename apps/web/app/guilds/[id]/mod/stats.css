@@ -87,7 +87,10 @@
 }
 
 .stats-seg {
+  position: relative;
   display: inline-flex;
+  flex-wrap: wrap;
+  max-width: 100%;
   padding: 2px;
   gap: 2px;
   border-radius: var(--radius-md);
@@ -133,6 +136,90 @@
 .stats-seg a svg {
   width: 12px;
   height: 12px;
+}
+
+/* The custom range opens a small form under the segment. A native details
+   element keeps it working without script and closes with the summary. */
+/* Anchored to the whole segment rather than the summary, so the panel stays on screen when the segment wraps. */
+.stats-custom {
+  display: inline-flex;
+}
+
+.stats-custom > summary {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: 2rem;
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  list-style: none;
+  transition:
+    background-color var(--mod-motion) var(--ease-out),
+    color var(--mod-motion) var(--ease-out);
+}
+
+.stats-custom > summary::-webkit-details-marker {
+  display: none;
+}
+
+.stats-custom > summary:hover,
+.stats-custom[open] > summary {
+  color: var(--text);
+}
+
+.stats-custom > summary:focus-visible {
+  outline: 2px solid var(--focus, var(--accent));
+  outline-offset: 1px;
+}
+
+.stats-custom > summary[aria-current="true"] {
+  background: var(--surface);
+  color: var(--text);
+  font-weight: 600;
+  box-shadow: inset 0 0 0 2px var(--text);
+}
+
+.stats-custom > summary svg {
+  width: 12px;
+  height: 12px;
+}
+
+.stats-custom-form {
+  position: absolute;
+  top: calc(100% + var(--space-2));
+  right: 0;
+  z-index: 20;
+  display: grid;
+  gap: var(--space-3);
+  width: min(18rem, calc(100vw - 2rem));
+  padding: var(--space-4);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  box-shadow: var(--shadow-lg);
+}
+
+.stats-custom-form label {
+  display: grid;
+  gap: var(--space-1);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  font-weight: 500;
+}
+
+.stats-custom-hint {
+  margin: 0;
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+}
+
+.stats-custom-form .btn {
+  justify-self: start;
 }
 
 /* KPIs -------------------------------------------------------------------- */
@@ -745,13 +832,17 @@
 
 /* Recent activity -------------------------------------------------------------- */
 
+/* The rows share one set of columns, so the badge column is as wide as the widest badge ("Automod message delete") and the text still lines up. */
 .stats-feed {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr) auto;
   list-style: none;
 }
 
 .stats-feed li {
   display: grid;
-  grid-template-columns: 4.75rem minmax(0, 1fr) auto;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
   align-items: center;
   gap: var(--space-3);
   min-height: var(--mod-row-height);
@@ -986,6 +1077,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .stats-seg a,
+  .stats-custom > summary,
   .dc-col,
   .dc-seg,
   .stats-rank li {

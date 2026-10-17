@@ -349,7 +349,7 @@ a.audit-body:hover .audit-actor-name {
 }
 
 .audit-before .audit-side-tag {
-  color: var(--danger);
+  color: var(--mod-danger-text);
 }
 
 .audit-after .audit-side-tag {
@@ -397,7 +397,7 @@ a.audit-body:hover .audit-actor-name {
 
 .audit-prose del {
   background: var(--danger-soft);
-  color: var(--danger);
+  color: var(--mod-danger-text);
   text-decoration: line-through;
 }
 

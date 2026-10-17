@@ -2,8 +2,10 @@ import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 import type { InfractionDto, NoteDto, UserRef } from "@tier0/core";
 import {
+  badFocusParam,
   buildTimeline,
   caseDomId,
+  missingText,
   filterShowing,
   findCaseItem,
   findFocusItem,
@@ -181,7 +183,14 @@ describe("the entry a link opens", () => {
     assert.equal(findFocusItem(items, null), null);
     assert.equal(focusDomId(caseRequest), "case-3");
     assert.equal(focusDomId(noteRequest), "note-7");
-    assert.equal(focusLabel(caseRequest), "Case 3");
+    assert.equal(focusLabel(caseRequest), "Case #3");
     assert.equal(focusLabel(noteRequest), "Note 7");
+  });
+
+  test("says what is wrong with a link that names no entry", () => {
+    assert.match(missingText(focusRequest(99999, null)!), /^Case #99999 is not on this member's record\. It may have been purged/);
+    assert.equal(badFocusParam("abc", null), "abc");
+    assert.equal(badFocusParam(undefined, null), null);
+    assert.equal(badFocusParam("12", 12), null);
   });
 });

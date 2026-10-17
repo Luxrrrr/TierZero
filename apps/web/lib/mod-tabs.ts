@@ -1,7 +1,7 @@
 import { can, type StaffRole } from "@tier0/core";
 
 export interface ModTab {
-  id: "overview" | "members" | "logs" | "serverlogs" | "access" | "settings" | "danger";
+  id: "overview" | "members" | "logs" | "serverlogs" | "appeals" | "raid" | "access" | "settings" | "danger";
   label: string;
   href: string;
 }
@@ -26,6 +26,8 @@ export function modTabsFor(guildId: string, role: StaffRole | null, canManage = 
       // Moderators get the tab too. Whether they may open the logs is a server setting, which the page explains.
       { id: "serverlogs", label: "Server logs", href: `${base}/server-logs` },
     );
+    if (can(role, "appeals.manage")) tabs.push({ id: "appeals", label: "Appeals", href: `${base}/appeals` });
+    if (can(role, "raid.lockdown")) tabs.push({ id: "raid", label: "Raid tools", href: `${base}/raid` });
     if (can(role, "staff.manage")) tabs.push({ id: "access", label: "Access", href: `${base}/access` });
   }
   if (canManage) tabs.push({ id: "settings", label: "Settings", href: `${base}/settings` });

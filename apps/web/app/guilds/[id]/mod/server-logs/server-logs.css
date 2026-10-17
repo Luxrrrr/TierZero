@@ -234,7 +234,7 @@
 
 .sl-entry[data-category="moderation"] .sl-icon {
   background: var(--danger-soft);
-  color: var(--danger);
+  color: var(--mod-danger-text);
 }
 
 .sl-entry[data-category="messages"] .sl-icon {
@@ -245,7 +245,7 @@
 .sl-entry[data-category="members"] .sl-icon,
 .sl-entry[data-category="voice"] .sl-icon {
   background: var(--info-soft);
-  color: var(--info, var(--accent-text));
+  color: var(--mod-info-text);
 }
 
 .sl-main {
@@ -409,5 +409,5 @@
 }
 
 .sl-danger-link {
-  color: var(--danger);
+  color: var(--mod-danger-text);
 }

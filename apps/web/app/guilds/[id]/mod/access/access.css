@@ -105,7 +105,7 @@
 
 .access-seg label[data-role="admin"]:has(input:checked) {
   background: var(--info-soft);
-  color: var(--info);
+  color: var(--mod-info-text);
   box-shadow: inset 0 0 0 1px var(--info);
 }
 
@@ -144,7 +144,7 @@
 .access-rowstatus[data-status="error"] {
   flex-basis: 100%;
   align-items: flex-start;
-  color: var(--danger);
+  color: var(--mod-danger-text);
   font-size: var(--text-sm);
 }
 
@@ -181,7 +181,7 @@
 }
 
 .access-remove:hover:not(:disabled) {
-  color: var(--danger);
+  color: var(--mod-danger-text);
   background: var(--danger-soft);
 }
 

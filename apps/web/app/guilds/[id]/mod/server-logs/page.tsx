@@ -1,4 +1,4 @@
-import { forbidden, redirect } from "next/navigation";
+import { denyStaffPage } from "../../../../../lib/mod-deny";
 import type { Metadata } from "next";
 import { requireStaff } from "../../../../../lib/mod-access";
 import { ControlApiError } from "../../../../../lib/control-api";
@@ -23,8 +23,7 @@ export default async function ServerLogsPage({
 
   const access = await requireStaff(id, "messages.view");
   if (!access.ok) {
-    if (access.status === 401) redirect("/login");
-    forbidden();
+    return denyStaffPage(id, access.status);
   }
   const viewer = { discordUserId: access.discordUserId, role: access.role };
 

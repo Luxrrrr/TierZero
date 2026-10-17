@@ -6,6 +6,7 @@ import {
   ArrowUpIcon,
   CheckIcon,
   ClockIcon,
+  DownloadIcon,
   InfoIcon,
   ShieldIcon,
   WarnTriangleIcon,
@@ -18,6 +19,7 @@ import {
   RANGES,
   automodLogHref,
   automodView,
+  bucketOf,
   changeBetween,
   changeSentence,
   isQuiet,
@@ -25,14 +27,19 @@ import {
   metricValue,
   periodText,
   plural,
+  rangeHref,
+  rangePhrase,
   repeatPercent,
   repeatRateText,
+  spanText,
   sparkPaths,
   sparkValues,
+  statsExportHref,
+  type Bucket,
   type Change,
   type DayCounts,
   type MetricKey,
-  type Range,
+  type RangeSpec,
 } from "./stats-logic";
 
 /**
@@ -40,42 +47,104 @@ import {
  * nothing about fetching, so they can be rendered from fixtures.
  */
 
+function fallbackPeriod(spec: RangeSpec): string {
+  if (spec.kind === "all") return "All time";
+  if (spec.kind === "custom") return spanText(spec.from, spec.to);
+  return `Last ${spec.days} days`;
+}
+
 export function StatsToolbar({
   guildId,
-  days,
+  spec,
+  today,
   period,
+  days,
+  bucket = "day",
   compare = false,
+  exportable = false,
 }: {
   guildId: string;
-  days: Range | number;
+  spec: RangeSpec;
+  /** Today in UTC, `YYYY-MM-DD`, the latest day the date pickers allow. */
+  today: string;
   period?: string | null;
+  /** Length of the range the bot counted, for the comparison note. */
+  days?: number;
+  bucket?: Bucket;
   compare?: boolean;
+  /** Whether there are figures to download. */
+  exportable?: boolean;
 }) {
+  const custom = spec.kind === "custom" ? spec : null;
   return (
     <div className="mod-toolbar stats-toolbar">
       <p className="stats-period">
         <ClockIcon />
         <span>
-          <strong>{period ?? `Last ${days} days`}</strong>
+          <strong>{period ?? fallbackPeriod(spec)}</strong>
           <span className="stats-period-note">
-            {compare ? ` · UTC · changes compare with the ${days} days before` : " · UTC"}
+            {" · UTC"}
+            {bucket !== "day" ? ` · one point per ${bucket}` : ""}
+            {compare && days ? ` · changes compare with the ${plural(days, "day")} before` : ""}
           </span>
         </span>
       </p>
       <span className="mod-toolbar-spacer" />
       <nav className="stats-seg" aria-label="Time range">
-        {RANGES.map((range) => (
-          <Link
-            key={range}
-            href={`/guilds/${guildId}/mod?days=${range}`}
-            aria-current={range === days ? "true" : undefined}
-            scroll={false}
-          >
-            {range === days ? <CheckIcon /> : null}
-            {range} days
-          </Link>
-        ))}
+        {RANGES.map((range) => {
+          const current = spec.kind === "days" && spec.days === range;
+          return (
+            <Link
+              key={range}
+              href={rangeHref(guildId, { kind: "days", days: range })}
+              aria-current={current ? "true" : undefined}
+              scroll={false}
+            >
+              {current ? <CheckIcon /> : null}
+              {range} days
+            </Link>
+          );
+        })}
+        <Link
+          href={rangeHref(guildId, { kind: "all" })}
+          aria-current={spec.kind === "all" ? "true" : undefined}
+          scroll={false}
+        >
+          {spec.kind === "all" ? <CheckIcon /> : null}
+          All time
+        </Link>
+        <details className="stats-custom">
+          <summary aria-current={custom ? "true" : undefined}>
+            {custom ? <CheckIcon /> : null}
+            Custom
+          </summary>
+          <form className="stats-custom-form" method="get" action={`/guilds/${guildId}/mod`}>
+            <label>
+              <span>From</span>
+              <input className="input" type="date" name="from" required max={today} defaultValue={custom?.from} />
+            </label>
+            <label>
+              <span>To</span>
+              <input className="input" type="date" name="to" required max={today} defaultValue={custom?.to ?? today} />
+            </label>
+            <p className="stats-custom-hint">Whole days in UTC, up to two years. For anything longer, use All time.</p>
+            <button type="submit" className="btn btn-primary btn-sm">
+              Show range
+            </button>
+          </form>
+        </details>
       </nav>
+      {exportable ? (
+        <a
+          className="btn btn-secondary btn-sm"
+          href={statsExportHref(guildId, spec)}
+          download
+          title="Download the figures for this range as a spreadsheet file"
+        >
+          <DownloadIcon />
+          Download CSV
+        </a>
+      ) : null}
     </div>
   );
 }
@@ -212,7 +281,7 @@ function RightNow({ stats }: { stats: StatsDto }) {
  * page claim that automod did nothing.
  */
 function AutomodCard({ guildId, stats, canConfigure }: { guildId: string; stats: StatsDto; canConfigure: boolean }) {
-  const view = automodView(stats.automod, ruleLabel, stats.days);
+  const view = automodView(stats.automod, ruleLabel, rangePhrase(stats));
   if (!view) return null;
   const sentence = view.change && view.previous !== null ? changeSentence(view.change, view.previous, stats.days) : null;
 
@@ -243,7 +312,9 @@ function AutomodCard({ guildId, stats, canConfigure }: { guildId: string; stats:
       <div className="stats-automod">
         <div className="stats-automod-fig">
           <div className="mod-kpi-value">{view.total.toLocaleString("en")}</div>
-          <div className="stats-sub">{view.total === 1 ? "hit" : "hits"} in {plural(stats.days, "day")}</div>
+          <div className="stats-sub">
+            {view.total === 1 ? "hit" : "hits"} {rangePhrase(stats)}
+          </div>
           {view.change ? <Delta change={view.change} sentence={sentence} /> : null}
         </div>
         <RuleBars bars={view.bars} summary={view.summary} />
@@ -274,13 +345,31 @@ function RepeatCard({ share }: { share: number | null }) {
   );
 }
 
+/** Where the empty state points next: the next preset up, then everything on record. */
+function widerRange(stats: StatsDto): { spec: RangeSpec; label: string } | null {
+  if (stats.range === "all") return null;
+  const next = stats.range === "custom" ? null : longerRange(stats.days);
+  return next ? { spec: { kind: "days", days: next }, label: `Show ${next} days` } : { spec: { kind: "all" }, label: "Show all time" };
+}
+
+function quietTitle(stats: StatsDto): string {
+  if (stats.range === "all") return "Nothing recorded yet";
+  if (stats.range === "custom") return `Nothing recorded ${rangePhrase(stats)}`;
+  return `A quiet ${plural(stats.days, "day")}`;
+}
+
 export function ModStatsView({
   guildId,
+  spec,
+  today,
   stats,
   recent,
   canConfigure = false,
 }: {
   guildId: string;
+  /** The range the page asked for, which the toolbar marks as selected. */
+  spec: RangeSpec;
+  today: string;
   stats: StatsDto;
   recent: InfractionDto[] | null;
   /** Whether the viewer can open the Settings tab, which is where the empty automod card points. */
@@ -288,15 +377,21 @@ export function ModStatsView({
 }) {
   const { totals } = stats;
   const quiet = isQuiet(totals);
-  const next = longerRange(stats.days);
+  const wider = widerRange(stats);
+  const bucket = bucketOf(stats.bucket);
+  const perDay = stats.perDay as DayCounts[];
 
   return (
     <div className="mod-page stats-page">
       <StatsToolbar
         guildId={guildId}
+        spec={spec}
+        today={today}
+        period={periodText(perDay)}
         days={stats.days}
-        period={periodText(stats.perDay as DayCounts[])}
+        bucket={bucket}
         compare={stats.previous !== null}
+        exportable
       />
 
       {quiet ? (
@@ -306,15 +401,15 @@ export function ModStatsView({
               <span className="mod-empty-icon">
                 <ClockIcon />
               </span>
-              <h2 className="mod-empty-title">A quiet {stats.days} days</h2>
+              <h2 className="mod-empty-title">{quietTitle(stats)}</h2>
               <p className="mod-empty-text">
                 No warns, timeouts, kicks, bans or notes were recorded in this range.
-                {next ? " A longer range may show more." : " Activity will appear here as moderators act."}
+                {wider ? " A longer range may show more." : " Activity will appear here as moderators act."}
               </p>
-              {next ? (
+              {wider ? (
                 <div className="mod-empty-action">
-                  <Link className="btn btn-secondary btn-sm" href={`/guilds/${guildId}/mod?days=${next}`}>
-                    Show {next} days
+                  <Link className="btn btn-secondary btn-sm" href={rangeHref(guildId, wider.spec)}>
+                    {wider.label}
                   </Link>
                 </div>
               ) : null}
@@ -331,19 +426,19 @@ export function ModStatsView({
         </>
       ) : (
         <>
-          <h2 className="visually-hidden">Totals for the last {stats.days} days</h2>
+          <h2 className="visually-hidden">Totals {rangePhrase(stats)}</h2>
           <section className="stats-kpis" aria-label="Totals for the range">
-            {KPIS.map((spec) => (
-              <Kpi key={spec.key} spec={spec} stats={stats} />
+            {KPIS.map((kpi) => (
+              <Kpi key={kpi.key} spec={kpi} stats={stats} />
             ))}
           </section>
 
           <div className="stats-row stats-row--chart">
             <Card
-              title="Actions per day"
-              desc={`${plural(totals.actions, "action")} over ${plural(stats.perDay.length, "day")}. Hover or use the arrow keys to read a day.`}
+              title={`Actions per ${bucket}`}
+              desc={`${plural(totals.actions, "action")} over ${plural(perDay.length, bucket)}. Hover or use the arrow keys to read a ${bucket}.`}
             >
-              <DayChart perDay={stats.perDay as DayCounts[]} />
+              <DayChart perDay={perDay} bucket={bucket} />
             </Card>
             <div className="stats-stack">
               <Card title="By type">

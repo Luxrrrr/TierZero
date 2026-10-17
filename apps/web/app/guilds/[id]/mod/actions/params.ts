@@ -1,4 +1,4 @@
-import { isInForce, type InfractionDto, type UserRef } from "@tier0/core";
+import { caseStateOf, isWarning, type InfractionDto, type UserRef } from "@tier0/core";
 
 /**
  * Query handling and display rules for the action log. Kept free of React so
@@ -111,31 +111,24 @@ export function hasActionFilters(query: ActionsQuery): boolean {
 
 export type InfractionState = "removed" | "active" | "expired" | "recorded";
 
-type StateInput = Pick<InfractionDto, "action" | "voided" | "active" | "expiresAt">;
+type StateInput = Pick<InfractionDto, "action" | "voided" | "active" | "expiresAt" | "warnExpiresAt">;
 
-/** Entries that have an end time of their own and can run out. */
-const EXPIRING = new Set(["timeout", "automod-timeout"]);
+const STATE_KEY = { removed: "removed", "in force": "active", expired: "expired", "on record": "recorded" } as const;
 
-/**
- * Removal wins over everything else. After that it is the shared rule
- * (`isInForce`) that decides whether a restriction is biting now. A timeout
- * whose end has passed is expired. Everything else, including warns, kicks,
- * lifted bans and reversals, is simply on the record: the stored `active`
- * flag is set on every new entry and says nothing about those.
- */
+/** The shared rule in @tier0/core, which the CSV export uses too, so the file and the page always agree. */
 export function infractionState(infraction: StateInput, now: Date = new Date()): InfractionState {
-  if (infraction.voided) return "removed";
-  const restriction = {
-    action: infraction.action,
-    active: infraction.active,
-    expiresAt: infraction.expiresAt,
-    removed: false,
-  };
-  if (isInForce(restriction, now)) return "active";
-  if (EXPIRING.has(infraction.action) && infraction.expiresAt !== null && new Date(infraction.expiresAt).getTime() <= now.getTime()) {
-    return "expired";
-  }
-  return "recorded";
+  return STATE_KEY[
+    caseStateOf(
+      {
+        action: infraction.action,
+        active: infraction.active,
+        expiresAt: infraction.expiresAt,
+        removed: infraction.voided !== null,
+        warnExpiresAt: infraction.warnExpiresAt ?? null,
+      },
+      now,
+    )
+  ];
 }
 
 const nameOf = (user: UserRef): string => user.name ?? `User ${user.userId.slice(-4)}`;
@@ -187,10 +180,17 @@ export function describeState(infraction: StateInput, now: Date = new Date()): S
       };
     }
     case "expired": {
+      if (isWarning(infraction.action) && infraction.warnExpiresAt) {
+        const stopped = shortWhen(infraction.warnExpiresAt, now);
+        return { state, tone: "expired", label: "Expired", detail: `Stopped counting on ${stopped}. It stays on the record.` };
+      }
       const ended = infraction.expiresAt ? shortWhen(infraction.expiresAt, now) : "";
       return { state, tone: "expired", label: ended ? `Expired ${ended}` : "Expired", detail: `Ran out ${ended}.` };
     }
     default:
+      if (isWarning(infraction.action) && infraction.warnExpiresAt) {
+        return { state, tone: "neutral", label: "On record", detail: `Counts until ${shortWhen(infraction.warnExpiresAt, now)}.` };
+      }
       return { state, tone: "neutral", label: "On record", detail: "Stays on the member's record." };
   }
 }

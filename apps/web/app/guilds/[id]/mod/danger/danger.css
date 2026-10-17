@@ -17,13 +17,13 @@
 
 .danger-icon {
   display: inline-flex;
-  color: var(--danger);
+  color: var(--mod-danger-text);
 }
 
 .danger-title {
   margin: 0;
   font-size: var(--text-md, 1rem);
-  color: var(--danger);
+  color: var(--mod-danger-text);
 }
 
 .danger-desc {
@@ -102,7 +102,7 @@
   border: 1px solid var(--danger);
   border-radius: var(--radius-md);
   background: transparent;
-  color: var(--danger);
+  color: var(--mod-danger-text);
   font-size: var(--text-sm);
   font-weight: 500;
   cursor: pointer;
@@ -144,4 +144,10 @@
 
 .hold-btn[data-holding="true"] .hold-label {
   color: #fff;
+}
+
+.danger-row-count {
+  margin-left: var(--space-2);
+  font-weight: 500;
+  color: var(--text-secondary);
 }

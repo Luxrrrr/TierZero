@@ -1,4 +1,4 @@
-import { forbidden, redirect } from "next/navigation";
+import { denyStaffPage } from "../../../../../lib/mod-deny";
 import type { Metadata } from "next";
 import { can, type UserRef } from "@tier0/core";
 import { requireStaff } from "../../../../../lib/mod-access";
@@ -35,8 +35,7 @@ export default async function ActionsPage({
 
   const access = await requireStaff(id, "view");
   if (!access.ok) {
-    if (access.status === 401) redirect("/login");
-    forbidden();
+    return denyStaffPage(id, access.status);
   }
 
   try {

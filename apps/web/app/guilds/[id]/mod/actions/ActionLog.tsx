@@ -6,18 +6,22 @@ import type { InfractionDto, Page, UserRef } from "@tier0/core";
 import {
   ActionBadge,
   Pager,
+  PastEnd,
   Pill,
   RelativeTime,
   StateIcon,
   UserChip,
   actionLabel,
+  automodDetailText,
   displayName,
   isAutomodAction,
+  isPastEnd,
   moderatorOf,
   parseAutomodReason,
   ruleLabel,
 } from "../../../../../components/mod/ModUi";
 import { DownloadIcon, HistoryIcon, SearchIcon, UserIcon } from "../../../../../components/Icons";
+import { automaticLine } from "../../../../../components/mod/format";
 import {
   ACTION_CHIPS,
   SOURCE_CHIPS,
@@ -169,10 +173,14 @@ export function ActionLog({ guildId, query, data, staff, canExport }: Props) {
 
         <p className="actions-count" role="status">
           <strong>{data.total.toLocaleString()}</strong> {data.total === 1 ? "action" : "actions"}
-          {filtered ? " match these filters" : " in total"}
+          {filtered ? (data.total === 1 ? " matches these filters" : " match these filters") : " in total"}
         </p>
 
-        {data.items.length === 0 ? (
+        {data.items.length === 0 && isPastEnd(data.page, data.pageSize, data.total) ? (
+          <div className="mod-card">
+            <PastEnd total={data.total} pageSize={data.pageSize} noun="actions" hrefFor={(page) => actionsHref(guildId, { ...query, page })} />
+          </div>
+        ) : data.items.length === 0 ? (
           <div className="mod-card">
             <div className="mod-empty">
               <span className="mod-empty-icon">
@@ -260,6 +268,22 @@ function ActionRow({ guildId, item, now, canSeeStaffActivity }: { guildId: strin
       </td>
       <td data-label="Reason" className="actions-reason-cell">
         <Reason text={item.reason} automod={isAutomodAction(item.action)} />
+        {item.automatic ? (
+          <span className="actions-automatic">
+            <span className="mod-pill" data-tone="neutral">
+              Automatic
+            </span>
+            <span>
+              {automaticLine(item.automatic)}
+              {item.automatic.fromCase !== null ? (
+                <>
+                  , after{" "}
+                  <Link href={`${memberHref(guildId, item.user.userId)}?case=${item.automatic.fromCase}`}>case #{item.automatic.fromCase}</Link>
+                </>
+              ) : null}
+            </span>
+          </span>
+        ) : null}
         {item.edited ? (
           <span className="actions-edited" title={`A staff member changed this case after it was made: ${displayName(item.edited.by)}`}>
             Case edited by staff
@@ -282,7 +306,7 @@ function ActionRow({ guildId, item, now, canSeeStaffActivity }: { guildId: strin
       </td>
       <td data-label="State">
         <Pill tone={state.tone}>{state.label}</Pill>
-        {removed ? <span className="actions-state-detail">{state.detail}</span> : null}
+        {removed || item.warnExpiresAt ? <span className="actions-state-detail">{state.detail}</span> : null}
       </td>
       <td data-label="Go to" className="actions-go">
         <Link className="btn btn-ghost btn-sm" href={memberHref(guildId, item.user.userId)}>
@@ -305,7 +329,7 @@ const LONG_REASON = 90;
 
 function Reason({ text, automod }: { text: string | null; automod: boolean }) {
   const parsed = automod ? parseAutomodReason(text) : null;
-  const shown = parsed ? parsed.detail : text;
+  const shown = parsed ? automodDetailText(parsed.detail) : text;
   const tag = parsed?.rule ? (
     <span className="actions-rule" title="The automod rule that acted">
       <span className="visually-hidden">Rule: </span>

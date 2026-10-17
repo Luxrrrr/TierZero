@@ -1,4 +1,7 @@
 import type {
+  AppealDetailDto,
+  AppealListDto,
+  RaidStatusDto,
   AuditDto,
   LoggedMessageDto,
   ServerLogEntryDto,
@@ -85,10 +88,29 @@ export interface AuditListParams {
 export const modAudit = (guildId: string, params: AuditListParams = {}) =>
   read<Page<AuditDto>>(guildId, `audit${query({ ...params })}`);
 
-export const modStats = (guildId: string, days = 30) =>
-  read<StatsDto>(guildId, `stats${query({ days })}`);
+/** One of: `days` for the last N days, `range: "all"`, or `from` and `to` as `YYYY-MM-DD` UTC days. */
+export interface StatsRangeParams {
+  days?: number;
+  range?: "all";
+  from?: string;
+  to?: string;
+}
+
+export const modStats = (guildId: string, params: StatsRangeParams | number = 30) =>
+  read<StatsDto>(guildId, `stats${query(typeof params === "number" ? { days: params } : { ...params })}`);
 
 export const modStaff = (guildId: string) => read<StaffDto[]>(guildId, "staff");
+
+/** How much each log the Danger zone can delete holds, and how many notes stay. Owner only; called from the server. */
+export interface DangerCounts {
+  "mod-logs": number;
+  "staff-activity": number;
+  "server-events": number;
+  "saved-messages": number;
+  notes: number;
+}
+
+export const modDangerCounts = (guildId: string) => read<DangerCounts>(guildId, "danger");
 
 export interface MessageLogParams {
   q?: string;
@@ -149,3 +171,20 @@ export const modServerLog = (guildId: string, params: ServerLogParams, viewer: {
     guildId,
     `server-logs${query({ ...params, viewer: viewer.discordUserId, owner: viewer.role === "owner" ? "1" : "0", role: viewer.role })}`,
   );
+
+export interface AppealListParams {
+  status?: "pending" | "accepted" | "denied" | "all";
+  page?: number;
+  pageSize?: number;
+}
+
+/** Ban appeals, pending ones by default, with the pending count whatever the filter. */
+export const modAppeals = (guildId: string, params: AppealListParams = {}) =>
+  read<AppealListDto>(guildId, `appeals${query({ ...params })}`);
+
+/** One appeal with the member's whole record and notes, for deciding it. */
+export const modAppeal = (guildId: string, appealId: number) =>
+  read<AppealDetailDto>(guildId, `appeals/${encodeURIComponent(String(appealId))}`);
+
+/** What is locked, what can be, and the join-rate alert, for the Raid tools tab. */
+export const modRaid = (guildId: string) => read<RaidStatusDto>(guildId, "raid");

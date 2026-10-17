@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import type { KeyboardEvent as ReactKeyboardEvent } from "react";
 import { useRouter } from "next/navigation";
-import type { MemberProfile, ModActionKind, StaffRole } from "@tier0/core";
+import type { ActionTargetDto, MemberProfile, ModActionKind, StaffRole } from "@tier0/core";
 import { ChevronDownIcon, ShieldIcon } from "../../../../../../components/Icons";
 import { StateIcon } from "../../../../../../components/mod/ModUi";
 import { useToast } from "../../../../../../components/Toaster";
@@ -22,6 +22,8 @@ interface Props {
   timeZone: string;
   /** Whether the viewer can open the server's Moderation settings, to offer the link when the feature is off. */
   canConfigure: boolean;
+  /** What Discord says about the member and which actions the bot would refuse, or null to go by the record. */
+  standing?: ActionTargetDto | null;
   /** Called once an action has gone through, before the page re-reads the record. */
   onActed?(kind: ModActionKind): void;
 }
@@ -32,13 +34,13 @@ interface Props {
  * page waits for the bot before showing anything new: these change Discord,
  * so there is no guess shown in the meantime.
  */
-export function TakeAction({ guildId, profile, name, role, now, timeZone, canConfigure, onActed }: Props) {
+export function TakeAction({ guildId, profile, name, role, now, timeZone, canConfigure, standing = null, onActed }: Props) {
   const router = useRouter();
   const toast = useToast();
   const { state: contextState, load } = useActionContext(guildId);
-  const state = memberState(profile, now);
+  const state = memberState(profile, now, standing);
   const switchedOff = contextState.status === "ready" ? contextState.context.disabledActions : [];
-  const options = actionOptions(role, state, switchedOff);
+  const options = actionOptions(role, state, switchedOff, standing?.blocked ?? {});
 
   const menuId = useId();
   const [open, setOpen] = useState(false);
@@ -190,8 +192,9 @@ export function TakeAction({ guildId, profile, name, role, now, timeZone, canCon
           onClose={() => setDialog(null)}
           onDone={({ caseNumber, notes }) => {
             const kind = dialog;
+            const changed = kind === "timeout" && state.timedOut;
             setDialog(null);
-            toast.push({ kind: "success", title: successTitle(kind, name, caseNumber), detail: notes.length > 0 ? notes.join(" ") : undefined });
+            toast.push({ kind: "success", title: successTitle(kind, name, caseNumber, changed), detail: notes.length > 0 ? notes.join(" ") : undefined });
             onActed?.(kind);
             router.refresh();
           }}

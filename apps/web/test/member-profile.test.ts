@@ -24,6 +24,10 @@ import {
   snapshotText,
   sparkPoints,
   standingOf,
+  standingWithDiscord,
+  removalLifts,
+  limitToShow,
+  TIMELINE_PAGE,
 } from "../app/guilds/[id]/mod/members/[userId]/timeline.ts";
 import {
   canAddNote,
@@ -94,13 +98,23 @@ const profile = {
   audit: [
     audit(9, "infraction.void", "2026-01-04T00:00:00Z", { infractionId: 1 }),
     audit(8, "note.add", "2026-01-02T00:00:00Z", { noteId: 5 }),
+    // About a case that is not on the timeline (purged since), so it has no card to fold into.
+    audit(10, "action.take", "2026-01-05T00:00:00Z", { infractionId: 99 }),
   ],
 };
 
 describe("buildTimeline", () => {
   test("merges the three sources newest first", () => {
     const keys = buildTimeline(profile, true).map((item) => item.key);
-    assert.deepEqual(keys, ["a9", "i1", "n5", "i2"]);
+    assert.deepEqual(keys, ["a10", "i1", "n5", "i2"]);
+  });
+
+  test("folds staff activity about a case or note on the timeline into that card instead of repeating it", () => {
+    const keys = buildTimeline(profile, true).map((item) => item.key);
+    assert.ok(!keys.includes("a9"), "the removal of case 1 is in case 1's history");
+    const withNoteEdit = { ...profile, audit: [...profile.audit, audit(11, "note.edit", "2026-01-06T00:00:00Z", { noteId: 5 })] };
+    assert.ok(!buildTimeline(withNoteEdit, true).some((item) => item.key === "a11"));
+    assert.deepEqual(historyFor(profile.audit, { infractionId: 1 }).map((entry) => entry.id), [9]);
   });
 
   test("leaves out audit entries when the viewer cannot read them", () => {
@@ -416,6 +430,10 @@ describe("formatDate and formatDateTime", () => {
     assert.equal(formatDate("2026-10-10T02:30:00Z", "America/New_York"), "Oct 9, 2026");
     assert.equal(formatDateTime("2026-10-10T02:30:00Z", "America/New_York").endsWith("UTC"), false);
   });
+
+  test("a local time says which zone it is in, so it can be told from the UTC times in the logs", () => {
+    assert.equal(formatDateTime("2026-10-10T02:30:00Z", "America/New_York"), "Oct 9, 2026, 10:30 PM EDT");
+  });
 });
 
 describe("activitySeries", () => {
@@ -470,7 +488,25 @@ describe("recordCounts", () => {
       ],
       notes: [note(1, "2026-01-01T00:00:00Z"), note(2, "2026-01-01T00:00:00Z", { deleted: { at: "2026-01-02T00:00:00Z", by: user("3") } })],
     });
-    assert.deepEqual(counts, { warn: 1, timeout: 0, kick: 0, ban: 1, other: 1, notes: 1, removed: 2 });
+    assert.deepEqual(counts, { warn: 1, timeout: 0, kick: 0, ban: 1, other: 1, notes: 1, removed: 2, expired: 0 });
+  });
+
+  test("counts a warning past the warn expiry apart from the warns that still count", () => {
+    const now = new Date("2026-06-01T00:00:00Z");
+    const counts = recordCounts(
+      {
+        infractions: [
+          infraction(1, "warn", "2026-01-01T00:00:00Z", { warnExpiresAt: "2026-02-01T00:00:00Z" }),
+          infraction(2, "automod-warn", "2026-05-20T00:00:00Z", { warnExpiresAt: "2026-06-20T00:00:00Z" }),
+          infraction(3, "warn", "2026-05-25T00:00:00Z"),
+        ],
+        notes: [],
+      },
+      now,
+    );
+    assert.equal(counts.expired, 1);
+    assert.equal(counts.warn, 1);
+    assert.equal(counts.other, 1);
   });
 });
 
@@ -644,5 +680,47 @@ describe("editing a case", () => {
   test("an admin may edit any case, and a removed case cannot be edited", () => {
     assert.equal(infractionControls("admin", mine, "999").edit, true);
     assert.equal(infractionControls("admin", removed, "999").edit, false);
+  });
+});
+
+describe("what Discord holds against the record", () => {
+  const now = new Date("2026-10-10T12:00:00Z");
+
+  test("a member banned in Discord with no ban case is not called clear", () => {
+    const standing = standingWithDiscord(standingOf({ infractions: [] }, now), { banned: true, timedOutUntil: null }, now);
+    assert.deepEqual(standing, { kind: "restricted", action: "ban", caseNumber: null, until: null, inDiscordOnly: true });
+  });
+
+  test("a timeout in Discord shows when the record has none in force", () => {
+    const until = "2026-10-11T00:00:00.000Z";
+    const standing = standingWithDiscord({ kind: "clear" }, { banned: false, timedOutUntil: until }, now);
+    assert.equal(standing.kind === "restricted" && standing.until, until);
+  });
+
+  test("the record's own restriction stands, and no answer changes nothing", () => {
+    const record = standingOf({ infractions: [infraction(1, "ban", "2026-10-09T00:00:00Z")] }, now);
+    assert.deepEqual(standingWithDiscord(record, { banned: true, timedOutUntil: null }, now), record);
+    assert.deepEqual(standingWithDiscord(record, null, now), record);
+  });
+});
+
+describe("what removing a case also undoes in Discord", () => {
+  const now = new Date("2026-10-10T12:00:00Z");
+  test("a ban or timeout still in force is lifted; history is not", () => {
+    assert.equal(removalLifts(infraction(1, "ban", "2026-10-09T00:00:00Z"), now), "ban");
+    assert.equal(removalLifts(infraction(2, "automod-timeout", "2026-10-10T11:00:00Z", { expiresAt: "2026-10-10T13:00:00Z" }), now), "timeout");
+    assert.equal(removalLifts(infraction(3, "timeout", "2026-10-09T00:00:00Z", { expiresAt: "2026-10-09T01:00:00Z" }), now), null);
+    assert.equal(removalLifts(infraction(4, "ban", "2026-10-09T00:00:00Z", { active: false }), now), null);
+    assert.equal(removalLifts(infraction(5, "warn", "2026-10-09T00:00:00Z"), now), null);
+  });
+});
+
+describe("a long timeline, a page at a time", () => {
+  test("shows enough pages to reach a linked entry, and never fewer than now", () => {
+    assert.equal(limitToShow(-1, TIMELINE_PAGE), TIMELINE_PAGE);
+    assert.equal(limitToShow(5, TIMELINE_PAGE), TIMELINE_PAGE);
+    assert.equal(limitToShow(30, TIMELINE_PAGE), 60);
+    assert.equal(limitToShow(61, TIMELINE_PAGE), 90);
+    assert.equal(limitToShow(10, 90), 90);
   });
 });

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { InfractionDto, StatsDto } from "@tier0/core";
-import { ActionBadge, UserChip, actionLabel, displayName, fmtDateTime, moderatorOf, timeAgo } from "../../../../components/mod/ModUi";
+import { ActionBadge, CaseReason, UserChip, actionLabel, displayName, fmtDateTime, moderatorOf, timeAgo } from "../../../../components/mod/ModUi";
 import {
   actionBars,
   actionVerb,
@@ -202,7 +202,11 @@ export function RecentFeed({ guildId, items }: { guildId: string; items: Infract
               </Link>
               {item.voided ? <span className="mod-pill stats-feed-pill" data-tone="removed">Removed</span> : null}
             </p>
-            {item.reason ? <p className="stats-sub">{item.reason}</p> : null}
+            {item.reason ? (
+              <p className="stats-sub">
+                <CaseReason action={item.action} reason={item.reason} />
+              </p>
+            ) : null}
           </div>
           <span className="stats-feed-time">
             <Ago iso={item.createdAt} />

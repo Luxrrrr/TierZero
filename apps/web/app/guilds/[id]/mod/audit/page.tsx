@@ -1,4 +1,4 @@
-import { forbidden, redirect } from "next/navigation";
+import { denyStaffPage } from "../../../../../lib/mod-deny";
 import type { Metadata } from "next";
 import { AUTOMOD_ACTOR_NAME, ROLE_LABEL, isAutomodRole, type AuditDto } from "@tier0/core";
 import { requireStaff } from "../../../../../lib/mod-access";
@@ -45,8 +45,7 @@ export default async function AuditPage({
 
   const access = await requireStaff(id, "audit.view");
   if (!access.ok) {
-    if (access.status === 401) redirect("/login");
-    forbidden();
+    return denyStaffPage(id, access.status);
   }
 
   try {

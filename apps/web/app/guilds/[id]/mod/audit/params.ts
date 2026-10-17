@@ -47,6 +47,11 @@ export const AUDIT_KIND_SHORT: Record<AuditKind, string> = {
   "staff.add": "Staff added",
   "staff.update": "Role changed",
   "staff.remove": "Staff removed",
+  "appeal.accept": "Appeal accepted",
+  "appeal.deny": "Appeal denied",
+  "raid.lockdown": "Lockdown",
+  "raid.unlock": "Unlock",
+  "raid.mass": "Mass action",
 };
 
 function validDay(value: string): string {
