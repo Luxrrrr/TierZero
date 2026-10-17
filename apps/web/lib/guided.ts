@@ -114,6 +114,11 @@ export function fieldAt(schema: FieldDescriptor, path: string): FieldDescriptor 
   return current;
 }
 
+/** `essential: true`, or a member of an essential set (`essential: "<set>"`). */
+export function isEssential(field: FieldDescriptor): boolean {
+  return field.essential === true || (typeof field.essential === "string" && field.essential !== "");
+}
+
 function collect(field: FieldDescriptor, path: string, selected: Set<string>): void {
   if (field.kind !== "object") return;
   const fields = field.fields as Fields | undefined;
@@ -121,7 +126,7 @@ function collect(field: FieldDescriptor, path: string, selected: Set<string>): v
 
   for (const [key, child] of Object.entries(fields)) {
     const childPath = path ? `${path}.${key}` : key;
-    if (child.essential === true || child.guided === true) selected.add(childPath);
+    if (isEssential(child) || child.guided === true) selected.add(childPath);
     collect(child, childPath, selected);
   }
 }
@@ -172,7 +177,16 @@ function project(
   }
 
   if (Object.keys(kept).length === 0) return null;
-  return { ...field, fields: kept };
+  // A group's one-line summary, "Delete · Time out · 10 min", is what tells
+  // someone in the quick setup what switching it on does, and it is built from
+  // settings the quick setup does not ask about.
+  const summary = Array.isArray(field.summary) ? (field.summary as string[]) : [];
+  const summaryFields = Object.fromEntries(
+    summary.filter((key) => fields[key] !== undefined).map((key) => [key, fields[key] as FieldDescriptor]),
+  );
+  return Object.keys(summaryFields).length > 0
+    ? { ...field, fields: kept, summaryFields }
+    : { ...field, fields: kept };
 }
 
 /** Selected paths in the order the schema declares them, parents before children. */

@@ -37,12 +37,33 @@ export function stripIndices(path: string): string {
   return path.replace(/\[\d+\]/g, "");
 }
 
+/**
+ * A generated id means nothing to the reader, and a setting whose `when` is
+ * not met is not in play, so neither is worth a place in the header.
+ */
+function shownEntries(row: Record<string, unknown>, fields: Fields): [string, FieldDescriptor][] {
+  return Object.entries(fields).filter(([, field]) => {
+    if (field.kind === "string" && field.generated === true) return false;
+    return conditionHolds(field.when, row);
+  });
+}
+
+function conditionHolds(when: unknown, row: Record<string, unknown>): boolean {
+  if (typeof when !== "object" || when === null) return true;
+  const { field, equals, includes } = when as { field?: unknown; equals?: unknown; includes?: unknown };
+  if (typeof field !== "string") return true;
+  const actual = row[field];
+  if (includes !== undefined) return Array.isArray(actual) && actual.includes(includes);
+  if (equals !== undefined) return actual === equals;
+  return actual !== undefined && actual !== null && actual !== "" && !(Array.isArray(actual) && actual.length === 0);
+}
+
 export function summarizeRow(
   row: Record<string, unknown>,
   fields: Fields,
   labels: RowLabels,
 ): RowSummary {
-  const entries = Object.entries(fields);
+  const entries = shownEntries(row, fields);
   const titled = pickTitle(row, entries, labels);
 
   const parts: string[] = [];
@@ -112,6 +133,12 @@ function detailFor(
       if (of?.kind === "choice") {
         return Array.isArray(value) ? summarizeChoices(value, (of.options ?? []) as Option[]) : undefined;
       }
+      if (of?.kind === "role" || of?.kind === "channel") {
+        if (!Array.isArray(value)) return undefined;
+        const name = of.kind === "role" ? labels.role : labels.channel;
+        const names = value.filter(isFilled).map((id) => ({ value: id, label: name(id) }));
+        return summarizeChoices(names.map((entry) => entry.value), names);
+      }
       if (of?.kind !== "object" || !Array.isArray(value) || value.length === 0) return undefined;
       return `${value.length} ${value.length === 1 ? singularLabel(label) : label.toLowerCase()}`;
     }
@@ -125,12 +152,19 @@ function messageDetail(value: unknown): string | undefined {
   if (typeof value === "string") return isFilled(value.trim()) ? truncate(value.trim()) : undefined;
   if (typeof value !== "object" || value === null) return undefined;
   const { content, embeds } = value as { content?: unknown; embeds?: unknown };
-  if (typeof content === "string" && content.trim() !== "") return truncate(content.trim().replace(/\s+/g, " "));
+  if (typeof content === "string" && worded(content)) return truncate(content.trim().replace(/\s+/g, " "));
   if (Array.isArray(embeds) && embeds.length > 0) {
     const title = (embeds[0] as { title?: unknown } | undefined)?.title;
-    return typeof title === "string" && title.trim() !== "" ? truncate(title.trim()) : embeds.length === 1 ? "Embed" : `${embeds.length} embeds`;
+    if (typeof title === "string" && worded(title)) return truncate(title.trim());
+    // Text made only of placeholders and mentions says nothing until it is sent.
+    return typeof content === "string" && content.trim() !== "" ? undefined : embeds.length === 1 ? "Embed" : `${embeds.length} embeds`;
   }
   return undefined;
+}
+
+/** Whether some text says something of its own, beyond placeholders such as {user} and mentions. */
+function worded(text: string): boolean {
+  return text.replace(/\{[^{}\s]+\}|<[@#][!&]?[0-9]+>/g, "").trim() !== "";
 }
 
 function choiceLabel(field: FieldDescriptor, value: unknown): string | undefined {

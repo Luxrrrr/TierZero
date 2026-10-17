@@ -36,7 +36,9 @@ export function TagInput({
     for (const candidate of candidates) {
       const tag = candidate.trim();
       if (!tag) continue;
-      if (values.includes(tag) || additions.includes(tag)) continue;
+      // "Spam" and "spam" are the same word to whoever typed them.
+      const lower = tag.toLowerCase();
+      if ([...values, ...additions].some((existing) => existing.toLowerCase() === lower)) continue;
       if (max !== undefined && values.length + additions.length >= max) break;
       additions.push(tag);
     }

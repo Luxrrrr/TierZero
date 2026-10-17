@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import { AlertIcon } from "../Icons";
+import { errorSentence } from "../../lib/field-error";
 
 /**
  * Everything a control needs in order to be labelled and described correctly,
@@ -17,6 +18,8 @@ export interface FieldChrome {
 interface Props {
   id: string;
   label: string;
+  /** The card around the field already shows this label, so it is kept for screen readers only. */
+  labelHidden?: boolean;
   help?: string;
   /** A quiet line under the control: a range, a character count, a ceiling. */
   hint?: ReactNode;
@@ -33,6 +36,8 @@ interface Props {
   layout?: "stacked" | "row" | "compact";
   /** Makes the field take a whole row of a `.form-grid`. */
   span?: boolean;
+  /** A small control beside the label, such as a link back to the default. */
+  action?: ReactNode;
   /**
    * False where the field holds a list or a set of rows rather than one
    * control, since a label has nothing to point at then.
@@ -44,6 +49,7 @@ interface Props {
 export function Field({
   id,
   label,
+  labelHidden = false,
   help,
   hint,
   dependency,
@@ -53,6 +59,7 @@ export function Field({
   layout = "stacked",
   span = false,
   labelFor = true,
+  action,
   children,
 }: Props) {
   const labelId = `${id}-label`;
@@ -73,26 +80,41 @@ export function Field({
     </>
   );
 
-  const labelElement = labelFor ? (
-    <label className="field-label" id={labelId} htmlFor={id}>
+  const labelClass = labelHidden ? "field-label visually-hidden" : "field-label";
+  const bareLabel = labelFor ? (
+    <label className={labelClass} id={labelId} htmlFor={id}>
       {labelContent}
     </label>
   ) : (
-    <span className="field-label" id={labelId}>
+    <span className={labelClass} id={labelId}>
       {labelContent}
     </span>
+  );
+  const labelElement = action ? (
+    <div className="field-label-row">
+      {bareLabel}
+      {action}
+    </div>
+  ) : (
+    bareLabel
   );
 
   const errorLine = error ? (
     <p className="field-error" id={errorId} role="alert">
       <AlertIcon />
-      {error}
+      {errorSentence(error)}
     </p>
   ) : null;
 
   if (layout === "row" || layout === "compact") {
     return (
-      <div className={layout === "compact" ? "field-row field-row-compact" : "field-row"} data-disabled={disabled ? "true" : undefined}>
+      <div
+        className={[layout === "compact" ? "field-row field-row-compact" : "field-row", span ? "field-span" : ""].filter(Boolean).join(" ")}
+        data-disabled={disabled ? "true" : undefined}
+        // Marked like a stacked field, so a refused switch or message is the
+        // one the page scrolls to and focuses.
+        data-invalid={error ? "true" : undefined}
+      >
         <div className="field-row-text">
           {labelElement}
           {help ? (

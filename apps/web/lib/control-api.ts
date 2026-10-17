@@ -2,7 +2,9 @@
 // from route handlers and server components, both of which run on the
 // server, so the secret never reaches anything shipped to the browser.
 
-import type { MessageBody, ModuleCategory, ResponseTemplate, RowDescription, RowStatus } from "@tier0/core";
+import type { MessageBody, ModuleCategory, ModuleNotice, ResponseTemplate, RowDescription, RowStatus } from "@tier0/core";
+import type { PublicLeaderboard } from "./leaderboard";
+import { failureFromBody, plainSystemText } from "./bot-errors";
 
 export interface FieldValidationError {
   path: string;
@@ -16,8 +18,8 @@ export class ControlApiError extends Error {
     /**
      * The per-field validation errors from a 400, when the response body was
      * shaped as one. Kept apart from `message` so a route handler can forward
-     * them to the dashboard. Flattening them into a single string loses the
-     * the settings form has no field to attach them to.
+     * them to the dashboard: flattened into one string, they would leave the
+     * settings form nothing to show under each field.
      */
     public readonly fieldErrors?: FieldValidationError[],
     options?: ErrorOptions,
@@ -33,6 +35,8 @@ export interface BotGuildSummary {
   /** Discord's icon hash, not a URL: see `guildIconUrl`. Null without one. */
   icon: string | null;
   memberCount: number;
+  /** What the bot may do server-wide, by Discord's permission names. Null when the bot has not said. */
+  permissions?: string[] | null;
 }
 
 export interface BotChannel {
@@ -89,33 +93,19 @@ function isTimeout(error: unknown): boolean {
   return error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError");
 }
 
-async function readJson<T>(res: Response, context: string): Promise<T> {
+/**
+ * The bot refuses with `{ error }` or, for settings, `{ errors: [{ path, message }] }`.
+ * Either way the message that travels on is one an owner can read; the bot's
+ * own wording is kept only when it already is a sentence, and what it was is
+ * still in the bot's log.
+ */
+async function readJson<T>(res: Response, _context: string): Promise<T> {
   if (!res.ok) {
     const text = await res.text().catch(() => "");
-    const fieldErrors = parseFieldErrors(text);
-    const message = fieldErrors
-      ? `The bot's control API rejected ${context} (${res.status}).`
-      : text || `The bot's control API rejected ${context} (${res.status}).`;
-    throw new ControlApiError(res.status, message, fieldErrors);
+    const failure = failureFromBody(res.status, text);
+    throw new ControlApiError(res.status, failure.message, failure.fieldErrors);
   }
   return (await res.json()) as T;
-}
-
-/** The bot reports validation failures as `{ errors: [{ path, message }] }`. */
-function parseFieldErrors(text: string): FieldValidationError[] | undefined {
-  try {
-    const body = JSON.parse(text) as { errors?: unknown };
-    if (!Array.isArray(body.errors)) return undefined;
-    return body.errors.filter((e): e is FieldValidationError => isFieldError(e));
-  } catch {
-    return undefined;
-  }
-}
-
-function isFieldError(value: unknown): value is FieldValidationError {
-  if (typeof value !== "object" || value === null) return false;
-  const candidate = value as Partial<FieldValidationError>;
-  return typeof candidate.path === "string" && typeof candidate.message === "string";
 }
 
 export async function listBotGuilds(): Promise<BotGuildSummary[]> {
@@ -140,9 +130,11 @@ export interface GuildModuleState {
   /** Which dashboard section this module's card is grouped under. */
   category: ModuleCategory;
   /** The part of the dashboard that hosts this module's settings, when it is not its own page. */
-  area: "moderation" | null;
+  area: "moderation" | "tickets" | null;
   /** Part of the bot itself: on everywhere, with no switch, and left out of the feature lists. */
   alwaysOn: boolean;
+  /** Discord permissions the feature cannot work without, by Discord's names. */
+  requires?: string[];
   enabled: boolean;
   settings: Record<string, unknown>;
   schema: Record<string, unknown>;
@@ -162,6 +154,8 @@ export interface GuildCommandState {
   allowRoles: string[];
   /** Empty means it works in every channel. */
   denyChannels: string[];
+  /** When not empty, the only channels it works in. */
+  allowChannels?: string[];
   /** The permission bits Discord needs a member to have to see it. Null means everyone. */
   defaultPermissions: string | null;
   /** True when the command answers privately unless an owner changes it. */
@@ -176,6 +170,25 @@ export interface GuildCommandState {
   ephemeral: boolean | null;
   /** The reply the owner wrote, sent in place of the command's own, or null to keep it. */
   customReply: MessageBody | null;
+  /** The parts of a slash command that has them, such as /ticket close. Absent from an older bot. */
+  subcommands?: GuildSubcommandState[];
+}
+
+/**
+ * One part of a command. Discord shows every part to anyone who can see the
+ * command, so these are enforced by the bot, which refuses a part that is off
+ * or limited with a message.
+ */
+export interface GuildSubcommandState {
+  /** As typed after the command: `close`, or `tag add` inside a group. */
+  name: string;
+  /** The override key, the command and the part: `ticket close`. */
+  key: string;
+  description: string;
+  enabled: boolean;
+  allowRoles: string[];
+  denyChannels: string[];
+  allowChannels: string[];
 }
 
 export async function getGuildModules(guildId: string): Promise<GuildModuleState[]> {
@@ -215,14 +228,39 @@ export async function updateGuildCommand(
   return readJson<unknown>(res, "the command update");
 }
 
+/** What the bot last registered with Discord for a server. */
+export interface CommandSyncStatus {
+  registered: number | null;
+  pending: boolean;
+  failed: string | null;
+}
+
+export async function getCommandSync(guildId: string): Promise<CommandSyncStatus> {
+  const res = await controlFetch(`/guilds/${encodeURIComponent(guildId)}/command-sync`);
+  return readJson<CommandSyncStatus>(res, "the command status");
+}
+
 export async function reloadGuild(guildId: string): Promise<void> {
   const res = await controlFetch(`/guilds/${encodeURIComponent(guildId)}/reload`, {
     method: "POST",
   });
   if (!res.ok && res.status !== 202) {
     const body = await res.text().catch(() => "");
-    throw new ControlApiError(res.status, body || `The bot rejected the reload request (${res.status}).`);
+    throw new ControlApiError(res.status, failureFromBody(res.status, body).message);
   }
+}
+
+export interface BotEmoji {
+  id: string;
+  name: string;
+  animated: boolean;
+  url: string;
+}
+
+/** The server's own custom emoji, for the emoji picker. */
+export async function getGuildEmojis(guildId: string): Promise<BotEmoji[]> {
+  const res = await controlFetch(`/guilds/${encodeURIComponent(guildId)}/emojis`);
+  return readJson<BotEmoji[]>(res, "the emoji list");
 }
 
 export interface RowActionOutcome {
@@ -258,7 +296,9 @@ export async function runRowAction(
       body: JSON.stringify({ input }),
     },
   );
-  return readJson<RowActionOutcome>(res, "the action");
+  const outcome = await readJson<RowActionOutcome>(res, "the action");
+  // A module's answer can carry a raw network error from whatever it called.
+  return { ...outcome, message: plainSystemText(String(outcome.message ?? "")) };
 }
 
 const MOD_TIMEOUT_MS = 15_000;
@@ -330,4 +370,62 @@ export async function messagesRequest(
     return {};
   });
   return { status: res.status, body };
+}
+
+/** What the ticket routes send as a file rather than JSON: the transcript downloads. */
+const TICKET_FILE_TYPES = ["text/html", "text/plain"];
+
+/**
+ * Calls the ticket workspace's part of the control API. Like `modRequest`, the
+ * bot's own answer comes back with its status, so a refusal reaches the page in
+ * the bot's words. A transcript comes back as a file.
+ */
+export async function ticketsRequest(
+  guildId: string,
+  path: string,
+  init: { method?: string; body?: unknown; timeoutMs?: number } = {},
+): Promise<ModReply> {
+  const res = await controlFetch(`/guilds/${encodeURIComponent(guildId)}/tickets/${path}`, {
+    method: init.method ?? "GET",
+    headers: init.body === undefined ? undefined : { "content-type": "application/json" },
+    body: init.body === undefined ? undefined : JSON.stringify(init.body),
+    signal: AbortSignal.timeout(init.timeoutMs ?? MOD_TIMEOUT_MS),
+  });
+  const contentType = res.headers.get("content-type") ?? "";
+  const timedOut = (error: unknown) => {
+    if (isTimeout(error)) throw new ControlApiError(504, "The bot took too long to answer. Try again in a moment.");
+  };
+  if (res.ok && TICKET_FILE_TYPES.some((type) => contentType.startsWith(type))) {
+    const text = await res.text().catch((error: unknown) => {
+      timedOut(error);
+      return "";
+    });
+    return { status: res.status, body: null, file: { text, contentType, disposition: res.headers.get("content-disposition") } };
+  }
+  const body: unknown = await res.json().catch((error: unknown) => {
+    timedOut(error);
+    return {};
+  });
+  return { status: res.status, body };
+}
+
+/**
+ * One page of a server's public leaderboard, or null when the server has not
+ * switched the page on. Called for visitors who are not signed in, so it is
+ * kept to the bot's read-only route and a short timeout.
+ */
+export async function getPublicLeaderboard(guildId: string, page: number): Promise<PublicLeaderboard | null> {
+  const res = await controlFetch(`/guilds/${encodeURIComponent(guildId)}/leaderboard?page=${page}`, {
+    signal: AbortSignal.timeout(8_000),
+  });
+  if (res.status === 404) return null;
+  return readJson<PublicLeaderboard>(res, "the leaderboard");
+}
+
+/** The lines a module shows above its settings, which depend on what this server has saved. */
+export async function getModuleNotices(guildId: string, moduleId: string): Promise<ModuleNotice[]> {
+  const res = await controlFetch(`/guilds/${encodeURIComponent(guildId)}/modules/${encodeURIComponent(moduleId)}/notices`, {
+    signal: AbortSignal.timeout(5_000),
+  });
+  return (await readJson<{ notices: ModuleNotice[] }>(res, "the notices")).notices;
 }

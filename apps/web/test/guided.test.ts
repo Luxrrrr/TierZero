@@ -8,6 +8,7 @@ import {
   guidedPaths,
   guidedProjection,
   hasGuidedSetup,
+  isEssential,
 } from "../lib/guided.ts";
 
 /**
@@ -162,5 +163,53 @@ describe("availableFlows", () => {
   test("leaves the exported flows alone", () => {
     availableFlows(["tickets"]);
     assert.deepEqual(flowById("moderation")?.modules, ["moderation", "automod"]);
+  });
+});
+
+describe("essential sets in the quick setup", () => {
+  const welcome = {
+    kind: "object",
+    fields: {
+      join: {
+        kind: "object",
+        fields: {
+          channel: { kind: "channel", label: "Channel to greet in", essential: "target" },
+          roles: { kind: "array", label: "Roles to give", of: { kind: "role" }, essential: "target" },
+          note: { kind: "string", label: "Note" },
+        },
+      },
+    },
+  } as never;
+
+  test("asks about every member of a set", () => {
+    assert.deepEqual(guidedPaths(welcome), ["join.channel", "join.roles"]);
+    assert.equal(isEssential({ kind: "channel", essential: "target" } as never), true);
+    assert.equal(isEssential({ kind: "channel", essential: "" } as never), false);
+    assert.equal(isEssential({ kind: "channel" } as never), false);
+  });
+});
+
+describe("a group's summary in the quick setup", () => {
+  const automod = {
+    kind: "object",
+    fields: {
+      invites: {
+        kind: "object",
+        collapsible: true,
+        summary: ["actions", "timeoutDuration"],
+        fields: {
+          enabled: { kind: "boolean", label: "On", guided: true },
+          actions: { kind: "array", label: "What to do", of: { kind: "choice", options: [] } },
+          timeoutDuration: { kind: "duration", label: "Timeout length", default: "10m" },
+        },
+      },
+    },
+  } as never;
+
+  test("carries the settings its summary is built from, without asking about them", () => {
+    const projected = guidedProjection(automod);
+    const invites = (projected?.fields as Record<string, { fields: object; summaryFields?: object }>).invites;
+    assert.deepEqual(Object.keys(invites.fields), ["enabled"]);
+    assert.deepEqual(Object.keys(invites.summaryFields ?? {}), ["actions", "timeoutDuration"]);
   });
 });

@@ -1,16 +1,21 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { FieldDescriptor } from "@tier0/core";
 import { SettingsForm, Switch } from "./form";
+import type { ExtraSection } from "./form/SectionedSettings";
 import { CommandRow } from "./CommandRow";
 import { AlertIcon, InfoIcon, SetupIcon } from "./Icons";
 import { useToast } from "./Toaster";
-import { moduleStatus } from "../lib/module-status";
+import { missingSentence, moduleStatus } from "../lib/module-status";
 import { hasGuidedSetup } from "../lib/guided";
-import { statusWord, type ModuleView } from "../lib/module-view";
+import { type ModuleView } from "../lib/module-view";
+import { settingsSections } from "../lib/settings-sections";
+import { readFailure, UNREACHABLE } from "../lib/bot-errors";
+import { errorsStillValid } from "../lib/field-error";
+import { useUnsavedGuard } from "../lib/unsaved-guard";
 
 interface Props {
   guildId: string;
@@ -24,31 +29,55 @@ interface Props {
    * callouts, form, commands and save bar stay exactly as they are.
    */
   embedded?: boolean;
+  /** Drawn between the status callouts and the form, for what a hosting area knows that the schema does not. */
+  lead?: ReactNode;
+  /**
+   * Drawn at the top of the named parts of a split settings page. Given the
+   * draft, so what it shows follows the edits, and whether the draft is
+   * saved, since the bot only knows what is.
+   */
+  sectionIntro?(draft: {
+    settings: Record<string, unknown>;
+    dirty: boolean;
+    enabled: boolean;
+    /** Replaces the draft, as an edit in the form would, for a part that edits settings in its own way. */
+    update(next: Record<string, unknown>): void;
+  }): Record<string, ReactNode>;
+  /** Extra parts of a split settings page, after the schema's own. */
+  extraSections?: ExtraSection[];
+  /** Drawn under the list of commands, inside the same card. */
+  commandsFooter?: ReactNode;
 }
 
 type SaveState = "idle" | "saving" | "error";
 
-interface FieldError {
-  path: string;
-  message: string;
-}
-
-const BADGE_CLASS = {
-  on: "badge badge-on",
-  off: "badge badge-off",
-  attention: "badge badge-attention",
-} as const;
-
-export function ModulePage({ guildId, serverName, eyebrow, module, embedded = false }: Props) {
+export function ModulePage({
+  guildId,
+  serverName,
+  eyebrow,
+  module,
+  embedded = false,
+  lead,
+  sectionIntro,
+  extraSections = [],
+  commandsFooter,
+}: Props) {
   const router = useRouter();
   const { push } = useToast();
 
   const [enabled, setEnabled] = useState(module.enabled);
   const [togglePending, setTogglePending] = useState(false);
+  // What the switch should end up as, and what the bot last confirmed. Rapid
+  // presses only move the first; one request at a time carries it to the bot.
+  const wantedEnabled = useRef(module.enabled);
+  const confirmedEnabled = useRef(module.enabled);
+  const toggling = useRef(false);
 
   const [settings, setSettings] = useState<Record<string, unknown>>(module.settings);
   const [saved, setSaved] = useState<Record<string, unknown>>(module.settings);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  // The draft the bot refused, which its field errors are about.
+  const [refused, setRefused] = useState<Record<string, unknown> | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
   const [state, setState] = useState<SaveState>("idle");
   const [revision, setRevision] = useState(0);
@@ -56,7 +85,12 @@ export function ModulePage({ guildId, serverName, eyebrow, module, embedded = fa
 
   const formRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => setEnabled(module.enabled), [module.enabled]);
+  useEffect(() => {
+    if (toggling.current) return;
+    setEnabled(module.enabled);
+    wantedEnabled.current = module.enabled;
+    confirmedEnabled.current = module.enabled;
+  }, [module.enabled]);
 
   useEffect(() => {
     const mac = /Mac|iPhone|iPad|iPod/.test(navigator.userAgent);
@@ -66,6 +100,7 @@ export function ModulePage({ guildId, serverName, eyebrow, module, embedded = fa
   const dirty = JSON.stringify(settings) !== JSON.stringify(saved);
   const errorCount = Object.keys(errors).length;
   const status = moduleStatus(enabled, module.missing);
+  const hasSettings = Object.keys((module.schema as { fields?: object }).fields ?? {}).length > 0;
   // Row actions and statuses are the bot's answer about what it has saved, so
   // they say nothing useful about edits it has not seen yet.
   const actionsLocked = dirty
@@ -74,51 +109,59 @@ export function ModulePage({ guildId, serverName, eyebrow, module, embedded = fa
       ? null
       : "Turn this feature on first";
   const guided = hasGuidedSetup(module.schema as unknown as FieldDescriptor);
+  // A split page lists the commands as one more part of it, where they are
+  // found the same way as everything else, rather than under every part.
+  const split = settingsSections(module.schema as unknown as FieldDescriptor) !== null;
 
-  const save = useCallback(async () => {
+  const save = useCallback(async (): Promise<boolean> => {
     setState("saving");
     setErrors({});
+    setRefused(null);
     setFailure(null);
+    const sent = settings;
     try {
       const res = await fetch(`/api/guilds/${guildId}/modules/${module.id}`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ settings }),
+        body: JSON.stringify({ settings: sent }),
       });
 
       if (!res.ok) {
-        const body = (await res.json().catch(() => ({}))) as {
-          error?: string;
-          errors?: FieldError[];
-        };
-        if (body.errors?.length) {
+        const refusal = await readFailure(res);
+        if (refusal.fieldErrors?.length) {
           const next: Record<string, string> = {};
-          for (const entry of body.errors) next[entry.path] = entry.message;
+          for (const entry of refusal.fieldErrors) next[entry.path] = entry.message;
           setErrors(next);
+          setRefused(sent);
         } else {
-          setFailure(body.error ?? "The bot did not accept these settings. Try again.");
+          setFailure(refusal.message);
         }
         setState("error");
-        return;
+        return false;
       }
 
-      setSaved(settings);
+      setSaved(sent);
       setRevision((count) => count + 1);
       setState("idle");
       push({ kind: "success", title: "Saved. The bot is already using the new settings." });
       router.refresh();
+      return true;
     } catch {
-      setFailure("The dashboard could not be reached. Check your connection, then try again.");
+      setFailure(UNREACHABLE);
       setState("error");
+      return false;
     }
   }, [guildId, module.id, push, router, settings]);
 
-  useEffect(() => {
-    if (!dirty) return;
-    const warn = (event: BeforeUnloadEvent) => event.preventDefault();
-    window.addEventListener("beforeunload", warn);
-    return () => window.removeEventListener("beforeunload", warn);
-  }, [dirty]);
+  const discard = useCallback(() => {
+    setSettings(saved);
+    setErrors({});
+    setRefused(null);
+    setFailure(null);
+    setState("idle");
+  }, [saved]);
+
+  const guard = useUnsavedGuard({ dirty, onSave: save, onDiscard: discard });
 
   // Claimed even when there is nothing to save: the browser's own Save Page
   // dialog is never what someone on a settings page meant.
@@ -151,46 +194,96 @@ export function ModulePage({ guildId, serverName, eyebrow, module, embedded = fa
     target?.focus({ preventScroll: true });
   }, [errors, errorCount]);
 
+  /**
+   * The switch answers at once; the bot hears only where it ends up. Each
+   * request carries the latest wanted state, and a press made while one is in
+   * flight is sent after it, so answers arriving out of order cannot leave the
+   * switch and the bot disagreeing, and the page reloads once at the end.
+   */
   async function toggle(next: boolean) {
+    wantedEnabled.current = next;
     setEnabled(next);
+    if (toggling.current) return;
+    toggling.current = true;
     setTogglePending(true);
+    let changed = false;
     try {
-      const res = await fetch(`/api/guilds/${guildId}/modules/${module.id}`, {
-        method: "PATCH",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ enabled: next }),
-      });
-      if (!res.ok) {
-        const body = (await res.json().catch(() => ({}))) as { error?: string };
-        setEnabled(!next);
-        push({
-          kind: "error",
-          title: `${module.name} is still ${next ? "off" : "on"}`,
-          detail: body.error ?? "The bot did not accept the change. Check it is running, then try again.",
-        });
-        return;
+      while (wantedEnabled.current !== confirmedEnabled.current) {
+        const target = wantedEnabled.current;
+        let res: Response;
+        try {
+          res = await fetch(`/api/guilds/${guildId}/modules/${module.id}`, {
+            method: "PATCH",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ enabled: target }),
+          });
+        } catch {
+          refuseToggle(target, UNREACHABLE);
+          break;
+        }
+        if (!res.ok) {
+          refuseToggle(target, (await readFailure(res)).message);
+          break;
+        }
+        confirmedEnabled.current = target;
+        changed = true;
       }
-      router.refresh();
-    } catch {
-      setEnabled(!next);
-      push({
-        kind: "error",
-        title: `${module.name} is still ${next ? "off" : "on"}`,
-        detail: "The dashboard could not be reached. Check your connection, then try again.",
-      });
     } finally {
+      toggling.current = false;
       setTogglePending(false);
     }
+    if (changed) router.refresh();
+  }
+
+  function refuseToggle(target: boolean, detail: string) {
+    wantedEnabled.current = confirmedEnabled.current;
+    setEnabled(confirmedEnabled.current);
+    push({ kind: "error", title: `${module.name} is still ${target ? "off" : "on"}`, detail });
   }
 
   const barState = state === "saving" ? "saving" : state === "error" ? "error" : "dirty";
+
+  function changeDraft(next: Record<string, unknown>) {
+    setSettings(next);
+    // A field error is the bot's verdict on the value it was sent, so
+    // it goes once that value is edited; the others stay until a save
+    // the bot accepts. A failure that named no field is about the
+    // attempt, not the draft, so the next edit starts clean.
+    const remaining = refused ? errorsStillValid(errors, refused, next) : {};
+    if (Object.keys(remaining).length !== errorCount) setErrors(remaining);
+    if (state === "error" && Object.keys(remaining).length === 0) {
+      setFailure(null);
+      setRefused(null);
+      setState("idle");
+    }
+  }
+
+  const commandsCard = (
+    <section className="card module-commands">
+      <div className="card-header">
+        <div className="card-header-text">
+          <h2 className="card-title">Commands</h2>
+          <p className="card-help">
+            These come with this feature. Turn one off to remove it from
+            Discord on this server, or limit who can use it and where.
+          </p>
+        </div>
+      </div>
+      <ul className="command-list">
+        {module.commands.map((command) => (
+          <CommandRow key={command.name} guildId={guildId} command={command} />
+        ))}
+      </ul>
+      {commandsFooter}
+    </section>
+  );
 
   const controls = (
     <div className="page-actions">
       {guided ? (
         <Link className="btn btn-secondary btn-sm" href={`/guilds/${guildId}/${module.id}/setup`}>
           <SetupIcon />
-          Walk me through it
+          Quick setup
         </Link>
       ) : null}
       {module.alwaysOn ? (
@@ -198,7 +291,8 @@ export function ModulePage({ guildId, serverName, eyebrow, module, embedded = fa
         <span className="badge badge-on">Always on</span>
       ) : (
         <>
-          <span className={BADGE_CLASS[status]}>{statusWord(status)}</span>
+          {/* The switch already says On or Off; the badge is only for what it cannot say. */}
+          {status === "attention" ? <span className="badge badge-attention">Needs setup</span> : null}
           <span className="switch-labelled">
             <span className="switch-text">{enabled ? "On" : "Off"}</span>
             <Switch
@@ -239,13 +333,13 @@ export function ModulePage({ guildId, serverName, eyebrow, module, embedded = fa
             <div className="callout callout-attention">
               <AlertIcon />
               <div>
-                Turned on, but it will not do anything until you set:{" "}
-                {module.missing.map((entry) => entry.label).join(", ")}.
+                Turned on, but it will not do anything until you set{" "}
+                {missingSentence(module.missing)}.
                 {guided ? (
                   <>
                     {" "}
                     <Link href={`/guilds/${guildId}/${module.id}/setup`}>
-                      Have the wizard ask you
+                      Open the quick setup
                     </Link>
                     .
                   </>
@@ -265,51 +359,39 @@ export function ModulePage({ guildId, serverName, eyebrow, module, embedded = fa
         </div>
       ) : null}
 
-      <div ref={formRef}>
-        <SettingsForm
-          schema={module.schema as unknown as FieldDescriptor}
-          value={settings}
-          guildId={guildId}
-          serverName={serverName}
-          errors={errors}
-          disabled={state === "saving"}
-          moduleId={module.id}
-          rows={module.rows}
-          actionsLocked={actionsLocked}
-          dirty={dirty}
-          savedRevision={revision}
-          onChange={(next) => {
-            setSettings(next);
-            // A failure that named no field is about the attempt, not the
-            // draft, so the next edit starts clean. Field errors stay until
-            // the bot accepts a save, since only it can say they are gone.
-            if (state === "error" && errorCount === 0) {
-              setFailure(null);
-              setState("idle");
-            }
-          }}
-        />
-      </div>
+      {lead}
 
-      {module.commands.length > 0 ? (
+      {guard.host}
+
+      {hasSettings ? (
+        <div ref={formRef}>
+          <SettingsForm
+            schema={module.schema as unknown as FieldDescriptor}
+            value={settings}
+            guildId={guildId}
+            serverName={serverName}
+            errors={errors}
+            disabled={state === "saving"}
+            moduleId={module.id}
+            rows={module.rows}
+            actionsLocked={actionsLocked}
+            dirty={dirty}
+            savedRevision={revision}
+            sectionIntro={sectionIntro?.({ settings, dirty, enabled, update: changeDraft })}
+            extraSections={
+              split && module.commands.length > 0
+                ? [...extraSections, { id: "commands", label: "Commands", content: commandsCard }]
+                : extraSections
+            }
+            onChange={changeDraft}
+          />
+        </div>
+      ) : null}
+
+      {module.commands.length > 0 && !split ? (
         <>
-          <div className="divider" />
-          <section className="card">
-            <div className="card-header">
-              <div className="card-header-text">
-                <h2 className="card-title">Commands</h2>
-                <p className="card-help">
-                  These come with this feature. Turn one off to remove it from
-                  Discord on this server, or limit who can use it and where.
-                </p>
-              </div>
-            </div>
-            <ul className="command-list">
-              {module.commands.map((command) => (
-                <CommandRow key={command.name} guildId={guildId} command={command} />
-              ))}
-            </ul>
-          </section>
+          {hasSettings ? <div className="divider" /> : null}
+          {commandsCard}
         </>
       ) : null}
 
@@ -336,12 +418,7 @@ export function ModulePage({ guildId, serverName, eyebrow, module, embedded = fa
               type="button"
               className="btn btn-ghost"
               disabled={state === "saving"}
-              onClick={() => {
-                setSettings(saved);
-                setErrors({});
-                setFailure(null);
-                setState("idle");
-              }}
+              onClick={discard}
             >
               Discard
             </button>

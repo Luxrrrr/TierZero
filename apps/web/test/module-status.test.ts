@@ -1,6 +1,6 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { isBlank, missingEssentials, moduleStatus } from "../lib/module-status.ts";
+import { isBlank, isSetForGroup, joinOr, missingEssentials, missingSentence, moduleStatus } from "../lib/module-status.ts";
 
 /**
  * The schema arrives from the bot as plain JSON, so the fixtures here are
@@ -100,6 +100,70 @@ describe("missingEssentials", () => {
   });
 });
 
+describe("essential sets", () => {
+  /** Welcome-shaped: any one of a channel, roles or a switched-on DM gives it something to do. */
+  const welcomeSchema = {
+    kind: "object",
+    fields: {
+      join: {
+        kind: "object",
+        fields: {
+          channel: { kind: "channel", label: "Channel to greet in", essential: "target" },
+          roles: { kind: "array", label: "Roles to give", of: { kind: "role" }, essential: "target" },
+          sendDm: { kind: "boolean", label: "Direct message", default: false, essential: "target" },
+        },
+      },
+      leave: {
+        kind: "object",
+        fields: { channel: { kind: "channel", label: "Farewell channel", essential: "target" } },
+      },
+    },
+  } as never;
+
+  test("names the whole set once when none of it is filled in", () => {
+    const missing = missingEssentials(welcomeSchema, { join: { roles: [], sendDm: false }, leave: {} });
+    assert.equal(missing.length, 1);
+    assert.equal(missing[0]?.path, "join.channel");
+    assert.deepEqual(missing[0]?.anyOf, ["Channel to greet in", "Roles to give", "Direct message", "Farewell channel"]);
+    assert.equal(missing[0]?.label, "Channel to greet in, Roles to give, Direct message or Farewell channel");
+  });
+
+  test("is satisfied by any one member, wherever it sits", () => {
+    assert.deepEqual(missingEssentials(welcomeSchema, { leave: { channel: "123456789012345678" } }), []);
+    assert.deepEqual(missingEssentials(welcomeSchema, { join: { roles: ["223456789012345678"] } }), []);
+  });
+
+  test("counts a switch only while it is on", () => {
+    assert.deepEqual(missingEssentials(welcomeSchema, { join: { sendDm: true } }), []);
+    assert.equal(missingEssentials(welcomeSchema, { join: { sendDm: false } }).length, 1);
+    assert.equal(isSetForGroup(false), false);
+    assert.equal(isSetForGroup(true), true);
+    assert.equal(isSetForGroup(0), true);
+  });
+
+  test("keeps separate sets apart and alongside single essentials", () => {
+    const schema = {
+      kind: "object",
+      fields: {
+        log: { kind: "channel", label: "Log channel", essential: true },
+        news: { kind: "array", label: "News feeds", essential: "feeds" },
+        steam: { kind: "array", label: "Steam games", essential: "feeds" },
+        menus: { kind: "array", label: "Role menus", essential: "menus" },
+      },
+    } as never;
+    const missing = missingEssentials(schema, { news: [{}] });
+    assert.deepEqual(missing.map((entry) => entry.label), ["Log channel", "Role menus"]);
+    assert.equal(missingSentence(missing), "Log channel, and one of Role menus");
+  });
+
+  test("words the sentence for one set and for single settings", () => {
+    assert.equal(joinOr(["A"]), "A");
+    assert.equal(joinOr(["A", "B"]), "A or B");
+    assert.equal(missingSentence([{ path: "a", label: "Log channel" }, { path: "b", label: "Category" }]), "Log channel, Category");
+    assert.equal(missingSentence([{ path: "a", label: "A or B", anyOf: ["A", "B"] }]), "one of A or B");
+  });
+});
+
 describe("moduleStatus", () => {
   test("is off whatever is missing, while the module is off", () => {
     assert.equal(moduleStatus(false, []), "off");
@@ -112,5 +176,20 @@ describe("moduleStatus", () => {
 
   test("is on when it is on and configured", () => {
     assert.equal(moduleStatus(true, []), "on");
+  });
+});
+
+describe("essential sets of group switches", () => {
+  test("names each group by its own label rather than its switch's", () => {
+    const schema = {
+      kind: "object",
+      fields: {
+        invites: { kind: "object", label: "Invite links", fields: { enabled: { kind: "boolean", label: "On", essential: "rules" } } },
+        links: { kind: "object", label: "Links", fields: { enabled: { kind: "boolean", label: "On", essential: "rules" } } },
+      },
+    } as never;
+    const [missing] = missingEssentials(schema, { invites: { enabled: false }, links: { enabled: false } });
+    assert.equal(missing?.label, "Invite links or Links");
+    assert.deepEqual(missingEssentials(schema, { invites: { enabled: true } }), []);
   });
 });

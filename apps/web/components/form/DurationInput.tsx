@@ -17,6 +17,8 @@ interface Props {
   onChange(next: string | undefined): void;
   /** The ceiling the schema declares, written as "28d". */
   max?: string;
+  /** The floor the schema declares, written as "1m". */
+  min?: string;
   /** Names the unit select, which has no visible label of its own. */
   label: string;
   disabled?: boolean;
@@ -32,13 +34,14 @@ export function DurationInput({
   value,
   onChange,
   max,
+  min,
   label,
   disabled = false,
   "aria-describedby": describedBy,
 }: Props) {
   const initial = formatDuration(value);
   const [unit, setUnit] = useState<DurationUnit>(initial.unit);
-  const [amount, setAmount] = useState(initial.amount === 0 ? "" : String(initial.amount));
+  const [amount, setAmount] = useState(amountText(value));
   const [seen, setSeen] = useState<unknown>(value);
 
   const emitted = amount === "" ? undefined : `${Number(amount)}${unit}`;
@@ -52,12 +55,14 @@ export function DurationInput({
     if (toMilliseconds(value) !== toMilliseconds(emitted)) {
       const parts = formatDuration(value);
       setUnit(parts.unit);
-      setAmount(parts.amount === 0 ? "" : String(parts.amount));
+      setAmount(amountText(value));
     }
   }
 
   const ceiling = toMilliseconds(max);
   const maxAmount = ceiling === null ? undefined : Math.floor(ceiling / unitMilliseconds(unit));
+  const floor = toMilliseconds(min);
+  const minAmount = floor === null ? 0 : Math.max(0, Math.ceil(floor / unitMilliseconds(unit)));
 
   function update(nextAmount: string, nextUnit: DurationUnit) {
     setAmount(nextAmount);
@@ -71,7 +76,7 @@ export function DurationInput({
         id={id}
         type="number"
         inputMode="numeric"
-        min={1}
+        min={minAmount}
         max={maxAmount}
         step={1}
         value={amount}
@@ -89,4 +94,14 @@ export function DurationInput({
       />
     </div>
   );
+}
+
+/**
+ * The number shown in the box. Zero is a value someone chose, so it shows as
+ * 0; only a duration that is not set at all leaves the box empty.
+ */
+function amountText(value: unknown): string {
+  const ms = toMilliseconds(value);
+  if (ms === null) return "";
+  return String(formatDuration(value).amount);
 }

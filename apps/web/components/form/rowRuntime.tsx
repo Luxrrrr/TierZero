@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import type { RowStatus } from "@tier0/core";
 import { useToast } from "../Toaster";
+import { readFailure, UNREACHABLE } from "../../lib/bot-errors";
 
 /**
  * The parts of a list row that talk to the bot: the status line it can report
@@ -22,12 +23,18 @@ interface StatusArgs {
   /** The list's indexed path, as validation errors are keyed. */
   listPath: string;
   enabled: boolean;
+  /**
+   * There are edits the bot has not seen, so asking it again would answer
+   * about the saved rows. What is on screen stays, and the caller marks it as
+   * possibly out of date.
+   */
+  paused?: boolean;
   /** Changes whenever a save lands, so the lines are asked for again. */
   revision: number;
 }
 
 /** Fetched on mount, after a save and on request; never on a timer. */
-export function useRowStatuses({ guildId, moduleId, listPath, enabled, revision }: StatusArgs) {
+export function useRowStatuses({ guildId, moduleId, listPath, enabled, paused = false, revision }: StatusArgs) {
   const [state, setState] = useState<StatusState>({ phase: "off" });
   const [requested, setRequested] = useState(0);
 
@@ -36,6 +43,7 @@ export function useRowStatuses({ guildId, moduleId, listPath, enabled, revision 
       setState({ phase: "off" });
       return;
     }
+    if (paused) return;
 
     let current = true;
     // A line already on screen stays put while its replacement is fetched.
@@ -58,7 +66,7 @@ export function useRowStatuses({ guildId, moduleId, listPath, enabled, revision 
     return () => {
       current = false;
     };
-  }, [guildId, moduleId, listPath, enabled, revision, requested]);
+  }, [guildId, moduleId, listPath, enabled, paused, revision, requested]);
 
   const refresh = useCallback(() => setRequested((count) => count + 1), []);
   return { state, refresh };
@@ -75,7 +83,6 @@ interface RunnerArgs {
   onFinished(): void;
 }
 
-const UNREACHABLE = "The dashboard could not be reached. Check your connection, then try again.";
 
 export function useRowActionRunner({ guildId, moduleId, onFinished }: RunnerArgs) {
   const { push } = useToast();
@@ -111,12 +118,8 @@ export function useRowActionRunner({ guildId, moduleId, onFinished }: RunnerArgs
         }
 
         if (!res.ok) {
-          const body = (await res.json().catch(() => ({}))) as { error?: string };
-          push({
-            kind: "error",
-            title: `${action.label} did not run`,
-            detail: body.error ?? "The bot did not accept the request. Check it is running, then try again.",
-          });
+          const refusal = await readFailure(res);
+          push({ kind: "error", title: `${action.label} did not run`, detail: refusal.message });
           return { kind: "failed" };
         }
 
@@ -139,15 +142,18 @@ export function useRowActionRunner({ guildId, moduleId, onFinished }: RunnerArgs
 
 const TONE_DOT = { ok: "on", problem: "problem", idle: undefined } as const;
 
-export function RowStatusLine({ status }: { status: RowStatus | "loading" }) {
+const STALE = "This was true when last saved and may change once you save.";
+
+export function RowStatusLine({ status, stale = false }: { status: RowStatus | "loading"; stale?: boolean }) {
   if (status === "loading") {
     return <span className="skeleton row-status-skeleton" aria-hidden="true" />;
   }
   return (
-    <span className="row-status" data-tone={status.tone}>
+    <span className="row-status" data-tone={status.tone} data-stale={stale ? "true" : undefined}>
       <span className="dot" data-status={TONE_DOT[status.tone]} aria-hidden="true" />
-      <span className="row-status-text" title={status.text}>
+      <span className="row-status-text" title={stale ? `${status.text}. ${STALE}` : status.text}>
         {status.text}
+        {stale ? <span className="visually-hidden">. {STALE}</span> : null}
       </span>
     </span>
   );
@@ -220,7 +226,7 @@ export function RowActionPanel({
           onClick={() => void submit()}
         >
           {running ? <span className="spinner" aria-hidden="true" /> : null}
-          Run
+          {action.label}
         </button>
       </div>
     </div>

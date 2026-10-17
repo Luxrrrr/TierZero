@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import type { FieldDescriptor, RowDescription } from "@tier0/core";
 import { describeDuration } from "../../lib/duration";
 import { arrayItemPath } from "../../lib/schema-paths";
@@ -39,7 +39,11 @@ interface Props {
   disabled: boolean;
   "aria-labelledby"?: string;
   rows: RowsContext | undefined;
+  /** Every row starts open, as the quick setup wants. */
+  openRows?: boolean;
   newItem(): unknown;
+  /** A copy of a row for Duplicate, with fresh ids where the row carries any. */
+  copyItem?(item: unknown): unknown;
   invalidAt(index: number): boolean;
   onChange(next: unknown[]): void;
   renderRow(item: unknown, index: number): ReactNode;
@@ -75,6 +79,7 @@ interface ViewProps extends Props {
 
 function ListView({
   guildId,
+  path,
   items,
   itemFields,
   itemLabel,
@@ -83,6 +88,7 @@ function ListView({
   disabled,
   "aria-labelledby": labelledBy,
   newItem,
+  copyItem,
   invalidAt,
   onChange,
   renderRow,
@@ -90,6 +96,7 @@ function ListView({
   headerActions,
   panel,
   onRowRemoved,
+  openRows = false,
 }: ViewProps) {
   const labels = useRowLabels(guildId, itemFields);
   return (
@@ -100,7 +107,10 @@ function ListView({
       itemLabel={itemLabel}
       disabled={disabled}
       aria-labelledby={labelledBy}
+      listPath={path}
+      startOpen={openRows}
       newItem={newItem}
+      copyItem={copyItem}
       describe={(entry) => summarizeRow(asRecord(entry), itemFields, labels)}
       invalidAt={invalidAt}
       headerStatus={headerStatus}
@@ -128,9 +138,16 @@ function LiveList(props: LiveProps) {
     guildId,
     moduleId,
     listPath: path,
-    enabled: description.status && !dirty,
+    enabled: description.status,
+    paused: dirty,
     revision,
   });
+  // The bot's statuses are by position in the saved list. While there are
+  // edits, a row keeps the status of the saved row it still matches exactly,
+  // shown as possibly out of date, so moving rows does not move statuses onto
+  // the wrong row and an edited row shows none.
+  const savedRows = useRef<string[]>([]);
+  if (!dirty) savedRows.current = props.items.map((item) => JSON.stringify(item));
   const runner = useRowActionRunner({ guildId, moduleId, onFinished: statuses.refresh });
   const [open, setOpen] = useState<{ index: number; actionId: string } | null>(null);
 
@@ -163,8 +180,13 @@ function LiveList(props: LiveProps) {
     ? (index: number) => {
         if (statuses.state.phase === "loading") return <RowStatusLine status="loading" />;
         if (statuses.state.phase !== "ready") return null;
-        const status = statuses.state.statuses[index];
-        return status ? <RowStatusLine status={status} /> : null;
+        if (!dirty) {
+          const status = statuses.state.statuses[index];
+          return status ? <RowStatusLine status={status} /> : null;
+        }
+        const at = savedRows.current.indexOf(JSON.stringify(props.items[index]));
+        const status = at === -1 ? null : statuses.state.statuses[at];
+        return status ? <RowStatusLine status={status} stale /> : null;
       }
     : undefined;
 
@@ -248,25 +270,31 @@ function LiveList(props: LiveProps) {
  * field of that kind.
  */
 function useRowLabels(guildId: string, fields: Fields): RowLabels {
-  const kinds = Object.values(fields).map((field) => field.kind);
-  const { channels } = useChannels(guildId, kinds.includes("channel"));
-  const { roles } = useRoles(guildId, kinds.includes("role"));
+  // A list of roles or channels is named in the summary too, so it needs the same lookups.
+  const kinds = Object.values(fields).map((field) =>
+    field.kind === "array" ? ((field.of as FieldDescriptor | undefined)?.kind ?? "array") : field.kind,
+  );
+  const { channels, failed: channelsFailed } = useChannels(guildId, kinds.includes("channel"));
+  const { roles, failed: rolesFailed } = useRoles(guildId, kinds.includes("role"));
 
   return useMemo<RowLabels>(() => {
     const channelNames = new Map(channels.map((channel) => [channel.id, channel.name]));
     const roleNames = new Map(roles.map((role) => [role.id, role.name]));
+    // A list that failed to load says nothing about whether the saved one still exists.
     return {
       channel: (id) => {
         const name = channelNames.get(id);
-        return name === undefined ? "unknown channel" : `#${name}`;
+        if (name !== undefined) return `#${name}`;
+        return channelsFailed ? "a saved channel" : "unknown channel";
       },
       role: (id) => {
         const name = roleNames.get(id);
-        return name === undefined ? "unknown role" : `@${name}`;
+        if (name !== undefined) return `@${name}`;
+        return rolesFailed ? "a saved role" : "unknown role";
       },
       duration: describeDuration,
     };
-  }, [channels, roles]);
+  }, [channels, roles, channelsFailed, rolesFailed]);
 }
 
 function asRecord(value: unknown): Record<string, unknown> {

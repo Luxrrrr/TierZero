@@ -41,9 +41,34 @@ interface SharedProps {
   emptyText?: string;
   /** A standing note under the list, such as why a row cannot be picked. */
   footer?: ReactNode;
+  /**
+   * The list could not be loaded. A stored value is then shown by its id
+   * rather than as deleted, nothing can be picked or cleared, and the failure
+   * is said under the control with a way to try again.
+   */
+  failed?: boolean;
+  failedText?: string;
+  onRetry?(): void;
+  /** How to name a stored value while the list is unavailable. */
+  unloadedLabel?(value: string): string;
   "aria-labelledby"?: string;
   "aria-describedby"?: string;
 }
+
+function FailedLine({ text, onRetry }: { text: string; onRetry?: () => void }) {
+  return (
+    <p className="picker-failed" role="status">
+      <span>{text}</span>
+      {onRetry ? (
+        <button type="button" className="link-button" onClick={onRetry}>
+          Try again
+        </button>
+      ) : null}
+    </p>
+  );
+}
+
+const DEFAULT_FAILED = "The list could not be loaded.";
 
 interface SingleProps extends SharedProps {
   /** Shows the search box. Turn it off for a short list that fits on screen. */
@@ -82,6 +107,10 @@ export function Combobox({
   searchPlaceholder = "Search",
   emptyText = "Nothing matches that.",
   footer,
+  failed = false,
+  failedText = DEFAULT_FAILED,
+  onRetry,
+  unloadedLabel,
   "aria-labelledby": labelledBy,
   "aria-describedby": describedBy,
 }: SingleProps) {
@@ -98,9 +127,12 @@ export function Combobox({
 
   const selected = options.find((option) => option.value === value);
   const listOptions = useMemo(() => {
+    // With the list missing, the clear row would be the only thing on offer,
+    // and one stray click on it would wipe a setting that works.
+    if (failed) return [];
     if (!clearable || value === undefined) return options;
     return [{ value: CLEAR, label: clearLabel, icon: <XIcon /> }, ...options];
-  }, [clearable, clearLabel, options, value]);
+  }, [clearable, clearLabel, failed, options, value]);
 
   return (
     <div className={wide ? "combobox combobox-wide" : "combobox"} ref={rootRef}>
@@ -130,6 +162,8 @@ export function Combobox({
               {selected.icon}
               <span className="combobox-option-text">{selected.label}</span>
             </>
+          ) : value !== undefined && failed ? (
+            <span className="combobox-option-text">{unloadedLabel ? unloadedLabel(value) : value}</span>
           ) : value !== undefined && missingLabel ? (
             <span className="combobox-option-text">{missingLabel}</span>
           ) : (
@@ -139,15 +173,17 @@ export function Combobox({
         <ChevronDownIcon className="combobox-chevron" />
       </button>
 
+      {failed ? <FailedLine text={failedText} onRetry={onRetry} /> : null}
+
       {open ? (
         <Popup
           options={listOptions}
           selectedValues={value === undefined ? [] : [value]}
-          searchable={searchable}
+          searchable={searchable && !failed}
           searchLabel={searchLabel}
           searchPlaceholder={searchPlaceholder}
-          emptyText={emptyText}
-          footer={footer}
+          emptyText={failed ? failedText : emptyText}
+          footer={failed ? undefined : footer}
           onPick={(picked) => {
             onChange(picked === CLEAR ? undefined : picked);
             close(true);
@@ -188,6 +224,10 @@ export function MultiCombobox({
   searchPlaceholder = "Search",
   emptyText = "Nothing matches that.",
   footer,
+  failed = false,
+  failedText = DEFAULT_FAILED,
+  onRetry,
+  unloadedLabel,
   "aria-labelledby": labelledBy,
   "aria-describedby": describedBy,
 }: MultiProps) {
@@ -218,7 +258,8 @@ export function MultiCombobox({
         {values.length === 0 && emptyLabel ? <span className="faint">{emptyLabel}</span> : null}
         {values.map((selectedValue) => {
           const option = byValue.get(selectedValue);
-          const label = option?.label ?? missingLabel;
+          const label =
+            option?.label ?? (failed ? (unloadedLabel ? unloadedLabel(selectedValue) : selectedValue) : missingLabel);
           return (
             <span className="chip" key={selectedValue}>
               {option?.icon}
@@ -260,15 +301,17 @@ export function MultiCombobox({
       </div>
 
       {atCapacity ? <p className="field-hint">Maximum of {max}.</p> : null}
+      {failed ? <FailedLine text={failedText} onRetry={onRetry} /> : null}
 
       {open ? (
         <Popup
-          options={available}
+          options={failed ? [] : available}
           selectedValues={[]}
+          searchable={!failed}
           searchLabel={searchLabel}
           searchPlaceholder={searchPlaceholder}
-          emptyText={available.length === 0 ? "Everything is already added." : emptyText}
-          footer={footer}
+          emptyText={failed ? failedText : available.length === 0 ? "Everything is already added." : emptyText}
+          footer={failed ? undefined : footer}
           onPick={(picked) => {
             onChange([...values, picked]);
             if (max !== undefined && values.length + 1 >= max) close(true);
@@ -380,6 +423,8 @@ function Popup({
         event.preventDefault();
         const option = visible[active];
         if (option && !option.disabled) onPick(option.value);
+        // Nothing to pick: an open list left behind would sit over whatever is below it.
+        else if (visible.length === 0) onClose(true);
         break;
       }
       case "Escape":

@@ -1698,6 +1698,127 @@ html:not([data-theme="light"]):not([data-theme="dark"]) .theme-toggle [data-them
   opacity: 0.55;
 }
 
+/* A settings page split into parts by the schema's `section`s. The list of
+   parts sits beside the form when there is room for both and runs across the
+   top otherwise; the decision follows the room the page has, not the window,
+   since a hosting area may put its own columns around it. */
+
+.settings-sectioned {
+  container-type: inline-size;
+  min-width: 0;
+}
+
+.settings-sectioned-grid {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  min-width: 0;
+}
+
+.settings-nav ul {
+  display: flex;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.settings-nav ul::-webkit-scrollbar {
+  display: none;
+}
+
+.settings-nav a {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  min-height: 2.25rem;
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  font-size: var(--text-base);
+  font-weight: 500;
+  white-space: nowrap;
+  transition:
+    background-color var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out);
+}
+
+.settings-nav a:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+  text-decoration: none;
+}
+
+.settings-nav a[aria-current="true"] {
+  background: var(--accent-soft);
+  color: var(--text);
+  font-weight: 600;
+  box-shadow: inset 2px 0 0 var(--focus);
+}
+
+.settings-nav-errors {
+  display: inline-grid;
+  place-items: center;
+  min-width: 1.25rem;
+  height: 1.25rem;
+  padding: 0 0.3rem;
+  border-radius: var(--radius-full);
+  background: var(--danger-soft);
+  color: var(--danger);
+  font-size: var(--text-2xs);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.settings-sections {
+  min-width: 0;
+}
+
+.settings-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  min-width: 0;
+}
+
+.settings-section[hidden] {
+  display: none;
+}
+
+@container (min-width: 46rem) {
+  .settings-sectioned-grid {
+    display: grid;
+    grid-template-columns: 11.5rem minmax(0, 1fr);
+    align-items: start;
+    gap: var(--space-6);
+  }
+
+  .settings-nav {
+    position: sticky;
+    top: var(--space-6);
+  }
+
+  .settings-nav ul {
+    flex-direction: column;
+    overflow: visible;
+  }
+}
+
+@container (max-width: 45.99rem) {
+  .settings-nav {
+    margin-inline: calc(var(--space-1) * -1);
+    border-bottom: 1px solid var(--border);
+    padding-bottom: var(--space-2);
+  }
+
+  .settings-nav a[aria-current="true"] {
+    box-shadow: inset 0 -2px 0 var(--focus);
+  }
+}
+
 .settings-group-body[hidden] {
   display: none;
 }
@@ -4811,6 +4932,12 @@ html:not([data-theme="light"]):not([data-theme="dark"]) .theme-toggle [data-them
     margin-bottom: var(--space-6);
   }
 
+  /* The quick setup button, the status and the switch do not fit one row of a 320px screen. */
+  .module-bar .page-actions {
+    flex-wrap: wrap;
+    max-width: 100%;
+  }
+
   .sidebar-toggle {
     display: none;
   }
@@ -7658,6 +7785,670 @@ html[data-sidebar="collapsed"] .nav-more-body[hidden] {
   }
 }
 
+/* What a feature adds under a message ------------------------------------- */
+/* The buttons or menu drawn under a preview, in Discord's colours because they
+   picture what members see, but real controls: each opens a small editor. */
+
+.message-compact-main {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.message-compact-main .message-compact-text {
+  flex: none;
+}
+
+/* With buttons under it the row grows tall, so its parts line up at the top rather than float in the middle. */
+.field-row-compact:has(.message-compact-attached),
+.message-compact:has(.message-compact-attached) {
+  align-items: flex-start;
+}
+
+.message-compact-attached {
+  padding: 8px 10px;
+  border-radius: var(--radius-md);
+  background: #313338;
+}
+
+.message-compact-attached .msg-buttons {
+  margin-top: 0;
+}
+
+.message-control-frame {
+  width: min(100%, 36rem);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: var(--radius-lg);
+  background: #313338;
+  overflow: hidden;
+}
+
+.message-control-frame .message-control-preview {
+  width: 100%;
+  border-radius: 0;
+}
+
+.message-control-frame .msg-preview {
+  border: 0;
+  border-radius: 0;
+  padding-bottom: 0;
+}
+
+/* Lined up under the message text, past the avatar, as Discord draws them. */
+.message-control-attached {
+  padding: 0 16px 14px 62px;
+}
+
+.msg-attach {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  color: #dbdee1;
+}
+
+.msg-attach-button {
+  cursor: pointer;
+  transition:
+    filter var(--duration-fast) var(--ease-out),
+    box-shadow var(--duration-fast) var(--ease-out);
+}
+
+.msg-attach-button:hover:not(:disabled) {
+  filter: brightness(1.12);
+}
+
+.msg-attach-button[aria-expanded="true"] {
+  box-shadow: 0 0 0 2px #313338, 0 0 0 4px var(--accent);
+}
+
+.msg-attach-button[data-invalid="true"],
+.msg-attach-option[data-invalid="true"] {
+  box-shadow: 0 0 0 2px #313338, 0 0 0 4px var(--danger);
+}
+
+.msg-attach-button:focus-visible,
+.msg-attach-option:focus-visible,
+.msg-attach-select:focus-visible,
+.msg-attach-add:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.msg-attach-add {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 4px 12px;
+  border: 1px dashed rgba(255, 255, 255, 0.28);
+  border-radius: 3px;
+  background: transparent;
+  color: #b5bac1;
+  font-size: var(--text-sm);
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.msg-attach-add:hover:not(:disabled) {
+  border-color: rgba(255, 255, 255, 0.5);
+  color: #fff;
+}
+
+.msg-attach-add:disabled {
+  cursor: default;
+}
+
+.msg-attach-add[data-full="true"] {
+  border-style: solid;
+  border-color: rgba(255, 255, 255, 0.12);
+  color: #949ba4;
+}
+
+.msg-attach-add--block {
+  align-self: flex-start;
+}
+
+.msg-attach-add svg {
+  width: 14px;
+  height: 14px;
+}
+
+.msg-attach-select {
+  width: 100%;
+  cursor: pointer;
+  text-align: left;
+}
+
+.msg-attach-select svg {
+  flex: none;
+  width: 16px;
+  height: 16px;
+}
+
+.msg-attach-select:hover:not(:disabled),
+.msg-attach-select[aria-expanded="true"] {
+  border-color: #4e5058;
+}
+
+/* The menu's options, drawn open beneath it the way Discord shows them once picked from. */
+.msg-attach-options {
+  display: flex;
+  flex-direction: column;
+  max-width: 24rem;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  border: 1px solid #1e1f22;
+  border-radius: 4px;
+  background: #2b2d31;
+}
+
+.msg-attach-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px;
+  border-radius: 3px;
+  color: #dbdee1;
+  font-size: var(--text-sm);
+  text-align: left;
+  cursor: pointer;
+}
+
+.msg-attach-option:hover:not(:disabled),
+.msg-attach-option[aria-expanded="true"] {
+  background: #35373c;
+}
+
+.msg-attach-option-text {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.msg-attach-option-text small {
+  color: #949ba4;
+  font-size: var(--text-xs);
+}
+
+.msg-attach-pencil {
+  flex: none;
+  width: 13px;
+  height: 13px;
+  color: #949ba4;
+  opacity: 0;
+}
+
+.msg-attach-option:hover .msg-attach-pencil,
+.msg-attach-option:focus-visible .msg-attach-pencil,
+.msg-attach-option[aria-expanded="true"] .msg-attach-pencil {
+  opacity: 1;
+}
+
+.msg-attach-options li > .attach-pop {
+  margin: 4px 0 8px;
+}
+
+/* The small editor that opens from a button or an option. Dashboard colours,
+   since it is part of the dashboard rather than the picture of Discord. */
+.attach-pop {
+  position: relative;
+  margin-top: 4px;
+  max-width: 26rem;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow-lg);
+}
+
+
+.attach-pop-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-4);
+  border-bottom: 1px solid var(--border);
+}
+
+.attach-pop-title {
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.attach-pop-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-4);
+}
+
+.attach-pop-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.attach-pop-label-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.attach-pop-input-narrow {
+  max-width: 10rem;
+}
+
+.attach-swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.attach-swatch {
+  min-height: 30px;
+  padding: 2px 12px;
+  border: 0;
+  cursor: pointer;
+}
+
+.attach-swatch[aria-checked="true"] {
+  box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--accent);
+}
+
+.attach-swatch:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 4px;
+}
+
+.attach-pop-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border);
+}
+
+.attach-pop-spacer {
+  flex: 1 1 auto;
+}
+
+@media (max-width: 640px) {
+  .message-control-attached {
+    padding-left: 16px;
+  }
+}
+
+/* Message lists and field lists ------------------------------------------- */
+/* A group drawn with `layout: "messages"` is one searchable list of rows under
+   plain headings; one with `layout: "fields"` is labelled inputs in two
+   columns. Both replace a stack of accordions. */
+
+.msl {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+.msl-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.msl-toolbar .search {
+  position: relative;
+  flex: 1 1 18rem;
+  max-width: 24rem;
+}
+
+.msl-topic {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.msl-topic-head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.msl-topic-title,
+.topic-fields-title {
+  margin: 0;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.msl-topic-help,
+.topic-fields-help {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--text-tertiary);
+}
+
+.msl-rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.msl-rows[hidden] {
+  display: none;
+}
+
+.msl-item + .msl-item {
+  border-top: 1px solid var(--border);
+}
+
+.msl-item[data-invalid="true"] {
+  box-shadow: inset 3px 0 0 var(--danger);
+}
+
+.msl-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+}
+
+.msl-what {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.msl-title-line {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.msl-title {
+  font-size: var(--text-md);
+  font-weight: 600;
+  color: var(--text);
+}
+
+.msl-audience {
+  flex: none;
+  font-size: var(--text-2xs);
+  font-weight: 500;
+  color: var(--text-tertiary);
+}
+
+.msl-when {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--text-tertiary);
+  text-wrap: pretty;
+}
+
+.msl-wording {
+  margin: 0;
+  overflow: hidden;
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.msl-wording[data-default="true"] {
+  color: var(--text-tertiary);
+}
+
+.msl-var {
+  display: inline-block;
+  margin: 0 1px;
+  padding: 0 5px;
+  border-radius: var(--radius-sm);
+  background: var(--accent-soft);
+  font: 500 var(--text-xs) var(--font-mono);
+  line-height: 1.5;
+  color: var(--text);
+  vertical-align: baseline;
+}
+
+.msl-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-3);
+}
+
+.msl-badge {
+  flex: none;
+  min-width: 5.75rem;
+  padding: 1px var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  font-size: var(--text-2xs);
+  font-weight: 600;
+  text-align: center;
+  color: var(--text-tertiary);
+}
+
+.msl-badge-custom {
+  border-color: var(--accent-ring);
+  background: var(--accent-soft);
+  color: var(--text);
+}
+
+.msl-reset {
+  font-size: var(--text-sm);
+}
+
+.msl-reset[aria-hidden="true"] {
+  visibility: hidden;
+}
+
+.msl-unused,
+.msl-error {
+  margin: 0;
+  padding: 0 var(--space-4) var(--space-3);
+  font-size: var(--text-sm);
+}
+
+.msl-unused {
+  color: var(--text-tertiary);
+}
+
+.msl-attached {
+  padding: 0 var(--space-4) var(--space-3);
+}
+
+.msl-attached .msg-attach {
+  display: inline-flex;
+  padding: 8px 10px;
+  border-radius: var(--radius-md);
+  background: #313338;
+}
+
+.msl-attached .msg-buttons {
+  margin-top: 0;
+}
+
+.msl-subs {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.msl-sub {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.msl-sub .msl-rows {
+  border: 0;
+  border-top: 1px solid var(--border);
+  border-radius: 0;
+}
+
+.msl-sub-heading {
+  margin: 0;
+  font-size: inherit;
+}
+
+.msl-sub-toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  padding: var(--space-3) var(--space-4);
+  border: 0;
+  background: var(--surface-2);
+  text-align: left;
+  font-size: var(--text-sm);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.msl-sub-toggle:hover:not(:disabled) {
+  background: var(--surface-3);
+}
+
+.msl-sub-toggle:disabled {
+  cursor: default;
+}
+
+.msl-sub-toggle:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
+}
+
+.msl-chevron {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  color: var(--text-tertiary);
+  transition: transform var(--duration-fast) var(--ease-out);
+}
+
+.msl-sub[data-open="true"] .msl-chevron {
+  transform: rotate(90deg);
+}
+
+.msl-sub-title {
+  font-weight: 600;
+}
+
+.msl-count {
+  padding: 1px 7px;
+  border-radius: var(--radius-full);
+  background: var(--surface-3);
+  font-size: var(--text-2xs);
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.msl-changed {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+}
+
+.msl-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding: var(--space-5);
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+
+.msl-empty p {
+  margin: 0;
+}
+
+.topic-fields {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.topic-fields + .topic-fields {
+  padding-top: var(--space-5);
+  border-top: 1px solid var(--border);
+}
+
+.topic-fields-help {
+  margin-top: calc(var(--space-2) * -1);
+}
+
+/* Lined up on their inputs, since a help line on one side would push it down. */
+.form-grid-two {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: end;
+}
+
+.template-inline {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.field-label-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.field-reset {
+  flex: none;
+  font-size: var(--text-xs);
+}
+
+@media (max-width: 900px) {
+  .msl-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .msl-wording {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+}
+
+@media (max-width: 640px) {
+  .form-grid-two {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .msl-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .msl-wording {
+    grid-row: auto;
+  }
+
+  .msl-actions {
+    justify-content: flex-start;
+  }
+}
+
 /* Bot messages page ------------------------------------------------------- */
 /* Cards for the features, then one feature as grouped one-line rows. A row is a
    dot for what the message is, its name, one line of what it says now, and the
@@ -8131,4 +8922,812 @@ html[data-sidebar="collapsed"] .nav-more-body[hidden] {
   .bm-prefix {
     display: none;
   }
+}
+
+/* Shared form: the leave dialog, picker failures, list order, emoji picker,
+   stale row statuses and the commands card on a phone. */
+
+.leave-layer {
+  z-index: 95;
+}
+
+.leave-dialog {
+  width: min(30rem, calc(100% - 2rem));
+}
+
+.leave-dialog .msg-dialog-body p {
+  color: var(--text-secondary);
+}
+
+.leave-dialog-foot {
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.picker-failed {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-1) var(--space-3);
+  margin-top: var(--space-2);
+  padding-left: var(--space-2);
+  border-left: 2px solid var(--attention);
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+}
+
+.list-item-order {
+  display: inline-flex;
+  gap: 2px;
+}
+
+.list-item-index[draggable="true"] {
+  cursor: grab;
+}
+
+.list-item-index[draggable="true"]:active {
+  cursor: grabbing;
+}
+
+.list-item[data-dragging="true"] {
+  opacity: 0.5;
+}
+
+.list-item[data-drop-target="before"] {
+  box-shadow: inset 0 2px 0 var(--focus);
+}
+
+.list-item[data-drop-target="after"] {
+  box-shadow: inset 0 -2px 0 var(--focus);
+}
+
+.list-item-foot {
+  flex-wrap: wrap;
+}
+
+/* A switch inside a list row reads as one line, not a narrow column. */
+.list-item-body .form-grid > .field-row {
+  grid-column: 1 / -1;
+}
+
+.row-status[data-stale="true"] {
+  opacity: 0.55;
+}
+
+.message-control-preview img[data-broken="true"] {
+  display: none;
+}
+
+.group-static-summary {
+  color: var(--text-tertiary);
+}
+
+.group-static-summary[data-off="true"] {
+  opacity: 0.6;
+}
+
+/* Long help on a folded group gets a second line instead of an ellipsis. On a
+   phone it stays hidden, as the rule above for narrow screens has it. */
+@media (min-width: 601px) {
+  .group-toggle-help {
+    display: -webkit-box;
+    white-space: normal;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+  }
+
+  .group-toggle-top {
+    align-items: flex-start;
+  }
+}
+
+.template-preview-empty {
+  font-size: var(--text-sm);
+  color: var(--text-tertiary);
+}
+
+.template-channel-preview {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  font-size: var(--text-sm);
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.template-channel-preview svg {
+  flex: none;
+  width: 1rem;
+  height: 1rem;
+  color: var(--text-tertiary);
+}
+
+/* The heading takes focus only so a screen reader hears the step change. */
+.wizard-title:focus,
+.wizard-title:focus-visible {
+  outline: none;
+}
+
+.emoji-field {
+  position: relative;
+  max-width: 24rem;
+}
+
+.emoji-field-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.emoji-field-row .emoji-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: var(--text-md, var(--text-sm));
+}
+
+.emoji-preview {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: var(--control-height);
+  height: var(--control-height);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  font-size: 1.25rem;
+  line-height: 1;
+}
+
+.emoji-preview img {
+  width: 1.25rem;
+  height: 1.25rem;
+  object-fit: contain;
+}
+
+.emoji-popover {
+  min-width: min(20rem, calc(100vw - 2rem));
+}
+
+.emoji-popover-body {
+  max-height: 18rem;
+  overflow-y: auto;
+  padding: var(--space-1) var(--space-2) var(--space-2);
+}
+
+.emoji-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(2.25rem, 1fr));
+  gap: 2px;
+  margin-bottom: var(--space-2);
+}
+
+.emoji-option {
+  display: inline-grid;
+  place-items: center;
+  height: 2.25rem;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  font-size: 1.25rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.emoji-option:hover,
+.emoji-option:focus-visible {
+  background: var(--surface-3);
+}
+
+.emoji-option img {
+  width: 1.5rem;
+  height: 1.5rem;
+  object-fit: contain;
+}
+
+/* On a phone the command's name and description get the width, with its
+   status, Customize and switch on a line of their own underneath. */
+@media (max-width: 36rem) {
+  .module-commands .command-head {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-2);
+  }
+
+  .module-commands .command-cell,
+  .module-commands .command-actions {
+    grid-column: 1;
+    grid-row: auto;
+  }
+
+  .module-commands .command-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+
+  .module-commands .command-status {
+    min-width: 0;
+    margin-right: auto;
+    text-align: left;
+  }
+
+  .list-item-order .btn-icon.btn-sm {
+    width: calc(var(--control-height-sm) - 0.25rem);
+  }
+}
+
+/* Server pages: commands, overview, quick setup hub, message creator, bot
+   messages, sign-in and the offline screen. */
+
+/* A feature that is off keeps its commands out of Discord, which the table says once per feature. */
+.cmd-feature-off {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+  padding: var(--space-3) var(--space-6);
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-2);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+
+.sheet-feature-off {
+  margin: 0 var(--space-7, 1.75rem) var(--space-5);
+  padding: var(--space-3) var(--space-4);
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-lg);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+
+/* On a phone a command's name and description get the whole width, with its
+   status and switch on the line underneath. */
+@media (max-width: 36rem) {
+  .cmd-cols {
+    display: none;
+  }
+
+  .cmd-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: var(--space-2) var(--space-3);
+    padding: var(--space-3) var(--space-4);
+  }
+
+  .cmd-row .cmd-tile,
+  .cmd-row .cmd-chevron {
+    display: none;
+  }
+
+  .cmd-row .cmd-cell-main {
+    grid-column: 1 / -1;
+  }
+
+  .cmd-row .cmd-status {
+    grid-column: 1;
+  }
+
+  .cmd-row .cmd-switch {
+    grid-column: 2;
+    justify-self: end;
+  }
+
+  .cmd-desc {
+    white-space: normal;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+  }
+
+  .cmd-group-label,
+  .cmd-feature-off {
+    padding-inline: var(--space-4);
+  }
+}
+
+/* Overview: what a feature is missing from Discord, and summaries read in full. */
+.module-tile-perms {
+  display: flex;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+  font-size: var(--text-xs);
+  line-height: 1.45;
+  color: var(--attention);
+}
+
+.module-tile-perms svg {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  margin-top: 2px;
+}
+
+.module-tile-summary {
+  display: block;
+  -webkit-line-clamp: unset;
+  line-clamp: unset;
+  overflow: visible;
+}
+
+@media (max-width: 30rem) {
+  .overview-stats {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--space-2);
+  }
+
+  .overview-stats .stat {
+    padding: var(--space-3);
+  }
+
+  .overview-stats .stat-value {
+    font-size: var(--text-lg);
+  }
+
+  .overview-stats .stat-label {
+    font-size: var(--text-2xs);
+  }
+}
+
+/* Your servers: the meta line wraps between its parts, never inside one. */
+.guild-card-meta {
+  flex-wrap: wrap;
+  row-gap: 0;
+}
+
+.guild-card-meta > span {
+  white-space: nowrap;
+}
+
+.sidebar-guild-icon svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* The folded rail can show two letters where features share a first one. */
+.nav-mono {
+  letter-spacing: -0.03em;
+}
+
+/* The phone drawer: the list scrolls above the account footer instead of under it. */
+@media (max-width: 900px) {
+  .sidebar-nav {
+    min-height: 0;
+    padding-bottom: var(--space-6);
+  }
+}
+
+/* Sign-in and first run carry the logo instead of a lettered tile. */
+.auth-mark:has(.mark) {
+  background: none;
+  box-shadow: none;
+}
+
+.auth-mark .mark {
+  width: 2.75rem;
+  height: 2.75rem;
+}
+
+/* Quick setup hub. */
+.setup-hub-section + .setup-hub-section {
+  margin-top: var(--space-10);
+}
+
+.flow-card-foot {
+  margin-top: auto;
+  padding-top: var(--space-2);
+}
+
+@media (max-width: 30rem) {
+  .setup-hub-section .section-title {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-1);
+  }
+}
+
+/* A heading that only receives focus from code, as a step does on load, needs no ring for a mouse user. */
+[tabindex="-1"]:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* Offline. */
+.bot-offline-retry {
+  font-size: var(--text-sm);
+  color: var(--text-tertiary);
+}
+
+/* Help: the shortcut list. */
+.help-shortcuts {
+  display: flex;
+  flex-direction: column;
+}
+
+.help-shortcuts > div {
+  display: grid;
+  grid-template-columns: minmax(9rem, 14rem) minmax(0, 1fr);
+  gap: var(--space-4);
+  padding: var(--space-3) var(--space-5);
+  border-bottom: 1px solid var(--border);
+}
+
+.help-shortcuts > div:last-child {
+  border-bottom: 0;
+}
+
+.help-shortcuts dd {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+
+.help-shortcuts kbd {
+  padding: 0 6px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  font: 500 var(--text-xs) var(--font-mono);
+  color: var(--text-secondary);
+}
+
+@media (max-width: 36rem) {
+  .help-shortcuts > div {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-1);
+    padding-inline: var(--space-4);
+  }
+}
+
+/* Message creator: the preview stays beside the editor down to a narrower
+   editor, and only stacks above it once there is no room for two columns. */
+@container msg-editor (min-width: 40rem) and (max-width: 58rem) {
+  .msg-workspace {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 18rem);
+  }
+
+  .msg-side {
+    position: sticky;
+    order: 0;
+  }
+}
+
+.msg-warning {
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--attention);
+  border-radius: var(--radius-lg);
+  background: var(--attention-soft, var(--surface-2));
+  font-size: var(--text-sm);
+}
+
+.msg-warning .msg-problems-title {
+  color: var(--attention);
+}
+
+.msg-warning ul {
+  margin-top: var(--space-1);
+  padding-left: var(--space-4);
+  list-style: disc;
+  color: var(--text-secondary);
+}
+
+.msg-mention-key {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-4);
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+}
+
+.msg-mention-key code {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+}
+
+.msg-inline-form {
+  flex-wrap: wrap;
+}
+
+.msg-inline-error {
+  flex-basis: 100%;
+  margin: 0;
+}
+
+.msg-schedules {
+  flex: none;
+  max-height: 16rem;
+  overflow-y: auto;
+  padding: var(--space-3) var(--space-4) var(--space-4);
+  border-top: 1px solid var(--border);
+}
+
+.msg-schedules ul {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.msg-schedule {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+
+.msg-schedule-text {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.msg-schedule-name {
+  overflow: hidden;
+  font-size: var(--text-sm);
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.msg-schedule-meta {
+  font-size: var(--text-2xs);
+  color: var(--text-tertiary);
+}
+
+.msg-schedule-error {
+  font-size: var(--text-2xs);
+  color: var(--danger);
+}
+
+.send-modes {
+  flex-wrap: wrap;
+}
+
+/* A picture the bot fills in when it sends, or one that would not load, drawn as a frame. */
+.msg-image-stand-in {
+  display: grid;
+  place-items: center;
+  border: 1px dashed rgba(255, 255, 255, 0.22);
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.04);
+  font-size: 11px;
+  color: #b5bac1;
+  text-align: center;
+}
+
+.msg-embed-image.msg-image-stand-in {
+  width: 100%;
+  height: 7rem;
+}
+
+.msg-embed-icon.msg-image-stand-in {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  font-size: 0;
+}
+
+.msg-embed-footer .msg-embed-icon.msg-image-stand-in {
+  width: 20px;
+  height: 20px;
+}
+
+/* Bot messages on a phone: the row's buttons drop under the name. */
+@media (max-width: 30rem) {
+  .bm-row {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .bm-text {
+    grid-column: 2;
+  }
+
+  .bm-actions {
+    grid-column: 2;
+    grid-row: 3;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+}
+
+.msg-sent-list {
+  margin-top: var(--space-4);
+}
+
+.msg-sent-items {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0 var(--space-5) var(--space-4);
+  list-style: none;
+}
+
+.msg-sent-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-2) 0;
+  border-top: 1px solid var(--border);
+}
+
+.msg-sent-item:first-child {
+  border-top: 0;
+}
+
+.msg-sent-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  font-size: var(--text-sm);
+}
+
+.msg-sent-text small {
+  font-size: var(--text-2xs);
+  color: var(--text-tertiary);
+}
+
+.msg-sent-tools {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.msg-sent-list .msg-empty,
+.msg-sent-list .field-error,
+.msg-sent-more {
+  margin: 0;
+  padding: 0 var(--space-5) var(--space-4);
+  font-size: var(--text-sm);
+  color: var(--text-tertiary);
+}
+/* Parts of a command (/ticket close): a toggle under the command's description,
+   above the row's stretched link so it keeps its own click. */
+.cmd-parts-toggle {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  align-self: flex-start;
+  margin-top: var(--space-1);
+  font-size: var(--text-2xs);
+  font-weight: 600;
+  color: var(--accent-text);
+}
+
+.cmd-parts-toggle .cmd-parts-chevron {
+  width: 0.875rem;
+  height: 0.875rem;
+  transform: rotate(-90deg);
+  transition: transform var(--duration-fast) var(--ease-out);
+}
+
+.cmd-parts-toggle[aria-expanded="true"] .cmd-parts-chevron {
+  transform: none;
+}
+
+.cmd-parts {
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-2);
+}
+
+.cmd-parts > ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.cmd-parts-note {
+  margin: 0;
+  padding: var(--space-2) var(--space-6);
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+}
+
+.cmd-part-row {
+  min-height: 3.25rem;
+  padding-left: calc(var(--space-6) + var(--space-6));
+}
+
+.cmd-table .cmd-parts > ul > li:last-child {
+  border-bottom: 0;
+}
+
+.cmd-tile[data-kind="part"] {
+  width: 1.75rem;
+  height: 1.75rem;
+  background: transparent;
+  color: var(--text-tertiary);
+}
+
+@media (max-width: 36rem) {
+  .cmd-parts-note {
+    padding-inline: var(--space-4);
+  }
+
+  .cmd-part-row {
+    padding-left: var(--space-6);
+  }
+}
+/* The parts of a command on a feature's own page. */
+.command-parts {
+  margin-top: var(--space-2);
+}
+
+.command-parts-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--text-xs);
+}
+
+.command-parts-toggle[aria-expanded="true"] .command-edit-chevron {
+  transform: rotate(180deg);
+}
+
+.command-parts .field-hint {
+  margin: var(--space-2) 0;
+}
+
+.command-part-list {
+  margin: 0;
+  padding: 0 0 0 var(--space-4);
+  border-left: 2px solid var(--border);
+  list-style: none;
+}
+
+.command-part {
+  padding: var(--space-2) 0;
+  border-top: 1px solid var(--border);
+}
+
+.command-part:first-child {
+  border-top: 0;
+}
+
+.command-part-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 12rem 13rem;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.command-part[data-off="true"] .command-name,
+.command-part[data-off="true"] .command-description {
+  color: var(--text-tertiary);
+}
+
+.command-part-panel {
+  display: grid;
+  gap: var(--space-3);
+}
+
+@media (max-width: 48rem) {
+  .command-part-head {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+
+/* Warnings past the warn expiry, beside the counts on the Members list. Quiet on purpose: they no longer count. */
+.members-expired {
+  color: var(--text-tertiary);
+  font-size: var(--text-2xs);
+  white-space: nowrap;
+}
+
+.msg-discard-ask {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-6);
+  border-top: 1px solid var(--border);
+  background: var(--bg-raised);
+  color: var(--text-primary);
+  font-size: var(--text-sm, 0.875rem);
 }

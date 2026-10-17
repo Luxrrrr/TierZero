@@ -20,6 +20,7 @@ export {
   type RoleList,
 } from "./RolePicker";
 export { DurationInput } from "./DurationInput";
+export { EmojiInput, useServerEmojis } from "./EmojiInput";
 export { TagInput } from "./TagInput";
 export { TemplateEditor } from "./TemplateEditor";
 export { ObjectList } from "./ObjectList";

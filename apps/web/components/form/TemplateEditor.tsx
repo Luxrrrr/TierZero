@@ -1,20 +1,30 @@
 "use client";
 
-import { Fragment, useRef, type ReactNode } from "react";
+import { useMemo, useRef } from "react";
+import { plainReply } from "@tier0/core";
+import { MessagePreview } from "../messages/MessagePreview";
+import { channelNamePreview, fillTemplate, sampleValues } from "../../lib/template-samples";
+import { HashIcon } from "../Icons";
 
 interface Props {
   id: string;
+  /** For the names of mentioned roles and channels in the preview. */
+  guildId: string;
   value: string;
   onChange(next: string): void;
   max?: number;
   placeholders: string[];
+  /** What the preview shows for each placeholder, from the schema's `samples`. */
+  samples?: Record<string, string>;
   /** Substituted for {server} in the preview. */
   serverName?: string;
+  /** `channel` previews the text as a channel name rather than as a message. */
+  preview?: "message" | "channel";
   disabled?: boolean;
+  /** One line with the insert buttons under it and no preview, for a list of short texts. */
+  inline?: boolean;
   "aria-describedby"?: string;
 }
-
-const PLACEHOLDER = /\{(\w+)\}/g;
 
 /**
  * A message body beside a mock-up of what Discord will show. The preview is
@@ -22,15 +32,23 @@ const PLACEHOLDER = /\{(\w+)\}/g;
  */
 export function TemplateEditor({
   id,
+  guildId,
   value,
   onChange,
   max = 2000,
   placeholders,
+  samples,
   serverName,
+  preview = "message",
   disabled = false,
+  inline = false,
   "aria-describedby": describedBy,
 }: Props) {
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement & HTMLInputElement>(null);
+  const context = useMemo(
+    () => ({ guildId, botName: "TierZero", variables: sampleValues(placeholders, samples, serverName) }),
+    [guildId, placeholders, samples, serverName],
+  );
 
   function insert(name: string) {
     const token = `{${name}}`;
@@ -51,20 +69,36 @@ export function TemplateEditor({
     });
   }
 
+  const box = inline ? (
+    <input
+      id={id}
+      ref={textareaRef}
+      className="input"
+      type="text"
+      maxLength={max}
+      value={value}
+      disabled={disabled}
+      aria-describedby={describedBy}
+      onChange={(event) => onChange(event.target.value)}
+    />
+  ) : (
+    <textarea
+      id={id}
+      ref={textareaRef}
+      className="textarea"
+      rows={4}
+      maxLength={max}
+      value={value}
+      disabled={disabled}
+      aria-describedby={describedBy}
+      onChange={(event) => onChange(event.target.value)}
+    />
+  );
+
   return (
-    <div className="template">
+    <div className={inline ? "template template-inline" : "template"}>
       <div className="template-editor">
-        <textarea
-          id={id}
-          ref={textareaRef}
-          className="textarea"
-          rows={4}
-          maxLength={max}
-          value={value}
-          disabled={disabled}
-          aria-describedby={describedBy}
-          onChange={(event) => onChange(event.target.value)}
-        />
+        {box}
         <div className="template-toolbar">
           {placeholders.length > 0 ? (
             <>
@@ -88,73 +122,23 @@ export function TemplateEditor({
         </div>
       </div>
 
-      <div className="template-preview">
-        <p className="template-preview-label">Preview</p>
-        <div className="dm">
-          <div className="dm-avatar" aria-hidden="true">
-            0
-          </div>
-          <div className="dm-content">
-            <div className="dm-head">
-              <span className="dm-author">TierZero</span>
-              <span className="dm-tag">App</span>
-              <span className="dm-time">Today at 9:41 AM</span>
-            </div>
-            {value ? (
-              <div className="dm-body">{render(value, serverName)}</div>
-            ) : (
-              <div className="dm-body is-empty">Nothing to preview yet.</div>
-            )}
-          </div>
+      {inline ? null : (
+        <div className="template-preview">
+          <p className="template-preview-label">Preview</p>
+          {value && preview === "channel" ? (
+            <p className="template-channel-preview">
+              <HashIcon />
+              <span>{channelNamePreview(fillTemplate(value, context.variables)) || "channel"}</span>
+            </p>
+          ) : value ? (
+            // The same drawing of a Discord message as every other preview, so
+            // markdown and mentions look the way members will see them.
+            <MessagePreview message={plainReply(value)} context={context} />
+          ) : (
+            <p className="template-preview-empty">Nothing to preview yet.</p>
+          )}
         </div>
-      </div>
+      )}
     </div>
   );
-}
-
-/** Sample values, so the preview reads like a real message rather than a form. */
-function render(value: string, serverName: string | undefined): ReactNode[] {
-  const parts: ReactNode[] = [];
-  let cursor = 0;
-  let key = 0;
-
-  for (const match of value.matchAll(PLACEHOLDER)) {
-    const index = match.index ?? 0;
-    const name = match[1];
-    if (index > cursor) parts.push(value.slice(cursor, index));
-    cursor = index + match[0].length;
-    key += 1;
-
-    switch (name) {
-      case "user":
-        parts.push(
-          <span className="dm-mention" key={key}>
-            @Alex
-          </span>,
-        );
-        break;
-      case "username":
-        parts.push(<Fragment key={key}>Alex</Fragment>);
-        break;
-      case "server":
-        parts.push(<Fragment key={key}>{serverName ?? "your server"}</Fragment>);
-        break;
-      case "memberCount":
-        parts.push(<Fragment key={key}>1,024</Fragment>);
-        break;
-      case "level":
-        parts.push(<Fragment key={key}>5</Fragment>);
-        break;
-      default:
-        parts.push(
-          <span className="dm-unknown" key={key}>
-            {match[0]}
-          </span>,
-        );
-        break;
-    }
-  }
-
-  if (cursor < value.length) parts.push(value.slice(cursor));
-  return parts;
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, type ReactNode } from "react";
-import type { FieldDescriptor, MessageBody, RowDescription } from "@tier0/core";
+import type { FieldDescriptor, FieldTopic, MessageAttach, MessageBody, RowDescription } from "@tier0/core";
 import { describeDuration, shortDuration } from "../lib/duration";
 import { conditionMet, type Condition } from "../lib/field-condition";
 import {
@@ -15,14 +15,21 @@ import {
   withOpen,
 } from "../lib/group-open";
 import { humanize, summarizeGroup } from "../lib/row-summary";
+import { getAt, groupByTopic, isChanged, listedFields, setAt, type ListedMessage } from "../lib/bot-messages";
+import { defaultsFor, isGenerated, makeRowId, withFreshIds } from "../lib/row-defaults";
 import { arrayItemPath, objectChildPath } from "../lib/schema-paths";
+import { settingsSections } from "../lib/settings-sections";
 // Imported one file at a time rather than through the barrel, which re-exports
 // this module in turn.
 import { ChannelPicker, MultiChannelPicker } from "./form/ChannelPicker";
 import { DurationInput } from "./form/DurationInput";
+import { EmojiInput } from "./form/EmojiInput";
 import { Field, type FieldChrome } from "./form/Field";
 import { MessageControl } from "./form/MessageControl";
 import { MultiChoice } from "./form/MultiChoice";
+import { SectionedSettings, type ExtraSection } from "./form/SectionedSettings";
+import { AttachedComponents } from "./form/AttachedComponents";
+import { MessageList } from "./form/MessageList";
 import { ChevronRightIcon } from "./Icons";
 import { ObjectArray, type RowsContext } from "./form/ObjectArray";
 import { MultiRolePicker, RolePicker } from "./form/RolePicker";
@@ -64,6 +71,22 @@ interface Props {
    * turns it off: it shows a few fields and wants all of them in view.
    */
   collapse?: boolean;
+  /**
+   * Whether a schema that names `section`s is split into them, with a
+   * navigation beside the form. The quick setup turns it off for the same
+   * reason as `collapse`.
+   */
+  sections?: boolean;
+  /**
+   * Whether the rows of a list start open. The quick setup turns it on: the
+   * few settings it asks about inside a row should be on screen, not one
+   * Edit button away.
+   */
+  openRows?: boolean;
+  /** Drawn at the top of a section, keyed by its id: a status line about what that part configures, say. */
+  sectionIntro?: Record<string, ReactNode>;
+  /** Entries of the page's own after the schema's sections, such as the feature's commands. */
+  extraSections?: ExtraSection[];
 }
 
 interface RenderContext {
@@ -72,6 +95,27 @@ interface RenderContext {
   disabled: boolean;
   serverName: string | undefined;
   rows: RowsContext | undefined;
+  openRows: boolean;
+  /** A top-level key whose label the card title already says, so the field keeps its own for screen readers only. */
+  hiddenLabel?: string;
+  /** The whole draft and the module's top-level fields, for a control that edits settings elsewhere, as an attached button does. */
+  root: Record<string, unknown>;
+  rootFields: Fields;
+  setRoot(next: Record<string, unknown>): void;
+  /**
+   * Drawn in a group with `layout: "fields"`: each changed setting offers a link
+   * back to its default, and a template is one line in its column.
+   */
+  listed?: boolean;
+}
+
+/** Where a field sits: the object beside it, so a control can read and write its siblings. */
+interface Place {
+  siblings: Record<string, unknown>;
+  siblingFields: Fields;
+  setSiblings(next: Record<string, unknown>): void;
+  /** The path of that object, as errors are keyed. */
+  parentPath: string;
 }
 
 type Fields = Record<string, FieldDescriptor>;
@@ -98,6 +142,10 @@ export function SettingsForm({
   dirty = false,
   savedRevision = 0,
   collapse = true,
+  sections = true,
+  openRows = false,
+  sectionIntro,
+  extraSections = [],
 }: Props) {
   const fields = (schema.fields ?? {}) as Fields;
   const entries = Object.entries(fields);
@@ -137,81 +185,120 @@ export function SettingsForm({
       moduleId !== undefined && rows !== undefined
         ? { moduleId, descriptions: rows, locked: actionsLocked, dirty, revision: savedRevision }
         : undefined,
+    openRows,
+    root: value,
+    rootFields: fields,
+    setRoot: onChange,
   };
 
-  const loose = entries.filter(([, field]) => field.kind !== "object");
-  const firstLooseKey = loose[0]?.[0];
+  const groupCards = (
+    subset: [string, FieldDescriptor][],
+    loose: { id: string; title: string; hideLoneLabel: boolean },
+  ): ReactNode[] => {
+    const looseEntries = subset.filter(([, field]) => field.kind !== "object");
+    const firstLooseKey = looseEntries[0]?.[0];
+    // A part of the page that is one list and nothing else, such as a list of
+    // panels, has its card named after the list rather than after the part.
+    const lone = loose.hideLoneLabel && looseEntries.length === 1 ? looseEntries[0] : undefined;
+    const looseTitle = lone ? (lone[1].label ?? humanize(lone[0])) : loose.title;
 
-  const sequence: { key: string; collapsible: boolean }[] = [];
-  for (const [key, field] of entries) {
-    if (field.kind !== "object") {
-      if (key === firstLooseKey) sequence.push({ key: "group-general", collapsible: false });
-      continue;
+    const sequence: { key: string; collapsible: boolean }[] = [];
+    for (const [key, field] of subset) {
+      if (field.kind !== "object") {
+        if (key === firstLooseKey) sequence.push({ key: loose.id, collapsible: false });
+        continue;
+      }
+      sequence.push({ key, collapsible: collapsibleKeys.includes(key) });
     }
-    sequence.push({ key, collapsible: collapsibleKeys.includes(key) });
-  }
-  const runStarts = new Map(collapsibleRuns(sequence).map((run) => [run[0], run] as const));
+    const runStarts = new Map(collapsibleRuns(sequence).map((run) => [run[0], run] as const));
 
-  const cards: ReactNode[] = [];
-  for (const [key, field] of entries) {
-    if (field.kind !== "object") {
-      // Everything that is not a group of its own shares one card, drawn where
-      // the first of them appears.
-      if (key !== firstLooseKey) continue;
-      cards.push(
-        <section className="card settings-group" id="group-general" key="group-general">
-          <div className="card-header">
-            <div className="card-header-text">
-              <h2 className="card-title" id="group-general-title">
-                {generalLabel}
-              </h2>
+    const cards: ReactNode[] = [];
+    for (const [key, field] of subset) {
+      if (field.kind !== "object") {
+        // Everything that is not a group of its own shares one card, drawn where
+        // the first of them appears.
+        if (key !== firstLooseKey) continue;
+        cards.push(
+          <section className="card settings-group" id={loose.id} key={loose.id}>
+            <div className="card-header">
+              <div className="card-header-text">
+                <h2 className="card-title" id={`${loose.id}-title`}>
+                  {looseTitle}
+                </h2>
+              </div>
             </div>
-          </div>
-          <div className="settings-group-body">
-            {renderFieldList(loose, fields, value, "", ctx, onChange)}
-          </div>
-        </section>,
-      );
-      continue;
-    }
+            <div className="settings-group-body">
+              {renderFieldList(looseEntries, fields, value, "", lone ? { ...ctx, hiddenLabel: lone[0] } : ctx, onChange)}
+            </div>
+          </section>,
+        );
+        continue;
+      }
 
-    const run = runStarts.get(key);
-    if (run) {
+      const run = runStarts.get(key);
+      if (run) {
+        cards.push(
+          <div className="group-tools" key={`tools-${key}`}>
+            <button
+              type="button"
+              className="link-button"
+              onClick={() => setOpen((current) => toggleRun(current, run))}
+            >
+              {runIsOpen(open, run) ? "Collapse all" : "Expand all"}
+            </button>
+          </div>,
+        );
+      }
+
       cards.push(
-        <div className="group-tools" key={`tools-${key}`}>
-          <button
-            type="button"
-            className="link-button"
-            onClick={() => setOpen((current) => toggleRun(current, run))}
-          >
-            {runIsOpen(open, run) ? "Collapse all" : "Expand all"}
-          </button>
-        </div>,
+        <Group
+          key={key}
+          groupKey={key}
+          field={field}
+          value={asRecord(value[key])}
+          ctx={ctx}
+          onChange={(next) => onChange({ ...value, [key]: next })}
+          fold={
+            collapsibleKeys.includes(key)
+              ? {
+                  open: open.has(key),
+                  onToggle: () => setOpen((current) => toggled(current, key)),
+                  onOpen: () => setOpen((current) => withOpen(current, [key])),
+                }
+              : undefined
+          }
+        />,
       );
     }
+    return cards;
+  };
 
-    cards.push(
-      <Group
-        key={key}
-        groupKey={key}
-        field={field}
-        value={asRecord(value[key])}
-        ctx={ctx}
-        onChange={(next) => onChange({ ...value, [key]: next })}
-        fold={
-          collapsibleKeys.includes(key)
-            ? {
-                open: open.has(key),
-                onToggle: () => setOpen((current) => toggled(current, key)),
-                onOpen: () => setOpen((current) => withOpen(current, [key])),
-              }
-            : undefined
-        }
-      />,
+  const parts = sections ? settingsSections(schema) : null;
+  if (!parts) {
+    return (
+      <div className="settings-groups">
+        {/* A card holding one setting is named after it: "Role menus", not "General". */}
+        {groupCards(entries, { id: "group-general", title: generalLabel, hideLoneLabel: true })}
+      </div>
     );
   }
 
-  return <div className="settings-groups">{cards}</div>;
+  return (
+    <SectionedSettings
+      sections={parts}
+      errors={errors}
+      intro={sectionIntro}
+      extra={extraSections}
+      render={(section) => (
+        <div className="settings-groups">
+          {groupCards(
+            entries.filter(([key]) => section.keys.includes(key)),
+            { id: `group-general-${section.id}`, title: section.label, hideLoneLabel: true },
+          )}
+        </div>
+      )}
+    />
+  );
 }
 
 interface GroupProps {
@@ -275,10 +362,40 @@ function Group({ groupKey, field, value, ctx, onChange, fold }: GroupProps) {
       id={extra.id}
       hidden={extra.hidden}
       data-off={enabled ? undefined : "true"}
-      data-flush={flush ? "true" : undefined}
+      data-flush={flush && field.layout === undefined ? "true" : undefined}
+      data-layout={typeof field.layout === "string" ? field.layout : undefined}
     >
-      {renderFieldList(body, fields, value, groupKey, ctx, onChange)}
+      {field.layout === "messages" ? (
+        <MessageList
+          guildId={ctx.guildId}
+          groupKey={groupKey}
+          group={field}
+          root={ctx.root}
+          rootFields={ctx.rootFields}
+          errors={ctx.errors}
+          disabled={ctx.disabled}
+          onSet={(entry, next) => ctx.setRoot(setAt(ctx.root, entry.segments, next))}
+          renderAttached={(entry) => attachedInList(entry, ctx)}
+        />
+      ) : field.layout === "fields" ? (
+        topicFields(field, value, groupKey, ctx, onChange)
+      ) : (
+        renderFieldList(body, fields, value, groupKey, ctx, onChange)
+      )}
     </div>
+  );
+
+  // The quick setup draws a group with only some of its settings, and carries
+  // the ones its summary needs alongside.
+  const summaryFields = { ...((field.summaryFields ?? {}) as Fields), ...fields };
+  const effective: Record<string, unknown> = {};
+  for (const [key, child] of Object.entries(summaryFields)) effective[key] = value[key] ?? child.default;
+  const summary = summarizeGroup(
+    summaryFields,
+    effective,
+    (field.summary as string[] | undefined) ?? [],
+    { duration: shortDuration },
+    (key) => conditionMet(summaryFields[key]?.when as Condition | undefined, effective),
   );
 
   if (!fold) {
@@ -290,23 +407,18 @@ function Group({ groupKey, field, value, ctx, onChange, fold }: GroupProps) {
               {title}
             </h2>
             {field.help ? <p className="card-help">{field.help}</p> : null}
+            {summary && field.collapsible === true ? (
+              <p className="card-help group-static-summary" data-off={enabled ? undefined : "true"}>
+                {summary}
+              </p>
+            ) : null}
           </div>
           {switchControl ? <div className="card-header-actions">{switchControl}</div> : null}
         </div>
-        {bodyNode({})}
+        {body.length > 0 || field.layout !== undefined ? bodyNode({}) : null}
       </section>
     );
   }
-
-  const effective: Record<string, unknown> = {};
-  for (const [key, child] of entries) effective[key] = value[key] ?? child.default;
-  const summary = summarizeGroup(
-    fields,
-    effective,
-    (field.summary as string[] | undefined) ?? [],
-    { duration: shortDuration },
-    (key) => conditionMet(fields[key]?.when as Condition | undefined, effective),
-  );
   const bodyId = `group-${groupKey}-body`;
   const helpId = field.help ? `group-${groupKey}-help` : undefined;
   const summaryId = summary ? `group-${groupKey}-summary` : undefined;
@@ -353,6 +465,74 @@ function Group({ groupKey, field, value, ctx, onChange, fold }: GroupProps) {
       </div>
       {bodyNode({ id: bodyId, hidden: !fold.open })}
     </section>
+  );
+}
+
+/**
+ * A group drawn with `layout: "fields"`: its settings as labelled inputs in two
+ * columns under the group's headings, each with a link back to its default. A
+ * nested group named like its heading is drawn as that heading's own fields.
+ */
+function topicFields(
+  group: FieldDescriptor,
+  values: Record<string, unknown>,
+  groupKey: string,
+  ctx: RenderContext,
+  onChange: (next: Record<string, unknown>) => void,
+): ReactNode {
+  const fields = (group.fields ?? {}) as Fields;
+  const listed = groupByTopic(listedFields(group), (group.topics ?? []) as FieldTopic[], group.label ?? humanize(groupKey));
+  const resetting = { ...ctx, listed: true };
+  return listed.map((topic) => (
+    <section className="topic-fields" key={topic.id} aria-labelledby={`topic-${groupKey}-${topic.id || "other"}`}>
+      <h3 className="topic-fields-title" id={`topic-${groupKey}-${topic.id || "other"}`}>
+        {topic.label}
+      </h3>
+      {topic.help ? <p className="topic-fields-help">{topic.help}</p> : null}
+      <div className="form-grid form-grid-two">
+        {topic.items.map(({ key, field }) => {
+          if (field.kind !== "object") return renderChild(key, field, fields, values, groupKey, resetting, onChange);
+          const childFields = (field.fields ?? {}) as Fields;
+          const childValues = asRecord(values[key]);
+          const setChild = (next: Record<string, unknown>) => onChange({ ...values, [key]: next });
+          if (field.label === topic.label) {
+            return Object.entries(childFields).map(([childKey, child]) =>
+              renderChild(childKey, child, childFields, childValues, objectChildPath(groupKey, key), resetting, setChild),
+            );
+          }
+          return (
+            <div className="field-span" key={key}>
+              {renderChild(key, field, fields, values, groupKey, resetting, onChange)}
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  ));
+}
+
+/** The buttons a listed message carries, read and written beside the message wherever it sits. */
+function attachedInList(entry: ListedMessage, ctx: RenderContext): ReactNode {
+  const attach = entry.field.attach as MessageAttach | undefined;
+  if (!attach || attach.kind !== "buttons") return undefined;
+  const parentSegments = entry.segments.slice(0, -1);
+  const parentPath = parentSegments.join(".");
+  const siblings = asRecord(getAt(ctx.root, parentSegments));
+  let siblingFields: Fields = ctx.rootFields;
+  for (const segment of parentSegments) siblingFields = ((siblingFields[String(segment)]?.fields ?? {}) as Fields);
+  return (
+    <AttachedComponents
+      attach={attach}
+      parentPath={parentPath}
+      siblings={siblings}
+      siblingFields={siblingFields}
+      setSiblings={(next) => ctx.setRoot(setAt(ctx.root, parentSegments, next))}
+      root={ctx.root}
+      rootFields={ctx.rootFields}
+      setRoot={ctx.setRoot}
+      errors={ctx.errors}
+      disabled={ctx.disabled}
+    />
   );
 }
 
@@ -408,6 +588,8 @@ function renderChild(
   ctx: RenderContext,
   onChange: (next: Record<string, unknown>) => void,
 ): ReactNode {
+  // A row's id is filled in when the row is added and is never anyone's to edit.
+  if (isGenerated(field)) return null;
   const path = objectChildPath(parentPath, key);
   const condition = field.when as Condition | undefined;
   const met = conditionMet(condition, values);
@@ -447,6 +629,7 @@ function renderChild(
       unavailable={!met}
       ctx={ctx}
       onChange={setValue}
+      place={{ siblings: values, siblingFields: siblings, setSiblings: onChange, parentPath }}
     />
   );
 }
@@ -460,6 +643,7 @@ interface ControlFieldProps {
   unavailable: boolean;
   ctx: RenderContext;
   onChange(next: unknown): void;
+  place?: Place;
 }
 
 function ControlField({
@@ -471,21 +655,31 @@ function ControlField({
   unavailable,
   ctx,
   onChange,
+  place,
 }: ControlFieldProps) {
   const id = htmlId(path);
   const label = field.label ?? humanize(name);
-  const disabled = ctx.disabled || unavailable;
+  // Wording can be settled before whatever it waits on, such as a greeting
+  // before its channel is picked; the dependency line still says when it is used.
+  const disabled = ctx.disabled || (unavailable && field.kind !== "message");
   const error = ctx.errors[path];
   const optional = field.optional === true && field.essential !== true;
 
   const shared = {
     id,
     label,
+    labelHidden: ctx.hiddenLabel === path,
     help: field.help as string | undefined,
     dependency,
     error,
     optional,
     disabled,
+    action:
+      ctx.listed && isChanged(field, value) ? (
+        <button type="button" className="link-button field-reset" disabled={disabled} onClick={() => onChange(field.default)}>
+          Reset<span className="visually-hidden"> {label} to the default</span>
+        </button>
+      ) : undefined,
   };
 
   if (field.kind === "boolean") {
@@ -507,8 +701,8 @@ function ControlField({
 
   if (isCompactMessage(field)) {
     return (
-      <Field {...shared} layout="compact">
-        {(chrome) => control(chrome, { name, path, field, value, ctx, onChange })}
+      <Field {...shared} layout="compact" span>
+        {(chrome) => control(chrome, { name, path, field, value, ctx, onChange, place })}
       </Field>
     );
   }
@@ -517,10 +711,10 @@ function ControlField({
     <Field
       {...shared}
       hint={hintFor(field, value)}
-      span={wantsWholeRow(field)}
+      span={ctx.listed && field.kind === "template" ? false : wantsWholeRow(field)}
       labelFor={!isComposite(field)}
     >
-      {(chrome) => control(chrome, { name, path, field, value, ctx, onChange })}
+      {(chrome) => control(chrome, { name, path, field, value, ctx, onChange, place })}
     </Field>
   );
 }
@@ -532,6 +726,7 @@ interface ControlProps {
   value: unknown;
   ctx: RenderContext;
   onChange(next: unknown): void;
+  place?: Place;
 }
 
 function control(chrome: FieldChrome, props: ControlProps): ReactNode {
@@ -557,7 +752,9 @@ function control(chrome: FieldChrome, props: ControlProps): ReactNode {
         <input
           {...common}
           className="input"
-          type="text"
+          type={field.url === true ? "url" : "text"}
+          inputMode={field.url === true ? "url" : undefined}
+          placeholder={field.url === true ? "https://" : undefined}
           maxLength={field.max as number | undefined}
           value={(value as string) ?? ""}
           onChange={(event) => onChange(event.target.value || undefined)}
@@ -587,6 +784,7 @@ function control(chrome: FieldChrome, props: ControlProps): ReactNode {
           label={field.label ?? humanize(props.name)}
           value={value}
           max={field.max as string | undefined}
+          min={field.min as string | undefined}
           onChange={onChange}
         />
       );
@@ -606,13 +804,13 @@ function control(chrome: FieldChrome, props: ControlProps): ReactNode {
 
     case "emoji":
       return (
-        <input
+        <EmojiInput
           {...common}
-          className="input emoji-input"
-          type="text"
-          placeholder="🙂"
-          value={(value as string) ?? ""}
-          onChange={(event) => onChange(event.target.value || undefined)}
+          guildId={ctx.guildId}
+          label={field.label ?? humanize(props.name)}
+          value={typeof value === "string" ? value : undefined}
+          clearable={field.optional === true}
+          onChange={onChange}
         />
       );
 
@@ -620,10 +818,14 @@ function control(chrome: FieldChrome, props: ControlProps): ReactNode {
       return (
         <TemplateEditor
           {...common}
+          guildId={ctx.guildId}
           value={(value as string) ?? ""}
           max={field.max as number | undefined}
           placeholders={(field.placeholders as string[] | undefined) ?? []}
+          samples={field.samples as Record<string, string> | undefined}
+          preview={field.preview === "channel" ? "channel" : "message"}
           serverName={ctx.serverName}
+          inline={ctx.listed === true}
           onChange={(next) => onChange(next || undefined)}
         />
       );
@@ -637,11 +839,14 @@ function control(chrome: FieldChrome, props: ControlProps): ReactNode {
           starting={field.starting as MessageBody}
           variables={(field.variables as EditorVariable[] | undefined) ?? []}
           delivery={field.delivery === "dm" ? "dm" : "channel"}
+          audience={field.audience as "public" | "private" | "dm" | undefined}
           components={field.components !== false}
           note={field.note as string | undefined}
           compact={field.compact === true}
+          serverName={ctx.serverName}
           value={value}
           onChange={onChange}
+          attached={attachedFor(field, props, chrome.disabled)}
         />
       );
 
@@ -653,6 +858,7 @@ function control(chrome: FieldChrome, props: ControlProps): ReactNode {
           types={(field.types as string[] | undefined) ?? ["text"]}
           value={typeof value === "string" ? value : undefined}
           clearable={field.optional === true}
+          hideTickets
           onChange={onChange}
         />
       );
@@ -664,6 +870,7 @@ function control(chrome: FieldChrome, props: ControlProps): ReactNode {
           guildId={ctx.guildId}
           value={typeof value === "string" ? value : undefined}
           clearable={field.optional === true}
+          assigns={field.assigns === true}
           onChange={onChange}
         />
       );
@@ -705,6 +912,7 @@ function arrayControl(chrome: FieldChrome, props: ControlProps): ReactNode {
         id={chrome.id}
         guildId={ctx.guildId}
         values={items.filter(isString)}
+        assigns={item.assigns === true || field.assigns === true}
         max={max}
         disabled={chrome.disabled}
         aria-labelledby={chrome.labelId}
@@ -747,7 +955,10 @@ function arrayControl(chrome: FieldChrome, props: ControlProps): ReactNode {
 
   if (item.kind === "object") {
     const itemFields = (item.fields ?? {}) as Fields;
-    const singular = singularize(field.label ?? humanize(name));
+    const singular =
+      typeof field.item === "string" && field.item !== ""
+        ? field.item.charAt(0).toUpperCase() + field.item.slice(1)
+        : singularize(field.label ?? humanize(name));
     return (
       <ObjectArray
         guildId={ctx.guildId}
@@ -760,7 +971,9 @@ function arrayControl(chrome: FieldChrome, props: ControlProps): ReactNode {
         disabled={chrome.disabled}
         aria-labelledby={chrome.labelId}
         rows={ctx.rows}
-        newItem={() => defaultsFor(itemFields)}
+        openRows={ctx.openRows}
+        newItem={() => defaultsFor(itemFields, makeRowId)}
+        copyItem={(entry) => withFreshIds(entry, itemFields, makeRowId)}
         invalidAt={(index) => hasErrorUnder(ctx.errors, arrayItemPath(path, index))}
         onChange={onChange}
         renderRow={(entry, index) => {
@@ -779,7 +992,7 @@ function arrayControl(chrome: FieldChrome, props: ControlProps): ReactNode {
           );
         }}
         actionInputs={{
-          initial: (input) => defaultsFor((input.fields ?? {}) as Fields),
+          initial: (input) => defaultsFor((input.fields ?? {}) as Fields, makeRowId),
           render: ({ input, rowPath, actionId, value, onChange: setInput, errors, disabled }) =>
             actionInputFields(input, `${rowPath}.${actionId}`, value, setInput, errors, {
               ...ctx,
@@ -877,16 +1090,14 @@ function hintFor(field: FieldDescriptor, value: unknown): ReactNode {
 
   if (field.kind === "duration") {
     const max = field.max as string | undefined;
+    const min = field.min as string | undefined;
+    if (min && max) return `From ${describeDuration(min)} to ${describeDuration(max)}`;
+    if (min) return `At least ${describeDuration(min)}`;
     return max ? `Up to ${describeDuration(max)}` : undefined;
   }
 
   if (field.kind === "emoji") {
-    return (
-      <>
-        A unicode emoji, or Discord&apos;s custom form: <code>&lt;:name:id&gt;</code>, or{" "}
-        <code>&lt;a:name:id&gt;</code> for an animated one.
-      </>
-    );
+    return "Pick one of this server's emoji or a standard one, or paste one. Typing :name: finds the server's emoji of that name.";
   }
 
   if (field.kind === "string") {
@@ -914,7 +1125,32 @@ function isComposite(field: FieldDescriptor): boolean {
 function wantsWholeRow(field: FieldDescriptor): boolean {
   if (field.kind === "template" || field.kind === "message") return true;
   if (field.kind === "array") return true;
-  return field.kind === "string" && field.multiline === true;
+  // A web address is long; a third of a row shows thirty characters of it.
+  return field.kind === "string" && (field.multiline === true || field.url === true);
+}
+
+/** The buttons or menu the schema says the feature adds under this message, editable in place. */
+function attachedFor(field: FieldDescriptor, props: ControlProps, disabled: boolean): ReactNode {
+  const attach = field.attach as MessageAttach | undefined;
+  const { place, ctx } = props;
+  if (!attach || !place) return undefined;
+  const listField = attach.kind === "list" ? place.siblingFields[attach.list] : undefined;
+  const rowFields = ((listField?.of as FieldDescriptor | undefined)?.fields ?? {}) as Fields;
+  return (
+    <AttachedComponents
+      attach={attach}
+      parentPath={place.parentPath}
+      siblings={place.siblings}
+      siblingFields={place.siblingFields}
+      setSiblings={place.setSiblings}
+      root={ctx.root}
+      rootFields={ctx.rootFields}
+      setRoot={ctx.setRoot}
+      errors={ctx.errors}
+      disabled={disabled}
+      newItem={listField ? () => defaultsFor(rowFields, makeRowId) : undefined}
+    />
+  );
 }
 
 /** Explains a disabled control in terms of the setting it waits on. */
@@ -943,21 +1179,6 @@ function dependencySentence(
     return `Only used when ${label} is set to ${chosen?.label ?? String(condition.equals)}.`;
   }
   return `Only used when ${label} is ${String(condition.equals)}.`;
-}
-
-/** A new list entry starts with whatever the schema says the defaults are. */
-function defaultsFor(fields: Fields): Record<string, unknown> {
-  const item: Record<string, unknown> = {};
-  for (const [key, field] of Object.entries(fields)) {
-    if (field.kind === "array") {
-      // A list that needs at least one entry would otherwise start out invalid.
-      const of = (field.of ?? {}) as FieldDescriptor;
-      item[key] = of.kind === "choice" && Array.isArray(field.default) ? field.default : [];
-    }
-    else if (field.kind === "object") item[key] = defaultsFor((field.fields ?? {}) as Fields);
-    else if (field.default !== undefined) item[key] = field.default;
-  }
-  return item;
 }
 
 /**

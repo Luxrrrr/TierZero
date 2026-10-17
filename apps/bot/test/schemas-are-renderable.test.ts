@@ -1,7 +1,7 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 import type { FieldDescriptor } from "@tier0/core";
-import { ModuleRegistry } from "@tier0/core";
+import { ModuleRegistry, layoutProblems, messageAttachProblems, type FieldTopic, type MessageAttach } from "@tier0/core";
 import utility from "@tier0/module-utility";
 import welcome from "@tier0/module-welcome";
 import roles from "@tier0/module-roles";
@@ -87,6 +87,21 @@ function walk(field: FieldDescriptor, path: string, visit: (f: FieldDescriptor, 
   }
 }
 
+/** Every message that declares what the feature adds under it, with the fields beside it. */
+function attachedMessages(field: FieldDescriptor, path: string, visit: (attach: MessageAttach, parent: Record<string, FieldDescriptor>, at: string) => void) {
+  if (field.kind === "array") {
+    attachedMessages(field.of as FieldDescriptor, `${path}[]`, visit);
+    return;
+  }
+  if (field.kind !== "object") return;
+  const fields = field.fields as Record<string, FieldDescriptor>;
+  for (const [key, child] of Object.entries(fields)) {
+    const at = path ? `${path}.${key}` : key;
+    if (child.kind === "message" && child.attach !== undefined) visit(child.attach as MessageAttach, fields, at);
+    attachedMessages(child, at, visit);
+  }
+}
+
 describe("every registered module", () => {
   const modules = registry.describe();
 
@@ -101,6 +116,13 @@ describe("every registered module", () => {
           RENDERABLE.has(field.kind),
           `${module.id}.${path} uses ${field.kind}, which the settings form has no control for`,
         );
+      });
+    });
+
+    test(`${module.id} attaches buttons to a message only from settings that exist`, () => {
+      const root = module.schema.fields as Record<string, FieldDescriptor>;
+      attachedMessages(module.schema, "", (attach, parent, at) => {
+        assert.deepEqual(messageAttachProblems(attach, parent, root), [], `${module.id}.${at}`);
       });
     });
 
@@ -148,15 +170,27 @@ describe("every registered module", () => {
             assert.ok(key in children, `${where} summarises ${key}, which is not one of its fields`);
           }
         }
+        if (field.section !== undefined) {
+          assert.ok(top[path] === field, `${where} has a section but is not a top-level setting, so the dashboard ignores it`);
+          assert.equal(typeof field.section, "string", `${where} names its section with something other than text`);
+        }
+        if (field.generated !== undefined) {
+          assert.equal(field.kind, "string", `${where} is generated but is not a string`);
+          assert.ok(path.includes("[]."), `${where} is generated but is not inside a list row, which is the only place one is filled in`);
+        }
         if (field.compact !== undefined) {
           assert.equal(field.kind, "message", `${where} is compact but is not a message`);
         }
-        if (field.layout !== undefined) {
+        if (field.layout !== undefined && field.kind !== "object") {
           const item = field.kind === "array" ? (field.of as FieldDescriptor) : undefined;
-          assert.equal(item?.kind, "choice", `${where} sets a layout but is not a list of choices`);
+          assert.equal(item?.kind, "choice", `${where} sets a layout but is not a list of choices or a group`);
           assert.ok(["chips", "rows"].includes(String(field.layout)), `${where} has an unknown layout`);
         }
       });
+    });
+
+    test(`${module.id} files settings only under headings its message and field lists declare`, () => {
+      assert.deepEqual(layoutProblems(module.schema), []);
     });
 
     test(`${module.id} settings resolve from an empty stored value`, () => {
@@ -191,7 +225,7 @@ describe("every registered module", () => {
 
     test(`${module.id} labels every setting the quick setup asks about`, () => {
       walk(module.schema, "", (field, path) => {
-        if (field.guided !== true && field.essential !== true) return;
+        if (field.guided !== true && !field.essential) return;
         assert.ok(
           field.label,
           `${module.id}.${path} is asked about by the quick setup but has no label, ` +
@@ -218,7 +252,7 @@ describe("the modules the quick setup relies on", () => {
 
       let asked = 0;
       walk(module.schema, "", (field) => {
-        if (field.guided === true || field.essential === true) asked += 1;
+        if (field.guided === true || Boolean(field.essential)) asked += 1;
       });
       assert.ok(asked > 0, `${id} tags no field guided or essential, so it offers no quick setup`);
     });
@@ -276,5 +310,56 @@ describe("the sibling check", () => {
     const failures: string[] = [];
     checkConditions(schema, "", (message) => failures.push(message));
     assert.equal(failures.length, 1);
+  });
+});
+
+describe("the ticket settings", () => {
+  const module = registry.describe().find((entry) => entry.id === "tickets");
+  const top = (module?.schema.fields ?? {}) as Record<string, FieldDescriptor>;
+
+  test("put every top-level setting in a section of the Settings tab", () => {
+    const allowed = ["panels", "general", "transcripts", "ratings", "automation", "savedReplies", "messages"];
+    for (const [key, field] of Object.entries(top)) {
+      assert.ok(allowed.includes(String(field.section)), `tickets.${key} has section ${String(field.section)}`);
+    }
+  });
+
+  test("show the buttons the bot adds under the panel, the first message and the notices", () => {
+    const panel = (top.panels?.of as FieldDescriptor).fields as Record<string, FieldDescriptor>;
+    const type = (panel.types?.of as FieldDescriptor).fields as Record<string, FieldDescriptor>;
+    const messages = top.messages?.fields as Record<string, FieldDescriptor>;
+    assert.equal((panel.message?.attach as MessageAttach | undefined)?.kind, "list");
+    assert.equal((type.welcome?.attach as MessageAttach | undefined)?.kind, "buttons");
+    assert.equal((messages.closed?.attach as MessageAttach | undefined)?.kind, "buttons");
+    assert.equal((messages.closeRequest?.attach as MessageAttach | undefined)?.kind, "buttons");
+  });
+
+  test("list every message of the Messages section under a heading", () => {
+    const messages = top.messages as FieldDescriptor;
+    const labels = top.labels as FieldDescriptor;
+    assert.equal(messages.layout, "messages");
+    assert.equal(labels.layout, "fields");
+    const declared = new Set(((messages.topics ?? []) as FieldTopic[]).map((topic) => topic.id));
+    const unfiled: string[] = [];
+    const visit = (field: FieldDescriptor, path: string, inherited: string | undefined) => {
+      const topic = typeof field.topic === "string" ? field.topic : inherited;
+      if (field.kind === "object") {
+        for (const [key, child] of Object.entries((field.fields ?? {}) as Record<string, FieldDescriptor>)) visit(child, `${path}.${key}`, topic);
+      } else if (field.kind === "message" && (topic === undefined || !declared.has(topic))) {
+        unfiled.push(path);
+      }
+    };
+    visit(messages, "messages", undefined);
+    assert.deepEqual(unfiled, []);
+    for (const field of Object.values((labels.fields ?? {}) as Record<string, FieldDescriptor>)) {
+      assert.equal(typeof field.topic, "string", `${String(field.label)} is under no heading`);
+    }
+  });
+
+  test("give panels and types an id the dashboard fills in", () => {
+    const panel = (top.panels?.of as FieldDescriptor).fields as Record<string, FieldDescriptor>;
+    const type = (panel.types?.of as FieldDescriptor).fields as Record<string, FieldDescriptor>;
+    assert.equal(panel.id?.generated, true);
+    assert.equal(type.id?.generated, true);
   });
 });

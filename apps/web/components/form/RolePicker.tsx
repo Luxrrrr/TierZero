@@ -17,20 +17,38 @@ export interface RoleList {
   roles: GuildRole[];
   loading: boolean;
   failed: boolean;
+  /** Asks the bot for the list again. */
+  retry(): void;
 }
 
 /** One SWR key per guild, so every role picker on a page shares one fetch. */
 export function useRoles(guildId: string, enabled = true): RoleList {
-  const { data, error, isLoading } = useSWR<GuildRole[]>(
+  const { data, error, isLoading, mutate } = useSWR<GuildRole[]>(
     enabled ? `/api/guilds/${guildId}/roles` : null,
     fetchJson,
   );
-  return { roles: data ?? [], loading: isLoading, failed: error !== undefined };
+  return {
+    roles: data ?? [],
+    loading: isLoading,
+    // A list loaded once and then failing to refresh is still good to show.
+    failed: error !== undefined && data === undefined,
+    retry: () => void mutate(),
+  };
 }
 
-const LIST_FAILED = "The role list could not be loaded. Reload the page to try again.";
+const LIST_FAILED = "The role list could not be loaded, so saved roles are shown by their ID.";
 
-const ABOVE_THE_BOT = "Roles above the bot's highest role cannot be assigned by it.";
+/** Where the bot hands the role out: roles above its own cannot be given, so they are greyed out. */
+const ABOVE_THE_BOT_ASSIGNS =
+  "Roles above the bot's highest role are greyed out: the bot cannot give those to anyone. Move the bot's role higher in Server Settings to use them.";
+
+/** Where the role only matches members: its position does not matter. */
+const ABOVE_THE_BOT_MATCHES =
+  "Roles above the bot's highest role can be picked here too, since the bot only checks for this role and never gives it out.";
+
+function unloaded(id: string): string {
+  return `Saved role, ID ${id}`;
+}
 
 interface SingleProps {
   id: string;
@@ -38,6 +56,11 @@ interface SingleProps {
   value: string | undefined;
   onChange(next: string | undefined): void;
   clearable?: boolean;
+  /**
+   * The bot gives this role to members, as the schema's `assigns` says, so a
+   * role above the bot's own is greyed out. Without it every role can be picked.
+   */
+  assigns?: boolean;
   disabled?: boolean;
   "aria-labelledby"?: string;
   "aria-describedby"?: string;
@@ -49,12 +72,13 @@ export function RolePicker({
   value,
   onChange,
   clearable = false,
+  assigns = false,
   disabled = false,
   "aria-labelledby": labelledBy,
   "aria-describedby": describedBy,
 }: SingleProps) {
-  const { roles, loading, failed } = useRoles(guildId);
-  const options = useMemo(() => roleOptions(roles), [roles]);
+  const { roles, loading, failed, retry } = useRoles(guildId);
+  const options = useMemo(() => roleOptions(roles, assigns), [roles, assigns]);
 
   return (
     <Combobox
@@ -63,6 +87,10 @@ export function RolePicker({
       onChange={onChange}
       options={options}
       loading={loading}
+      failed={failed}
+      failedText={LIST_FAILED}
+      onRetry={retry}
+      unloadedLabel={unloaded}
       disabled={disabled}
       clearable={clearable}
       clearLabel="No role"
@@ -70,8 +98,8 @@ export function RolePicker({
       missingLabel="Unknown role (deleted)"
       searchLabel="Search roles"
       searchPlaceholder="Search roles"
-      emptyText={failed ? LIST_FAILED : "No role here matches that."}
-      footer={roles.some((role) => !role.assignable) ? ABOVE_THE_BOT : undefined}
+      emptyText="No role here matches that."
+      footer={roleFooter(roles, assigns)}
       aria-labelledby={labelledBy}
       aria-describedby={describedBy}
     />
@@ -84,6 +112,8 @@ interface MultiProps {
   values: string[];
   onChange(next: string[]): void;
   max?: number;
+  /** As on `RolePicker`. */
+  assigns?: boolean;
   disabled?: boolean;
   addLabel?: string;
   emptyLabel?: string;
@@ -97,14 +127,15 @@ export function MultiRolePicker({
   values,
   onChange,
   max,
+  assigns = false,
   disabled = false,
   addLabel = "Add a role",
   emptyLabel,
   "aria-labelledby": labelledBy,
   "aria-describedby": describedBy,
 }: MultiProps) {
-  const { roles, loading, failed } = useRoles(guildId);
-  const options = useMemo(() => roleOptions(roles), [roles]);
+  const { roles, loading, failed, retry } = useRoles(guildId);
+  const options = useMemo(() => roleOptions(roles, assigns), [roles, assigns]);
 
   return (
     <MultiCombobox
@@ -114,28 +145,42 @@ export function MultiRolePicker({
       options={options}
       max={max}
       loading={loading}
+      failed={failed}
+      failedText={LIST_FAILED}
+      onRetry={retry}
+      unloadedLabel={unloaded}
       disabled={disabled}
       addLabel={addLabel}
       emptyLabel={emptyLabel}
       missingLabel="Unknown role (deleted)"
       searchLabel="Search roles"
       searchPlaceholder="Search roles"
-      emptyText={failed ? LIST_FAILED : "No role here matches that."}
-      footer={roles.some((role) => !role.assignable) ? ABOVE_THE_BOT : undefined}
+      emptyText="No role here matches that."
+      footer={roleFooter(roles, assigns)}
       aria-labelledby={labelledBy}
       aria-describedby={describedBy}
     />
   );
 }
 
-export function roleOptions(roles: readonly GuildRole[]): ComboboxOption[] {
+function roleFooter(roles: readonly GuildRole[], assigns: boolean): string | undefined {
+  if (!roles.some((role) => !role.assignable)) return undefined;
+  return assigns ? ABOVE_THE_BOT_ASSIGNS : ABOVE_THE_BOT_MATCHES;
+}
+
+/**
+ * The picker's rows. Only a role the bot would have to hand out is greyed out
+ * for sitting above the bot; a role used to exempt, limit or ping members is
+ * checked, never given, so its position does not matter.
+ */
+export function roleOptions(roles: readonly GuildRole[], assigns = false): ComboboxOption[] {
   return roles.map((role) => {
     const option: ComboboxOption = {
       value: role.id,
       label: role.name,
       icon: <RoleDot color={role.color} />,
     };
-    if (!role.assignable) {
+    if (assigns && !role.assignable) {
       option.disabled = true;
       option.note = "Above the bot's role";
     }

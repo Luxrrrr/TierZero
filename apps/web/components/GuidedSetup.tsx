@@ -6,8 +6,11 @@ import { useRouter } from "next/navigation";
 import type { FieldDescriptor } from "@tier0/core";
 import { SettingsForm } from "./form";
 import { AlertIcon, CheckIcon, ChevronRightIcon, InfoIcon } from "./Icons";
-import { missingEssentials } from "../lib/module-status";
+import { missingEssentials, missingSentence } from "../lib/module-status";
 import { moduleHref, type ModuleArea } from "../lib/module-href";
+import { readFailure, UNREACHABLE } from "../lib/bot-errors";
+import { errorsStillValid } from "../lib/field-error";
+import { useUnsavedGuard } from "../lib/unsaved-guard";
 
 export interface GuidedStep {
   moduleId: string;
@@ -30,16 +33,12 @@ interface Props {
   steps: GuidedStep[];
 }
 
-type Outcome = "on" | "skipped";
-
-interface FieldError {
-  path: string;
-  message: string;
-}
+/** "saved" is a feature whose answers were kept but which stayed off, because it would do nothing yet. */
+type Outcome = "on" | "saved" | "skipped";
 
 /**
  * The quick setup. One feature per step, showing only the settings its schema
- * tagged as worth asking about, and turning the feature on at the end of each.
+ * tagged as worth asking about, and turning the feature on as each is saved.
  *
  * Each step saves as it is finished rather than everything landing at the end.
  * Leaving halfway then keeps what was already answered, and the bot is using
@@ -53,9 +52,14 @@ export function GuidedSetup({ guildId, serverName, title, blurb, steps }: Props)
   const [drafts, setDrafts] = useState<Record<string, Record<string, unknown>>>(() =>
     Object.fromEntries(steps.map((step) => [step.moduleId, step.settings])),
   );
+  // What the bot holds for each module, so leaving with a step edited but not saved can ask first.
+  const [stored, setStored] = useState<Record<string, Record<string, unknown>>>(() =>
+    Object.fromEntries(steps.map((step) => [step.moduleId, step.settings])),
+  );
   const [outcomes, setOutcomes] = useState<Record<string, Outcome>>({});
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [refused, setRefused] = useState<Record<string, unknown> | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
 
   const headingRef = useRef<HTMLHeadingElement>(null);
@@ -63,6 +67,16 @@ export function GuidedSetup({ guildId, serverName, title, blurb, steps }: Props)
 
   const done = index >= steps.length;
   const step = done ? undefined : steps[index];
+
+  const dirty = steps.some(
+    (entry) => JSON.stringify(drafts[entry.moduleId]) !== JSON.stringify(stored[entry.moduleId]),
+  );
+  // Saving a step here also turns its feature on, which "Save and leave" would
+  // not say, so the guard offers only Stay and Discard.
+  const guard = useUnsavedGuard({
+    dirty,
+    onDiscard: () => setDrafts(stored),
+  });
 
   // The step heading is the only thing that changes between steps, so moving
   // focus there is what tells a screen reader the page moved on at all.
@@ -76,16 +90,24 @@ export function GuidedSetup({ guildId, serverName, title, blurb, steps }: Props)
     window.scrollTo({ top: 0 });
   }, [index]);
 
-  // A rejected save is only useful if it puts the reader on the field at fault.
+  // A rejected save is only useful if it puts the reader, and the keyboard
+  // focus, on the field at fault; otherwise focus drops to the page itself.
   useEffect(() => {
     if (Object.keys(errors).length === 0) return;
-    const field = formRef.current?.querySelector<HTMLElement>('[data-invalid="true"]');
-    field?.scrollIntoView({ block: "center", behavior: "smooth" });
+    const marked = [...(formRef.current?.querySelectorAll<HTMLElement>('[data-invalid="true"]') ?? [])];
+    const field = marked.find((el) => !el.querySelector('[data-invalid="true"]'));
+    if (!field) return;
+    const calm = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    field.scrollIntoView({ block: "center", behavior: calm ? "auto" : "smooth" });
+    field
+      .querySelector<HTMLElement>('input, textarea, select, button, [tabindex]:not([tabindex="-1"])')
+      ?.focus({ preventScroll: true });
   }, [errors]);
 
   const advance = useCallback((moduleId: string, outcome: Outcome) => {
     setOutcomes((current) => ({ ...current, [moduleId]: outcome }));
     setErrors({});
+    setRefused(null);
     setFailure(null);
     setIndex((current) => current + 1);
   }, []);
@@ -94,40 +116,50 @@ export function GuidedSetup({ guildId, serverName, title, blurb, steps }: Props)
     if (!step) return;
     setSaving(true);
     setErrors({});
+    setRefused(null);
     setFailure(null);
+    // The module's whole settings object, not only what this step drew:
+    // anything the wizard leaves out has to survive the write.
+    const sent = drafts[step.moduleId] ?? step.settings;
+    // A feature that would do nothing is not switched on: its answers are kept and it stays as it was.
+    const turnOn = step.enabled || missingEssentials(step.schema, sent).length === 0;
 
     try {
       const res = await fetch(`/api/guilds/${guildId}/modules/${step.moduleId}`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
-        // The module's whole settings object, not only what this step drew:
-        // anything the wizard leaves out has to survive the write.
-        body: JSON.stringify({ enabled: true, settings: drafts[step.moduleId] ?? step.settings }),
+        body: JSON.stringify(turnOn ? { enabled: true, settings: sent } : { settings: sent }),
       });
 
       if (!res.ok) {
-        const body = (await res.json().catch(() => ({}))) as {
-          error?: string;
-          errors?: FieldError[];
-        };
-        if (body.errors?.length) {
+        const refusal = await readFailure(res);
+        if (refusal.fieldErrors?.length) {
           const next: Record<string, string> = {};
-          for (const entry of body.errors) next[entry.path] = entry.message;
+          for (const entry of refusal.fieldErrors) next[entry.path] = entry.message;
           setErrors(next);
+          setRefused(sent);
         } else {
-          setFailure(body.error ?? "The bot did not accept these settings. Try again.");
+          setFailure(refusal.message);
         }
         return;
       }
 
+      setStored((current) => ({ ...current, [step.moduleId]: sent }));
       router.refresh();
-      advance(step.moduleId, "on");
+      advance(step.moduleId, turnOn ? "on" : "saved");
     } catch {
-      setFailure("The dashboard could not be reached. Check your connection, then try again.");
+      setFailure(UNREACHABLE);
     } finally {
       setSaving(false);
     }
   }
+
+  const alreadyOn = step ? step.enabled || outcomes[step.moduleId] === "on" : false;
+  const last = index === steps.length - 1;
+  const stillMissing = step && !alreadyOn ? missingEssentials(step.schema, drafts[step.moduleId] ?? step.settings) : [];
+  const forwardLabel = alreadyOn || stillMissing.length > 0
+    ? last ? "Save and finish" : "Save and continue"
+    : last ? "Turn on and finish" : "Turn on and continue";
 
   return (
     <>
@@ -150,6 +182,7 @@ export function GuidedSetup({ guildId, serverName, title, blurb, steps }: Props)
               </span>
               <span className="wizard-step-name">{entry.name}</span>
               {state === "skipped" ? <span className="wizard-step-note">Skipped</span> : null}
+              {state === "saved" ? <span className="wizard-step-note">Still off</span> : null}
               {position === index ? <span className="visually-hidden">, current step</span> : null}
             </li>
           );
@@ -166,7 +199,7 @@ export function GuidedSetup({ guildId, serverName, title, blurb, steps }: Props)
         <>
           <div className="wizard-head">
             <p className="wizard-count">
-              Step {index + 1} of {steps.length}
+              Step {index + 1} of {steps.length + 1}
             </p>
             <h2 className="wizard-title" tabIndex={-1} ref={headingRef}>
               {step.name}
@@ -193,11 +226,31 @@ export function GuidedSetup({ guildId, serverName, title, blurb, steps }: Props)
               disabled={saving}
               generalLabel="Basics"
               collapse={false}
-              onChange={(next) =>
-                setDrafts((current) => ({ ...current, [step.moduleId]: next }))
-              }
+              sections={false}
+              onChange={(next) => {
+                setDrafts((current) => ({ ...current, [step.moduleId]: next }));
+                if (refused) {
+                  const remaining = errorsStillValid(errors, refused, next);
+                  if (Object.keys(remaining).length !== Object.keys(errors).length) setErrors(remaining);
+                }
+                if (failure) setFailure(null);
+              }}
             />
           </div>
+
+          {guard.host}
+
+          {stillMissing.length > 0 ? (
+            <div className="wizard-callouts">
+              <div className="callout callout-attention" role="status">
+                <InfoIcon />
+                <div>
+                  {step.name} stays off until you set {missingSentence(stillMissing)}, because until then it would
+                  do nothing. Saving keeps your other answers.
+                </div>
+              </div>
+            </div>
+          ) : null}
 
           <div className="wizard-actions">
             <div className="wizard-actions-back">
@@ -217,7 +270,11 @@ export function GuidedSetup({ guildId, serverName, title, blurb, steps }: Props)
                 type="button"
                 className="btn btn-secondary"
                 disabled={saving}
-                onClick={() => advance(step.moduleId, "skipped")}
+                onClick={() => {
+                  // Skipping leaves the feature as it was, edits on this step included.
+                  setDrafts((current) => ({ ...current, [step.moduleId]: stored[step.moduleId] ?? step.settings }));
+                  advance(step.moduleId, "skipped");
+                }}
               >
                 Skip for now
               </button>
@@ -228,15 +285,16 @@ export function GuidedSetup({ guildId, serverName, title, blurb, steps }: Props)
                 onClick={() => void saveAndContinue()}
               >
                 {saving ? <span className="spinner" aria-hidden="true" /> : null}
-                {saving ? "Saving…" : index === steps.length - 1 ? "Save and finish" : "Save and continue"}
+                {saving ? "Saving…" : forwardLabel}
               </button>
             </div>
           </div>
 
           <p className="wizard-foot">
-            Every setting here can be changed later, and there is more to each
-            feature than the wizard asks about. Skipping a step leaves the
-            feature exactly as it is.
+            Saving a step turns that feature on and the bot starts using it
+            straight away, unless it still needs something to work. Every setting here can be changed later, and there is
+            more to each feature than the quick setup asks about. Skipping a step
+            leaves the feature exactly as it is.
           </p>
         </>
       ) : (
@@ -268,6 +326,7 @@ interface FinishedProps {
  */
 function Finished({ guildId, steps, drafts, outcomes, headingRef }: FinishedProps) {
   const turnedOn = steps.filter((step) => outcomes[step.moduleId] === "on");
+  const leftOff = steps.filter((step) => outcomes[step.moduleId] === "saved");
   const skipped = steps.filter((step) => outcomes[step.moduleId] === "skipped");
 
   const incomplete = turnedOn
@@ -281,14 +340,36 @@ function Finished({ guildId, steps, drafts, outcomes, headingRef }: FinishedProp
     <>
       <div className="wizard-head">
         <h2 className="wizard-title" tabIndex={-1} ref={headingRef}>
-          {turnedOn.length > 0 ? "That is everything" : "Nothing was changed"}
+          {turnedOn.length === 0 && leftOff.length === 0
+            ? "Nothing was changed"
+            : incomplete.length > 0 || leftOff.length > 0
+              ? "Almost done"
+              : "That is everything"}
         </h2>
         <p className="wizard-summary">
           {turnedOn.length > 0
-            ? "The bot is already using these settings. No restart, nothing to deploy."
-            : "Every step was skipped, so this server is exactly as you left it."}
+            ? "The bot is already using these settings."
+            : leftOff.length > 0
+              ? "Your answers are saved, and nothing was switched on yet."
+              : "Every step was skipped, so this server is exactly as you left it."}
         </p>
       </div>
+
+      {leftOff.length > 0 ? (
+        <div className="wizard-callouts">
+          {leftOff.map((step) => (
+            <div className="callout callout-attention" key={step.moduleId}>
+              <AlertIcon />
+              <div>
+                {step.name} is still off, because it does nothing until you set{" "}
+                {missingSentence(missingEssentials(step.schema, drafts[step.moduleId] ?? step.settings))}. Your answers are
+                saved.{" "}
+                <Link href={moduleHref(guildId, { id: step.moduleId, area: step.area })}>Finish setting it up</Link>.
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : null}
 
       {incomplete.length > 0 ? (
         <div className="wizard-callouts">
@@ -296,8 +377,8 @@ function Finished({ guildId, steps, drafts, outcomes, headingRef }: FinishedProp
             <div className="callout callout-attention" key={step.moduleId}>
               <AlertIcon />
               <div>
-                {step.name} is on, but stays idle until you set:{" "}
-                {missing.map((entry) => entry.label).join(", ")}.{" "}
+                {step.name} is on, but does nothing until you set{" "}
+                {missingSentence(missing)}.{" "}
                 <Link href={moduleHref(guildId, { id: step.moduleId, area: step.area })}>Finish setting it up</Link>.
               </div>
             </div>
@@ -311,7 +392,7 @@ function Finished({ guildId, steps, drafts, outcomes, headingRef }: FinishedProp
             <div className="card-header-text">
               <h3 className="card-title">Turned on</h3>
               <p className="card-help">
-                Each of these has more settings than the wizard asked about.
+                Each of these has more settings than the quick setup asked about.
               </p>
             </div>
           </div>

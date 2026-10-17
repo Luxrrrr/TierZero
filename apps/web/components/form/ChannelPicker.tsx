@@ -13,12 +13,16 @@ export interface GuildChannel {
   type: number;
   parentId: string | null;
   position: number;
+  /** The channel of a ticket. */
+  ticket?: boolean;
 }
 
 export interface ChannelList {
   channels: GuildChannel[];
   loading: boolean;
   failed: boolean;
+  /** Asks the bot for the list again. */
+  retry(): void;
 }
 
 /**
@@ -26,16 +30,26 @@ export interface ChannelList {
  * once and every picker shares it.
  */
 export function useChannels(guildId: string, enabled = true): ChannelList {
-  const { data, error, isLoading } = useSWR<GuildChannel[]>(
+  const { data, error, isLoading, mutate } = useSWR<GuildChannel[]>(
     enabled ? `/api/guilds/${guildId}/channels` : null,
     fetchJson,
   );
-  return { channels: data ?? [], loading: isLoading, failed: error !== undefined };
+  return {
+    channels: data ?? [],
+    loading: isLoading,
+    // A list loaded once and then failing to refresh is still good to show.
+    failed: error !== undefined && data === undefined,
+    retry: () => void mutate(),
+  };
 }
 
 const DEFAULT_TYPES = ["text"];
 
-const LIST_FAILED = "The channel list could not be loaded. Reload the page to try again.";
+const LIST_FAILED = "The channel list could not be loaded, so saved channels are shown by their ID.";
+
+function unloaded(id: string): string {
+  return `Saved channel, ID ${id}`;
+}
 
 interface SingleProps {
   id: string;
@@ -45,6 +59,8 @@ interface SingleProps {
   onChange(next: string | undefined): void;
   clearable?: boolean;
   disabled?: boolean;
+  /** Leaves out ticket channels, where a choice like "send it here" makes no sense. A saved one still shows. */
+  hideTickets?: boolean;
   "aria-labelledby"?: string;
   "aria-describedby"?: string;
 }
@@ -57,11 +73,15 @@ export function ChannelPicker({
   onChange,
   clearable = false,
   disabled = false,
+  hideTickets = false,
   "aria-labelledby": labelledBy,
   "aria-describedby": describedBy,
 }: SingleProps) {
-  const { channels, loading, failed } = useChannels(guildId);
-  const options = useMemo(() => channelOptions(channels, types), [channels, types]);
+  const { channels, loading, failed, retry } = useChannels(guildId);
+  const options = useMemo(
+    () => channelOptions(hideTickets ? channels.filter((channel) => !channel.ticket || channel.id === value) : channels, types),
+    [channels, types, hideTickets, value],
+  );
 
   return (
     <Combobox
@@ -70,6 +90,10 @@ export function ChannelPicker({
       onChange={onChange}
       options={options}
       loading={loading}
+      failed={failed}
+      failedText={LIST_FAILED}
+      onRetry={retry}
+      unloadedLabel={unloaded}
       disabled={disabled}
       clearable={clearable}
       clearLabel="No channel"
@@ -77,7 +101,7 @@ export function ChannelPicker({
       missingLabel="Unknown channel (deleted)"
       searchLabel="Search channels"
       searchPlaceholder="Search channels"
-      emptyText={failed ? LIST_FAILED : "No channel here matches that."}
+      emptyText="No channel here matches that."
       aria-labelledby={labelledBy}
       aria-describedby={describedBy}
     />
@@ -111,7 +135,7 @@ export function MultiChannelPicker({
   "aria-labelledby": labelledBy,
   "aria-describedby": describedBy,
 }: MultiProps) {
-  const { channels, loading, failed } = useChannels(guildId);
+  const { channels, loading, failed, retry } = useChannels(guildId);
   const options = useMemo(() => channelOptions(channels, types), [channels, types]);
 
   return (
@@ -122,13 +146,17 @@ export function MultiChannelPicker({
       options={options}
       max={max}
       loading={loading}
+      failed={failed}
+      failedText={LIST_FAILED}
+      onRetry={retry}
+      unloadedLabel={unloaded}
       disabled={disabled}
       addLabel={addLabel}
       emptyLabel={emptyLabel}
       missingLabel="Unknown channel (deleted)"
       searchLabel="Search channels"
       searchPlaceholder="Search channels"
-      emptyText={failed ? LIST_FAILED : "No channel here matches that."}
+      emptyText="No channel here matches that."
       aria-labelledby={labelledBy}
       aria-describedby={describedBy}
     />
