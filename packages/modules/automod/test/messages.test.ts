@@ -46,16 +46,16 @@ const USER = "<@111111111111111111>";
 describe("the notice in the channel", () => {
   test("says what it always has, for each action, with and without a reason", () => {
     const notice = settings({}).noticeMessage;
-    assert.deepEqual(shown(fill(notice, trip("delete", "Posted a Discord invite link"))), { ping: USER, text: "Your message was removed (invites: Posted a Discord invite link)." });
-    assert.deepEqual(shown(fill(notice, trip("timeout", "Spam", 600_000))), { ping: USER, text: "Your message was removed and you were timed out (invites: Spam)." });
-    assert.deepEqual(shown(fill(notice, trip("warn"))), { ping: USER, text: "That message tripped automod (invites)." });
+    assert.deepEqual(shown(fill(notice, trip("delete", "Posted a Discord invite link"))), { ping: USER, text: "Your message was removed (invite links: Posted a Discord invite link)." });
+    assert.deepEqual(shown(fill(notice, trip("timeout", "Spam", 600_000))), { ping: USER, text: "Your message was removed and you were timed out (invite links: Spam)." });
+    assert.deepEqual(shown(fill(notice, trip("warn"))), { ping: USER, text: "That message tripped automod (invite links)." });
   });
 
   test("says only what was done when a step failed", () => {
     const notice = settings({}).noticeMessage;
-    assert.deepEqual(shown(fill(notice, trip("timeout", "Spam", 600_000, { timedOut: false }))), { ping: USER, text: "Your message was removed (invites: Spam)." });
-    assert.deepEqual(shown(fill(notice, trip("timeout", "Spam", 600_000, { deleted: false, timedOut: false }))), { ping: USER, text: "That message tripped automod (invites: Spam)." });
-    assert.deepEqual(shown(fill(notice, trip("delete", "Spam", undefined, { deleted: false }))), { ping: USER, text: "That message tripped automod (invites: Spam)." });
+    assert.deepEqual(shown(fill(notice, trip("timeout", "Spam", 600_000, { timedOut: false }))), { ping: USER, text: "Your message was removed (invite links: Spam)." });
+    assert.deepEqual(shown(fill(notice, trip("timeout", "Spam", 600_000, { deleted: false, timedOut: false }))), { ping: USER, text: "That message tripped automod (invite links: Spam)." });
+    assert.deepEqual(shown(fill(notice, trip("delete", "Spam", undefined, { deleted: false }))), { ping: USER, text: "That message tripped automod (invite links: Spam)." });
     assert.equal(trip("timeout", "Spam", 600_000, { timedOut: false }).duration, "");
   });
 
@@ -76,7 +76,7 @@ describe("the notice in the channel", () => {
 
   test("uses the message the owner wrote", () => {
     const own = settings({ noticeMessage: { content: "Careful {user}: {rule} ({action}) for {duration}" } }).noticeMessage;
-    assert.equal(fill(own, trip("timeout", "Spam", 600_000)).content, "Careful <@111111111111111111>: invites (delete and timeout) for 10 minutes");
+    assert.equal(fill(own, trip("timeout", "Spam", 600_000)).content, "Careful <@111111111111111111>: invite links (delete and timeout) for 10 minutes");
   });
 
   test("reads a plain string saved as the message", () => {
@@ -91,7 +91,7 @@ describe("the log posts", () => {
     test(`are the embed automod always posted when a rule ${action}s`, () => {
       const embed = fill(settings({}).logMessages[action], tripLog(action, "Spam")).embeds[0];
       assert.equal(colorToInt(embed?.color ?? ""), colours[action]);
-      assert.equal(embed?.description, "<@111111111111111111> tripped **invites**");
+      assert.equal(embed?.description, "<@111111111111111111> tripped **invite links**");
       assert.deepEqual(embed?.fields.map((f) => [f.name, f.value, f.inline]), [
         ["Action", action === "timeout" ? "delete and timeout" : action, true],
         ["Reason", "Spam", true],
@@ -135,7 +135,7 @@ describe("the log posts", () => {
   test("use the embed the owner wrote for one action and leave the others alone", () => {
     const stored = { logMessages: { delete: { content: "", embeds: [{ description: "{user} broke {rule}", color: "#00ff00" }] } } };
     const resolved = settings(stored);
-    assert.equal(fill(resolved.logMessages.delete, tripLog("delete")).embeds[0]?.description, "<@111111111111111111> broke invites");
+    assert.equal(fill(resolved.logMessages.delete, tripLog("delete")).embeds[0]?.description, "<@111111111111111111> broke invite links");
     assert.deepEqual(resolved.logMessages.timeout, LOG_MESSAGES.timeout);
   });
 });

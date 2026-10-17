@@ -7,9 +7,10 @@ import { DEFAULT_WORDING, labelGroup, timeWordsGroup, type TextSpec, type Wordin
  * the reason), not sent on their own. The messages that are sent are in
  * messages.ts.
  *
- * A rule's key (`rateLimit`) is what the code and the stored case know it by.
- * Its name here is only what members and staff are shown in Discord, and by
- * default it is the key itself, as the notice has always shown it.
+ * A rule's key (`rateLimit`) is what the code and the stored case know it by,
+ * and is never shown to anyone. Its name here is what members and staff are
+ * shown in Discord. Older installs defaulted the name to the key; a stored name
+ * that still equals its key is read as the new default (see `ruleName`).
  */
 
 const OUTCOMES = {
@@ -39,13 +40,13 @@ const FRAGMENTS = {
 } as const satisfies Record<string, TextSpec>;
 
 const RULE_NAMES = {
-  invites: { label: "Invite links", text: "invites", max: 60, help: "What {rule} says when this rule trips. {ruleKey} is always the name shown here by default." },
+  invites: { label: "Invite links", text: "invite links", max: 60, help: "What {rule} says when this rule trips. It is lower case by default because the notice uses it mid-sentence." },
   links: { label: "Links", text: "links", max: 60 },
-  capitals: { label: "Excessive capitals", text: "capitals", max: 60 },
-  repeatedText: { label: "Repeated text", text: "repeatedText", max: 60 },
-  mentions: { label: "Mass mentions", text: "mentions", max: 60 },
-  bannedWords: { label: "Banned words", text: "bannedWords", max: 60 },
-  rateLimit: { label: "Rate limit", text: "rateLimit", max: 60 },
+  capitals: { label: "Excessive capitals", text: "excessive capitals", max: 60 },
+  repeatedText: { label: "Repeated text", text: "repeated text", max: 60 },
+  mentions: { label: "Mass mentions", text: "mass mentions", max: 60 },
+  bannedWords: { label: "Banned words", text: "banned words", max: 60 },
+  rateLimit: { label: "Rate limit", text: "rate limit", max: 60 },
 } as const satisfies Record<string, TextSpec>;
 
 const REASONS = {

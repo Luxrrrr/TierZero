@@ -2,6 +2,7 @@ import { ChannelType } from "discord.js";
 import { prisma } from "@tier0/db";
 import {
   SERVER_LOG_CATEGORY_IDS,
+  automodRef,
   can,
   isServerLogCategory,
   readServerLogDetails,
@@ -17,7 +18,7 @@ import type { GuildState } from "../../runtime/guild-state.js";
 import { writeAudit } from "./audit.js";
 import { messageLogWhere } from "./message-filters.js";
 import { refOf, resolveUsers } from "./names.js";
-import { serverLogWhere } from "./server-log-filters.js";
+import { actsAsAutomod, serverLogWhere } from "./server-log-filters.js";
 import { forbidden, ok, pageOf, refuse, type ModCtx, type Reply } from "./types.js";
 
 const MODULE_ID = "serverlog";
@@ -87,10 +88,15 @@ export async function listServerLog(ctx: ModCtx, state: GuildState, query: URLSe
   ]);
 
   const ids = rows.flatMap((row) => [row.actorId, row.targetId].filter((id): id is string => id !== null));
-  const refs = await resolveUsers(ctx.client, ctx.guild, ids);
+  // The bot's account does work for every feature (ticket channels, role menus, feeds), so here it keeps its own
+  // name. Only what an automod rule did is shown as Automod.
+  const refs = await resolveUsers(ctx.client, ctx.guild, ids, { keepBotAccount: true });
+  const botId = ctx.client.user?.id ?? null;
   const items: ServerLogEntryDto[] = rows.map((row) => {
+    const details = readServerLogDetails(row.details);
     const named = (id: string | null, saved: string) => {
       if (id === null) return null;
+      if (actsAsAutomod(id, botId, details.deletedBy)) return automodRef(id);
       const ref = refOf(refs, id);
       // The name saved with the entry still reads right after the member leaves or renames themselves.
       return ref.name === null && saved ? { ...ref, name: saved } : ref;
@@ -105,7 +111,7 @@ export async function listServerLog(ctx: ModCtx, state: GuildState, query: URLSe
       actor: named(row.actorId, row.actorName),
       target: named(row.targetId, row.targetName),
       channel: row.channelId ? { id: row.channelId, name: ctx.guild.channels.cache.get(row.channelId)?.name ?? row.channelName } : null,
-      details: readServerLogDetails(row.details),
+      details,
     };
   });
 

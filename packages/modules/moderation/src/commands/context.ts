@@ -3,8 +3,11 @@ import {
   ApplicationCommandType,
   ContextMenuCommandBuilder,
   InteractionContextType,
+  LabelBuilder,
   ModalBuilder,
   PermissionFlagsBits,
+  StringSelectMenuBuilder,
+  StringSelectMenuOptionBuilder,
   TextInputBuilder,
   TextInputStyle,
   type ContextMenuCommandInteraction,
@@ -14,6 +17,7 @@ import {
 import {
   canTakeAction,
   customId,
+  presetNamed,
   type EvidenceMessage,
   type ComponentEvent,
   type ContextCommandDefinition,
@@ -26,6 +30,7 @@ import { parseDuration } from "../duration.js";
 import { resolveEvidence } from "../evidence.js";
 import { fetchMemberOrNull } from "../lookups.js";
 import { performAction } from "../perform.js";
+import { applyPreset, presetLength } from "../presets.js";
 import { replyRefusal, say } from "../reply.js";
 import { staffRoleOf } from "../staff.js";
 import { fillLabel, type Wording } from "../texts.js";
@@ -76,6 +81,19 @@ const DISCORD_PERMISSION: Record<MenuAction, bigint> = {
 };
 
 const REASON_ROOM = 400;
+/** Discord's limits on a select menu in a form: 25 options, each label, value and description at most 100 characters. */
+const PRESET_OPTIONS_MAX = 25;
+const clipOption = (text: string): string => (text.length > 100 ? `${text.slice(0, 97)}...` : text);
+
+/** The preset picked in the form, if the form had a picker and something was picked. */
+function pickedPreset(interaction: ModalSubmitInteraction): string | null {
+  try {
+    return interaction.fields.getStringSelectValues("preset")[0] ?? null;
+  } catch {
+    // A form opened while the server had no presets has no picker to read.
+    return null;
+  }
+}
 
 const abilityOf = (action: MenuAction, abilities: Wording["abilities"]): string => abilities[action];
 
@@ -131,11 +149,30 @@ async function openForm(interaction: ContextMenuCommandInteraction, ctx: Ctx, ac
     .setCustomId(customId("moderation", "ctxact", rest))
     .setTitle(fillLabel(menu.modalTitle, { verb: menu[VERB_KEY[action]], name: target.user.username }).slice(0, 45));
 
+  const presets = ctx.settings.reasonPresets.slice(0, PRESET_OPTIONS_MAX);
+  if (presets.length > 0) {
+    const picker = new StringSelectMenuBuilder()
+      .setCustomId("preset")
+      .setPlaceholder(menu.presetPlaceholder)
+      .setRequired(false)
+      .setMinValues(0)
+      .setMaxValues(1)
+      .addOptions(
+        presets.map((preset) => {
+          const option = new StringSelectMenuOptionBuilder().setLabel(clipOption(preset.name)).setValue(clipOption(preset.name));
+          return preset.reason.trim() === "" ? option : option.setDescription(clipOption(preset.reason));
+        }),
+      );
+    modal.addLabelComponents(new LabelBuilder().setLabel(menu.presetLabel).setStringSelectMenuComponent(picker));
+  }
+
   const reason = new TextInputBuilder()
     .setCustomId("reason")
     .setLabel(menu.reasonLabel)
     .setStyle(TextInputStyle.Paragraph)
-    .setRequired(ctx.settings.requireReason)
+    // With presets on offer, picking one is enough, so the box can be left empty here and the
+    // server's rule on reasons is applied to what the two make together.
+    .setRequired(ctx.settings.requireReason && presets.length === 0)
     .setMaxLength(REASON_ROOM)
     .setPlaceholder(target.message ? menu.reasonPlaceholderMessage : menu.reasonPlaceholder);
   modal.addComponents(new ActionRowBuilder<TextInputBuilder>().addComponents(reason));
@@ -207,7 +244,12 @@ export async function submitContextAction(
   if (!role) return say(ctx, interaction, "staff", "notStaff");
   if (!canTakeAction(role, action)) return say(ctx, interaction, "staff", "needsAdmin", { action: abilityOf(action, labels.abilities) });
 
-  const typed = interaction.fields.getTextInputValue("reason").trim();
+  // A preset picked from the menu leads, with anything typed after it. Typing a preset's name works as picking it.
+  const typedRaw = interaction.fields.getTextInputValue("reason").trim();
+  const picked = presetNamed(pickedPreset(interaction), ctx.settings.reasonPresets);
+  const typedChoice = picked ? null : applyPreset(typedRaw, ctx.settings.reasonPresets, action);
+  const typed = picked ? [picked.reason, typedRaw].filter(Boolean).join("\n") : (typedChoice?.reason ?? typedRaw);
+  const presetMs = picked ? presetLength(picked, action) : (typedChoice?.durationMs ?? null);
   const link =
     channelId && messageId && /^\d{17,20}$/.test(channelId) && /^\d{17,20}$/.test(messageId)
       ? `https://discord.com/channels/${ctx.guild.id}/${channelId}/${messageId}`
@@ -218,7 +260,7 @@ export async function submitContextAction(
   if (action === "timeout" || action === "ban") {
     const input = interaction.fields.getTextInputValue("duration").trim();
     if (input === "") {
-      durationMs = action === "timeout" ? ctx.settings.defaultTimeoutDuration : null;
+      durationMs = presetMs ?? (action === "timeout" ? ctx.settings.defaultTimeoutDuration : null);
     } else {
       durationMs = parseDuration(input);
       unreadableDuration = durationMs === null;

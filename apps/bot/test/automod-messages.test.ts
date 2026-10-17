@@ -57,7 +57,7 @@ describe("the automod notice", () => {
     });
     assert.ok(sent);
     assert.equal(payloads[0]?.content, "<@111111111111111111>", "the mention stays outside the embed so it notifies");
-    assert.equal(embedOf(payloads[0]).description, "Your message was removed (invites: Spam).");
+    assert.equal(embedOf(payloads[0]).description, "Your message was removed (invite links: Spam).");
     assert.equal(embedOf(payloads[0]).color, WARNING);
   });
 
@@ -90,7 +90,7 @@ describe("the automod notice", () => {
       console.error = original;
     }
     assert.equal(payloads[0]?.content, "<@111111111111111111>");
-    assert.equal(embedOf(payloads[0]).description, `Your message was removed (invites: ${"z".repeat(700)}).`);
+    assert.equal(embedOf(payloads[0]).description, `Your message was removed (invite links: ${"z".repeat(700)}).`);
   });
 });
 
@@ -119,7 +119,7 @@ describe("the automod direct message", () => {
     const sent = await sendMessage(fakeMember(payloads) as never, settings.dmMessage, tripValues(facts, settings.labels), { guild: guild as never, fallback: DM_MESSAGE });
     assert.ok(sent);
     assert.equal(payloads[0]?.content, undefined);
-    assert.equal(embedOf(payloads[0]).description, "In Test Server, your message was removed (invites: Spam).");
+    assert.equal(embedOf(payloads[0]).description, "In Test Server, your message was removed (invite links: Spam).");
     assert.equal(embedOf(payloads[0]).color, WARNING);
     assert.deepEqual(payloads[0]?.allowedMentions, { parse: [] });
   });
@@ -141,7 +141,7 @@ describe("the automod direct message", () => {
     } finally {
       console.error = original;
     }
-    assert.equal(embedOf(payloads[0]).description, `In Test Server, your message was removed (invites: ${"z".repeat(700)}).`);
+    assert.equal(embedOf(payloads[0]).description, `In Test Server, your message was removed (invite links: ${"z".repeat(700)}).`);
   });
 
   test("a member with direct messages closed is skipped without throwing", async () => {

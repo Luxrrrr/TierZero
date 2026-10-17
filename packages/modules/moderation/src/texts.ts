@@ -78,7 +78,7 @@ export const REFUSALS = {
   timeoutTooLong: {
     label: "A timeout is longer than Discord allows",
     help: "When a timeout is set for more than 28 days.",
-    text: "Timeouts cannot be longer than 28 days - that's Discord's own limit.",
+    text: "Timeouts cannot be longer than 28 days, which is Discord's own limit.",
     kind: "error",
   },
   banTooLong: {
@@ -331,6 +331,48 @@ export const DIRECT = {
   },
 } satisfies Record<string, MessageSpec>;
 
+/** /lockdown. */
+export const RAID = {
+  lockdownStarted: {
+    label: "Channels locked",
+    help: "After /lockdown start.",
+    text: "Locked {count}.{skippedNote}",
+    kind: "success",
+    variables: [v("count", "How many channels were locked, with the word after it", "12 channels"), v("skippedNote", "A sentence about channels that could not be locked, with a space in front. Empty when none", " 2 channels could not be changed, most likely because the bot cannot manage them.")],
+  },
+  lockdownEnded: {
+    label: "Channels unlocked",
+    help: "After /lockdown end.",
+    text: "Unlocked {count}.{skippedNote}",
+    kind: "success",
+    variables: [v("count", "How many channels were unlocked, with the word after it", "12 channels"), v("skippedNote", "A sentence about channels that could not be changed back, with a space in front. Empty when none", " 1 channel could not be changed back. Check its permissions by hand.")],
+  },
+  lockdownNothingLocked: {
+    label: "Nothing to unlock",
+    help: "When /lockdown end finds no channel the bot locked.",
+    text: "No channel is locked by the bot.",
+    kind: "info",
+  },
+  lockdownNothingToLock: {
+    label: "Nothing to lock",
+    help: "When every channel /lockdown start would lock is already locked, exempt or hidden from members.",
+    text: "There is nothing to lock: those channels are already locked, left alone by the settings, or hidden from members.",
+    kind: "info",
+  },
+  lockdownNeedsPermission: {
+    label: "The bot cannot change channels",
+    help: "When the bot lacks Manage Roles, which it needs to change who can talk in a channel.",
+    text: "I need the Manage Roles permission to lock channels.",
+    kind: "error",
+  },
+  lockdownNotAllowed: {
+    label: "Not allowed to lock channels",
+    help: "When the person has neither Manage Channels nor an admin place on the staff list.",
+    text: "You need the Manage Channels permission, or to be an admin on this server's staff list, to lock or unlock channels.",
+    kind: "error",
+  },
+} satisfies Record<string, MessageSpec>;
+
 export const REPLIES = {
   refusals: REFUSALS,
   staff: STAFF,
@@ -338,6 +380,7 @@ export const REPLIES = {
   purge: PURGE,
   confirmations: CONFIRMATIONS,
   direct: DIRECT,
+  raid: RAID,
 } as const;
 
 export type ReplyGroup = keyof typeof REPLIES;
@@ -352,6 +395,7 @@ export const REPLY_GROUP_TITLES: Record<ReplyGroup, { label: string; help: strin
   purge: { label: "Purge", help: "What /purge says when it cannot do its job. The reply when it works is on the Commands page." },
   confirmations: { label: "Confirmations", help: "What a moderator is told once the action has been taken." },
   direct: { label: "Direct messages", help: "Messages sent to the member besides the one about the action. That one is Direct message to the member, above." },
+  raid: { label: "Lockdown", help: "What /lockdown says back." },
 };
 
 /** The sentence for a refusal, filled in. The dashboard gets its own wording where it differs. */
@@ -396,6 +440,7 @@ export function repliesShape() {
     purge: messageGroup(PURGE, REPLY_GROUP_TITLES.purge),
     confirmations: messageGroup(CONFIRMATIONS, REPLY_GROUP_TITLES.confirmations),
     direct: messageGroup(DIRECT, REPLY_GROUP_TITLES.direct),
+    raid: messageGroup(RAID, REPLY_GROUP_TITLES.raid),
   };
 }
 
@@ -456,6 +501,8 @@ const NOTES = {
   modLogFailed: { label: "Mod log post failed", text: "The mod log post failed. Check that the bot can send messages in the mod log channel.", max: 300 },
   correctionSent: { label: "Correction sent", text: "They had already been sent a message about it, so they were sent a correction.", max: 300, help: "Added to a refusal when the member had already been messaged and was then sent a correction." },
   correctionFailed: { label: "Correction could not be sent", text: "They had already been sent a message about it and the correction could not be delivered.", max: 300 },
+  raidLocked: { label: "The alert locked channels", text: "Locked {count}.", max: 200, placeholders: ["count"], help: "What {lockdownNote} becomes in the join-rate alert when it locked channels. {count} is the number with the word after it." },
+  appealRetry: { label: "When a denied member may appeal again", text: "You can appeal again {when}.", max: 200, placeholders: ["when"], help: "What {retryNote} becomes in the message about a denied appeal. {when} is the time, counted from now. Left out when they may appeal again straight away." },
 } satisfies Record<string, TextSpec>;
 
 const TIME = {
@@ -487,6 +534,9 @@ const COUNTS = {
   messageMany: { label: "Several messages", text: "{count} messages", max: 60, placeholders: ["count"] },
   skippedOne: { label: "One message left because it is old", text: "{count} message was left because it is older than 14 days.", max: 200, placeholders: ["count"], help: "Added to the reply to /purge for messages Discord does not let a bot delete in bulk." },
   skippedMany: { label: "Several messages left because they are old", text: "{count} messages were left because they are older than 14 days.", max: 200, placeholders: ["count"] },
+  channelOne: { label: "One channel", text: "{count} channel", max: 60, placeholders: ["count"], help: "How a number of channels reads in the replies to /lockdown." },
+  channelMany: { label: "Several channels", text: "{count} channels", max: 60, placeholders: ["count"] },
+  lockSkipped: { label: "Channels that could not be changed", text: "{count} could not be changed, most likely because the bot cannot manage them.", max: 200, placeholders: ["count"], help: "Added to the replies to /lockdown when some channels could not be locked or unlocked. {count} is the number of channels with the word after it." },
 } satisfies Record<string, TextSpec>;
 
 const MENU = {
@@ -502,6 +552,8 @@ const MENU = {
   timeoutPlaceholder: { label: "Timeout length hint", text: "10m, 2h or 7d. Empty uses the server's default.", max: 100 },
   banLabel: { label: "Ban length box", text: "How long (empty is permanent)", max: 45 },
   banPlaceholder: { label: "Ban length hint", text: "1d or 7d. Empty is permanent.", max: 100 },
+  presetLabel: { label: "Preset box", text: "Preset", max: 45, help: "Shown above the reason when the server has reason presets." },
+  presetPlaceholder: { label: "Preset hint", text: "Pick a common reason, or write one below", max: 100 },
 } satisfies Record<string, TextSpec>;
 
 const REASONS = {
@@ -510,6 +562,31 @@ const REASONS = {
     text: "Temporary ban expired",
     max: 512,
     help: "The reason when the bot lifts a temporary ban by itself. It goes in the server's audit log, on the case and in the direct message.",
+  },
+  escalated: {
+    label: "An escalation rule acting",
+    text: "Automatic: {rule} ({warns})",
+    max: 300,
+    placeholders: ["rule", "warns"],
+    help: "The reason on a case an escalation rule makes. {rule} is the rule's name, {warns} says what it counted, such as 3 warnings in 30 days.",
+  },
+  appealAccepted: {
+    label: "A ban lifted by an appeal",
+    text: "Ban appeal accepted",
+    max: 512,
+    help: "The reason on the unban when staff accept an appeal. It goes in the server's audit log and on the case.",
+  },
+  lockdown: {
+    label: "A lockdown",
+    text: "Lockdown",
+    max: 400,
+    help: "Shown in the server's audit log for the permission changes a lockdown and an unlock make. The reason staff gave is added after it.",
+  },
+  joinAlert: {
+    label: "A lockdown the join-rate alert started",
+    text: "Many members joined in a short time",
+    max: 300,
+    help: "The reason on a lockdown the join-rate alert starts by itself.",
   },
 } satisfies Record<string, TextSpec>;
 
@@ -545,7 +622,7 @@ const LABEL_GROUP_TITLES: Record<keyof typeof LABELS, { label: string; help: str
   notes: { label: "Phrases added to other text", help: "Short sentences that other messages are built from. The space between them is added for you." },
   time: { label: "Lengths of time", help: "How a length such as 10 minutes is written." },
   history: { label: "The /history list", help: "How each line of the list is laid out." },
-  counts: { label: "Purge counts", help: "How the reply to /purge counts messages." },
+  counts: { label: "Counts", help: "How the replies to /purge and /lockdown count messages and channels." },
   menu: { label: "Right-click forms", help: "The titles, boxes and hints of the forms the right-click actions open. Discord limits each, shown as you type." },
   reasons: { label: "Reasons the bot writes", help: "Reasons the bot gives for something it does without a moderator." },
 };

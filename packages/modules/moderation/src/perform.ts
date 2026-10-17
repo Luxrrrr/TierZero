@@ -22,6 +22,7 @@ import {
   type OutcomeNote,
 } from "./action-rules.js";
 import { deleteMessageSeconds } from "./duration.js";
+import { escalateAfterWarning, type EscalationOutcome } from "./escalation.js";
 import { guardAgainstMember, guardForDashboard } from "./hierarchy-guard.js";
 import { deactivateOpen, deactivateOpenTimeouts, recordInfraction, type InfractionRecord } from "./infractions.js";
 import type { ModerationAction } from "./modlog.js";
@@ -56,6 +57,8 @@ export interface PerformInput {
   origin: ActionOrigin;
   /** Copies of messages to keep with the case. Taken before the action, because a ban can delete the messages. */
   evidence?: EvidenceMessage[];
+  /** Leaves out the direct message about the action, for a caller that sends its own, such as an accepted appeal. */
+  noDirectMessage?: boolean;
 }
 
 export interface PerformOutcome {
@@ -64,6 +67,8 @@ export interface PerformOutcome {
   notes: string[];
   /** The same notes by name, for a caller that words them from the server's settings. */
   noteKeys: OutcomeNote[];
+  /** The case an escalation rule took straight after this warning, if one did. */
+  escalation?: EscalationOutcome | null;
 }
 
 type Ctx = ModuleContext<ModerationSettings>;
@@ -162,7 +167,7 @@ async function perform(ctx: Ctx, input: PerformInput): Promise<PerformOutcome> {
   }
 
   const notify = async (expiresAt: Date | null, durationMs: number | null = null): Promise<DmOutcome> => {
-    const decision = shouldMessage(action, targetMember !== null, settings.dmOnAction);
+    const decision = shouldMessage(action, targetMember !== null, settings.dmOnAction && !input.noDirectMessage);
     if (decision !== "send") return decision;
     const sent = await tryDirectMessage(ctx, targetId, {
       action,
@@ -273,5 +278,16 @@ async function perform(ctx: Ctx, input: PerformInput): Promise<PerformOutcome> {
   });
 
   const facts = { action, dm, modLog, targetInServer: action === "unban" || targetMember !== null };
-  return { record, notes: outcomeNotes(facts), noteKeys: outcomeNoteKeys(facts) };
+  const notes = outcomeNotes(facts);
+  // Counted once the warning is on the record, so it is among the warnings counted.
+  const escalation = action === "warn" ? await escalateAfterWarning(ctx, targetId) : null;
+  if (escalation) notes.push(escalationNote(escalation));
+  return { record, notes, noteKeys: outcomeNoteKeys(facts), escalation };
+}
+
+const ESCALATED: Record<EscalationOutcome["action"], string> = { timeout: "timed them out", kick: "kicked them", ban: "banned them" };
+
+/** The dashboard's side note when a warning set off an escalation rule. */
+export function escalationNote(outcome: Pick<EscalationOutcome, "action" | "automatic" | "record">): string {
+  return `This warning reached the escalation rule "${outcome.automatic.rule}", which ${ESCALATED[outcome.action]} as case #${outcome.record.caseNumber}.`;
 }

@@ -2,7 +2,7 @@ import { SlashCommandBuilder, PermissionFlagsBits } from "discord.js";
 import { embedReply, type CommandDefinition, type ResponseTemplate } from "@tier0/core";
 import type { ModerationSettings } from "../settings.js";
 import { answer } from "./answer.js";
-import { runFromCommand } from "./run-action.js";
+import { runFromCommand, suggestReasons } from "./run-action.js";
 
 const WARN_REPLY: ResponseTemplate = {
   starting: embedReply("Warned {user}. Case #{case}.", "success"),
@@ -25,8 +25,9 @@ export const warnCommand: CommandDefinition<ModerationSettings> = {
         option.setName("member").setDescription("Who to warn").setRequired(true),
       )
       .addStringOption((option) =>
-        option.setName("reason").setDescription("Why").setMaxLength(500),
+        option.setName("reason").setDescription("Why, or pick one of the server's presets").setMaxLength(500).setAutocomplete(true),
       ),
+  autocomplete: suggestReasons,
   async run(interaction, ctx) {
     const target = interaction.options.getUser("member", true);
     const record = await runFromCommand(interaction, ctx, { action: "warn", target });

@@ -1,6 +1,18 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { buildCsv, buildExport, caseState, csvCell, csvRow, EXPORT_HEADER, exportFilename, exportRow } from "../dist/control/mod/csv.js";
+import {
+  buildCsv,
+  buildExport,
+  buildStatsExport,
+  caseState,
+  csvCell,
+  csvRow,
+  EXPORT_HEADER,
+  exportFilename,
+  exportRow,
+  STATS_EXPORT_HEADER,
+  statsExportFilename,
+} from "../dist/control/mod/csv.js";
 import { rawHeaders } from "../dist/control/mod/types.js";
 
 const NOW = new Date("2026-10-09T12:00:00Z");
@@ -85,12 +97,25 @@ describe("caseState", () => {
     assert.equal(caseState(infraction({ voidedAt: NOW, active: false }), NOW), "removed");
   });
 
-  test("a lapsed or lifted case is expired, an open one is active", () => {
+  test("uses the words Member actions shows, by the shared in-force rule", () => {
     assert.equal(caseState(infraction({ action: "timeout", expiresAt: new Date("2026-10-09T11:59:59Z") }), NOW), "expired");
     assert.equal(caseState(infraction({ action: "timeout", expiresAt: new Date("2026-10-09T12:00:00Z") }), NOW), "expired");
-    assert.equal(caseState(infraction({ action: "ban", active: false }), NOW), "expired");
-    assert.equal(caseState(infraction({ action: "timeout", expiresAt: new Date("2026-10-10T00:00:00Z") }), NOW), "active");
-    assert.equal(caseState(infraction(), NOW), "active");
+    assert.equal(caseState(infraction({ action: "timeout", expiresAt: new Date("2026-10-10T00:00:00Z") }), NOW), "in force");
+    assert.equal(caseState(infraction({ action: "ban", active: true }), NOW), "in force");
+    assert.equal(caseState(infraction({ action: "ban", active: false }), NOW), "on record");
+    assert.equal(caseState(infraction(), NOW), "on record");
+    assert.equal(caseState(infraction({ action: "kick" }), NOW), "on record");
+  });
+
+  test("an automod warn reads as on record, as on the page, whatever its stored flag", () => {
+    assert.equal(caseState(infraction({ action: "automod-warn", active: false }), NOW), "on record");
+  });
+});
+
+describe("exportRow reasons", () => {
+  test("an automod case names its rule, never the key it is stored under", () => {
+    const row = exportRow(infraction({ action: "automod-delete", reason: "bannedWords: Used a banned word or phrase (matched `free nitro`)" }), NOW, names);
+    assert.equal(row[5], "Banned words: Used a banned word or phrase (matched free nitro)");
   });
 });
 
@@ -107,7 +132,7 @@ describe("exportRow", () => {
       "spam",
       "300000000000000001",
       "Mod",
-      "expired",
+      "on record",
       "2026-10-02T00:00:00.000Z",
       null,
       null,
@@ -179,5 +204,63 @@ describe("rawHeaders", () => {
     const disposition = rawHeaders({ contentType: "text/csv", text: "", filename: 'x"\r\nSet-Cookie: a=b' })["content-disposition"]!;
     assert.ok(!/[\r\n]/.test(disposition));
     assert.equal(disposition.split('"').length, 3);
+  });
+});
+
+describe("stats export", () => {
+  const stats = {
+    days: 3,
+    since: "2026-10-07T00:00:00.000Z",
+    until: "2026-10-09",
+    range: "custom" as const,
+    bucket: "day" as const,
+    totals: {
+      actions: 6,
+      warns: 3,
+      timeouts: 1,
+      kicks: 0,
+      bans: 1,
+      unbans: 1,
+      voided: 2,
+      notes: 4,
+      membersWithRecord: 5,
+      activeNow: 1,
+    },
+    previous: null,
+    perDay: [
+      { date: "2026-10-07", warn: 2, timeout: 0, kick: 0, ban: 0, other: 0 },
+      { date: "2026-10-08", warn: 0, timeout: 1, kick: 0, ban: 1, other: 1 },
+      { date: "2026-10-09", warn: 1, timeout: 0, kick: 0, ban: 0, other: 0 },
+    ],
+    byAction: [],
+    moderators: [
+      { userId: "300000000000000001", total: 5, warn: 3, timeout: 1, kick: 0, ban: 1, notes: 4, voided: 2, lastActionAt: null },
+    ],
+    topMembers: [],
+    byHour: new Array(24).fill(0),
+    repeatRate: null,
+    automod: { total: 0, previousTotal: null, byRule: [] },
+  };
+
+  test("has one row per point, a range row, then one row per moderator", () => {
+    const lines = buildStatsExport(stats, () => "=HYPERLINK(\"x\")").split("\r\n");
+    assert.equal(lines[0], STATS_EXPORT_HEADER.join(","));
+    assert.equal(lines[1], "day,2026-10-07,2026-10-07,,,2,0,0,0,0,2,,");
+    assert.equal(lines[2], "day,2026-10-08,2026-10-08,,,0,1,0,1,1,3,,");
+    assert.equal(lines[4], "range,2026-10-07,2026-10-09,,,3,1,0,1,1,6,4,2");
+    assert.equal(lines[5], `moderator,2026-10-07,2026-10-09,300000000000000001,"'=HYPERLINK(""x"")",3,1,0,1,0,5,4,2`);
+    assert.equal(lines[6], "");
+  });
+
+  test("week and month points carry their last day", () => {
+    const text = buildStatsExport(
+      { ...stats, bucket: "week", perDay: [{ date: "2026-10-01", end: "2026-10-04", warn: 1, timeout: 0, kick: 0, ban: 0, other: 0 }] },
+      () => null,
+    );
+    assert.equal(text.split("\r\n")[1], "week,2026-10-01,2026-10-04,,,1,0,0,0,0,1,,");
+  });
+
+  test("the file name says which days it covers", () => {
+    assert.equal(statsExportFilename("100000000000000001", stats), "tier0-mod-stats-100000000000000001-2026-10-07-to-2026-10-09.csv");
   });
 });

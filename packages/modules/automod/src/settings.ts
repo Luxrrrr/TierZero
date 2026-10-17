@@ -1,4 +1,5 @@
-import { s, type Infer } from "@tier0/core";
+import { s, type Field, type Infer } from "@tier0/core";
+import { PATTERN_MAX_LENGTH, patternProblem } from "./patterns.js";
 import {
   DM_MESSAGE,
   DM_NOTE,
@@ -91,7 +92,8 @@ const ACTION_OPTIONS: Array<{ value: RuleAction; label: string; description: str
 function ruleHead(rule: RuleName, defaultTimeout: string) {
   const recommended = RECOMMENDED_ACTIONS[rule];
   return {
-    enabled: s.boolean({ label: "On", default: false, guided: true }),
+    // Every rule's switch is in one essential set, so automod reads "Needs setup" while all are off, naming the rules.
+    enabled: s.boolean({ label: "On", default: false, guided: true, essential: "rules" }),
     actions: s.array(
       s.choice({
         options: ACTION_OPTIONS.map((option) => ({ ...option, recommended: recommended.includes(option.value) })),
@@ -107,9 +109,33 @@ function ruleHead(rule: RuleName, defaultTimeout: string) {
     timeoutDuration: s.duration({
       label: "Timeout length",
       default: defaultTimeout,
+      min: "1m",
       max: "28d",
       when: { field: "actions", includes: "timeout" },
     }),
+    countTowardEscalation: s.boolean({
+      label: "Count its warnings toward automatic escalation",
+      default: true,
+      help: "Warnings from this rule count toward the escalation rules in the Moderation settings, as a moderator's do.",
+      when: { field: "actions", includes: "warn" },
+    }),
+  };
+}
+
+/**
+ * A string setting with one more rule than its builder knows, applied when it
+ * is saved and on every read. The rules used here only look at the text, so
+ * what passed when it was saved still passes when it is read back.
+ */
+function checked(field: Field<string>, problem: (value: string) => string | null): Field<string> {
+  return {
+    ...field,
+    parse(input, path = "") {
+      const result = field.parse(input, path);
+      if (!result.ok) return result;
+      const found = problem(result.value);
+      return found ? { ok: false, errors: [{ path, message: found }] } : result;
+    },
   };
 }
 
@@ -264,6 +290,7 @@ export const settings = s.object({
       repeatWindow: s.duration({
         label: "Window the repeated messages must fall within",
         default: "30s",
+        min: "1s",
         max: "1h",
       }),
       ...ruleExemptions(),
@@ -288,7 +315,17 @@ export const settings = s.object({
   bannedWords: s.object(
     {
       ...ruleHead("bannedWords", "10m"),
-      words: s.array(s.string(), { label: "Banned words or phrases" }),
+      // Not checked on save: lists saved before wildcards existed may hold any number of *, and a check
+      // that failed on read would switch automod off. A word with more than two is matched as written.
+      words: s.array(s.string(), {
+        label: "Banned words or phrases",
+        help: "A * in a word stands for a few characters with no space, so free*nitro also catches freenitro and free-nitro. Up to two * in one word; a word with more is matched exactly as written.",
+      }),
+      patterns: s.array(checked(s.string({ max: PATTERN_MAX_LENGTH }), patternProblem), {
+        label: "Patterns",
+        max: 50,
+        help: "Regular expressions, for owners who know them, matched without regard to case. Patterns that could take too long are refused when you save: repeating a group that repeats or is optional, such as (a+)+ or (a?b?)+, references back to a group, lookahead and lookbehind, and long runs of optional parts. A repeat such as + or * covers at most 32 characters.",
+      }),
       ...ruleExemptions(),
     },
     ruleOptions("Banned words", "bannedWords"),
@@ -306,6 +343,7 @@ export const settings = s.object({
       window: s.duration({
         label: "Window the message count is measured over",
         default: "10s",
+        min: "1s",
         max: "5m",
       }),
       ...ruleExemptions(),

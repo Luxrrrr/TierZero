@@ -6,6 +6,7 @@ import {
   readEvidence,
   type EvidenceMessage,
   type ActionContextDto,
+  type ActionTargetDto,
   parseEvidenceRefs,
   type ActionResult,
   type Actor,
@@ -16,12 +17,15 @@ import { prisma } from "@tier0/db";
 import {
   ActionRefused,
   actionContext,
+  blockedActions,
   commandForAction,
   changeLength,
   commandSwitchedOff,
   disabledActions,
+  fetchBanOrNull,
   fetchMemberOrNull,
   performAction,
+  presetDtos,
   readRequestFields,
   recentFor,
   resolveEvidence,
@@ -29,7 +33,7 @@ import {
 } from "@tier0/module-moderation";
 import type { GuildState } from "../../runtime/guild-state.js";
 import { writeAudit } from "./audit.js";
-import { checkVoidReason, describeCase, infractionDto, infractionSnapshot, isSnowflake } from "./dto.js";
+import { checkVoidReason, describeCase, infractionDto, infractionSnapshot, isSnowflake, joinWords } from "./dto.js";
 import { createLimiter } from "./limiter.js";
 import { refOf, resolveUsers } from "./names.js";
 import { forbidden, notFound, ok, refuse, type ModCtx, type Reply } from "./types.js";
@@ -74,7 +78,6 @@ const ACTION_PAST: Record<ModActionKind, string> = {
 };
 
 const clipReason = (text: string): string => (text.length > 120 ? `${text.slice(0, 117)}...` : text);
-
 /** The moderation module's context for this server, or null when its stored settings fail validation. */
 async function moderationContext(ctx: ModCtx, state: GuildState): Promise<ModerationContext | null> {
   const moduleCtx = await state.context(ctx.guild, MODULE_ID);
@@ -102,6 +105,7 @@ export async function actionContextFor(ctx: ModCtx, state: GuildState): Promise<
   const body: ActionContextDto = {
     moduleEnabled,
     ...actionContext(moduleCtx.settings),
+    reasonPresets: presetDtos(moduleCtx.settings.reasonPresets),
     disabledActions: disabledActions(await switchedOffCommands(ctx.guild.id)),
   };
   return ok(body);
@@ -167,7 +171,7 @@ export async function takeAction(
       const found = refOf(refs, id);
       return removed && id === targetId ? { ...found, inServer: false } : found;
     };
-    const infraction = infractionDto({ ...record, voidedAt: null, voidedBy: null, voidReason: null }, ref);
+    const infraction = infractionDto({ ...record, voidedAt: null, voidedBy: null, voidReason: null }, ref, ctx.warnExpiryMs ?? null);
     const body: ActionResult = { caseNumber: record.caseNumber, infraction, notes };
 
     // The case is the record of the action, and the audit trail is the record of who took it from the
@@ -182,6 +186,42 @@ export async function takeAction(
       after: { action, caseNumber: record.caseNumber, reason: record.reason },
     }).catch((error: unknown) => console.error("mod: could not write the audit entry for an action:", error));
 
+    return ok(body);
+  } catch (error) {
+    if (error instanceof ActionRefused) return refusal(error);
+    throw error;
+  }
+}
+
+/**
+ * GET /mod/members/:id/standing -> ActionTargetDto. What Discord says about the member now, and which actions the
+ * bot would refuse this viewer, by the rules `performAction` applies. The dashboard names the viewer from the session.
+ */
+export async function actionTarget(ctx: ModCtx, targetId: string, viewerId: string | null, isOwner: boolean): Promise<Reply> {
+  if (!isSnowflake(targetId)) return refuse(400, "That is not a valid Discord user id.");
+  if (!viewerId || !isSnowflake(viewerId)) return refuse(400, "The request did not say who is asking.");
+  try {
+    const [actor, target] = await Promise.all([fetchMemberOrNull(ctx.guild, viewerId), fetchMemberOrNull(ctx.guild, targetId)]);
+    // A failed ban lookup leaves the dashboard to go by the record, rather than failing the whole menu.
+    const banned = target ? false : await fetchBanOrNull(ctx.guild, targetId).then((ban) => ban !== null, () => null);
+    const until = target?.communicationDisabledUntil ?? null;
+    const body: ActionTargetDto = {
+      inServer: target !== null,
+      banned,
+      timedOutUntil: until && until.getTime() > Date.now() ? until.toISOString() : null,
+      blocked: blockedActions({
+        targetId,
+        actorId: viewerId,
+        botId: ctx.client.user?.id ?? null,
+        ownerId: ctx.guild.ownerId,
+        actor: actor ? { topRole: actor.roles.highest.position, isServerOwner: actor.id === ctx.guild.ownerId } : null,
+        actorIsInstanceOwner: isOwner,
+        target: target
+          ? { topRole: target.roles.highest.position, moderatable: target.moderatable, kickable: target.kickable, bannable: target.bannable }
+          : null,
+        botTopRole: ctx.guild.members.me?.roles.highest.position ?? 0,
+      }),
+    };
     return ok(body);
   } catch (error) {
     if (error instanceof ActionRefused) return refusal(error);
@@ -302,7 +342,7 @@ export async function editInfraction(
         guildId: ctx.guild.id,
         actor,
         kind: "infraction.edit",
-        summary: `Edited ${changes.join(", ")} on ${described}`,
+        summary: `Edited ${joinWords(changes)} on ${described}`,
         targetUserId: seen.userId,
         infractionId: id,
         before: infractionSnapshot(seen),
@@ -319,5 +359,5 @@ export async function editInfraction(
 async function presentCase(ctx: ModCtx, row: NonNullable<Awaited<ReturnType<typeof prisma.infraction.findFirst>>>) {
   const ids = [row.userId, row.moderatorId, ...(row.editedBy ? [row.editedBy] : [])];
   const refs = await resolveUsers(ctx.client, ctx.guild, ids);
-  return infractionDto(row, (userId) => refOf(refs, userId));
+  return infractionDto(row, (userId) => refOf(refs, userId), ctx.warnExpiryMs ?? null);
 }

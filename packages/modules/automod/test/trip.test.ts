@@ -400,7 +400,7 @@ describe("the direct message to the member", () => {
     assert.equal(dm.body.embeds[0]?.description, "In {server}, {outcome} ({rule}{reasonNote}).");
     assert.equal(dm.options.fallback?.embeds[0]?.description, "In {server}, {outcome} ({rule}{reasonNote}).");
     assert.equal(dm.values.outcome, "your message was removed and you were warned");
-    assert.equal(dm.values.rule, "bannedWords");
+    assert.equal(dm.values.rule, "banned words", "members see the rule by name, never by its key");
     assert.equal(dm.values.reason, "Used a banned word or phrase");
     assert.equal(dm.values.action, "delete and warn");
     assert.equal(dm.values.user, `<@${MEMBER}>`);
@@ -481,7 +481,7 @@ describe("the wording an owner can change", () => {
   test("the reason on the timeout in the audit log is Automod and the rule, until it is changed", async () => {
     const stock = setup({ messageId: "100000000000000411", actions: ["timeout"] });
     await automod.events!.messageCreate!(stock.message as never, stock.ctx as never);
-    assert.deepEqual(stock.timeoutReasons, ["Automod: bannedWords"]);
+    assert.deepEqual(stock.timeoutReasons, ["Automod: banned words"]);
 
     const custom = setup({
       messageId: "100000000000000412",

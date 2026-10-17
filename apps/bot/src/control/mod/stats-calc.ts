@@ -48,13 +48,35 @@ export interface StatsTotalsResult {
   activeNow: number;
 }
 
+export type StatsRangeKind = "days" | "all" | "custom";
+export type StatsBucket = "day" | "week" | "month";
+
+/** Which stretch of time the stats cover. Custom dates are whole UTC days, `YYYY-MM-DD`, both included. */
+export type StatsRange = { kind: "days"; days: number } | { kind: "all" } | { kind: "custom"; from: string; to: string };
+
+export interface StatsPoint {
+  /** First day the point covers. */
+  date: string;
+  /** Last day the point covers, set only when the point is a week or a month. */
+  end?: string;
+  warn: number;
+  timeout: number;
+  kick: number;
+  ban: number;
+  other: number;
+}
+
 export interface StatsResult {
   days: number;
   since: string;
+  /** Last day in the range, `YYYY-MM-DD`. */
+  until: string;
+  range: StatsRangeKind;
+  bucket: StatsBucket;
   totals: StatsTotalsResult;
-  /** The same totals for the equal-length period just before this one, or null when no history predates the range. */
+  /** The same totals for the equal-length period just before this one, or null when no history predates the range or the range is all time. */
   previous: StatsTotalsResult | null;
-  perDay: { date: string; warn: number; timeout: number; kick: number; ban: number; other: number }[];
+  perDay: StatsPoint[];
   byAction: { action: string; count: number }[];
   moderators: StatsModerator[];
   topMembers: { userId: string; count: number }[];
@@ -86,6 +108,82 @@ const countsTowardRepeats = (action: string): boolean =>
 
 const utcMidnight = (date: Date): number =>
   Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
+
+const isoDay = (ms: number): string => new Date(ms).toISOString().slice(0, 10);
+
+export const DEFAULT_DAYS = 30;
+export const MAX_DAYS = 365;
+/** Two years. Past that the per-day rows would only be read as months anyway, which All time already gives. */
+export const MAX_CUSTOM_DAYS = 731;
+
+/** Midnight UTC of a `YYYY-MM-DD` day, or null for anything that is not a real calendar date. */
+export function dayMs(text: string | null | undefined): number | null {
+  if (typeof text !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(text)) return null;
+  const [year, month, day] = text.split("-").map(Number) as [number, number, number];
+  const ms = Date.UTC(year, month - 1, day);
+  return isoDay(ms) === text ? ms : null;
+}
+
+/**
+ * Reads `?range=all`, `?from=&to=` or `?days=`. A custom range that is
+ * malformed, reversed, starts in the future or runs past MAX_CUSTOM_DAYS falls
+ * back to the days reading rather than failing, because a hand-edited URL
+ * should still show a page. An end date past today is pulled back to today.
+ */
+export function parseStatsRange(query: URLSearchParams, now: Date): StatsRange {
+  if (query.get("range") === "all") return { kind: "all" };
+  const fromMs = dayMs(query.get("from"));
+  const toRaw = dayMs(query.get("to"));
+  if (fromMs !== null && toRaw !== null) {
+    const toMs = Math.min(toRaw, utcMidnight(now));
+    if (fromMs <= toMs && (toMs - fromMs) / DAY_MS + 1 <= MAX_CUSTOM_DAYS) {
+      return { kind: "custom", from: isoDay(fromMs), to: isoDay(toMs) };
+    }
+  }
+  const days = Math.min(MAX_DAYS, Math.max(1, Math.trunc(Number(query.get("days"))) || DEFAULT_DAYS));
+  return { kind: "days", days };
+}
+
+/** Days up to three months stay days; up to two years become weeks; longer becomes months. */
+export function bucketFor(days: number): StatsBucket {
+  if (days <= 92) return "day";
+  if (days <= MAX_CUSTOM_DAYS) return "week";
+  return "month";
+}
+
+function bucketKey(date: string, bucket: StatsBucket): string {
+  if (bucket === "month") return date.slice(0, 7);
+  if (bucket === "day") return date;
+  const ms = dayMs(date)!;
+  const sinceMonday = (new Date(ms).getUTCDay() + 6) % 7;
+  return isoDay(ms - sinceMonday * DAY_MS);
+}
+
+/**
+ * Sums consecutive days into weeks (starting Monday) or calendar months. The
+ * first and last points are clipped to the range, so `date` and `end` say
+ * which days a point really covers rather than the whole week or month.
+ */
+export function bucketSeries(perDay: StatsPoint[], bucket: StatsBucket): StatsPoint[] {
+  if (bucket === "day") return perDay;
+  const points: StatsPoint[] = [];
+  let key: string | null = null;
+  for (const day of perDay) {
+    const next = bucketKey(day.date, bucket);
+    if (next !== key || points.length === 0) {
+      key = next;
+      points.push({ date: day.date, end: day.date, warn: 0, timeout: 0, kick: 0, ban: 0, other: 0 });
+    }
+    const point = points[points.length - 1]!;
+    point.end = day.date;
+    point.warn += day.warn;
+    point.timeout += day.timeout;
+    point.kick += day.kick;
+    point.ban += day.ban;
+    point.other += day.other;
+  }
+  return points;
+}
 
 /** Counts of each action kind, with everything that is not one of the four main ones lumped together. */
 type Kind = "warn" | "timeout" | "kick" | "ban" | "other";
@@ -184,18 +282,47 @@ function membersWithRecordBefore(infractions: StatsInfraction[], untilMs: number
  * the entries still on the record. `previous.activeNow` is a copy of the
  * current figure: whether a ban or timeout was in force then depends on when
  * it was cleared, which is not stored, so no honest past value exists.
+ *
+ * `range` overrides `days`. All time starts on the day of the earliest entry
+ * or note, removed ones included, and has no comparison period because
+ * nothing comes before it. A custom range covers its two dates in full, or up
+ * to `now` when it ends today, and compares with the same number of days
+ * before it. Long ranges come back as weeks or months (see bucketFor); every
+ * other figure is unaffected by that.
  */
 export function computeStats(input: {
   infractions: StatsInfraction[];
   notes: StatsNote[];
   now: Date;
-  days: number;
+  days?: number;
+  range?: StatsRange;
 }): StatsResult {
   const { now } = input;
-  const days = Math.max(1, Math.trunc(input.days));
-  const sinceMs = utcMidnight(now) - (days - 1) * DAY_MS;
+  const range: StatsRange = input.range ?? { kind: "days", days: input.days ?? DEFAULT_DAYS };
   const nowMs = now.getTime();
-  const inRange = (date: Date): boolean => date.getTime() >= sinceMs && date.getTime() <= nowMs;
+  const todayMs = utcMidnight(now);
+
+  let sinceMs: number;
+  let lastDayMs = todayMs;
+  if (range.kind === "all") {
+    let earliest = todayMs;
+    for (const row of input.infractions) earliest = Math.min(earliest, utcMidnight(row.createdAt));
+    for (const note of input.notes) earliest = Math.min(earliest, utcMidnight(note.createdAt));
+    sinceMs = earliest;
+  } else if (range.kind === "custom") {
+    const fromMs = dayMs(range.from);
+    const toMs = dayMs(range.to);
+    lastDayMs = toMs === null ? todayMs : Math.min(toMs, todayMs);
+    sinceMs = fromMs === null ? lastDayMs : Math.min(fromMs, lastDayMs);
+  } else {
+    sinceMs = todayMs - (Math.max(1, Math.trunc(range.days)) - 1) * DAY_MS;
+  }
+  const days = Math.round((lastDayMs - sinceMs) / DAY_MS) + 1;
+  const endsToday = lastDayMs === todayMs;
+  // Exclusive end of the range, used to shift the comparison window back.
+  const endMs = endsToday ? nowMs : lastDayMs + DAY_MS;
+  const inRangeMs = (ms: number): boolean => ms >= sinceMs && (endsToday ? ms <= nowMs : ms < endMs);
+  const inRange = (date: Date): boolean => inRangeMs(date.getTime());
 
   const perDay = Array.from({ length: days }, (_, index) => ({
     date: new Date(sinceMs + index * DAY_MS).toISOString().slice(0, 10),
@@ -302,7 +429,7 @@ export function computeStats(input: {
   let repeating = 0;
   for (const userId of actioned) {
     const times = keptByMember.get(userId)!.sort((a, b) => a - b);
-    const repeated = times.some((time, i) => i > 0 && time >= sinceMs && time <= nowMs && time - times[i - 1]! <= REPEAT_WINDOW_MS);
+    const repeated = times.some((time, i) => i > 0 && inRangeMs(time) && time - times[i - 1]! <= REPEAT_WINDOW_MS);
     if (repeated) repeating++;
   }
   const repeatRate = actioned.size < REPEAT_MIN_MEMBERS ? null : repeating / actioned.size;
@@ -310,17 +437,18 @@ export function computeStats(input: {
   // With nothing dated before the range there is no baseline, and a row of
   // zeros would read as "everything is up infinitely".
   const hasHistory =
-    input.infractions.some((row) => row.createdAt.getTime() < sinceMs) ||
-    input.notes.some((note) => note.createdAt.getTime() < sinceMs);
+    range.kind !== "all" &&
+    (input.infractions.some((row) => row.createdAt.getTime() < sinceMs) ||
+      input.notes.some((note) => note.createdAt.getTime() < sinceMs));
+  const previousFromMs = sinceMs - days * DAY_MS;
+  const previousUntilMs = endMs - days * DAY_MS;
   const previous = hasHistory
-    ? totalsForWindow(input.infractions, input.notes, sinceMs - days * DAY_MS, nowMs - days * DAY_MS, {
-        membersWithRecord: membersWithRecordBefore(input.infractions, nowMs - days * DAY_MS),
+    ? totalsForWindow(input.infractions, input.notes, previousFromMs, previousUntilMs, {
+        membersWithRecord: membersWithRecordBefore(input.infractions, previousUntilMs),
         activeNow: totals.activeNow,
       })
     : null;
 
-  const previousFromMs = sinceMs - days * DAY_MS;
-  const previousUntilMs = nowMs - days * DAY_MS;
   const previousAutomod = previous
     ? input.infractions.filter(
         (row) =>
@@ -334,12 +462,16 @@ export function computeStats(input: {
   const byCountThenKey = <T>(count: (item: T) => number, key: (item: T) => string) =>
     (a: T, b: T): number => count(b) - count(a) || key(a).localeCompare(key(b));
 
+  const bucket = bucketFor(days);
   return {
     days,
     since: new Date(sinceMs).toISOString(),
+    until: isoDay(lastDayMs),
+    range: range.kind,
+    bucket,
     totals,
     previous,
-    perDay,
+    perDay: bucketSeries(perDay, bucket),
     byAction: [...byAction].map(([action, count]) => ({ action, count })).sort(byCountThenKey((x) => x.count, (x) => x.action)),
     moderators: [...moderators.values()].sort(byCountThenKey((x) => x.total, (x) => x.userId)),
     topMembers: [...byMember]

@@ -5,7 +5,7 @@ import type { ModerationSettings } from "../settings.js";
 import { parseDuration } from "../duration.js";
 import { say } from "../reply.js";
 import { answer } from "./answer.js";
-import { runFromCommand } from "./run-action.js";
+import { runFromCommand, suggestReasons } from "./run-action.js";
 
 type Ctx = ModuleContext<ModerationSettings>;
 
@@ -30,6 +30,7 @@ async function runSet(interaction: ChatInputCommandInteraction, ctx: Ctx): Promi
     target,
     durationMs,
     unreadableDuration: durationMs === null,
+    untypedDuration: durationInput === null,
   });
   if (!record) return;
 
@@ -67,7 +68,7 @@ export const timeoutCommand: CommandDefinition<ModerationSettings> = {
               .setDescription("How long, e.g. 10m, 2h, 7d. Defaults to the server's setting."),
           )
           .addStringOption((option) =>
-            option.setName("reason").setDescription("Why").setMaxLength(500),
+            option.setName("reason").setDescription("Why, or pick one of the server's presets").setMaxLength(500).setAutocomplete(true),
           ),
       )
       .addSubcommand((sub) =>
@@ -81,6 +82,7 @@ export const timeoutCommand: CommandDefinition<ModerationSettings> = {
             option.setName("reason").setDescription("Why").setMaxLength(500),
           ),
       ),
+  autocomplete: suggestReasons,
   async run(interaction, ctx) {
     const sub = interaction.options.getSubcommand(true);
     if (sub === "set") {

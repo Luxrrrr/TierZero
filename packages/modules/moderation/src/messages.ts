@@ -1,4 +1,4 @@
-import { embedReply, emptyEmbed, plainReply, viewCaseButton, type MessageBody, type MessageVariable, type ResponseTemplate } from "@tier0/core";
+import { embedReply, emptyButton, emptyEmbed, plainReply, viewCaseButton, type MessageBody, type MessageVariable, type ResponseTemplate } from "@tier0/core";
 
 /**
  * The messages the moderation module sends, as the dashboard offers them. Each
@@ -143,3 +143,101 @@ export const PURGE_REPLY: ResponseTemplate = {
   ],
   note: "Used when messages were deleted. Nothing to delete, or a permissions problem, keeps its own reply.",
 };
+
+// -- raid tools ----------------------------------------------------------------
+
+export const RAID_ALERT_VARIABLES: MessageVariable[] = [
+  { name: "joins", description: "How many members joined", sample: "14" },
+  { name: "seconds", description: "Over how many seconds", sample: "30" },
+  { name: "lockdownNote", description: "A sentence saying the server was locked down, with a space in front. Empty when the alert does not lock anything", sample: " The server has been locked down." },
+  { name: "dashboardUrl", description: "A link to the Raid tools tab. Empty when the bot does not know the dashboard's address yet", sample: "https://bot.example.com/guilds/123456789012345678/mod/raid" },
+];
+
+export const RAID_ALERT: MessageBody = {
+  ...embedReply("{joins} members joined in {seconds} seconds.{lockdownNote}", "warning", { title: "Possible raid" }),
+  buttons: [{ ...emptyButton(), label: "Open Raid tools", style: "link", url: "{dashboardUrl}" }],
+};
+
+export const LOCKDOWN_VARIABLES: MessageVariable[] = [
+  { name: "reason", description: "The reason given for the lockdown, or \"No reason given\"", sample: "Raid in progress" },
+  { name: "reasonNote", description: "\" Reason: \" and the reason, with a space in front. Empty when none was given", sample: " Reason: Raid in progress" },
+];
+
+export const LOCKDOWN_NOTICE: MessageBody = embedReply("This channel is locked for now. Members cannot send messages until staff unlock it.{reasonNote}", "warning");
+export const UNLOCK_NOTICE: MessageBody = embedReply("This channel is unlocked again.", "success");
+
+// -- appeals -------------------------------------------------------------------
+
+const APPEAL_CASE: MessageVariable = { name: "case", description: "The ban's case number", sample: "118" };
+
+export const APPEAL_POST_VARIABLES: MessageVariable[] = [
+  { name: "member", description: "The member who appealed, as a mention", sample: "@spamlord_42" },
+  { name: "memberId", description: "Their user ID", sample: "123456789012345678" },
+  { name: "user", description: "Their username", sample: "spamlord_42" },
+  APPEAL_CASE,
+  { name: "appealUrl", description: "A link to the appeal on the Appeals tab. Empty when the bot does not know the dashboard's address yet", sample: "https://bot.example.com/guilds/123456789012345678/mod/appeals?appeal=7" },
+];
+
+export const APPEAL_POST: MessageBody = {
+  ...embedReply("{member} ({memberId}) appealed their ban, case #{case}.", "info", { title: "New ban appeal" }),
+  buttons: [{ ...emptyButton(), label: "Read the appeal", style: "link", url: "{appealUrl}" }],
+};
+
+export const APPEAL_DECISION_VARIABLES: MessageVariable[] = [
+  APPEAL_CASE,
+  { name: "response", description: "What staff wrote back, or empty when they wrote nothing", sample: "Welcome back. Keep it friendly in #general." },
+  { name: "responseNote", description: "\" \" and what staff wrote back, so it follows a sentence. Empty when they wrote nothing", sample: " Welcome back. Keep it friendly in #general." },
+  { name: "retryNote", description: "When the member may appeal again, as a sentence with a space in front. Empty when they may appeal again straight away", sample: " You can appeal again in 7 days." },
+];
+
+export const APPEAL_ACCEPTED_DM: MessageBody = embedReply("Your appeal for case #{case} in {server} was accepted and the ban has been lifted.{responseNote}", "success");
+export const APPEAL_DENIED_DM: MessageBody = embedReply("Your appeal for case #{case} in {server} was denied.{responseNote}{retryNote}", "error");
+
+interface AppealReplySpec {
+  label: string;
+  help: string;
+  starting: MessageBody;
+  variables: MessageVariable[];
+}
+
+const UNTIL: MessageVariable = { name: "until", description: "When they may appeal again, as a Discord date", sample: "Oct 25, 4:12 PM" };
+
+/** What the member is told in their direct messages after pressing the button or sending the form. */
+export const APPEAL_REPLIES = {
+  received: {
+    label: "Appeal received",
+    help: "After the member sends the form.",
+    starting: embedReply("Your appeal for case #{case} was sent to the staff of {server}. You will get a message here when it is decided.", "success"),
+    variables: [APPEAL_CASE],
+  },
+  alreadyOpen: {
+    label: "An appeal is already open",
+    help: "When the member presses the button while an earlier appeal for the same ban is still waiting.",
+    starting: embedReply("You already have an appeal waiting for case #{case}. You will get a message here when it is decided.", "info"),
+    variables: [APPEAL_CASE],
+  },
+  cooldown: {
+    label: "Too soon after a denied appeal",
+    help: "When the member appeals again before the wait after a denied appeal is over.",
+    starting: embedReply("Your last appeal for case #{case} was denied. You can appeal again {until}.", "info"),
+    variables: [APPEAL_CASE, UNTIL],
+  },
+  notBanned: {
+    label: "The member is no longer banned",
+    help: "When the ban was lifted or removed from the record before the member appealed.",
+    starting: embedReply("Case #{case} is no longer a ban in force, so there is nothing to appeal.", "info"),
+    variables: [APPEAL_CASE],
+  },
+  closed: {
+    label: "Appeals are closed",
+    help: "When the server has turned appeals off, or Moderation is off.",
+    starting: embedReply("{server} is not taking ban appeals at the moment.", "info"),
+    variables: [],
+  },
+  tooFast: {
+    label: "Appealing too often",
+    help: "When the member sends several appeals in a short time.",
+    starting: embedReply("You have sent several appeals in a short time. Wait a while and try again.", "error"),
+    variables: [],
+  },
+} satisfies Record<string, AppealReplySpec>;

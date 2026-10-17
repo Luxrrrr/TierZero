@@ -2,15 +2,18 @@ import type { Client, Guild } from "discord.js";
 import { isStaffRole, type Actor } from "@tier0/core";
 import type { GuildState } from "../../runtime/guild-state.js";
 import { systemLabels } from "../../runtime/system-messages.js";
-import { actionContextFor, editInfraction, memberMessages, takeAction } from "./actions.js";
+import { actionContextFor, actionTarget, editInfraction, memberMessages, takeAction } from "./actions.js";
 import { listAudit } from "./audit-list.js";
+import { appealDetail, decideAppeal, listAppeals } from "./appeals.js";
+import { lockFromDashboard, massJob, massPreview, massRun, raidStatus, unlockFromDashboard } from "./raid.js";
 import { exportInfractions, listInfractions, purgeInfraction, restoreInfraction, voidInfraction } from "./infractions.js";
-import { dangerDelete } from "./danger.js";
+import { dangerCounts, dangerDelete } from "./danger.js";
 import { listLoggedMessages, listServerLog, purgeServerLog } from "./server-log.js";
 import { listMembers, memberProfile, searchGuildMembers } from "./members.js";
 import { addNote, deleteNote, editNote, purgeNote, restoreNote } from "./notes.js";
 import { listStaff, removeStaff, setStaff } from "./staff.js";
-import { modStats } from "./stats.js";
+import { exportStats, modStats } from "./stats.js";
+import { parseStatsRange } from "./stats-calc.js";
 import { forbidden, refuse, type ModCtx, type Reply } from "./types.js";
 
 export interface ModRequest {
@@ -51,7 +54,9 @@ const isReply = (value: Actor | Reply): value is Reply => "status" in value;
 /** Routes one request under `/guilds/:id/mod/`. Returns null for a path that matches nothing. */
 export async function handleMod(request: ModRequest): Promise<Reply | null> {
   const { client, guild, state, method, segments, query, body } = request;
-  const ctx: ModCtx = { client, guild, labels: await systemLabels(state, guild.id) };
+  // The warn expiry is read whether or not Moderation is on, so the record reads the same either way.
+  const moderation = (await state.context(guild, "moderation"))?.settings as { warnExpiry?: number } | undefined;
+  const ctx: ModCtx = { client, guild, labels: await systemLabels(state, guild.id), warnExpiryMs: moderation?.warnExpiry ?? null };
   const [area, a, b] = segments;
 
   if (method === "GET") {
@@ -62,17 +67,28 @@ export async function handleMod(request: ModRequest): Promise<Reply | null> {
     if (area === "members" && a !== undefined && b === "messages") {
       return memberMessages(ctx, a, query.get("viewer"), query.get("owner") === "1");
     }
+    if (area === "members" && a !== undefined && b === "standing") {
+      return actionTarget(ctx, a, query.get("viewer"), query.get("owner") === "1");
+    }
     if (area === "server-logs" && a === undefined) return listServerLog(ctx, state, query);
     if (area === "messages" && a === undefined) return listLoggedMessages(ctx, state, query);
     if (area === "member-search") return searchGuildMembers(ctx, query.get("q") ?? "");
     if (area === "infractions" && a === undefined) return listInfractions(ctx, query);
     if (area === "infractions" && a === "export" && b === undefined) return exportInfractions(ctx, query);
     if (area === "audit" && a === undefined) return listAudit(ctx, query);
-    if (area === "stats") {
-      const days = Math.min(365, Math.max(1, Math.trunc(Number(query.get("days"))) || 30));
-      return modStats(ctx, days);
+    if (area === "stats" && a === undefined) return modStats(ctx, parseStatsRange(query, new Date()));
+    if (area === "stats" && a === "export" && b === undefined) {
+      return exportStats(ctx, parseStatsRange(query, new Date()));
     }
     if (area === "staff" && a === undefined) return listStaff(ctx);
+    if (area === "danger" && a === undefined) return dangerCounts(ctx);
+    if (area === "appeals" && a === undefined) return listAppeals(ctx, query);
+    if (area === "appeals" && a !== undefined && b === undefined) {
+      const id = idOf(a);
+      return id === null ? refuse(400, "Bad appeal id") : appealDetail(ctx, id);
+    }
+    if (area === "raid" && a === undefined) return raidStatus(ctx, state);
+    if (area === "raid" && a === "mass" && b !== undefined && segments.length === 3) return massJob(ctx, b);
     return null;
   }
 
@@ -89,12 +105,20 @@ export async function handleMod(request: ModRequest): Promise<Reply | null> {
     }
     if (area === "infractions" && b === "void") {
       const id = idOf(a);
-      return id === null ? refuse(400, "Bad case id") : voidInfraction(ctx, id, actor, payload.reason);
+      return id === null ? refuse(400, "Bad case id") : voidInfraction(ctx, id, actor, payload.reason, { liftBan: payload.liftBan, state });
     }
     if (area === "infractions" && b === "restore") {
       const id = idOf(a);
       return id === null ? refuse(400, "Bad case id") : restoreInfraction(ctx, id, actor);
     }
+    if (area === "appeals" && (b === "accept" || b === "deny") && segments.length === 3) {
+      const id = idOf(a);
+      return id === null ? refuse(400, "Bad appeal id") : decideAppeal(ctx, state, id, actor, b === "accept" ? "accepted" : "denied", payload);
+    }
+    if (area === "raid" && a === "lock" && b === undefined) return lockFromDashboard(ctx, state, actor, payload);
+    if (area === "raid" && a === "unlock" && b === undefined) return unlockFromDashboard(ctx, state, actor, payload);
+    if (area === "raid" && a === "mass" && b === undefined) return massRun(ctx, state, actor, payload);
+    if (area === "raid" && a === "mass" && b === "preview" && segments.length === 3) return massPreview(ctx, state, actor, payload);
     return null;
   }
 

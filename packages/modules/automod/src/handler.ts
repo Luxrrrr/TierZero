@@ -62,6 +62,7 @@ export function judgeMessage(state: AutomodState, message: IncomingMessage): Eva
   state.markHandled(message.messageId, fingerprint);
 
   const verdict = evaluateMessage({
+    guildId: message.guildId,
     content: message.content,
     authorRoles: message.authorRoles,
     authorIsBot: false,

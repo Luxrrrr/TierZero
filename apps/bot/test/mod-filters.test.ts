@@ -85,6 +85,8 @@ describe("infractionWhere", () => {
   test("q looks in reasons, and also matches case numbers and ids when it is shaped like one", () => {
     assert.deepEqual(infractionWhere(GUILD, params("q=spam")).AND, [{ OR: [{ reason: { contains: "spam" } }] }]);
     assert.deepEqual(infractionWhere(GUILD, params("q=12")).AND, [{ OR: [{ reason: { contains: "12" } }, { caseNumber: 12 }] }]);
+    assert.deepEqual(infractionWhere(GUILD, params("q=%23198")).AND, [{ OR: [{ reason: { contains: "#198" } }, { caseNumber: 198 }] }]);
+    assert.deepEqual(infractionWhere(GUILD, params("q=%23%20198")).AND, [{ OR: [{ reason: { contains: "# 198" } }, { caseNumber: 198 }] }]);
     const id = "123456789012345678";
     assert.deepEqual(infractionWhere(GUILD, params(`q=${id}`)).AND, [
       { OR: [{ reason: { contains: id } }, { userId: id }, { moderatorId: id }] },

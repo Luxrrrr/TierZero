@@ -4,7 +4,7 @@ import type { ModerationSettings } from "../settings.js";
 import { parseDuration } from "../duration.js";
 import { fillLabel } from "../texts.js";
 import { answer } from "./answer.js";
-import { runFromCommand } from "./run-action.js";
+import { runFromCommand, suggestReasons } from "./run-action.js";
 
 const BAN_REPLY: ResponseTemplate = {
   starting: embedReply("Banned {user}. Case #{case}.{expiry}", "success"),
@@ -33,8 +33,9 @@ export const banCommand: CommandDefinition<ModerationSettings> = {
           .setDescription("How long, e.g. 1d, 7d. Leave unset for a permanent ban."),
       )
       .addStringOption((option) =>
-        option.setName("reason").setDescription("Why").setMaxLength(500),
+        option.setName("reason").setDescription("Why, or pick one of the server's presets").setMaxLength(500).setAutocomplete(true),
       ),
+  autocomplete: suggestReasons,
   async run(interaction, ctx) {
     const target = interaction.options.getUser("member", true);
     const durationInput = interaction.options.getString("duration");
@@ -45,6 +46,7 @@ export const banCommand: CommandDefinition<ModerationSettings> = {
       target,
       durationMs,
       unreadableDuration: durationInput !== null && durationMs === null,
+      untypedDuration: durationInput === null,
     });
     if (!record) return;
 

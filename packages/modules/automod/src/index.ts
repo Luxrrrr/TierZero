@@ -6,7 +6,7 @@ import {
 } from "discord.js";
 import { defineModule, noteDeletion, takeDeletionNote, type EvidenceMessage, type ModuleContext } from "@tier0/core";
 import { createInfraction } from "@tier0/db";
-import { auditAutomodCase, evidenceForTrip, loggedCopyOf, staffReasonOf } from "@tier0/module-moderation";
+import { auditAutomodCase, escalateFromPeer, evidenceForTrip, loggedCopyOf, staffReasonOf } from "@tier0/module-moderation";
 import { settings, type AutomodSettings } from "./settings.js";
 import type { EvaluationVerdict } from "./evaluator.js";
 import { carryOut, draftInfraction, judgeMessage, noticeLifetimeMs, type Outcome } from "./handler.js";
@@ -161,6 +161,7 @@ async function recordInfraction(
   evidence: EvidenceMessage[],
 ): Promise<number | undefined> {
   const draft = draftInfraction(verdict, outcome, verdict.timeoutMs, Date.now(), ctx.settings.labels);
+  const escalates = verdict.rule ? ctx.settings[verdict.rule].countTowardEscalation : true;
   try {
     const record = await createInfraction({
       guildId: ctx.guild.id,
@@ -168,6 +169,7 @@ async function recordInfraction(
       moderatorId: ctx.client.user?.id ?? "0",
       ...draft,
       evidence: JSON.stringify(evidence),
+      escalates,
     });
     // Written here so every combination of actions leaves the same entry, and only when a case exists.
     await auditAutomodCase({
@@ -183,6 +185,8 @@ async function recordInfraction(
       timedOut: outcome.timedOut,
       reason: staffReasonOf(record.reason),
     });
+    // Moderation's escalation rules count automod's warnings too, when this rule says they should.
+    if (record.action === "automod-warn" && escalates) await escalateFromPeer(ctx, member.id);
     return record.caseNumber;
   } catch (error) {
     console.error("[automod] failed to record infraction:", error);

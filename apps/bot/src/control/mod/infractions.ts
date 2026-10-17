@@ -8,24 +8,27 @@ import {
   describeCase,
   infractionDto,
   infractionSnapshot,
+  BAN_LIFT_UNCONFIRMED,
+  liftsBan,
+  restoredActive,
+  TIMEOUT_ACTIONS,
   type InfractionRow,
 } from "./dto.js";
 import { infractionWhere } from "./filters.js";
 import { refOf, resolveUsers } from "./names.js";
-import { timeoutRemovalReason } from "../../runtime/system-messages.js";
+import { fetchBanOrNull } from "@tier0/module-moderation";
+import type { GuildState } from "../../runtime/guild-state.js";
+import { banRemovalReason, timeoutRemovalReason } from "../../runtime/system-messages.js";
 import { forbidden, notFound, ok, pageOf, refuse, type ModCtx, type Reply } from "./types.js";
 
 const EXPORT_NAME_LOOKUPS = 300;
-
-/** Both put a Discord timeout on the member, so removing either has to lift it. */
-const TIMEOUT_ACTIONS = ["timeout", "automod-timeout"];
 
 async function present(ctx: ModCtx, row: InfractionRow): Promise<InfractionDto> {
   const ids = [row.userId, row.moderatorId];
   if (row.voidedBy) ids.push(row.voidedBy);
   if (row.editedBy) ids.push(row.editedBy);
   const refs = await resolveUsers(ctx.client, ctx.guild, ids);
-  return infractionDto(row, (id) => refOf(refs, id));
+  return infractionDto(row, (id) => refOf(refs, id), ctx.warnExpiryMs ?? null);
 }
 
 /** The case, only when it belongs to this server. */
@@ -37,7 +40,7 @@ async function findCase(ctx: ModCtx, id: number): Promise<InfractionRow | null> 
 /** GET /mod/infractions?action=&moderatorId=&userId=&state=all|onrecord|inforce|expired|removed&status=active|voided|all (older, ignored when state is given)&source=all|manual|automod&q=&page=&pageSize= -> Page of InfractionDto */
 export async function listInfractions(ctx: ModCtx, query: URLSearchParams): Promise<Reply> {
   const { page, pageSize } = pageOf(query);
-  const where = infractionWhere(ctx.guild.id, query);
+  const where = infractionWhere(ctx.guild.id, query, new Date(), ctx.warnExpiryMs ?? null);
   const [total, rows] = await Promise.all([
     prisma.infraction.count({ where }),
     prisma.infraction.findMany({
@@ -57,7 +60,7 @@ export async function listInfractions(ctx: ModCtx, query: URLSearchParams): Prom
   }
   const refs = await resolveUsers(ctx.client, ctx.guild, ids);
   const body: Page<InfractionDto> = {
-    items: rows.map((row) => infractionDto(row, (id) => refOf(refs, id))),
+    items: rows.map((row) => infractionDto(row, (id) => refOf(refs, id), ctx.warnExpiryMs ?? null)),
     total,
     page,
     pageSize,
@@ -72,7 +75,7 @@ export async function listInfractions(ctx: ModCtx, query: URLSearchParams): Prom
 export async function exportInfractions(ctx: ModCtx, query: URLSearchParams): Promise<Reply> {
   const now = new Date();
   const rows = await prisma.infraction.findMany({
-    where: infractionWhere(ctx.guild.id, query),
+    where: infractionWhere(ctx.guild.id, query, new Date(), ctx.warnExpiryMs ?? null),
     orderBy: { id: "desc" },
     take: EXPORT_MAX_ROWS,
   });
@@ -93,7 +96,7 @@ export async function exportInfractions(ctx: ModCtx, query: URLSearchParams): Pr
     body: null,
     raw: {
       contentType: "text/csv; charset=utf-8",
-      text: buildExport(rows, now, (id) => refs.get(id)?.name ?? null),
+      text: buildExport(rows, now, (id) => refs.get(id)?.name ?? null, ctx.warnExpiryMs ?? null),
       filename: exportFilename(ctx.guild.id, now),
     },
   };
@@ -135,6 +138,44 @@ async function liftTimeout(ctx: ModCtx, row: InfractionRow, actor: Actor): Promi
 }
 
 /**
+ * Lifts the Discord ban that a removed case put in place, so the record and
+ * Discord agree. Best effort, like lifting a timeout: the removal stands
+ * either way, and the outcome is returned as words for the audit entry.
+ */
+async function liftBan(ctx: ModCtx, state: GuildState | undefined, row: InfractionRow, actor: Actor): Promise<string> {
+  const now = new Date();
+  const newer = await prisma.infraction.findFirst({
+    where: {
+      guildId: row.guildId,
+      userId: row.userId,
+      action: "ban",
+      active: true,
+      voidedAt: null,
+      id: { not: row.id },
+      OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
+    },
+  });
+  if (newer) return `Left the Discord ban in place because case #${newer.caseNumber} is still in force.`;
+
+  let banned: boolean;
+  try {
+    banned = (await fetchBanOrNull(ctx.guild, row.userId)) !== null;
+  } catch {
+    return "Could not check the ban in Discord, so it was left as it is. Unban them from their record if they should be let back in.";
+  }
+  if (!banned) return "The member was not banned in Discord.";
+  try {
+    await ctx.guild.members.unban(row.userId, banRemovalReason(ctx.labels?.banRemovalReason, row.caseNumber, actor.name));
+  } catch {
+    return "Could not lift the Discord ban; the bot may lack the Ban Members permission. Unban them from their record.";
+  }
+  // A temporary ban scheduled its own reversal, which has nothing left to do.
+  const moduleCtx = state ? await state.context(ctx.guild, "moderation").catch(() => null) : null;
+  await moduleCtx?.tasks.cancel("unban", { userId: row.userId }).catch(() => undefined);
+  return "Lifted the Discord ban.";
+}
+
+/**
  * Reply for a conditional write that matched nothing: the case was purged
  * (404) or another request got there first (409).
  */
@@ -142,14 +183,24 @@ async function lostRace(ctx: ModCtx, id: number, message: string): Promise<Reply
   return (await findCase(ctx, id)) ? refuse(409, message) : notFound("That case");
 }
 
-/** POST /mod/infractions/:id/void {actor, reason} -> InfractionDto. Staff may void warns and timeouts. */
-export async function voidInfraction(ctx: ModCtx, id: number, actor: Actor, reason: unknown): Promise<Reply> {
+/**
+ * POST /mod/infractions/:id/void {actor, reason, liftBan?} -> InfractionDto. Staff may void warns and timeouts.
+ * A ban still in force is lifted in Discord too, so the request must say `liftBan: true`.
+ */
+export async function voidInfraction(
+  ctx: ModCtx,
+  id: number,
+  actor: Actor,
+  reason: unknown,
+  options: { liftBan?: unknown; state?: GuildState } = {},
+): Promise<Reply> {
   const seen = await findCase(ctx, id);
   if (!seen) return notFound("That case");
   if (!canVoidAction(actor.role, seen.action)) return forbidden(`remove a ${seen.action} from a record`);
   if (seen.voidedAt) return refuse(409, "That case has already been removed.");
   const checked = checkVoidReason(reason);
   if (!checked.ok) return refuse(400, checked.error);
+  if (liftsBan(seen, new Date()) && options.liftBan !== true) return refuse(409, BAN_LIFT_UNCONFIRMED);
 
   const target = (await resolveUsers(ctx.client, ctx.guild, [seen.userId])).get(seen.userId);
   const described = describeCase(seen, target ?? { userId: seen.userId, name: null, avatarUrl: null, inServer: false });
@@ -184,15 +235,20 @@ export async function voidInfraction(ctx: ModCtx, id: number, actor: Actor, reas
   });
   if (!done) return lostRace(ctx, id, "That case has already been removed.");
 
-  if (TIMEOUT_ACTIONS.includes(done.row.action) && done.row.active) {
+  const lift = TIMEOUT_ACTIONS.includes(done.row.action) && done.row.active
+    ? () => liftTimeout(ctx, done.row, actor)
+    : liftsBan(done.row, new Date())
+      ? () => liftBan(ctx, options.state, done.row, actor)
+      : null;
+  if (lift) {
     try {
-      const outcome = await liftTimeout(ctx, done.row, actor);
+      const outcome = await lift();
       await prisma.modAudit.updateMany({
         where: { id: done.auditId },
         data: { summary: [...summary, outcome].join(". ") },
       });
     } catch (error) {
-      console.error("Could not finish lifting the timeout for a removed case:", error);
+      console.error("Could not finish lifting the restriction for a removed case:", error);
     }
   }
   return ok(await present(ctx, done.updated));
@@ -216,11 +272,14 @@ export async function restoreInfraction(ctx: ModCtx, id: number, actor: Actor): 
 
   const target = (await resolveUsers(ctx.client, ctx.guild, [seen.userId])).get(seen.userId);
   const described = describeCase(seen, target ?? { userId: seen.userId, name: null, avatarUrl: null, inServer: false });
+  // Removing a ban lifted it in Discord, and a restore never bans again, so the case is only in force if Discord still
+  // holds a ban. When Discord cannot be asked, it is left not in force, which the Unban option will still correct.
+  const stillBanned = seen.action === "ban" ? await fetchBanOrNull(ctx.guild, seen.userId).then((ban) => ban !== null, () => false) : true;
 
   const done = await prisma.$transaction(async (tx) => {
     // Voiding clears `active`, so put it back from the snapshot taken then.
-    // A timeout stays inactive: putting the member back under one long after
-    // the fact is not something a restore should do.
+    // A timeout of either kind stays inactive: removing it lifted it, and
+    // putting the member back under one long after the fact is not something a restore should do.
     const voidEntry = await tx.modAudit.findFirst({
       where: { guildId: ctx.guild.id, infractionId: id, kind: "infraction.void" },
       orderBy: { id: "desc" },
@@ -232,7 +291,7 @@ export async function restoreInfraction(ctx: ModCtx, id: number, actor: Actor): 
         voidedAt: null,
         voidedBy: null,
         voidReason: null,
-        active: seen.action === "timeout" ? false : wasActive,
+        active: restoredActive(seen.action, wasActive, stillBanned),
       },
     });
     if (changed.count === 0) return null;

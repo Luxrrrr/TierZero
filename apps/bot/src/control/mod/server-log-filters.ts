@@ -77,3 +77,11 @@ export function serverLogWhere(
 
   return { guildId, AND: and };
 }
+
+/**
+ * Whether a server log entry's actor is shown as Automod. The bot's account does work for every feature, so it
+ * is Automod only for what an automod rule did, which the log knows for deleted messages.
+ */
+export function actsAsAutomod(actorId: string | null, botId: string | null, deletedBy: string | undefined): boolean {
+  return actorId !== null && actorId === botId && deletedBy === "automod";
+}

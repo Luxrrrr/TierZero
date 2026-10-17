@@ -27,6 +27,25 @@ export function parseTargets(raw: string | null): { ok: true; targets: DangerTar
   return { ok: true, targets };
 }
 
+export type DangerCounts = Record<DangerTarget, number> & { notes: number };
+
+/**
+ * GET /mod/danger -> how much each log holds, so the owner sees what a tick will delete. Notes are counted to say
+ * they stay. A read carries no actor, so the dashboard's proxy is what limits this to the owner.
+ */
+export async function dangerCounts(ctx: ModCtx): Promise<Reply> {
+  const guildId = ctx.guild.id;
+  const [cases, staffActivity, events, messages, notes] = await Promise.all([
+    prisma.infraction.count({ where: { guildId } }),
+    prisma.modAudit.count({ where: { guildId } }),
+    prisma.serverLogEntry.count({ where: { guildId } }),
+    prisma.loggedMessage.count({ where: { guildId } }),
+    prisma.modNote.count({ where: { guildId } }),
+  ]);
+  const body: DangerCounts = { "mod-logs": cases, "staff-activity": staffActivity, "server-events": events, "saved-messages": messages, notes };
+  return ok(body);
+}
+
 /**
  * DELETE /mod/danger?targets=a,b -> deletes whole logs of this server for good. Only the owner can, since it
  * removes records that other staff rely on. The deletion itself is written to staff activity afterwards,
@@ -41,7 +60,14 @@ export async function dangerDelete(ctx: ModCtx, actor: Actor, rawTargets: string
   const has = (name: DangerTarget) => parsed.targets.includes(name);
   const counts = { cases: 0, staffActivity: 0, events: 0, messages: 0 };
 
-  if (has("mod-logs")) counts.cases = (await prisma.infraction.deleteMany({ where: { guildId } })).count;
+  if (has("mod-logs")) {
+    counts.cases = (await prisma.infraction.deleteMany({ where: { guildId } })).count;
+    // Staff activity about a deleted case would still link to it by the number in its snapshot, and land on a
+    // case that is gone. Unlinked, the entry opens the member's record instead.
+    if (!has("staff-activity")) {
+      await prisma.modAudit.updateMany({ where: { guildId, infractionId: { not: null } }, data: { infractionId: null } });
+    }
+  }
   if (has("staff-activity")) counts.staffActivity = (await prisma.modAudit.deleteMany({ where: { guildId } })).count;
   if (has("server-events")) counts.events = (await prisma.serverLogEntry.deleteMany({ where: { guildId } })).count;
   if (has("saved-messages")) counts.messages = (await prisma.loggedMessage.deleteMany({ where: { guildId } })).count;

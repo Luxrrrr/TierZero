@@ -1,5 +1,5 @@
 import type { Prisma } from "@tier0/db";
-import { isInForce } from "@tier0/core";
+import { isInForce, isWarning } from "@tier0/core";
 
 /**
  * Query-string parsing for the action log and the audit trail, kept apart from
@@ -54,9 +54,11 @@ export function parseInfractionSource(value: string | null): InfractionSource {
  * paging and totals stay correct. Mirrors `isInForce` from the shared contract:
  * a restriction is in force when it is not removed, still flagged active, and
  * has no end or an end in the future. `expired` is the rest of the
- * restrictions that are still on the record: ended by time or cleared.
+ * restrictions that are still on the record, ended by time or cleared, and,
+ * while the server's warn expiry is set, the warnings older than it, which is
+ * what `caseStateOf` calls expired too.
  */
-export function stateWhere(state: InfractionState, now: Date): Prisma.InfractionWhereInput {
+export function stateWhere(state: InfractionState, now: Date, warnExpiryMs: number | null = null): Prisma.InfractionWhereInput {
   switch (state) {
     case "all":
       return {};
@@ -71,14 +73,19 @@ export function stateWhere(state: InfractionState, now: Date): Prisma.Infraction
         action: { in: RESTRICTION_ACTIONS },
         OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
       };
-    case "expired":
-      return {
-        voidedAt: null,
+    case "expired": {
+      const restrictions: Prisma.InfractionWhereInput = {
         action: { in: RESTRICTION_ACTIONS },
         OR: [{ active: false }, { expiresAt: { lte: now } }],
       };
+      if (!warnExpiryMs || warnExpiryMs <= 0) return { voidedAt: null, ...restrictions };
+      const warnings: Prisma.InfractionWhereInput = { action: { in: WARNING_ACTIONS }, createdAt: { lte: new Date(now.getTime() - warnExpiryMs) } };
+      return { voidedAt: null, OR: [restrictions, warnings] };
+    }
   }
 }
+
+export const WARNING_ACTIONS: string[] = KNOWN_ACTIONS.filter(isWarning);
 
 /**
  * `state` is the full filter: all, onrecord (not removed), inforce, expired or
@@ -89,6 +96,7 @@ export function infractionWhere(
   guildId: string,
   query: URLSearchParams,
   now: Date = new Date(),
+  warnExpiryMs: number | null = null,
 ): Prisma.InfractionWhereInput {
   const where: Prisma.InfractionWhereInput = { guildId };
   const and: Prisma.InfractionWhereInput[] = [];
@@ -106,7 +114,7 @@ export function infractionWhere(
 
   const state = parseInfractionState(query.get("state"));
   if (state !== null) {
-    and.push(stateWhere(state, now));
+    and.push(stateWhere(state, now, warnExpiryMs));
   } else {
     const status = query.get("status");
     if (status === "active") where.voidedAt = null;
@@ -116,7 +124,9 @@ export function infractionWhere(
   const q = (query.get("q") ?? "").trim().slice(0, SEARCH_MAX);
   if (q !== "") {
     const either: Prisma.InfractionWhereInput[] = [{ reason: { contains: q } }];
-    if (/^\d{1,9}$/.test(q)) either.push({ caseNumber: Number(q) });
+    // The dashboard prints case numbers as "#198", so that is what people paste.
+    const caseNumber = /^#?\s*(\d{1,9})$/.exec(q)?.[1];
+    if (caseNumber) either.push({ caseNumber: Number(caseNumber) });
     if (SNOWFLAKE.test(q)) either.push({ userId: q }, { moderatorId: q });
     and.push({ OR: either });
   }

@@ -17,6 +17,8 @@ export interface ModCtx {
   guild: Guild;
   /** The owner's short pieces of text, for the few the bot writes to Discord itself. The defaults apply without them. */
   labels?: SystemLabels;
+  /** The server's warn expiry from the Moderation settings, or null when warnings never stop counting. */
+  warnExpiryMs?: number | null;
 }
 
 export const ok = (body: unknown): Reply => ({ status: 200, body });

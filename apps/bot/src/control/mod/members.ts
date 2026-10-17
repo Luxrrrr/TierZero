@@ -67,7 +67,7 @@ export async function listMembers(ctx: ModCtx, query: URLSearchParams): Promise<
   // name is looked up.
   const unnamed = (id: string): UserRef => ({ userId: id, name: null, avatarUrl: null, inServer: false });
   let entries = filterMembers(
-    ids.map((id) => summarizeMember(unnamed(id), byInfraction.get(id) ?? [], byNote.get(id) ?? [], now)),
+    ids.map((id) => summarizeMember(unnamed(id), byInfraction.get(id) ?? [], byNote.get(id) ?? [], now, ctx.warnExpiryMs ?? null)),
     filter,
     now,
   );
@@ -156,8 +156,8 @@ export async function memberProfile(ctx: ModCtx, userId: string): Promise<Reply>
           .sort((a, b) => b.position - a.position)
           .map((role) => ({ id: role.id, name: role.name }))
       : [],
-    summary: summarizeMember(target, infractions, notes, new Date()).summary,
-    infractions: infractions.map((row) => infractionDto(row, ref)),
+    summary: summarizeMember(target, infractions, notes, new Date(), ctx.warnExpiryMs ?? null).summary,
+    infractions: infractions.map((row) => infractionDto(row, ref, ctx.warnExpiryMs ?? null)),
     notes: notes.map((row) => noteDto(row, ref)),
     audit: await toAuditDtos(ctx, auditRows, refs),
   };

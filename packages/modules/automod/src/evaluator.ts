@@ -6,6 +6,7 @@
  */
 import { createHash } from "node:crypto";
 import { fill } from "./fill.js";
+import { PATTERN_TEXT_MAX, PatternGuard, checkPattern, wildcardSource } from "./patterns.js";
 import type { AutomodSettings, RuleAction, RuleName } from "./settings.js";
 
 export type { RuleAction, RuleName };
@@ -30,6 +31,8 @@ export function fingerprintOf(content: string): string {
 }
 
 export interface EvaluationInput {
+  /** The server, for setting aside a slow pattern there only. */
+  guildId?: string;
   content: string;
   authorRoles: string[];
   authorIsBot: boolean;
@@ -324,18 +327,51 @@ function escapeRegExp(text: string): string {
   return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+// Compiled once per distinct source. Owners' lists change rarely, so this stays small; it is cleared
+// whole if it ever grows past the cap rather than tracking what is still in use.
+const compiled = new Map<string, RegExp>();
+const COMPILED_MAX = 5000;
+
+function regexFor(source: string, flags: string): RegExp {
+  const key = `${flags}/${source}`;
+  let found = compiled.get(key);
+  if (!found) {
+    if (compiled.size >= COMPILED_MAX) compiled.clear();
+    found = new RegExp(source, flags);
+    compiled.set(key, found);
+  }
+  return found;
+}
+
+const WORD_EDGE_BEFORE = "(?<![\\p{L}\\p{N}\\p{M}])";
+const WORD_EDGE_AFTER = "(?![\\p{L}\\p{N}\\p{M}])";
+
+/** A word, or a word with wildcards, standing on its own in the text. */
 function containsWord(text: string, word: string): boolean {
   if (!word) return false;
-  const pattern = new RegExp(
-    `(?<![\\p{L}\\p{N}\\p{M}])${escapeRegExp(word)}(?![\\p{L}\\p{N}\\p{M}])`,
-    "u",
-  );
-  return pattern.test(text);
+  const body = wildcardSource(word) ?? escapeRegExp(word);
+  return regexFor(`${WORD_EDGE_BEFORE}${body}${WORD_EDGE_AFTER}`, "u").test(text);
+}
+
+/** Patterns that ran slowly are set aside per server; see patterns.ts. */
+export const patternGuard = new PatternGuard();
+
+/** The owner's patterns that match, as written. A pattern that fails the shape check is never run. */
+function matchingPatterns(input: EvaluationInput, patterns: readonly string[]): string[] {
+  if (patterns.length === 0) return [];
+  const text = input.content.normalize("NFC").slice(0, PATTERN_TEXT_MAX);
+  return patterns.filter((pattern) => {
+    const check = checkPattern(pattern);
+    if (!check.ok) return false;
+    const regex = regexFor(check.source, "iu");
+    return patternGuard.run(input.guildId ?? "", check.source, () => regex.test(text));
+  });
 }
 
 function checkBannedWords(input: EvaluationInput): RuleMatch | null {
   const rule = input.settings.bannedWords;
-  if (!rule.enabled || isExempt(input, rule) || rule.words.length === 0) return null;
+  const patterns = rule.patterns ?? [];
+  if (!rule.enabled || isExempt(input, rule) || (rule.words.length === 0 && patterns.length === 0)) return null;
 
   // Folding turns "!" and "@" into letters, so "damn!" becomes "damni" and
   // would slip through. The plain text is tried as well, which is what lets
@@ -347,6 +383,7 @@ function checkBannedWords(input: EvaluationInput): RuleMatch | null {
     const foldedWord = normalizeForBannedWords(word).trim();
     return containsWord(plain, plainWord) || containsWord(folded, foldedWord);
   });
+  hits.push(...matchingPatterns(input, patterns));
   if (hits.length === 0) return null;
 
   // The list's own entries are reported, never the member's text around them.

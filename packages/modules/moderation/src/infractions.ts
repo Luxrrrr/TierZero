@@ -1,5 +1,5 @@
 import { createInfraction, prisma } from "@tier0/db";
-import type { EvidenceMessage } from "@tier0/core";
+import type { AutomaticCase, EvidenceMessage } from "@tier0/core";
 import type { ModerationAction } from "./modlog.js";
 
 export interface InfractionRecord {
@@ -26,6 +26,8 @@ export interface RecordInfractionInput {
   expiresAt?: Date | null;
   active?: boolean;
   evidence?: EvidenceMessage[];
+  /** Set when an escalation rule took this action, not a person. */
+  automatic?: AutomaticCase | null;
 }
 
 /**
@@ -44,6 +46,7 @@ export async function recordInfraction(input: RecordInfractionInput): Promise<In
     expiresAt: input.expiresAt ?? null,
     active: input.active ?? true,
     evidence: JSON.stringify(input.evidence ?? []),
+    ...(input.automatic ? { automatic: JSON.stringify(input.automatic) } : {}),
   });
 }
 

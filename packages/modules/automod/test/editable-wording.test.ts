@@ -21,7 +21,16 @@ const LABELS_WERE = {
   },
   actionWords: { delete: "delete", warn: "warn", timeout: "timeout", comma: ",", and: "and" },
   fragments: { noReason: "-", reasonNote: ": {reason}", matchesMore: "and {count} more", invalidAddress: "an invalid address" },
-  ruleNames: { invites: "invites", links: "links", capitals: "capitals", repeatedText: "repeatedText", mentions: "mentions", bannedWords: "bannedWords", rateLimit: "rateLimit" },
+  // The rule names were the code's keys until 2026-10, which members saw in the notice. They are words now.
+  ruleNames: {
+    invites: "invite links",
+    links: "links",
+    capitals: "excessive capitals",
+    repeatedText: "repeated text",
+    mentions: "mass mentions",
+    bannedWords: "banned words",
+    rateLimit: "rate limit",
+  },
   reasons: {
     invites: "Posted a Discord invite link",
     links: "Posted a link to a site that isn't allowed",
@@ -131,7 +140,7 @@ describe("values for the notice, the direct message and the log", () => {
     assert.deepEqual(tripValues({ ...facts, actions: [...facts.actions] }), {
       user: "<@111111111111111111>",
       userId: "111111111111111111",
-      rule: "rateLimit",
+      rule: "rate limit",
       ruleKey: "rateLimit",
       action: "delete, warn and timeout",
       reason: "Sent 6 messages in 10s, more than the limit of 5",
@@ -160,8 +169,24 @@ describe("values for the notice, the direct message and the log", () => {
     assert.equal(tripValues({ ...facts, actions: ["delete"], reason: undefined, warned: false, timedOut: false }, wording).reason, "n/a");
   });
 
-  test("a rule this version does not know keeps its key", () => {
+  test("a rule this version does not know gets a name made from its key", () => {
     assert.equal(ruleName("slowmode"), "slowmode");
+    assert.equal(ruleName("zalgoText"), "zalgo text");
+  });
+
+  test("a name saved back when the default was the key reads as the new default, without touching stored data", () => {
+    const old = { ...DEFAULT_AUTOMOD_WORDING, ruleNames: { ...DEFAULT_AUTOMOD_WORDING.ruleNames, bannedWords: "bannedWords", rateLimit: "rateLimit", invites: "Spam links" } };
+    assert.equal(ruleName("bannedWords", old), "banned words");
+    assert.equal(ruleName("rateLimit", old), "rate limit");
+    assert.equal(ruleName("invites", old), "Spam links");
+    assert.equal(tripValues({ ...facts, actions: [...facts.actions] }, old).rule, "rate limit");
+  });
+
+  test("no default rule name is the key members used to see", () => {
+    for (const [key, name] of Object.entries(DEFAULT_AUTOMOD_WORDING.ruleNames)) {
+      assert.match(name, /^[a-z]+( [a-z]+)*$/, key);
+      if (key !== "links") assert.notEqual(name, key);
+    }
   });
 
   test("the list of what matched is cut short in the owner's words", () => {

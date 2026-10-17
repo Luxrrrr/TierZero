@@ -10,9 +10,46 @@ import { historyCommand } from "./commands/history.js";
 import { purgeCommand } from "./commands/purge.js";
 import { contextCommands, submitContextAction } from "./commands/context.js";
 import { liftTemporaryBan } from "./unban-task.js";
+import { openAppealForm, submitAppeal } from "./appeals.js";
+import { lockdownCommand } from "./commands/lockdown.js";
+import { joinTracker, onMemberJoin } from "./join-alert.js";
+import { endScheduledLockdown } from "./lockdown.js";
 import { recentMessages } from "./recent-messages.js";
 
-export { performAction, type PerformInput, type PerformOutcome } from "./perform.js";
+export { escalationNote, performAction, type PerformInput, type PerformOutcome } from "./perform.js";
+export {
+  automaticFacts,
+  countedWarnings,
+  escalateAfterWarning,
+  escalateFromPeer,
+  pickRule,
+  ruleName,
+  standingBlocks,
+  type EscalationOutcome,
+  type WarningRow,
+} from "./escalation.js";
+export { applyPreset, presetDtos, presetLength, presetSuggestions } from "./presets.js";
+export { appealBlock, retryNote, AppealLimiter, type AppealBlock, type AppealFacts } from "./appeals.js";
+export {
+  LOCK_PERMISSIONS,
+  botCanLock,
+  lockChannels,
+  lockPatch,
+  lockableChannels,
+  previousOf,
+  readPrevious,
+  restorePatch,
+  shouldRemoveAfterRestore,
+  unlockChannels,
+  type LockResult,
+  type PreviousOverwrite,
+} from "./lockdown.js";
+export { auditLockdown, lockdownSummary } from "./raid-audit.js";
+export { JoinTracker, joinTracker } from "./join-alert.js";
+export { latestOpenBan } from "./infractions.js";
+export { tryDirectMessage, appealRow } from "./dm.js";
+export { postModLog } from "./reply.js";
+export { APPEAL_ACCEPTED_DM, APPEAL_DENIED_DM } from "./messages.js";
 export {
   ActionRefused,
   actionContext,
@@ -22,7 +59,8 @@ export {
   readRequestFields,
   type ActionOrigin,
 } from "./action-rules.js";
-export { fetchMemberOrNull } from "./lookups.js";
+export { fetchBanOrNull, fetchMemberOrNull } from "./lookups.js";
+export { BLOCKED_TEXT, blockedActions, type AvailabilityInput } from "./availability.js";
 export { describeLength } from "./modlog.js";
 export { DEFAULT_WORDING, fillLabel, labelGroup, timeWordsGroup, type TextSpec, type Wording } from "./texts.js";
 export {
@@ -67,11 +105,16 @@ export default defineModule({
     caseCommand,
     historyCommand,
     purgeCommand,
+    lockdownCommand,
   ],
 
   contextCommands,
 
-  modals: { ctxact: submitContextAction },
+  modals: { ctxact: submitContextAction, appealform: submitAppeal },
+
+  // The appeal button sits under a ban's direct message, where Discord names no server.
+  components: { appeal: openAppealForm },
+  directMessage: ["appeal", "appealform"],
 
   // What a member said lately is kept in memory, so a moderator can attach it to an
   // action even on a server that has not turned on Server logs, including a message
@@ -100,6 +143,7 @@ export default defineModule({
     async messageDeleteBulk(messages) {
       for (const message of messages.values()) recentMessages.markDeleted(message.id);
     },
+    memberJoin: onMemberJoin,
   },
 
   tasks: {
@@ -107,6 +151,12 @@ export default defineModule({
     // timer, so a ban issued just before a restart still gets lifted on time.
     // A failed attempt schedules its own retry; see liftTemporaryBan.
     unban: liftTemporaryBan,
+    // Ends a lockdown that was given a length, for the same reason.
+    unlock: endScheduledLockdown,
+  },
+
+  async onDisable(ctx) {
+    joinTracker.forget(ctx.guild.id);
   },
 
   requires: ["ModerateMembers", "KickMembers", "BanMembers", "ManageMessages"],

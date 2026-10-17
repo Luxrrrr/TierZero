@@ -1,4 +1,15 @@
-import { isInForce as restrictionInForce, readEvidence, type InfractionDto, type MemberSummary, type NoteDto, type UserRef } from "@tier0/core";
+import {
+  isCounting,
+  isInForce as restrictionInForce,
+  readAutomatic,
+  readEvidence,
+  readableReason,
+  warnExpiresAt,
+  type InfractionDto,
+  type MemberSummary,
+  type NoteDto,
+  type UserRef,
+} from "@tier0/core";
 
 /**
  * Mappers and rules for the mod dashboard that need neither Discord nor a
@@ -23,6 +34,8 @@ export interface InfractionRow {
   evidence: string;
   editedAt?: Date | null;
   editedBy?: string | null;
+  /** Set on a case an escalation rule took, as JSON. */
+  automatic?: string | null;
 }
 
 export interface NoteRow {
@@ -57,7 +70,9 @@ function checkText(value: unknown, label: string, max: number): Checked {
 export const checkNoteContent = (value: unknown): Checked => checkText(value, "A note", NOTE_MAX);
 export const checkVoidReason = (value: unknown): Checked => checkText(value, "A reason", REASON_MAX);
 
-export function infractionDto(row: InfractionRow, ref: RefLookup): InfractionDto {
+/** `warnExpiryMs` is the server's warn expiry, null for never, which decides when a warning stops counting. */
+export function infractionDto(row: InfractionRow, ref: RefLookup, warnExpiryMs: number | null = null): InfractionDto {
+  const warnEnds = warnExpiresAt(row.action, row.createdAt, warnExpiryMs);
   return {
     id: row.id,
     caseNumber: row.caseNumber,
@@ -73,7 +88,17 @@ export function infractionDto(row: InfractionRow, ref: RefLookup): InfractionDto
       : null,
     evidence: readEvidence(row.evidence),
     edited: row.editedAt ? { at: row.editedAt.toISOString(), by: ref(row.editedBy ?? "") } : null,
+    automatic: readAutomatic(row.automatic),
+    warnExpiresAt: warnEnds ? warnEnds.toISOString() : null,
   };
+}
+
+/** Whether a row still counts toward the member's totals, by the shared rule. */
+export function rowCounts(row: InfractionRow, now: Date, warnExpiryMs: number | null): boolean {
+  return isCounting(
+    { action: row.action, active: row.active, expiresAt: row.expiresAt, removed: row.voidedAt !== null, warnExpiresAt: warnExpiresAt(row.action, row.createdAt, warnExpiryMs) },
+    now,
+  );
 }
 
 /**
@@ -135,10 +160,20 @@ export function clip(text: string, max: number = SUMMARY_TEXT_MAX): string {
 
 export const labelOf = (ref: UserRef): string => ref.name ?? ref.userId;
 
-/** "warn #12 for NAME: REASON" with the reason left off when there is none. */
+/** "the reason", "the reason and the length", "the reason, the length and the attached messages". */
+export function joinWords(parts: string[]): string {
+  if (parts.length <= 1) return parts[0] ?? "";
+  return `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}`;
+}
+
+/**
+ * "warn #12 for NAME: REASON" with the reason left off when there is none. Automod's cases read
+ * "automod timeout #12 ...: Rate limit: ...", never with the rule key they are stored under.
+ */
 export function describeCase(row: InfractionRow, target: UserRef): string {
-  const reason = row.reason ? `: ${clip(row.reason)}` : "";
-  return `${row.action} #${row.caseNumber} for ${labelOf(target)}${reason}`;
+  const text = readableReason(row.action, row.reason);
+  const reason = text ? `: ${clip(text)}` : "";
+  return `${row.action.replace(/^automod-/, "automod ")} #${row.caseNumber} for ${labelOf(target)}${reason}`;
 }
 
 /** Whether the row is restricting the member now, by the one rule in the shared contract. */
@@ -147,6 +182,27 @@ export function isInForce(row: InfractionRow, now: Date): boolean {
     { action: row.action, active: row.active, expiresAt: row.expiresAt, removed: row.voidedAt !== null },
     now,
   );
+}
+
+/** Both put a Discord timeout on the member, so removing either has to lift it. */
+export const TIMEOUT_ACTIONS = ["timeout", "automod-timeout"];
+
+/** Whether removing this case lifts a ban in Discord, which the request has to confirm. */
+export function liftsBan(row: InfractionRow, now: Date): boolean {
+  return row.action === "ban" && isInForce(row, now);
+}
+
+export const BAN_LIFT_UNCONFIRMED =
+  "Removing this ban from the record also lifts the ban in Discord, so the member can rejoin. Confirm that to go ahead.";
+
+/**
+ * The stored flag a restored case gets back. Restoring never contacts Discord: a timeout of either kind was lifted
+ * when it was removed and stays inactive, and a ban is in force again only if Discord still holds one.
+ */
+export function restoredActive(action: string, wasActive: boolean, stillBanned: boolean): boolean {
+  if (TIMEOUT_ACTIONS.includes(action)) return false;
+  if (action === "ban") return wasActive && stillBanned;
+  return wasActive;
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -176,20 +232,28 @@ export function activityByDay(rows: InfractionRow[], now: Date, days: number = A
 
 export interface MemberEntry {
   summary: MemberSummary;
-  /** Latest thing on their record, notes included, for ordering by recency. */
+  /** Latest thing on their record, notes included, to break ties between members with no action. */
   touchedAt: number;
+  /** Their latest action, which the "Last action" column shows and the default order follows. Null for notes only. */
+  lastActionMs?: number | null;
 }
 
-/** Builds one member's summary from every row about them. Removed entries are ignored. */
+/**
+ * Builds one member's summary from every row about them. Removed entries are ignored. The warn count is the
+ * warnings that still count under the server's warn expiry; the expired ones are counted apart.
+ */
 export function summarizeMember(
   user: UserRef,
   infractions: InfractionRow[],
   notes: NoteRow[],
   now: Date,
+  warnExpiryMs: number | null = null,
 ): MemberEntry {
   const live = infractions.filter((row) => !row.voidedAt);
   const liveNotes = notes.filter((row) => !row.deletedAt);
   const count = (action: string) => live.filter((row) => row.action === action).length;
+  const warns = live.filter((row) => row.action === "warn");
+  const currentWarns = warns.filter((row) => rowCounts(row, now, warnExpiryMs)).length;
   const lastAction = live.reduce<number | null>(
     (latest, row) => (latest === null || row.createdAt.getTime() > latest ? row.createdAt.getTime() : latest),
     null,
@@ -199,16 +263,19 @@ export function summarizeMember(
     summary: {
       user,
       infractionCount: live.length,
-      warnCount: count("warn"),
+      warnCount: currentWarns,
+      expiredWarnCount: warns.length - currentWarns,
       timeoutCount: count("timeout"),
       banCount: count("ban"),
       kickCount: count("kick"),
+      automodCount: live.filter((row) => row.action.startsWith("automod-")).length,
       noteCount: liveNotes.length,
       lastActionAt: lastAction === null ? null : new Date(lastAction).toISOString(),
       hasActive: live.some((row) => isInForce(row, now)),
       activity: activityByDay(live, now),
     },
     touchedAt: Math.max(lastAction ?? 0, lastNote),
+    lastActionMs: lastAction,
   };
 }
 
@@ -258,7 +325,10 @@ export function sortMembers(entries: MemberEntry[], sort: MemberSort): MemberEnt
     const compared = (an ?? "").localeCompare(bn ?? "", undefined, { sensitivity: "base" });
     return compared !== 0 ? compared : a.summary.user.userId.localeCompare(b.summary.user.userId);
   };
-  const recent = (a: MemberEntry, b: MemberEntry): number => b.touchedAt - a.touchedAt;
+  // Ordered by the date the "Last action" column shows, so a recent note does not lift an old action up the list.
+  // Members with notes but no action come after everyone with one, newest note first.
+  const recent = (a: MemberEntry, b: MemberEntry): number =>
+    (b.lastActionMs ?? -1) - (a.lastActionMs ?? -1) || b.touchedAt - a.touchedAt;
   const sorted = [...entries];
   if (sort === "name") return sorted.sort(byName);
   if (sort === "most") {

@@ -1,4 +1,4 @@
-import { dashboardLinks, embedReply, emptyEmbed, plainReply, viewCaseButton, type MessageBody, type MessageEmbed, type MessageVariable } from "@tier0/core";
+import { automodRuleLabel, dashboardLinks, embedReply, emptyEmbed, plainReply, viewCaseButton, type MessageBody, type MessageEmbed, type MessageVariable } from "@tier0/core";
 import { describeLength } from "@tier0/module-moderation";
 import { fill } from "./fill.js";
 import { DEFAULT_AUTOMOD_WORDING, type AutomodWording } from "./texts.js";
@@ -19,8 +19,12 @@ export type LoggedAction = "warn" | "delete" | "timeout";
 
 const USER: MessageVariable = { name: "user", description: "The member who tripped the rule, as a mention", sample: "@spamlord_42" };
 const USER_ID: MessageVariable = { name: "userId", description: "The member's user ID", sample: "123456789012345678" };
-const RULE: MessageVariable = { name: "rule", description: "The rule that tripped, as it is named in Labels and text", sample: "invites" };
-const RULE_KEY: MessageVariable = { name: "ruleKey", description: "The rule's own name, whatever it is called in Labels and text", sample: "invites" };
+const RULE: MessageVariable = { name: "rule", description: "The rule that tripped, as it is named in Labels and text", sample: "invite links" };
+const RULE_KEY: MessageVariable = {
+  name: "ruleKey",
+  description: "The rule's internal key, such as bannedWords, whatever it is called in Labels and text. Meant for staff-only posts",
+  sample: "invites",
+};
 const ACTION: MessageVariable = { name: "action", description: "What was done, in words: delete, warn, timeout, or several such as delete and warn", sample: "delete" };
 const REASON: MessageVariable = { name: "reason", description: "What the member did to trip it, worded so it is safe to show anyone, or a dash when there is nothing to add", sample: "Posted a Discord invite link" };
 const DURATION: MessageVariable = { name: "duration", description: "How long the timeout lasts. Empty unless the member was timed out", sample: "10 minutes" };
@@ -225,9 +229,16 @@ export function tripValues(facts: TripFacts, wording: AutomodWording = DEFAULT_A
   };
 }
 
-/** What a rule is called to members and in the log. A rule this version does not know keeps its key. */
+/**
+ * What a rule is called to members and in the log. Saved settings from before the names were words still hold the
+ * key as the name, which is mapped to the default on read rather than migrated. A rule this version does not know
+ * gets a name made from its key.
+ */
 export function ruleName(rule: string, wording: AutomodWording = DEFAULT_AUTOMOD_WORDING): string {
-  return Object.hasOwn(wording.ruleNames, rule) ? wording.ruleNames[rule as keyof AutomodWording["ruleNames"]] : rule;
+  if (!Object.hasOwn(DEFAULT_AUTOMOD_WORDING.ruleNames, rule)) return automodRuleLabel(rule).toLowerCase();
+  const key = rule as keyof AutomodWording["ruleNames"];
+  const chosen = Object.hasOwn(wording.ruleNames, rule) ? wording.ruleNames[key] : undefined;
+  return !chosen || chosen.trim() === "" || chosen === rule ? DEFAULT_AUTOMOD_WORDING.ruleNames[key] : chosen;
 }
 
 const MATCHES_SHOWN = 10;

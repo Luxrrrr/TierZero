@@ -15,6 +15,9 @@ import {
   slicePage,
   sortMembers,
   summarizeMember,
+  joinWords,
+  liftsBan,
+  restoredActive,
 } from "../dist/control/mod/dto.js";
 
 const ref = (id: string) => ({ userId: id, name: `name-${id}`, avatarUrl: null, inServer: true });
@@ -370,5 +373,64 @@ describe("infractionSnapshot", () => {
       "https://discord.com/channels/1/2/1 (warned for version 1 of 2)",
       "https://discord.com/channels/1/2/2",
     ]);
+  });
+});
+
+describe("automod cases in the member list", () => {
+  test("are counted, so the Actions column does not say None for a member automod acted on", () => {
+    const rows = [
+      infraction({ action: "automod-warn", reason: "invites: Posted a Discord invite link" }),
+      infraction({ id: 2, action: "automod-timeout", reason: "rateLimit: Sent 8 messages" }),
+      infraction({ id: 3, action: "warn" }),
+    ];
+    const { summary } = summarizeMember(ref("200000000000000001"), rows, [], NOW);
+    assert.equal(summary.automodCount, 2);
+    assert.equal(summary.warnCount, 1);
+  });
+});
+
+describe("most recent action order", () => {
+  test("follows the action date the column shows, not a later note", () => {
+    const old = summarizeMember(ref("1"), [infraction({ createdAt: new Date("2026-09-09T00:00:00Z") })], [
+      { id: 1, guildId: "g", userId: "1", authorId: "2", content: "watch", createdAt: new Date("2026-10-09T00:00:00Z"), updatedAt: new Date("2026-10-09T00:00:00Z"), deletedAt: null, deletedBy: null },
+    ], NOW);
+    const newer = summarizeMember(ref("2"), [infraction({ createdAt: new Date("2026-10-04T00:00:00Z") })], [], NOW);
+    const notesOnly = summarizeMember(ref("3"), [], [
+      { id: 2, guildId: "g", userId: "3", authorId: "2", content: "hm", createdAt: new Date("2026-10-08T00:00:00Z"), updatedAt: new Date("2026-10-08T00:00:00Z"), deletedAt: null, deletedBy: null },
+    ], NOW);
+    const order = sortMembers([old, notesOnly, newer], "recent").map((entry) => entry.summary.user.userId);
+    assert.deepEqual(order, ["2", "1", "3"]);
+  });
+});
+
+describe("automod cases described for staff activity", () => {
+  test("name the rule and the kind in words, never the keys they are stored under", () => {
+    const text = describeCase(infraction({ action: "automod-timeout", caseNumber: 198, reason: "rateLimit: Sent 8 messages in 5s" }), ref("200000000000000001"));
+    assert.equal(text, "automod timeout #198 for name-200000000000000001: Rate limit: Sent 8 messages in 5s");
+  });
+});
+
+describe("listing what an edit changed", () => {
+  test("joins the last two with and", () => {
+    assert.equal(joinWords(["the reason"]), "the reason");
+    assert.equal(joinWords(["the reason", "the attached messages"]), "the reason and the attached messages");
+    assert.equal(joinWords(["the reason", "the length", "the attached messages"]), "the reason, the length and the attached messages");
+  });
+});
+
+describe("removing and restoring a ban", () => {
+  test("only a ban still in force is lifted in Discord, and needs the request to say so", () => {
+    assert.equal(liftsBan(infraction({ action: "ban" }), NOW), true);
+    assert.equal(liftsBan(infraction({ action: "ban", active: false }), NOW), false);
+    assert.equal(liftsBan(infraction({ action: "ban", expiresAt: new Date("2026-10-01T00:00:00Z") }), NOW), false);
+    assert.equal(liftsBan(infraction({ action: "kick" }), NOW), false);
+  });
+
+  test("a restored case is in force again only where Discord still holds the restriction", () => {
+    assert.equal(restoredActive("ban", true, true), true);
+    assert.equal(restoredActive("ban", true, false), false, "the removal lifted it, and a restore never bans again");
+    assert.equal(restoredActive("timeout", true, true), false);
+    assert.equal(restoredActive("automod-timeout", true, true), false);
+    assert.equal(restoredActive("warn", true, true), true);
   });
 });

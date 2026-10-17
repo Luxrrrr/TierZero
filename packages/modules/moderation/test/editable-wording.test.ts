@@ -19,7 +19,7 @@ const WAS_SAID: Record<string, Record<string, string>> = {
     reasonTooLong: "A reason can be at most {max} characters.",
     durationUnreadableTimeout: "Duration must look like 10m, 2h or 7d.",
     durationUnreadableBan: "Duration must look like 1d or 7d.",
-    timeoutTooLong: "Timeouts cannot be longer than 28 days - that's Discord's own limit.",
+    timeoutTooLong: "Timeouts cannot be longer than 28 days, which is Discord's own limit.",
     banTooLong: "A temporary ban can last at most {maxDays} days. Leave the duration unset for a permanent ban.",
     targetSelf: "You cannot take a moderation action against yourself.",
     targetBot: "The bot cannot take a moderation action against itself.",
@@ -65,13 +65,23 @@ const WAS_SAID: Record<string, Record<string, string>> = {
   direct: {
     correction: "Correction: the message you were just sent about being {action} was sent in error. Nothing happened to you.",
   },
+  // Added with /lockdown, so these are what it said when it was first written.
+  raid: {
+    lockdownStarted: "Locked {count}.{skippedNote}",
+    lockdownEnded: "Unlocked {count}.{skippedNote}",
+    lockdownNothingLocked: "No channel is locked by the bot.",
+    lockdownNothingToLock: "There is nothing to lock: those channels are already locked, left alone by the settings, or hidden from members.",
+    lockdownNeedsPermission: "I need the Manage Roles permission to lock channels.",
+    lockdownNotAllowed: "You need the Manage Channels permission, or to be an admin on this server's staff list, to lock or unlock channels.",
+  },
 };
 
 /** The colour each default has, written out so changing one is a decision and not an accident. */
 const KIND_OF = (group: string, key: string): ReplyKind => {
   if (group === "confirmations") return "success";
   if (group === "direct") return "warning";
-  if (key === "noHistory" || key === "purgeNothingEligible") return "info";
+  if (key === "lockdownStarted" || key === "lockdownEnded") return "success";
+  if (key === "noHistory" || key === "purgeNothingEligible" || key === "lockdownNothingLocked" || key === "lockdownNothingToLock") return "info";
   return "error";
 };
 
@@ -106,6 +116,8 @@ const LABELS_WERE: Record<string, Record<string, string>> = {
     modLogFailed: "The mod log post failed. Check that the bot can send messages in the mod log channel.",
     correctionSent: "They had already been sent a message about it, so they were sent a correction.",
     correctionFailed: "They had already been sent a message about it and the correction could not be delivered.",
+    raidLocked: "Locked {count}.",
+    appealRetry: "You can appeal again {when}.",
   },
   time: {
     dayOne: "{n} day",
@@ -128,6 +140,9 @@ const LABELS_WERE: Record<string, Record<string, string>> = {
     messageMany: "{count} messages",
     skippedOne: "{count} message was left because it is older than 14 days.",
     skippedMany: "{count} messages were left because they are older than 14 days.",
+    channelOne: "{count} channel",
+    channelMany: "{count} channels",
+    lockSkipped: "{count} could not be changed, most likely because the bot cannot manage them.",
   },
   menu: {
     menuWarn: "Warn",
@@ -142,8 +157,16 @@ const LABELS_WERE: Record<string, Record<string, string>> = {
     timeoutPlaceholder: "10m, 2h or 7d. Empty uses the server's default.",
     banLabel: "How long (empty is permanent)",
     banPlaceholder: "1d or 7d. Empty is permanent.",
+    presetLabel: "Preset",
+    presetPlaceholder: "Pick a common reason, or write one below",
   },
-  reasons: { tempBanExpired: "Temporary ban expired" },
+  reasons: {
+    tempBanExpired: "Temporary ban expired",
+    escalated: "Automatic: {rule} ({warns})",
+    appealAccepted: "Ban appeal accepted",
+    lockdown: "Lockdown",
+    joinAlert: "Many members joined in a short time",
+  },
 };
 
 describe("defaults are what the module has always said", () => {
@@ -237,7 +260,7 @@ describe("a refusal carries a code and values, and the dashboard still reads its
 
   test("duration limits", () => {
     const long = refused(() => checkTimeoutDuration(29 * 86_400_000));
-    assert.deepEqual([long.code, long.message], ["timeoutTooLong", "Timeouts cannot be longer than 28 days - that's Discord's own limit."]);
+    assert.deepEqual([long.code, long.message], ["timeoutTooLong", "Timeouts cannot be longer than 28 days, which is Discord's own limit."]);
     const ban = refused(() => checkBanDuration(4000 * 86_400_000));
     assert.deepEqual([ban.code, ban.values], ["banTooLong", { maxDays: 3650 }]);
     assert.match(ban.message, /^A temporary ban can last at most 3650 days\./);

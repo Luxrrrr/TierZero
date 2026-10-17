@@ -170,6 +170,19 @@ export function checkDeleteDays(days: number | null, fallback: number): number {
   return value;
 }
 
+/** Which identity rule rules the target out, or null when none does. The menu and the action share it. */
+export function targetIdentityCode(
+  targetId: string,
+  actorId: string,
+  botId: string | null,
+  ownerId: string | null = null,
+): "targetSelf" | "targetBot" | "targetOwner" | null {
+  if (targetId === actorId) return "targetSelf";
+  if (botId !== null && targetId === botId) return "targetBot";
+  if (ownerId !== null && targetId === ownerId) return "targetOwner";
+  return null;
+}
+
 /** Nobody acts on themselves, the bot does not act on itself, and the server owner is out of reach. */
 export function checkTargetIdentity(
   targetId: string,
@@ -177,15 +190,8 @@ export function checkTargetIdentity(
   botId: string | null,
   ownerId: string | null = null,
 ): void {
-  if (targetId === actorId) {
-    throw refusal(403, "targetSelf");
-  }
-  if (botId !== null && targetId === botId) {
-    throw refusal(403, "targetBot");
-  }
-  if (ownerId !== null && targetId === ownerId) {
-    throw refusal(403, "targetOwner");
-  }
+  const code = targetIdentityCode(targetId, actorId, botId, ownerId);
+  if (code) throw refusal(403, code);
 }
 
 /** The key of an action in the label groups that name it by what it does. */

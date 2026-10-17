@@ -1,6 +1,6 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { serverLogWhere } from "../dist/control/mod/server-log-filters.js";
+import { actsAsAutomod, serverLogWhere } from "../dist/control/mod/server-log-filters.js";
 
 const GUILD = "100000000000000001";
 const ID = "200000000000000002";
@@ -44,5 +44,16 @@ describe("serverLogWhere", () => {
     const [range] = clauses("since=2026-10-01T00:00:00.000Z&until=2026-10-02T00:00:00.000Z");
     assert.ok((range!.at as { gte: Date }).gte instanceof Date);
     assert.deepEqual(clauses("since=nope"), []);
+  });
+});
+
+describe("who an entry is credited to", () => {
+  const BOT = "300000000000000003";
+  test("the bot is Automod only for what an automod rule did", () => {
+    assert.equal(actsAsAutomod(BOT, BOT, "automod"), true);
+    assert.equal(actsAsAutomod(BOT, BOT, undefined), false, "a ticket channel the bot made is the bot's own work");
+    assert.equal(actsAsAutomod(BOT, BOT, "bot"), false);
+    assert.equal(actsAsAutomod(ID, BOT, "automod"), false);
+    assert.equal(actsAsAutomod(null, BOT, "automod"), false);
   });
 });
