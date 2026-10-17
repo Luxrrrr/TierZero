@@ -44,6 +44,8 @@ export interface TranscriptTexts {
   line: string;
   attachment: string;
   unavailable: string;
+  /** The close reason, under who closed it. */
+  reason?: string;
 }
 
 export const DEFAULT_TRANSCRIPT_TEXTS: TranscriptTexts = {
@@ -56,6 +58,7 @@ export const DEFAULT_TRANSCRIPT_TEXTS: TranscriptTexts = {
   line: "[{time}] {author} ({authorId})",
   attachment: "  attachment: {url}",
   unavailable: "(message content unavailable)",
+  reason: "Reason: {reason}",
 };
 
 function formatTimestamp(epochMs: number): string {

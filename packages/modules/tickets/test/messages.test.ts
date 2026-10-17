@@ -1,6 +1,6 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { ModuleRegistry, REPLY_COLOR, applyVariables, applyVariablesToMessage, type FieldDescriptor, type MessageBody } from "@tier0/core";
+import { MESSAGE_VARIABLES, ModuleRegistry, REPLY_COLOR, applyVariables, applyVariablesToMessage, type FieldDescriptor, type MessageBody } from "@tier0/core";
 import tickets from "../dist/index.js";
 import {
   ADDED_MESSAGE,
@@ -25,16 +25,24 @@ const ROLE_B = "423456789012345678";
 const registry = new ModuleRegistry();
 registry.register(tickets);
 
-interface Resolved {
-  panel: { message: MessageBody; buttonLabel: string };
-  transcript: { message: MessageBody };
-  messages: Record<"opened" | "created" | "closing" | "added" | "removed" | "panelPosted", MessageBody>;
+interface Stored {
+  panels: { message: MessageBody; types: { welcome: MessageBody; appearance: { buttonLabel?: string } }[] }[];
+  transcripts: { message: MessageBody };
+  messages: Record<"created" | "closing" | "added" | "removed" | "panelPosted", MessageBody>;
 }
 
+interface Resolved extends Stored {
+  panel: Stored["panels"][number];
+  messages: Stored["messages"] & { opened: MessageBody };
+}
+
+/** Settings saved before panels had types, read through the upgrade into the current shape. */
 function resolve(stored: unknown): Resolved {
   const result = registry.resolveSettings("tickets", { category: CATEGORY, supportRoles: [ROLE_A], ...(stored as object) });
   assert.ok(result.ok, "settings should resolve");
-  return result.value as Resolved;
+  const value = result.value as Stored;
+  const panel = value.panels[0]!;
+  return { ...value, panel, messages: { ...value.messages, opened: panel.types[0]!.welcome } };
 }
 
 const fill = (body: MessageBody, values: Record<string, string | number>) =>
@@ -88,7 +96,7 @@ describe("the first message in a ticket", () => {
   const opener = { id: "42", username: "ada" };
 
   test("reads the same as before when there is a subject", () => {
-    const values = openedValues(opener, { id: 7, subject: "Cannot log in" }, CHANNEL, [ROLE_A, ROLE_B]);
+    const values = { ...openedValues(opener, { id: 7, subject: "Cannot log in" }, CHANNEL, [ROLE_A, ROLE_B]), pingRoles: `<@&${ROLE_A}> <@&${ROLE_B}>` };
     const message = fill(OPENED_MESSAGE, values);
     assert.equal(message.content.trim(), `<@42> <@&${ROLE_A}> <@&${ROLE_B}>`);
     assert.equal(message.embeds[0]?.title, "Cannot log in");
@@ -144,7 +152,7 @@ describe("the transcript post", () => {
   test("says Transcript for ticket #N by default", () => {
     const values = transcriptValues({ id: 12, subject: null, openerId: "42" }, { id: "9", tag: "grace" }, "ticket-ada");
     assert.equal(fill(TRANSCRIPT_MESSAGE, values).embeds[0]?.description, "Transcript for ticket #12");
-    assert.deepEqual(resolve({}).transcript.message, TRANSCRIPT_MESSAGE);
+    assert.deepEqual(resolve({}).transcripts.message, TRANSCRIPT_MESSAGE);
   });
 
   test("names the scheduled close rather than mentioning it", () => {
@@ -156,8 +164,8 @@ describe("the transcript post", () => {
   });
 
   test("a customised message and a legacy string both read", () => {
-    const { transcript } = resolve({ transcript: { message: "Log for #{number} by {user}" } });
-    assert.equal(transcript.message.content, "Log for #{number} by {user}");
+    const { transcripts } = resolve({ transcript: { message: "Log for #{number} by {user}" } });
+    assert.equal(transcripts.message.content, "Log for #{number} by {user}");
   });
 });
 
@@ -173,8 +181,8 @@ describe("the default look", () => {
     }
   });
 
-  test("the opening message still pings the opener and the support roles from its text", () => {
-    assert.equal(OPENED_MESSAGE.content, "{user} {supportRoles}");
+  test("the opening message names the opener and the roles picked to ping", () => {
+    assert.equal(OPENED_MESSAGE.content, "{user} {pingRoles}");
     assert.equal(OPENED_MESSAGE.embeds.length, 1);
   });
 });
@@ -202,24 +210,85 @@ describe("what the dashboard is told", () => {
   const summary = registry.describe().find((entry) => entry.id === "tickets");
   const fields = summary?.schema.fields as Record<string, FieldDescriptor>;
   const group = (name: string) => fields[name]?.fields as Record<string, FieldDescriptor>;
+  const panelFields = (fields.panels?.of as FieldDescriptor).fields as Record<string, FieldDescriptor>;
+  const typeFields = (panelFields.types?.of as FieldDescriptor).fields as Record<string, FieldDescriptor>;
   const names = (field: FieldDescriptor | undefined) => (field?.variables as { name: string }[]).map((variable) => variable.name);
 
   test("every message is a message field that cannot carry the module's own buttons", () => {
     const nested = Object.values(group("messages")).flatMap((field) =>
       field.kind === "object" ? Object.values(field.fields as Record<string, FieldDescriptor>) : [field],
     );
-    for (const field of [group("panel").message, group("transcript").message, ...nested]) {
+    for (const field of [panelFields.message, typeFields.welcome, group("transcripts").message, ...nested]) {
       assert.equal(field?.kind, "message");
       assert.equal(field?.components, false);
     }
   });
 
-  test("the first message offers its variables", () => {
-    assert.deepEqual(names(group("messages").opened), ["user", "username", "subject", "title", "number", "ticket", "supportRoles"]);
+  test("the first message offers the variables it always had, then the ones types brought", () => {
+    const offered = names(typeFields.welcome);
+    assert.deepEqual(offered.slice(0, 7), ["user", "username", "subject", "title", "number", "ticket", "supportRoles"]);
+    for (const name of ["type", "priority", "answers", "answer1", "answer5", "claimedBy", "handlers", "pingRoles"]) {
+      assert.ok(offered.includes(name), name);
+    }
   });
 
   test("the replies only the member sees are delivered as direct-style messages", () => {
     assert.equal(group("messages").created?.delivery, "dm");
     assert.equal(group("messages").closing?.delivery, "channel");
+  });
+});
+
+describe("every message the module can send", () => {
+  const summary = registry.describe().find((entry) => entry.id === "tickets");
+  const found: { path: string; field: FieldDescriptor }[] = [];
+  const walk = (field: FieldDescriptor, path: string) => {
+    if (field.kind === "message") found.push({ path, field });
+    if (field.kind === "object") {
+      for (const [key, child] of Object.entries(field.fields as Record<string, FieldDescriptor>)) walk(child, path ? path + "." + key : key);
+    }
+    if (field.kind === "array") walk(field.of as FieldDescriptor, path + "[]");
+  };
+  walk(summary!.schema, "");
+  const shared = MESSAGE_VARIABLES.map((variable) => variable.name as string);
+
+  test("is found by walking the schema, as the Bot messages page does", () => {
+    for (const path of ["panels[].message", "panels[].types[].welcome", "messages.closeRequest", "messages.claimed", "ratings.message", "ratings.thanks", "automation.reminder.message", "transcripts.summaryMessage", "transcripts.dmMessage", "general.blocklist.message", "messages.opening.cooldown"]) {
+      assert.ok(found.some((entry) => entry.path === path), path);
+    }
+  });
+
+  test("only uses variables it offers", () => {
+    for (const { path, field } of found) {
+      const offered = new Set([...shared, ...(field.variables as { name: string }[]).map((variable) => variable.name)]);
+      const text = JSON.stringify(field.starting);
+      for (const match of text.matchAll(/\{([a-zA-Z][a-zA-Z0-9.]*)\}/g)) {
+        assert.ok(offered.has(match[1]!), path + " uses {" + match[1] + "} without offering it");
+      }
+    }
+  });
+
+  test("has a sample for every variable it offers", () => {
+    for (const { path, field } of found) {
+      for (const variable of field.variables as { name: string; description: string; sample: string }[]) {
+        assert.ok(variable.description.length > 0, path + " {" + variable.name + "}");
+        assert.equal(typeof variable.sample, "string");
+      }
+    }
+  });
+
+  test("is written without dashes standing in for punctuation", () => {
+    for (const { path, field } of found) {
+      assert.ok(!/[\u2013\u2014]/.test(JSON.stringify(field.starting)), path);
+    }
+  });
+
+  test("that the bot answers through its own buttons cannot carry others", () => {
+    for (const { path, field } of found) {
+      if (path === "transcripts.summaryMessage") {
+        assert.equal(field.components, true, "the summary carries its own link button");
+        continue;
+      }
+      assert.equal(field.components, false, path);
+    }
   });
 });

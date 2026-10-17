@@ -13,12 +13,18 @@ const ROLE = "323456789012345678";
 const registry = new ModuleRegistry();
 registry.register(tickets);
 
-type Groups = Record<"refusals" | "opening" | "panel", Record<string, MessageBody>>;
+type Groups = Record<"refusals" | "opening" | "working" | "panel", Record<string, MessageBody>>;
 
 function resolve(stored: unknown = {}) {
   const result = registry.resolveSettings("tickets", { category: CATEGORY, supportRoles: [ROLE], ...(stored as object) });
   assert.ok(result.ok, result.ok ? "" : result.errors[0]?.message);
-  return result.value as { messages: Groups; labels: Record<string, unknown>; autoClose: { notice: boolean } };
+  return result.value as {
+    messages: Groups;
+    labels: Record<string, unknown>;
+    general: { channelName: string; blocklist: { message: MessageBody } };
+    panels: { types: { form: { label: string }[] }[] }[];
+    automation: { autoClose: { notice: boolean } };
+  };
 }
 
 const TODAY = {
@@ -38,12 +44,20 @@ const TODAY = {
   panelFailed: "I couldn't post the panel there. Check that I can send messages and embed links in that channel.",
 } as const;
 
-const flat = (groups: Groups): Record<string, MessageBody> => ({ ...groups.refusals, ...groups.opening, ...groups.panel });
+const flat = (groups: Groups): Record<string, MessageBody> => ({ ...groups.refusals, ...groups.opening, ...groups.working, ...groups.panel });
 
 describe("the refusals and failures", () => {
+  test("every one in the catalogue is a setting, the blocklist's with the blocklist", () => {
+    const resolved = resolve();
+    const replies = { ...flat(resolved.messages), blocked: resolved.general.blocklist.message };
+    assert.deepEqual(Object.keys(replies).sort(), Object.keys(REPLIES).sort());
+    for (const [key, body] of Object.entries(replies)) {
+      assert.deepEqual(body, REPLIES[key as keyof typeof REPLIES].starting, key);
+    }
+  });
+
   test("say what they always have until the owner writes another", () => {
     const replies = flat(resolve().messages);
-    assert.deepEqual(Object.keys(replies).sort(), Object.keys(TODAY).sort());
     for (const [key, text] of Object.entries(TODAY)) {
       assert.equal(replies[key]?.embeds[0]?.description, text, key);
       assert.equal(replies[key]?.embeds[0]?.color, REPLY_COLOR.error, key);
@@ -94,9 +108,17 @@ describe("the labels", () => {
     assert.equal(transcript.unknownAuthor, "unknown user");
     assert.equal(transcript.unknownAuthorId, "unknown");
     assert.equal(values.modalTitle, "Open a ticket");
-    assert.equal(values.modalQuestion, "What do you need help with?");
     assert.equal(values.closeButton, "Close ticket");
-    assert.equal(values.channelName, "ticket-{username}");
+  });
+
+  test("the form question and channel name moved, with their old values, to where types read them", () => {
+    const moved = resolve();
+    assert.equal(moved.panels[0]?.types[0]?.form[0]?.label, "What do you need help with?");
+    assert.equal(moved.general.channelName, "ticket-{username}");
+    const custom = resolve({ labels: { modalQuestion: "What's up?", channelName: "help-{username}" } });
+    assert.equal(custom.panels[0]?.types[0]?.form[0]?.label, "What's up?");
+    assert.equal(custom.general.channelName, "help-{username}");
+    assert.equal(custom.labels.modalQuestion, undefined);
   });
 
   test("the topic, audit-log reason and file name read as before", () => {
@@ -132,22 +154,29 @@ describe("the labels", () => {
     const result = registry.resolveSettings("tickets", {
       category: CATEGORY,
       supportRoles: [ROLE],
-      labels: { channelName: "ticket-{number}" },
+      labels: { channelName: "ticket-{reason}" },
     });
     assert.equal(result.ok, false);
+    assert.equal(registry.resolveSettings("tickets", { general: { channelName: "ticket-{opener}" } }).ok, false);
   });
 
   test("every limited string is held to Discord's limit", () => {
     const summary = registry.describe().find((entry) => entry.id === "tickets");
-    const labels = (summary?.schema.fields as Record<string, FieldDescriptor>).labels;
+    const top = summary?.schema.fields as Record<string, FieldDescriptor>;
+    const labels = top.labels;
     const fields = labels?.fields as Record<string, FieldDescriptor>;
+    const general = top.general?.fields as Record<string, FieldDescriptor>;
     assert.equal(fields.modalTitle?.max, 45);
-    assert.equal(fields.modalQuestion?.max, 45);
-    assert.equal(fields.closeButton?.max, 80);
+    assert.equal(fields.reasonTitle?.max, 45);
+    assert.equal(fields.reasonQuestion?.max, 45);
+    for (const key of ["closeButton", "claimButton", "unclaimButton", "reopenButton", "deleteButton", "requestCloseButton", "keepOpenButton"]) {
+      assert.equal(fields[key]?.max, 80, key);
+    }
     assert.ok((fields.closeReason?.max as number) <= 512);
     assert.ok((fields.topicWithSubject?.max as number) <= 1024);
-    assert.equal(labels?.collapsible, true);
-    assert.deepEqual(fields.channelName?.placeholders, ["username"]);
+    assert.equal(labels?.layout, "fields");
+    assert.deepEqual(general.channelName?.placeholders, ["username", "type", "number"]);
+    assert.equal(general.channelName?.max, 90);
   });
 });
 
@@ -255,8 +284,8 @@ describe("the transcript wording", () => {
 describe("the inactivity setting", () => {
   test("the closing message before an automatic close is off unless asked for", () => {
     const off = resolve({ autoClose: { enabled: true } });
-    assert.equal(off.autoClose.notice, false);
+    assert.equal(off.automation.autoClose.notice, false);
     const on = resolve({ autoClose: { enabled: true, notice: true } });
-    assert.equal(on.autoClose.notice, true);
+    assert.equal(on.automation.autoClose.notice, true);
   });
 });
