@@ -1,4 +1,3 @@
-import Link from "next/link";
 import type { UpdateStatus } from "../lib/updates";
 import { compareVersions } from "../lib/version";
 import { ReleaseNotes } from "./ReleaseNotes";
@@ -12,6 +11,9 @@ function releaseLabel(name: string, tag: string): string {
 }
 
 const dayFormat = new Intl.DateTimeFormat("en", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
+
+const DOCS = "https://github.com/Luxrrrr/TierZero/blob/main/docs";
+const GUIDE = `${DOCS}/install-beginner.md`;
 
 /**
  * The body of the Updates page: the version this install runs, whether a newer one is out, how to update, the
@@ -67,14 +69,24 @@ export function UpdatesContent({ status, owner }: { status: UpdateStatus; owner:
     <section className="update-section" aria-labelledby="how-to-update">
       <h2 id="how-to-update">How to update</h2>
       <p className="update-text">
-        Run these on the machine the bot runs on, in the folder you installed it in. Copy <code>data/tier0.db</code> first, because
-        database changes only go forward and the copy is how you go back.
+        Copy <code>data/tier0.db</code> first, because database changes only go forward and the copy is how you go back.
+      </p>
+      <p className="update-text">
+        If you installed it by downloading the ZIP, as the{" "}
+        <a href={`${GUIDE}#keeping-it-running-updating-and-backups`} target="_blank" rel="noreferrer">
+          step-by-step install guide
+        </a>{" "}
+        does, follow its Updating steps: download the new ZIP, copy it over your folder, then run the second command below. If you
+        installed it with git, run both, on the machine the bot runs on, in the folder you installed it in.
       </p>
       <CopyCommand command="git pull" />
       <CopyCommand command="docker compose up -d --build" />
       <p className="update-text">
-        The dashboard restarts and applies any database changes on its own. The <Link href="/help">help page</Link> and the install guide cover
-        running from source and going back to an older version.
+        The dashboard restarts and applies any database changes on its own. The{" "}
+        <a href={`${DOCS}/install.md#updating`} target="_blank" rel="noreferrer">
+          install guide
+        </a>{" "}
+        covers going back to an older version.
       </p>
     </section>
 

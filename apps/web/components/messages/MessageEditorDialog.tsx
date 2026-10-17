@@ -3,6 +3,7 @@
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { createPortal } from "react-dom";
 import { MESSAGE_VARIABLES, discordTimestamp, parseMessage, type MessageBody } from "@tier0/core";
+import { useUnsavedGuard } from "../../lib/unsaved-guard";
 import { MessageForm, type MessageDraft } from "./MessageForm";
 import { MessagePreview } from "./MessagePreview";
 
@@ -97,6 +98,7 @@ export function MessageEditorDialog({
   onClose,
 }: Props) {
   const [draft, setDraft] = useState<MessageDraft>(current ?? starting);
+  const [asking, setAsking] = useState(false);
   const titleId = useId();
   const dialogRef = useRef<HTMLDivElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
@@ -108,14 +110,27 @@ export function MessageEditorDialog({
     return () => opener?.focus();
   }, []);
 
+  const changed = JSON.stringify(draft) !== JSON.stringify(current ?? starting);
+
+  // An accidental way out, Escape or a click beside the dialog, asks before it throws edits away.
+  // The close and Cancel buttons are deliberate and close at once.
+  const closeRequest = useRef<() => void>(() => undefined);
+  closeRequest.current = () => {
+    if (changed) setAsking((was) => !was);
+    else onClose();
+  };
+
+  // The page's own navigation asks too, because the edits live only in this dialog.
+  const guard = useUnsavedGuard({ dirty: changed });
+
   // Focus that ended up outside the dialog, after a click on the backdrop edge for instance, still closes it.
   useEffect(() => {
     function onKey(event: globalThis.KeyboardEvent) {
-      if (event.key === "Escape" && !event.defaultPrevented && !dialogRef.current?.contains(document.activeElement)) onClose();
+      if (event.key === "Escape" && !event.defaultPrevented && !dialogRef.current?.contains(document.activeElement)) closeRequest.current();
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  }, []);
 
   const parsed = useMemo(() => parseMessage(draft), [draft]);
   const errors = parsed.ok ? [] : parsed.errors;
@@ -134,13 +149,11 @@ export function MessageEditorDialog({
 
   const previewContext = useMemo(() => previewContextFor(guildId, own), [guildId, own]);
 
-  const changed = JSON.stringify(draft) !== JSON.stringify(current ?? starting);
-
   function onKeyDown(event: KeyboardEvent<HTMLDivElement>) {
     if (event.key === "Escape" && !event.defaultPrevented) {
       // Whatever this dialog sits inside, a sheet or an open row, must not close with it.
       event.stopPropagation();
-      onClose();
+      closeRequest.current();
       return;
     }
     if (event.key !== "Tab") return;
@@ -161,7 +174,7 @@ export function MessageEditorDialog({
   // Drawn on the page itself so a sheet or a list row it was opened from cannot clip or reposition it.
   return createPortal(
     <div className="sheet-layer">
-      <div className="sheet-scrim" onClick={onClose} aria-hidden="true" />
+      <div className="sheet-scrim" onClick={() => closeRequest.current()} aria-hidden="true" />
       <div
         ref={dialogRef}
         className="msg-dialog msg-dialog-wide"
@@ -203,6 +216,20 @@ export function MessageEditorDialog({
           </div>
         </div>
 
+        {asking ? (
+          <div className="msg-discard-ask" role="alert">
+            <span>You have changes that are not saved. Close without saving them?</span>
+            <span className="msg-dialog-foot-actions">
+              <button type="button" className="btn btn-ghost" autoFocus onClick={() => setAsking(false)}>
+                Keep editing
+              </button>
+              <button type="button" className="btn btn-danger" onClick={onClose}>
+                Discard changes
+              </button>
+            </span>
+          </div>
+        ) : null}
+
         <div className="msg-dialog-foot msg-dialog-foot-split">
           {current !== null ? (
             <button type="button" className="link-button" onClick={onReset}>
@@ -221,6 +248,7 @@ export function MessageEditorDialog({
           </span>
         </div>
       </div>
+      {guard.host}
     </div>,
     document.body,
   );

@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
 import useSWR from "swr";
 import { MESSAGE_VARIABLES, TIMESTAMP_STYLES, discordTimestamp, type TimestampStyle } from "@tier0/core";
 import { useChannels, useRoles } from "../form";
@@ -84,8 +84,24 @@ export function useToolTarget(value: string, setValue: (next: string) => void, l
     return () => release?.(field);
   }, [release, field]);
 
-  return { ref, onFocus: () => tools?.setActive(field) };
+  // The usual editor shortcuts, so Ctrl+B in a message makes text bold the way it does elsewhere.
+  const onKeyDown = (event: ReactKeyboardEvent<Field>) => {
+    const marker = formatShortcut(event);
+    if (marker === null) return;
+    event.preventDefault();
+    latest.current.wrap(marker);
+  };
+
+  return { ref, onFocus: () => tools?.setActive(field), onKeyDown };
 }
+
+/** The Markdown Ctrl+B, Ctrl+I and Ctrl+U stand for, or Cmd on a Mac; null for any other key. */
+export function formatShortcut(event: { key: string; ctrlKey: boolean; metaKey: boolean; altKey: boolean; shiftKey: boolean }): string | null {
+  if (event.altKey || event.shiftKey || event.ctrlKey === event.metaKey) return null;
+  return FORMAT_KEYS[event.key.toLowerCase()] ?? null;
+}
+
+const FORMAT_KEYS: Record<string, string> = { b: "**", i: "*", u: "__" };
 
 export type ToolTarget = ReturnType<typeof useToolTarget>;
 

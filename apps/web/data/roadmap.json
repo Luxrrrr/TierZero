@@ -1,18 +1,13 @@
 {
   "items": [
     {
-      "title": "Better tickets",
-      "description": "Improve the ticket system.",
+      "title": "Rank cards",
+      "description": "A picture of a member's level and progress for /rank, drawn by the bot.",
       "status": "planned"
     },
     {
-      "title": "Better leveling",
-      "description": "Improve the leveling system.",
-      "status": "planned"
-    },
-    {
-      "title": "Postgres support",
-      "description": "An option for larger installs that outgrow SQLite.",
+      "title": "Room for large servers",
+      "description": "A way to keep data in a separate database for installs too large for the single file TierZero uses now.",
       "status": "planned"
     },
     {

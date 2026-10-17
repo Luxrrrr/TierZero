@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   SECTIONS,
   groupModulesBySection,
+  railMarks,
   hasSettings,
   navGroups,
   orderModulesBySection,
@@ -155,5 +156,18 @@ describe("features with nothing to configure", () => {
       { id: "welcome", category: "members" as const, area: null, schema: some },
     ]);
     assert.deepEqual(groups.map((group) => group.id), ["members"]);
+  });
+});
+
+describe("railMarks", () => {
+  test("one letter each while they differ", () => {
+    assert.deepEqual([...railMarks(["Welcome messages", "Automod"]).values()], ["W", "A"]);
+  });
+
+  test("two letters where features would share one", () => {
+    const marks = railMarks(["Leveling", "Log channel", "Welcome messages"]);
+    assert.equal(marks.get("Leveling"), "Le");
+    assert.equal(marks.get("Log channel"), "LC");
+    assert.equal(marks.get("Welcome messages"), "W");
   });
 });

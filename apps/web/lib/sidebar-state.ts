@@ -39,6 +39,28 @@ export function isSidebarShortcut(event: ShortcutEvent): boolean {
   return event.key.toLowerCase() === "b";
 }
 
+/** What the shortcut needs to know about where the key was pressed. */
+export interface ShortcutTarget {
+  tagName?: string;
+  isContentEditable?: boolean;
+  type?: string;
+}
+
+const TYPED_INPUTS = new Set(["", "text", "search", "url", "email", "tel", "password", "number"]);
+
+/**
+ * Where Ctrl+B means bold, or belongs to the browser, and so must never fold
+ * the sidebar: a text box, a text field, a select, or anything editable.
+ */
+export function isEditableTarget(target: ShortcutTarget | null | undefined): boolean {
+  if (!target) return false;
+  if (target.isContentEditable) return true;
+  const tag = (target.tagName ?? "").toUpperCase();
+  if (tag === "TEXTAREA" || tag === "SELECT") return true;
+  if (tag === "INPUT") return TYPED_INPUTS.has((target.type ?? "").toLowerCase());
+  return false;
+}
+
 export function shortcutLabel(mac: boolean): string {
   return mac ? "⌘B" : "Ctrl+B";
 }

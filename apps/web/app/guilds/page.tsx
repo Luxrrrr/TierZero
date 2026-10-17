@@ -1,9 +1,8 @@
 import Link from "next/link";
 import type { CSSProperties } from "react";
 import type { Metadata } from "next";
-import { redirect } from "next/navigation";
 import { auth } from "../../lib/auth";
-import { accessibleGuilds } from "../../lib/guild-access";
+import { accessibleGuilds, guildHome, guildRoleLabel, type AccessibleGuilds } from "../../lib/guild-access";
 import { ControlApiError, type BotGuildSummary } from "../../lib/control-api";
 import { botGuilds, guildModules } from "../../lib/guild-data";
 import { AppShell } from "../../components/AppShell";
@@ -13,6 +12,7 @@ import { BotOffline } from "../../components/BotOffline";
 import { guildIconUrl, initialsOf } from "../../lib/discord-cdn";
 import { ChevronRightIcon, DiscordMark, ExternalLinkIcon } from "../../components/Icons";
 import { signOutAction } from "./actions";
+import { redirectToLogin } from "../../lib/auth-redirect";
 
 export const metadata: Metadata = {
   title: "Your servers",
@@ -20,24 +20,26 @@ export const metadata: Metadata = {
 
 interface GuildCard {
   guild: BotGuildSummary;
-  /** Listed staff here without Manage Server: the card opens the mod dashboard only. */
-  staffOnly: boolean;
+  /** Where the card goes: the overview, or the one area the person was given. */
+  href: string;
+  /** "Moderation" or "Tickets" when that area is all the person can open here. */
+  role: string | null;
   /** Null when this one guild's module list could not be read, or the user cannot see it. */
   features: { on: number; total: number } | null;
 }
 
 export default async function GuildsPage() {
   const session = await auth();
-  if (!session?.user?.id) redirect("/login");
+  if (!session?.user?.id) return redirectToLogin();
   const user = { name: session.user.name, image: session.user.image };
   const invite = inviteUrl();
 
   let guilds: BotGuildSummary[];
-  let managed: Set<string>;
+  let accessible: AccessibleGuilds;
   try {
-    const [accessible, all] = await Promise.all([accessibleGuilds(session.user.id), botGuilds()]);
+    const [found, all] = await Promise.all([accessibleGuilds(session.user.id), botGuilds()]);
+    accessible = found;
     guilds = all.filter((guild) => accessible.all.has(guild.id));
-    managed = accessible.managed;
   } catch (error) {
     if (!(error instanceof ControlApiError)) throw error;
     return (
@@ -50,7 +52,7 @@ export default async function GuildsPage() {
             <h1 className="page-title">Your servers</h1>
           </div>
         </div>
-        <BotOffline />
+        <BotOffline ownHeading={false} />
       </AppShell>
     );
   }
@@ -58,16 +60,19 @@ export default async function GuildsPage() {
   // One failing guild should cost that guild its feature count, not the page.
   const cards: GuildCard[] = await Promise.all(
     guilds.map(async (guild) => {
-      if (!managed.has(guild.id)) return { guild, staffOnly: true, features: null };
+      const href = guildHome(guild.id, accessible);
+      const role = guildRoleLabel(guild.id, accessible);
+      if (!accessible.managed.has(guild.id)) return { guild, href, role, features: null };
       try {
         const modules = (await guildModules(guild.id)).filter((module) => !module.alwaysOn);
         return {
           guild,
-          staffOnly: false,
+          href,
+          role,
           features: { on: modules.filter((module) => module.enabled).length, total: modules.length },
         };
       } catch {
-        return { guild, staffOnly: false, features: null };
+        return { guild, href, role, features: null };
       }
     }),
   );
@@ -75,14 +80,22 @@ export default async function GuildsPage() {
   return (
     <AppShell
       title="Your servers"
-      sidebar={<Sidebar user={user} guilds={guilds} modules={[]} signOutAction={signOutAction} />}
+      sidebar={
+        <Sidebar
+          user={user}
+          guilds={guilds}
+          homes={Object.fromEntries(cards.map((card) => [card.guild.id, card.href]))}
+          modules={[]}
+          signOutAction={signOutAction}
+        />
+      }
     >
       <div className="page-header">
         <div className="page-header-text">
           <h1 className="page-title">Your servers</h1>
           <p className="page-summary">
             Servers you manage that TierZero has been invited to, and servers
-            where you have been given moderation access.
+            where you moderate or work tickets.
           </p>
         </div>
         {invite && guilds.length > 0 ? (
@@ -104,7 +117,8 @@ export default async function GuildsPage() {
             Manage Server permission. That is a Discord permission set on roles
             under Server Settings, and the server's owner always has it. Then
             reload this page. To moderate one, ask the owner of this installation
-            to add you to its staff.
+            to add you to its staff. To work its tickets, ask for one of the
+            roles its ticket types are handled by.
           </p>
           {invite ? (
             <div className="empty-actions">
@@ -122,12 +136,12 @@ export default async function GuildsPage() {
         </div>
       ) : (
         <div className="guild-grid">
-          {cards.map(({ guild, features, staffOnly }, index) => {
+          {cards.map(({ guild, features, href, role }, index) => {
             const icon = guildIconUrl(guild.id, guild.icon, 96);
             return (
               <Link
                 key={guild.id}
-                href={staffOnly ? `/guilds/${guild.id}/mod` : `/guilds/${guild.id}`}
+                href={href}
                 className="guild-card rise"
                 style={{ "--i": index } as CSSProperties}
               >
@@ -138,10 +152,10 @@ export default async function GuildsPage() {
                   <span className="guild-card-name">{guild.name}</span>
                   <span className="guild-card-meta">
                     <span>{guild.memberCount.toLocaleString()} members</span>
-                    {staffOnly ? (
+                    {role ? (
                       <>
                         <span aria-hidden="true">·</span>
-                        <span>Moderation</span>
+                        <span>{role}</span>
                       </>
                     ) : features ? (
                       <>

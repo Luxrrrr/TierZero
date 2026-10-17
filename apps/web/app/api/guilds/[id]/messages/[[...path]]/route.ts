@@ -24,11 +24,13 @@ function fail(status: number, error: string) {
 /** The paths that exist, so the route is not a window onto the whole control API. */
 function allowed(method: string, path: string[]): boolean {
   const [area, id, extra] = path;
-  if (extra !== undefined) return false;
   const isId = id !== undefined && /^\d+$/.test(id);
-  if (method === "GET") return path.length === 0 || (path.length === 1 && area === "emojis");
-  if (method === "POST") return (area === "folders" || area === "templates" || area === "send") && id === undefined;
-  if (method === "PATCH" || method === "DELETE") return (area === "folders" || area === "templates") && isId;
+  if (method === "GET" && area === "templates" && isId && extra === "sends") return path.length === 3;
+  if (extra !== undefined) return false;
+  if (method === "GET") return path.length === 0 || (path.length === 1 && (area === "emojis" || area === "schedules" || area === "sends"));
+  if (method === "POST") return (area === "folders" || area === "templates" || area === "send" || area === "edit" || area === "schedules") && id === undefined;
+  if (method === "PATCH") return (area === "folders" || area === "templates") && isId;
+  if (method === "DELETE") return (area === "folders" || area === "templates" || area === "schedules" || area === "sends") && isId;
   return false;
 }
 
@@ -59,7 +61,7 @@ async function handle(method: string, request: Request, { params }: Params) {
     try {
       body = text.trim() === "" ? {} : (JSON.parse(text) as unknown);
       // A send says who sent it, for the {sender} variable. The browser cannot name itself.
-      if (path[0] === "send" && typeof body === "object" && body !== null) {
+      if ((path[0] === "send" || path[0] === "edit" || path[0] === "schedules") && typeof body === "object" && body !== null) {
         const session = await auth();
         body = { ...(body as Record<string, unknown>), sender: session?.user?.name ?? "the dashboard" };
       }

@@ -1,11 +1,13 @@
-import { forbidden, redirect } from "next/navigation";
+import { forbidden } from "next/navigation";
 import type { Metadata } from "next";
 import { requireGuildAccess } from "../../../../lib/authz";
 import { ControlApiError } from "../../../../lib/control-api";
 import { botGuilds, guildModules } from "../../../../lib/guild-data";
+import { featureIsOn } from "../../../../lib/commands";
 import { BotOffline } from "../../../../components/BotOffline";
 import { CommandsBrowser } from "../../../../components/CommandsBrowser";
 import { CommandsIcon } from "../../../../components/Icons";
+import { redirectToLogin } from "../../../../lib/auth-redirect";
 
 export async function generateMetadata({
   params,
@@ -28,7 +30,7 @@ export default async function CommandsPage({ params }: { params: Promise<{ id: s
   try {
     const access = await requireGuildAccess(id);
     if (!access.ok) {
-      if (access.status === 401) redirect("/login");
+      if (access.status === 401) await redirectToLogin();
       forbidden();
     }
 
@@ -39,6 +41,7 @@ export default async function CommandsPage({ params }: { params: Promise<{ id: s
         id: module.id,
         name: module.name,
         summary: module.summary,
+        featureOn: featureIsOn(module),
         commands: module.commands,
       }));
 
@@ -50,7 +53,7 @@ export default async function CommandsPage({ params }: { params: Promise<{ id: s
             <h1 className="page-title">Commands</h1>
             <p className="page-summary">
               Turn a command off, limit who can use it and where, or change how it
-              replies.
+              replies. A command is only in Discord while its feature is on.
             </p>
           </div>
         </div>

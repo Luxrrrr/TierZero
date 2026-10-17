@@ -2,8 +2,9 @@
 
 import { useEffect, useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { CheckIcon, ChevronDownIcon, PlusIcon } from "./Icons";
+import { CheckIcon, ChevronDownIcon, OverviewIcon, PlusIcon } from "./Icons";
 import { guildIconUrl, initialsOf } from "../lib/discord-cdn";
+import { confirmLeave } from "../lib/unsaved-guard";
 
 const MENU_MIN_WIDTH = 240;
 
@@ -16,6 +17,8 @@ export interface SwitcherGuild {
 
 interface Props {
   guilds: SwitcherGuild[];
+  /** Where each server opens. A server missing here opens on its overview. */
+  homes?: Record<string, string>;
   current?: SwitcherGuild;
   /** Where "Add a server" goes. The entry is left out when there is no link to offer. */
   inviteUrl?: string | null;
@@ -26,7 +29,7 @@ interface Props {
  * an entry navigates instead of setting a value, so the roving focus and the
  * Enter-to-activate behavior below follow the menu button pattern.
  */
-export function GuildSwitcher({ guilds, current, inviteUrl }: Props) {
+export function GuildSwitcher({ guilds, homes = {}, current, inviteUrl }: Props) {
   const router = useRouter();
   const menuId = useId();
   const [open, setOpen] = useState(false);
@@ -126,9 +129,10 @@ export function GuildSwitcher({ guilds, current, inviteUrl }: Props) {
     }
   }
 
+  // A page with unsaved edits gets to ask before the switch throws them away.
   function go(href: string) {
     close(false);
-    router.push(href);
+    confirmLeave(() => router.push(href));
   }
 
   const icon = current ? guildIconUrl(current.id, current.icon, 72) : null;
@@ -160,7 +164,7 @@ export function GuildSwitcher({ guilds, current, inviteUrl }: Props) {
           ) : current ? (
             initialsOf(current.name)
           ) : (
-            "0"
+            <OverviewIcon />
           )}
         </span>
         <span className="sidebar-guild-text">
@@ -168,7 +172,9 @@ export function GuildSwitcher({ guilds, current, inviteUrl }: Props) {
           <span className="sidebar-guild-name">{current ? current.name : "Your servers"}</span>
           <span className="sidebar-guild-meta">
             {current
-              ? `${current.memberCount.toLocaleString()} members`
+              ? current.memberCount > 0
+                ? `${current.memberCount.toLocaleString()} members`
+                : "Details unavailable"
               : `${guilds.length} ${guilds.length === 1 ? "server" : "servers"}`}
           </span>
         </span>
@@ -214,7 +220,7 @@ export function GuildSwitcher({ guilds, current, inviteUrl }: Props) {
                   (active === index ? " is-active" : "")
                 }
                 onMouseEnter={() => setActive(index)}
-                onClick={() => go(`/guilds/${guild.id}`)}
+                onClick={() => go(homes[guild.id] ?? `/guilds/${guild.id}`)}
               >
                 <span className="avatar" aria-hidden="true">
                   {guildIcon ? (

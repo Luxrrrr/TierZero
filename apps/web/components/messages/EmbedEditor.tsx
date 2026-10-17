@@ -269,9 +269,9 @@ function Text({
         ) : null}
       </div>
       {multiline ? (
-        <textarea id={id} ref={target.ref as RefObject<HTMLTextAreaElement>} onFocus={target.onFocus} className="textarea" rows={4} placeholder={placeholder} value={value} onChange={(event) => onChange(event.target.value)} />
+        <textarea id={id} ref={target.ref as RefObject<HTMLTextAreaElement>} onFocus={target.onFocus} onKeyDown={target.onKeyDown} className="textarea" rows={4} placeholder={placeholder} value={value} onChange={(event) => onChange(event.target.value)} />
       ) : (
-        <input id={id} ref={target.ref as RefObject<HTMLInputElement>} onFocus={target.onFocus} className="input" placeholder={placeholder} value={value} onChange={(event) => onChange(event.target.value)} />
+        <input id={id} ref={target.ref as RefObject<HTMLInputElement>} onFocus={target.onFocus} onKeyDown={target.onKeyDown} className="input" placeholder={placeholder} value={value} onChange={(event) => onChange(event.target.value)} />
       )}
       {error ? <p className="field-error">{error}</p> : null}
     </div>
@@ -283,7 +283,7 @@ function FieldName({ variables, label, value, onChange }: { variables?: readonly
   return (
     <input
       ref={target.ref as RefObject<HTMLInputElement>}
-      onFocus={target.onFocus}
+      onFocus={target.onFocus} onKeyDown={target.onKeyDown}
       className="input"
       aria-label={label}
       placeholder="Name"
@@ -298,7 +298,7 @@ function FieldValue({ variables, label, value, onChange }: { variables?: readonl
   return (
     <textarea
       ref={target.ref as RefObject<HTMLTextAreaElement>}
-      onFocus={target.onFocus}
+      onFocus={target.onFocus} onKeyDown={target.onKeyDown}
       className="textarea"
       aria-label={label}
       placeholder="Value"

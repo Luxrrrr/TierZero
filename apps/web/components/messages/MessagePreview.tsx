@@ -1,8 +1,10 @@
 "use client";
 
-import { Fragment, useMemo, type ReactNode } from "react";
+import { Fragment, useMemo, useState, type ReactNode } from "react";
 import { applyVariablesToMessage, isHexColor, isHttpUrl, type MessageBody, type MessageEmbed, type VariableValues } from "@tier0/core";
+import { comesFromVariable } from "../../lib/message-variables";
 import { useChannels, useRoles } from "../form";
+import { serverVariables, usePreviewServer } from "./PreviewServer";
 
 export interface PreviewContext {
   guildId: string;
@@ -18,6 +20,9 @@ export interface PreviewContext {
  * timezone the way Discord does, and a role or channel mention shows its name.
  */
 export function MessagePreview({ message, context, ephemeral = false }: { message: MessageBody; context: PreviewContext; ephemeral?: boolean }) {
+  const server = usePreviewServer();
+  const variables = useMemo(() => ({ ...context.variables, ...serverVariables(server) }), [context.variables, server]);
+  const botName = server?.botName ?? context.botName;
   const { roles } = useRoles(context.guildId);
   const { channels } = useChannels(context.guildId);
   const names = useMemo(
@@ -28,22 +33,22 @@ export function MessagePreview({ message, context, ephemeral = false }: { messag
     [roles, channels],
   );
 
-  const filled = useMemo(() => applyVariablesToMessage(message, context.variables), [message, context.variables]);
+  const filled = useMemo(() => applyVariablesToMessage(message, variables), [message, variables]);
   const hasText = filled.content.trim() !== "";
 
   return (
     <div className="msg-preview" aria-label="Preview of the message in Discord">
       <span className="msg-preview-avatar" aria-hidden="true">
-        {context.botName.charAt(0).toUpperCase()}
+        {botName.charAt(0).toUpperCase()}
       </span>
       <div className="msg-preview-main">
         <p className="msg-preview-author">
-          {context.botName} <span className="msg-preview-app">App</span>
+          {botName} <span className="msg-preview-app">App</span>
           <small>Today at 4:12 PM</small>
         </p>
         {hasText ? <div className="msg-preview-text">{renderMarkdown(filled.content, names)}</div> : null}
         {filled.embeds.map((embed, index) => (
-          <EmbedPreview key={index} embed={embed} names={names} />
+          <EmbedPreview key={index} embed={embed} raw={message.embeds[index]} names={names} />
         ))}
         {filled.buttons.length > 0 || filled.selects.length > 0 ? (
           <div className="msg-components">
@@ -102,14 +107,44 @@ export function MessagePreview({ message, context, ephemeral = false }: { messag
   );
 }
 
-type Names = {
+export type Names = {
   roles: Map<string, { name: string; color: string }>;
   channels: Map<string, string>;
+  /** Display names by user id, where the caller knows them. A user the map lacks reads as @user. */
+  users?: Map<string, string>;
 };
 
-function EmbedPreview({ embed, names }: { embed: MessageEmbed; names: Names }) {
+/**
+ * A picture in the preview. One whose address a variable fills in is only known
+ * when the bot sends, and the sample behind it is a made-up address, so it is
+ * drawn as a placeholder rather than fetched. A real one is loaded without
+ * telling the other site which page asked, and one that fails to load says so
+ * instead of leaving a broken image.
+ */
+function PreviewImage({ src, fromVariable, className, label }: { src: string | null; fromVariable: boolean; className?: string; label: string }) {
+  const [failed, setFailed] = useState<string | null>(null);
+  if (fromVariable) {
+    return (
+      <span className={`msg-image-stand-in ${className ?? ""}`} title={`${label} is filled in when the message is sent`}>
+        {label}
+      </span>
+    );
+  }
+  if (!src) return null;
+  if (failed === src) {
+    return (
+      <span className={`msg-image-stand-in is-broken ${className ?? ""}`} title={`This picture did not load: ${src}`}>
+        Picture did not load
+      </span>
+    );
+  }
+  return <img className={className} src={src} alt="" referrerPolicy="no-referrer" loading="lazy" decoding="async" onError={() => setFailed(src)} />;
+}
+
+function EmbedPreview({ embed, raw, names }: { embed: MessageEmbed; raw: MessageEmbed | undefined; names: Names }) {
   const color = isHexColor(embed.color) ? embed.color : "#1e1f22";
   const safe = (value: string) => (isHttpUrl(value) ? value : null);
+  const variable = (field: "thumbnailUrl" | "imageUrl" | "authorIconUrl" | "footerIconUrl") => comesFromVariable(raw?.[field] ?? "");
   const thumbnail = safe(embed.thumbnailUrl);
   const image = safe(embed.imageUrl);
   const authorIcon = safe(embed.authorIconUrl);
@@ -127,7 +162,7 @@ function EmbedPreview({ embed, names }: { embed: MessageEmbed; names: Names }) {
         <div className="msg-embed-text">
           {embed.authorName ? (
             <p className="msg-embed-author">
-              {authorIcon ? <img src={authorIcon} alt="" /> : null}
+              <PreviewImage src={authorIcon} fromVariable={variable("authorIconUrl")} className="msg-embed-icon" label="Icon" />
               {authorLink ? <a href={authorLink}>{embed.authorName}</a> : embed.authorName}
             </p>
           ) : null}
@@ -152,12 +187,12 @@ function EmbedPreview({ embed, names }: { embed: MessageEmbed; names: Names }) {
             </div>
           ) : null}
         </div>
-        {thumbnail ? <img className="msg-embed-thumb" src={thumbnail} alt="" /> : null}
+        <PreviewImage src={thumbnail} fromVariable={variable("thumbnailUrl")} className="msg-embed-thumb" label="Thumbnail" />
       </div>
-      {image ? <img className="msg-embed-image" src={image} alt="" /> : null}
+      <PreviewImage src={image} fromVariable={variable("imageUrl")} className="msg-embed-image" label="Picture" />
       {embed.footerText || stampText ? (
         <p className="msg-embed-footer">
-          {footerIcon ? <img src={footerIcon} alt="" /> : null}
+          <PreviewImage src={footerIcon} fromVariable={variable("footerIconUrl")} className="msg-embed-icon" label="Icon" />
           {embed.footerText}
           {embed.footerText && stampText ? " • " : null}
           {stampFull}
@@ -222,7 +257,7 @@ const formatTime = (date: Date) => date.toLocaleTimeString([], { hour: "numeric"
 export function renderEmoji(token: string): ReactNode {
   const custom = /^<(a?):(\w+):(\d+)>$/.exec(token);
   if (!custom) return token;
-  return <img className="msg-emoji" src={`https://cdn.discordapp.com/emojis/${custom[3]}.${custom[1] ? "gif" : "png"}?size=48`} alt={`:${custom[2]}:`} />;
+  return <img className="msg-emoji" src={`https://cdn.discordapp.com/emojis/${custom[3]}.${custom[1] ? "gif" : "png"}?size=48`} alt={`:${custom[2]}:`} referrerPolicy="no-referrer" />;
 }
 
 const INLINE =
@@ -257,10 +292,17 @@ export function renderInline(text: string, names: Names): ReactNode[] {
     }
     const channel = /^<#(\d+)>$/.exec(part);
     if (channel?.[1]) return <span key={i} className="msg-mention">#{names.channels.get(channel[1]) ?? "channel"}</span>;
-    if (/^<@!?\d+>$/.test(part)) return <span key={i} className="msg-mention">@user</span>;
+    const user = /^<@!?(\d+)>$/.exec(part);
+    if (user?.[1]) return <span key={i} className="msg-mention">@{names.users?.get(user[1]) ?? "user"}</span>;
     if (/^<a?:\w+:\d+>$/.test(part)) return <Fragment key={i}>{renderEmoji(part)}</Fragment>;
     if (part === "@everyone" || part === "@here") return <span key={i} className="msg-mention">{part}</span>;
-    if (/^https?:\/\//.test(part)) return <a key={i} href={isHttpUrl(part) ? part : undefined}>{part}</a>;
+    if (/^https?:\/\//.test(part)) {
+      return (
+        <a key={i} href={isHttpUrl(part) ? part : undefined} target="_blank" rel="noopener noreferrer">
+          {part}
+        </a>
+      );
+    }
     return part;
   });
 }

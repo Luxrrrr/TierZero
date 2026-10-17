@@ -541,7 +541,7 @@ export function BotMessagesBrowser({ guildId, modules, initialFeature }: Props) 
           {quick.length > 0 ? (
             <section className="bm-quick" aria-labelledby="bm-quick-title">
               <h2 className="bm-heading" id="bm-quick-title">
-                Most changed
+                Common messages
               </h2>
               <ul className="bm-chips">
                 {quick.map((item) => (

@@ -1,4 +1,4 @@
-import { parseMessage, plainReply, REPLY_COLOR, type FieldDescriptor, type MessageBody, type ResponseTemplate } from "@tier0/core";
+import { parseMessage, plainReply, REPLY_COLOR, type FieldDescriptor, type FieldTopic, type MessageAudience, type MessageBody, type ResponseTemplate } from "@tier0/core";
 
 /**
  * The logic behind the Bot messages page: finding every message a server's
@@ -45,8 +45,14 @@ export interface BotMessageRow {
   help: string;
   /** The groups between the feature and the message, such as "Replies and errors". */
   trail: string[];
-  /** The group the message is listed under: its trail, with a list entry folded into the list's name. */
+  /**
+   * The group the message is listed under: the heading the feature files it
+   * under when it names one, else its trail, with a list entry folded into the
+   * list's name.
+   */
   section: string;
+  /** Where a heading the feature declares comes in its order; absent for a section made from the trail, which comes first. */
+  sectionRank?: number;
   /** For a message inside a list, which entry it belongs to, such as the name of a role menu. */
   entry: string | null;
   /** The id of the group on the feature's settings page that holds it. */
@@ -73,6 +79,19 @@ export const REPLIES_SECTION = "Command replies";
 function titleOf(key: string): string {
   const spaced = key.replace(/([a-z0-9])([A-Z])/g, "$1 $2");
   return spaced.charAt(0).toUpperCase() + spaced.slice(1).toLowerCase();
+}
+
+/**
+ * A field's help as this page can show it. Help written for the settings page
+ * may point at the control beside it ("the channel above"), which is not on
+ * this page, so a sentence that does is left out.
+ */
+export function contextFreeHelp(help: string): string {
+  return help
+    .split(/(?<=[.!?])\s+/)
+    .filter((sentence) => !/\b(above|below)\b/i.test(sentence))
+    .join(" ")
+    .trim();
 }
 
 /** `menus[0].message` is how the bot names the place; this is the same place as a list of steps. */
@@ -106,6 +125,7 @@ function sectionOf(trail: readonly string[], listed: { list: string; name: strin
 function settingRows(module: ModuleInput, settings: Record<string, unknown>): BotMessageRow[] {
   const rows: BotMessageRow[] = [];
   const top = (module.schema.fields ?? {}) as Fields;
+  const topics = declaredTopics(top);
 
   const visit = (
     field: FieldDescriptor,
@@ -115,8 +135,11 @@ function settingRows(module: ModuleInput, settings: Record<string, unknown>): Bo
     anchorKey: string,
     value: unknown,
     listed: { list: string; name: string } | null = null,
+    inherited: string | null = null,
   ) => {
+    const topicId = typeof field.topic === "string" ? field.topic : inherited;
     if (field.kind === "message") {
+      const topic = listed === null && topicId !== null ? topics.get(topicId) : undefined;
       rows.push({
         key: `${module.id}/${pathOf(segments)}`,
         kind: "setting",
@@ -124,9 +147,10 @@ function settingRows(module: ModuleInput, settings: Record<string, unknown>): Bo
         moduleName: module.name,
         moduleOff: !module.enabled && module.alwaysOn !== true,
         label: field.label ?? titleOf(key),
-        help: field.help ?? "",
+        help: contextFreeHelp(field.help ?? ""),
         trail,
-        section: sectionOf(trail, listed),
+        section: topic?.label ?? sectionOf(trail, listed),
+        ...(topic ? { sectionRank: topic.rank } : {}),
         entry: listed?.name ?? null,
         anchor: `group-${anchorKey}`,
         segments,
@@ -144,7 +168,9 @@ function settingRows(module: ModuleInput, settings: Record<string, unknown>): Bo
       const children = (field.fields ?? {}) as Fields;
       const record = typeof value === "object" && value !== null && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
       const next = segments.length === 0 ? trail : [...trail, field.label ?? titleOf(key)];
-      for (const [childKey, child] of Object.entries(children)) visit(child, childKey, [...segments, childKey], next, anchorKey, record[childKey], listed);
+      // Only a group drawn with a layout hands its heading down; elsewhere a message names its own.
+      const handed = segments.length === 1 && field.layout === undefined ? null : topicId;
+      for (const [childKey, child] of Object.entries(children)) visit(child, childKey, [...segments, childKey], next, anchorKey, record[childKey], listed, handed);
       return;
     }
     if (field.kind === "array") {
@@ -169,6 +195,16 @@ function settingRows(module: ModuleInput, settings: Record<string, unknown>): Bo
     visit(field, key, [key], [], anchorKey, settings[key]);
   }
   return rows;
+}
+
+/** The headings a feature's message lists declare, by id, numbered in the order they are drawn. */
+function declaredTopics(top: Fields): Map<string, { label: string; rank: number }> {
+  const found = new Map<string, { label: string; rank: number }>();
+  for (const field of Object.values(top)) {
+    if (field.layout !== "messages") continue;
+    for (const topic of (field.topics ?? []) as FieldTopic[]) found.set(topic.id, { label: topic.label, rank: found.size });
+  }
+  return found;
 }
 
 function replyRows(module: ModuleInput): BotMessageRow[] {
@@ -382,10 +418,14 @@ export interface Section {
   edited: number;
 }
 
-/** A feature's messages under their group, in the order the groups first appear. */
+/**
+ * A feature's messages under their group, in the order the groups first appear,
+ * except that the headings a feature declares come after the rest, in its order.
+ */
 export function groupBySection(rows: readonly BotMessageRow[], views: ReadonlyMap<string, RowView>): Section[] {
   const sections = new Map<string, Section>();
-  for (const row of rows) {
+  const ranked = rows.map((row, index) => ({ row, index })).sort((a, b) => (a.row.sectionRank ?? -1) - (b.row.sectionRank ?? -1) || a.index - b.index);
+  for (const { row } of ranked) {
     const section = sections.get(row.section) ?? { title: row.section, rows: [], edited: 0 };
     section.rows.push(row);
     if (views.get(row.key)?.edited) section.edited += 1;
@@ -423,16 +463,17 @@ export function isSectionOpen(toggled: boolean | undefined, startOpen: boolean, 
 }
 
 /**
- * The messages owners most often want to change, so the first thing on the page
- * is a way straight to them. Chosen as the ones members see first or that carry
- * the server's tone: the greeting, what automod and moderation say, the ticket
- * panel, level-ups. The path is where the message sits in the feature's settings.
+ * A short list of the messages members see first or that carry the server's
+ * tone, so the first thing on the page is a way straight to them: the greeting,
+ * what automod and moderation say, the first ticket panel, level-ups. It is a
+ * fixed choice, not a count of what owners edit. The path is where the message
+ * sits in the feature's settings.
  */
 export const MOST_CHANGED: readonly { moduleId: string; path: string; label: string }[] = [
   { moduleId: "welcome", path: "join.message", label: "Welcome greeting" },
   { moduleId: "automod", path: "noticeMessage", label: "Automod notice" },
   { moduleId: "moderation", path: "modLogMessage", label: "Mod log post" },
-  { moduleId: "tickets", path: "panel.message", label: "Ticket panel" },
+  { moduleId: "tickets", path: "panels[0].message", label: "Ticket panel" },
   { moduleId: "leveling", path: "announce.message", label: "Level-up announcement" },
   { moduleId: "moderation", path: "dmMessage", label: "Punishment DM" },
 ];
@@ -466,4 +507,187 @@ export function parseFeatureParam(value: string | string[] | null | undefined, k
 /** The query string for a view: a feature, or nothing for the cards. */
 export function featureSearch(featureId: string | null): string {
   return featureId === null ? "" : `?feature=${encodeURIComponent(featureId)}`;
+}
+
+// -- a settings group drawn as a list ----------------------------------------------
+// A group with a `layout` lists its settings under its own headings: which settings,
+// under which heading, and which of them an owner has changed.
+
+type Values = Record<string, unknown>;
+
+export interface ListedMessage {
+  /** The dotted, indexed path, as errors are keyed. */
+  path: string;
+  segments: Segment[];
+  field: FieldDescriptor;
+  label: string;
+  /** When it is sent, from the field's help. */
+  help: string;
+  topic: string | null;
+  audience: MessageAudience | null;
+  /** The setting it waits on is off, so the bot does not send it for now. */
+  unused: string | null;
+}
+
+const isRecord = (value: unknown): value is Values => typeof value === "object" && value !== null && !Array.isArray(value);
+
+/** The values beside a field with each setting's default filled in, as the bot reads them. */
+function withDefaults(fields: Fields, values: Values): Values {
+  const filled: Values = { ...values };
+  for (const [key, field] of Object.entries(fields)) if (filled[key] === undefined && field.default !== undefined) filled[key] = field.default;
+  return filled;
+}
+
+
+/** The same test as the settings form's: `includes` on a list, `equals` on a value, or anything at all. */
+function whenMet(condition: { field: string; equals?: unknown; includes?: unknown }, values: Values): boolean {
+  const actual = values[condition.field];
+  if (condition.includes !== undefined) return Array.isArray(actual) && actual.includes(condition.includes);
+  if (condition.equals !== undefined) return actual === condition.equals;
+  return actual !== undefined && actual !== null && actual !== "" && !(Array.isArray(actual) && actual.length === 0);
+}
+
+function unusedReason(field: FieldDescriptor, siblings: Fields, values: Values): string | null {
+  const condition = field.when as { field: string; equals?: unknown; includes?: unknown } | undefined;
+  if (!condition || whenMet(condition, withDefaults(siblings, values))) return null;
+  const label = siblings[condition.field]?.label ?? titleOf(condition.field);
+  return `Not sent while ${label} is off.`;
+}
+
+const audienceOf = (field: FieldDescriptor): MessageAudience | null =>
+  field.audience === "public" || field.audience === "private" || field.audience === "dm" ? field.audience : null;
+
+/**
+ * Every message a `layout: "messages"` group lists: its own, at any depth, each
+ * under its own topic or the nearest group's, then messages elsewhere in the
+ * module that name one of its topics. Lists are not entered: a message in a
+ * list row has a wording per row, which a flat list cannot show.
+ */
+export function listedMessages(groupKey: string, rootFields: Fields, root: Values): ListedMessage[] {
+  const group = rootFields[groupKey];
+  if (!group || group.kind !== "object") return [];
+  const topics = new Set(((group.topics ?? []) as FieldTopic[]).map((topic) => topic.id));
+  const own: ListedMessage[] = [];
+  const borrowed: ListedMessage[] = [];
+
+  const visit = (fields: Fields, values: Values, segments: Segment[], inherited: string | null, inGroup: boolean) => {
+    for (const [key, field] of Object.entries(fields)) {
+      const at = [...segments, key];
+      const topic = typeof field.topic === "string" ? field.topic : inherited;
+      if (field.kind === "object") {
+        visit((field.fields ?? {}) as Fields, isRecord(values[key]) ? (values[key] as Values) : {}, at, inGroup ? topic : null, inGroup);
+        continue;
+      }
+      if (field.kind !== "message") continue;
+      if (!inGroup && (topic === null || !topics.has(topic))) continue;
+      const entry: ListedMessage = {
+        path: pathOf(at),
+        segments: at,
+        field,
+        label: field.label ?? titleOf(key),
+        help: typeof field.help === "string" ? field.help : "",
+        topic: topic !== null && topics.has(topic) ? topic : null,
+        audience: audienceOf(field),
+        unused: unusedReason(field, fields, values),
+      };
+      (inGroup ? own : borrowed).push(entry);
+    }
+  };
+
+  visit((group.fields ?? {}) as Fields, isRecord(root[groupKey]) ? (root[groupKey] as Values) : {}, [groupKey], typeof group.topic === "string" ? group.topic : null, true);
+  for (const [key, field] of Object.entries(rootFields)) {
+    if (key === groupKey || field.kind !== "object" || field.layout !== undefined) continue;
+    visit({ [key]: field }, root, [], null, false);
+  }
+  return [...own, ...borrowed];
+}
+
+export interface TopicGroup<T> {
+  id: string;
+  label: string;
+  help: string;
+  items: T[];
+  /** Headings drawn inside this one, closed until opened. */
+  children: TopicGroup<T>[];
+}
+
+/** The id of the heading for whatever names no topic of the group. */
+export const OTHER_TOPIC = "";
+
+/**
+ * Items under the group's headings, in the order the headings are declared,
+ * leaving out headings with nothing under them. Items naming no heading go
+ * under a last one called `otherLabel`.
+ */
+export function groupByTopic<T extends { topic: string | null }>(items: readonly T[], topics: readonly FieldTopic[], otherLabel: string): TopicGroup<T>[] {
+  const make = (topic: FieldTopic): TopicGroup<T> => ({ id: topic.id, label: topic.label, help: topic.help ?? "", items: [], children: [] });
+  const byId = new Map(topics.map((topic) => [topic.id, make(topic)] as const));
+  const other: TopicGroup<T> = { id: OTHER_TOPIC, label: otherLabel, help: "", items: [], children: [] };
+  for (const item of items) (item.topic !== null ? (byId.get(item.topic) ?? other) : other).items.push(item);
+
+  const top: TopicGroup<T>[] = [];
+  for (const topic of topics) {
+    const group = byId.get(topic.id);
+    if (!group) continue;
+    const parent = topic.within !== undefined ? byId.get(topic.within) : undefined;
+    if (parent) parent.children.push(group);
+    else top.push(group);
+  }
+  const filled = (group: TopicGroup<T>): TopicGroup<T> | null => {
+    const children = group.children.map(filled).filter((child): child is TopicGroup<T> => child !== null);
+    return group.items.length > 0 || children.length > 0 ? { ...group, children } : null;
+  };
+  const result = top.map(filled).filter((group): group is TopicGroup<T> => group !== null);
+  if (other.items.length > 0) result.push(other);
+  return result;
+}
+
+/** How many items a heading holds, counting the headings inside it. */
+export function topicSize<T>(group: TopicGroup<T>, count: (item: T) => boolean = () => true): number {
+  return group.items.filter(count).length + group.children.reduce((sum, child) => sum + topicSize(child, count), 0);
+}
+
+/** What the message says now: the owner's wording, or the default. */
+export function currentMessage(entry: ListedMessage, root: Values): { body: MessageBody; customised: boolean } {
+  const starting = entry.field.starting as MessageBody;
+  const stored = storedMessage(getAt(root, entry.segments));
+  const customised = isCustomized(stored, starting);
+  return { body: customised && stored ? stored : starting, customised };
+}
+
+/**
+ * Messages that match every word of the search in their title, when line or
+ * current wording, and, with `customisedOnly`, that the owner has changed.
+ */
+export function filterMessages(entries: readonly ListedMessage[], root: Values, query: string, customisedOnly: boolean): ListedMessage[] {
+  const words = query.toLowerCase().split(/\s+/).filter((word) => word !== "");
+  return entries.filter((entry) => {
+    const { body, customised } = currentMessage(entry, root);
+    if (customisedOnly && !customised) return false;
+    if (words.length === 0) return true;
+    const haystack = [entry.label, entry.help, messageText(body)].join(" ").toLowerCase();
+    return words.every((word) => haystack.includes(word));
+  });
+}
+
+/** Whether a plain setting holds something other than its default. */
+export function isChanged(field: FieldDescriptor, value: unknown): boolean {
+  if (value === undefined || value === null || value === "") return false;
+  return JSON.stringify(value) !== JSON.stringify(field.default);
+}
+
+export interface ListedField {
+  key: string;
+  field: FieldDescriptor;
+  topic: string | null;
+}
+
+/** The settings of a `layout: "fields"` group with the heading each is drawn under. A nested group keeps together under its own topic. */
+export function listedFields(group: FieldDescriptor): ListedField[] {
+  const inherited = typeof group.topic === "string" ? group.topic : null;
+  return Object.entries((group.fields ?? {}) as Fields).map(([key, field]) => ({
+    key,
+    field,
+    topic: typeof field.topic === "string" ? field.topic : inherited,
+  }));
 }

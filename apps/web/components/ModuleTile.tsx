@@ -4,8 +4,10 @@ import Link from "next/link";
 import { useEffect, useState, type CSSProperties } from "react";
 import { useRouter } from "next/navigation";
 import { Switch } from "./form";
-import { ChevronRightIcon } from "./Icons";
+import { AlertIcon, ChevronRightIcon } from "./Icons";
 import { useToast } from "./Toaster";
+import { UNREACHABLE, readFailure } from "../lib/bot-errors";
+import { permissionLabel } from "../lib/invite";
 import { moduleStatus } from "../lib/module-status";
 import { moduleHref } from "../lib/module-href";
 import { hasSettings, sectionHeading } from "../lib/sections";
@@ -17,6 +19,8 @@ interface Props {
   /** Position in the grid, which sets the stagger delay of the entrance. */
   index?: number;
   animate?: boolean;
+  /** Discord permissions the feature needs that the bot does not have on this server. */
+  missingPermissions?: string[];
 }
 
 /**
@@ -24,7 +28,7 @@ interface Props {
  * nothing to review before turning a feature on, and the request only returns
  * once the bot has applied it.
  */
-export function ModuleTile({ guildId, module, index = 0, animate = false }: Props) {
+export function ModuleTile({ guildId, module, index = 0, animate = false, missingPermissions = [] }: Props) {
   const router = useRouter();
   const { push } = useToast();
   const [enabled, setEnabled] = useState(module.enabled);
@@ -44,12 +48,12 @@ export function ModuleTile({ guildId, module, index = 0, animate = false }: Prop
         body: JSON.stringify({ enabled: next }),
       });
       if (!res.ok) {
-        const body = (await res.json().catch(() => ({}))) as { error?: string };
+        const failure = await readFailure(res);
         setEnabled(!next);
         push({
           kind: "error",
           title: `${module.name} is still ${next ? "off" : "on"}`,
-          detail: body.error ?? "The bot did not accept the change. Check it is running, then try again.",
+          detail: failure.message,
         });
         return;
       }
@@ -59,7 +63,7 @@ export function ModuleTile({ guildId, module, index = 0, animate = false }: Prop
       push({
         kind: "error",
         title: `${module.name} is still ${next ? "off" : "on"}`,
-        detail: "The dashboard could not be reached. Check your connection, then try again.",
+        detail: UNREACHABLE,
       });
     } finally {
       setPending(false);
@@ -80,6 +84,16 @@ export function ModuleTile({ guildId, module, index = 0, animate = false }: Prop
       </div>
 
       <p className="module-tile-summary">{module.summary}</p>
+
+      {missingPermissions.length > 0 ? (
+        <p className="module-tile-perms">
+          <AlertIcon />
+          <span>
+            The bot is missing {missingPermissions.map(permissionLabel).join(", ")}. Give its role{" "}
+            {missingPermissions.length === 1 ? "that permission" : "those permissions"} in Server Settings, Roles.
+          </span>
+        </p>
+      ) : null}
 
       <div className="module-tile-foot">
         <span className="module-tile-status" data-status={status}>

@@ -2,9 +2,9 @@ import Link from "next/link";
 import type { BotGuildSummary } from "../lib/control-api";
 import type { ModuleView } from "../lib/module-view";
 import { statusWord } from "../lib/module-view";
-import { isHosted, moduleHref } from "../lib/module-href";
+import { areaHref, moduleHref } from "../lib/module-href";
 import { inviteUrl } from "../lib/invite";
-import { navGroups } from "../lib/sections";
+import { navGroups, railMarks } from "../lib/sections";
 import { initialsOf } from "../lib/discord-cdn";
 import { GuildSwitcher } from "./GuildSwitcher";
 import { Logo } from "./Logo";
@@ -15,11 +15,13 @@ import { RoadmapList } from "./RoadmapList";
 import { peekUpdateStatus } from "../lib/updates";
 import { SidebarToggle } from "./SidebarToggle";
 import { ThemeToggle } from "./ThemeToggle";
-import { BotMessagesIcon, CommandsIcon, DownloadIcon, HelpIcon, MessagesIcon, OverviewIcon, SetupIcon, ShieldIcon, SignOutIcon } from "./Icons";
+import { BotMessagesIcon, CommandsIcon, DownloadIcon, HelpIcon, MessagesIcon, OverviewIcon, SetupIcon, ShieldIcon, SignOutIcon, TicketIcon } from "./Icons";
 
 interface Props {
   user: { name: string | null | undefined; image: string | null | undefined };
   guilds: BotGuildSummary[];
+  /** Where each server in the switcher opens, for someone who can only use one area of it. */
+  homes?: Record<string, string>;
   /** Absent on the server list, where there is nothing to navigate within. */
   currentGuild?: BotGuildSummary;
   modules: ModuleView[];
@@ -27,30 +29,41 @@ interface Props {
   canManage?: boolean;
   /** Listed staff here, so the Moderation entry shows. */
   canModerate?: boolean;
+  /** Works tickets here as a handler or through an admin role, so the Tickets entry shows. */
+  canHandleTickets?: boolean;
   signOutAction(): Promise<void>;
 }
 
 export async function Sidebar({
   user,
   guilds,
+  homes,
   currentGuild,
   modules,
   canManage = true,
   canModerate = false,
+  canHandleTickets = false,
   signOutAction,
 }: Props) {
   const groups = canManage ? navGroups(modules) : [];
+  const marks = railMarks(groups.flatMap((group) => group.modules.map((module) => module.name)));
   // Never waits for GitHub: a stale answer starts a refresh and the next page sees it.
   const updates = await peekUpdateStatus();
 
   // Moderation is where hosted settings live, so a manager who is not listed
   // staff still gets the entry, pointing at the one tab they can open.
-  const hosted = canManage ? modules.filter(isHosted) : [];
+  const hosted = canManage ? modules.filter((module) => module.area === "moderation") : [];
   const showModeration = canModerate || hosted.length > 0;
   const needsSetup = hosted.some((module) => module.status === "attention");
   const moderationHref = currentGuild
     ? `/guilds/${currentGuild.id}/mod${canModerate ? "" : "/settings"}`
     : "";
+
+  // Tickets takes over the module's own entry: the inbox is where most people
+  // who open it are going, and its Settings tab holds what the entry used to.
+  const tickets = canManage ? modules.find((module) => module.area === "tickets") : undefined;
+  const showTickets = tickets !== undefined || canHandleTickets;
+  const ticketsNeedSetup = tickets?.status === "attention";
 
   return (
     <>
@@ -62,7 +75,7 @@ export async function Sidebar({
           </Link>
           <SidebarToggle />
         </div>
-        <GuildSwitcher guilds={guilds} current={currentGuild} inviteUrl={inviteUrl()} />
+        <GuildSwitcher guilds={guilds} homes={homes} current={currentGuild} inviteUrl={inviteUrl()} />
       </div>
 
       <nav className="sidebar-nav" aria-label="Dashboard">
@@ -108,6 +121,21 @@ export async function Sidebar({
                   ) : null}
                 </NavLink>
               ) : null}
+              {showTickets ? (
+                <NavLink
+                  href={areaHref(currentGuild.id, "tickets")}
+                  tip={ticketsNeedSetup ? "Tickets · Needs setup" : "Tickets"}
+                >
+                  <TicketIcon />
+                  <span className="nav-link-text">Tickets</span>
+                  {ticketsNeedSetup ? (
+                    <>
+                      <span className="dot nav-flag" data-status="attention" aria-hidden="true" />
+                      <span className="visually-hidden">, needs setup</span>
+                    </>
+                  ) : null}
+                </NavLink>
+              ) : null}
             </div>
 
             {groups.map((group) => {
@@ -118,7 +146,7 @@ export async function Sidebar({
                   tip={`${module.name} · ${statusWord(module.status)}`}
                 >
                   <span className="nav-mono" aria-hidden="true">
-                    {module.name.charAt(0).toUpperCase()}
+                    {marks.get(module.name) ?? module.name.charAt(0).toUpperCase()}
                   </span>
                   <span className="dot" data-status={module.status} aria-hidden="true" />
                   <span className="nav-link-text">{module.name}</span>

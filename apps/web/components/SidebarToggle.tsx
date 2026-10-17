@@ -5,6 +5,7 @@ import { ChevronLeftIcon } from "./Icons";
 import {
   SIDEBAR_ATTRIBUTE,
   SIDEBAR_STORAGE_KEY,
+  isEditableTarget,
   isSidebarShortcut,
   parseSidebarMode,
   shortcutLabel,
@@ -71,7 +72,7 @@ export function SidebarToggle() {
       // The drawer ignores the preference, so there is nothing to toggle.
       if (window.matchMedia(DRAWER_QUERY).matches) return;
       const target = event.target;
-      if (target instanceof HTMLElement && target.isContentEditable) return;
+      if (target instanceof HTMLElement && isEditableTarget(target as HTMLElement & { type?: string })) return;
       event.preventDefault();
       toggle();
     }

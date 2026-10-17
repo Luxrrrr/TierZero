@@ -7,6 +7,7 @@ import { flowById } from "../../../../../lib/guided";
 import { guidedSteps } from "../../../../../lib/guided-steps";
 import { BotOffline } from "../../../../../components/BotOffline";
 import { GuidedSetup } from "../../../../../components/GuidedSetup";
+import { redirectToLogin } from "../../../../../lib/auth-redirect";
 
 export async function generateMetadata({
   params,
@@ -31,7 +32,7 @@ export default async function FlowSetupPage({
   try {
     const access = await requireGuildAccess(id);
     if (!access.ok) {
-      if (access.status === 401) redirect("/login");
+      if (access.status === 401) await redirectToLogin();
       forbidden();
     }
 

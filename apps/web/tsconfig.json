@@ -9,6 +9,6 @@
     "module": "ESNext",
     "plugins": [{ "name": "next" }]
   },
-  "include": ["components", "app", "lib", "types", "next-env.d.ts", ".next/types/**/*.ts"],
+  "include": ["components", "app", "lib", "types", "proxy.ts", "next-env.d.ts", ".next/types/**/*.ts"],
   "exclude": ["node_modules"]
 }

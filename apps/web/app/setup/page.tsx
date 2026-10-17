@@ -1,9 +1,10 @@
 import { redirect } from "next/navigation";
 import type { Metadata } from "next";
-import { auth, signIn } from "../../lib/auth";
+import { auth, signIn, signOut } from "../../lib/auth";
 import { claimInstanceOwnership, isInstanceClaimed } from "../../lib/instance";
 import { AuthCard } from "../../components/AuthCard";
 import { DiscordMark } from "../../components/Icons";
+import { Logo } from "../../components/Logo";
 
 export const metadata: Metadata = {
   title: "Set up",
@@ -13,10 +14,13 @@ export const metadata: Metadata = {
 // never be prerendered: a build has no database to read it from.
 export const dynamic = "force-dynamic";
 
-// The minimal half of the setup wizard: claiming instance ownership. The
-// guided walk-through for creating the Discord application itself (docs/
-// architecture.md's "first-run wizard") is a separate, larger piece of work
-// and isn't built here - this only covers the part task 3 asks for.
+/**
+ * The first-run screen: who owns this install. Claiming is a button press, never
+ * a side effect of opening the page, so a link preview, a prefetch or someone
+ * else's browser cannot make itself the owner by loading it. Creating the
+ * Discord application itself happens before this, by following the install
+ * guide.
+ */
 export default async function SetupPage() {
   if (await isInstanceClaimed()) redirect("/login");
 
@@ -29,12 +33,12 @@ export default async function SetupPage() {
     }
 
     return (
-      <AuthCard mark="0" brand={false}>
+      <AuthCard mark={<Logo />} brand={false}>
         <h1 className="auth-title">Set up TierZero</h1>
         <p className="auth-text">
-          Nobody owns this installation yet. Sign in with the Discord account
-          you want to manage it with. The first account to sign in here becomes
-          the owner.
+          Nobody owns this installation yet. Sign in with the Discord account you
+          want to run it with. After signing in you are asked to confirm, and that
+          account becomes the owner.
         </p>
         <div className="auth-actions">
           <form action={signInWithDiscord}>
@@ -49,6 +53,41 @@ export default async function SetupPage() {
     );
   }
 
-  await claimInstanceOwnership(session.user.id);
-  redirect("/guilds");
+  const userId = session.user.id;
+
+  async function claim() {
+    "use server";
+    // Checked again here: the page may have sat open while someone else claimed it.
+    if (!(await isInstanceClaimed())) await claimInstanceOwnership(userId);
+    redirect("/guilds");
+  }
+
+  async function switchAccount() {
+    "use server";
+    await signOut({ redirectTo: "/setup" });
+  }
+
+  return (
+    <AuthCard mark={<Logo />} brand={false}>
+      <h1 className="auth-title">Make this account the owner</h1>
+      <p className="auth-text">
+        You are signed in as <strong>{session.user.name ?? "this Discord account"}</strong>. The owner
+        can use Moderation on every server TierZero is in, choose who else gets it, and install
+        updates from the dashboard. An install has one owner.
+      </p>
+      <div className="auth-actions">
+        <form action={claim}>
+          <button type="submit" className="btn btn-primary btn-block">
+            Make me the owner
+          </button>
+        </form>
+        <form action={switchAccount}>
+          <button type="submit" className="btn btn-ghost btn-block">
+            Use a different Discord account
+          </button>
+        </form>
+      </div>
+      <p className="auth-foot">Pick the account you will keep. Changing the owner later is done in the install&apos;s .env file.</p>
+    </AuthCard>
+  );
 }

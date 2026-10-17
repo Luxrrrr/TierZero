@@ -445,3 +445,132 @@ export function EyeIcon(props: { className?: string }) {
     </svg>
   );
 }
+
+export function TicketIcon(props: { className?: string }) {
+  return (
+    <Stroke className={props.className}>
+      <path d="M3 8a2 2 0 0 0 2-2h14a2 2 0 0 0 2 2v2a2 2 0 0 0 0 4v2a2 2 0 0 0-2 2H5a2 2 0 0 0-2-2v-2a2 2 0 0 0 0-4Z" />
+      <path d="M14 6v2.5M14 11v2M14 15.5V18" />
+    </Stroke>
+  );
+}
+
+export function InboxIcon(props: { className?: string }) {
+  return (
+    <Stroke className={props.className}>
+      <path d="M4 13h4l1.5 3h5L16 13h4" />
+      <path d="M5.5 5h13L21 13v5a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-5Z" />
+    </Stroke>
+  );
+}
+
+export function ArchiveIcon(props: { className?: string }) {
+  return (
+    <Stroke className={props.className}>
+      <rect x="3" y="4" width="18" height="4.5" rx="1" />
+      <path d="M5 8.5V19a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8.5" />
+      <path d="M10 12.5h4" />
+    </Stroke>
+  );
+}
+
+export function ChartIcon(props: { className?: string }) {
+  return (
+    <Stroke className={props.className}>
+      <path d="M4 4v15a1 1 0 0 0 1 1h15" />
+      <path d="m7.5 15 3.5-4 3 2.5 5-6" />
+    </Stroke>
+  );
+}
+
+export function StarIcon(props: { className?: string; filled?: boolean }) {
+  return (
+    <svg className={props.className} viewBox="0 0 24 24" width="16" height="16" fill={props.filled ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="m12 3.5 2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8-4.3-4.1 5.9-.9Z" />
+    </svg>
+  );
+}
+
+export function SendIcon(props: { className?: string }) {
+  return (
+    <Stroke className={props.className}>
+      <path d="M21 3 10.5 13.5" />
+      <path d="M21 3 14.5 21l-4-7.5L3 9.5Z" />
+    </Stroke>
+  );
+}
+
+export function LockIcon(props: { className?: string }) {
+  return (
+    <Stroke className={props.className}>
+      <rect x="4.5" y="10.5" width="15" height="10" rx="2" />
+      <path d="M8 10.5V7a4 4 0 0 1 8 0v3.5" />
+    </Stroke>
+  );
+}
+
+export function PaperclipIcon(props: { className?: string }) {
+  return (
+    <Stroke className={props.className}>
+      <path d="m20 11.5-8.2 8.2a5 5 0 0 1-7.1-7.1l8.5-8.5a3.3 3.3 0 0 1 4.7 4.7l-8.5 8.5a1.7 1.7 0 0 1-2.4-2.4l7.8-7.8" />
+    </Stroke>
+  );
+}
+
+export function UsersIcon(props: { className?: string }) {
+  return (
+    <Stroke className={props.className}>
+      <circle cx="9" cy="8" r="3.5" />
+      <path d="M2.5 20a6.5 6.5 0 0 1 13 0" />
+      <path d="M16 4.6a3.5 3.5 0 0 1 0 6.8" />
+      <path d="M18.5 14.2A6.5 6.5 0 0 1 21.5 20" />
+    </Stroke>
+  );
+}
+
+export function FlagIcon(props: { className?: string }) {
+  return (
+    <Stroke className={props.className}>
+      <path d="M5 21V4" />
+      <path d="M5 4h11l-2 4 2 4H5" />
+    </Stroke>
+  );
+}
+
+export function SwapIcon(props: { className?: string }) {
+  return (
+    <Stroke className={props.className}>
+      <path d="M4 8h14" />
+      <polyline points="14 4 18 8 14 12" />
+      <path d="M20 16H6" />
+      <polyline points="10 12 6 16 10 20" />
+    </Stroke>
+  );
+}
+
+export function BellIcon(props: { className?: string }) {
+  return (
+    <Stroke className={props.className}>
+      <path d="M6 9a6 6 0 0 1 12 0c0 5 2 6.5 2 6.5H4S6 14 6 9Z" />
+      <path d="M10 19a2 2 0 0 0 4 0" />
+    </Stroke>
+  );
+}
+
+export function ThreadIcon(props: { className?: string }) {
+  return (
+    <Stroke className={props.className}>
+      <path d="M5 4v9a3 3 0 0 0 3 3h11" />
+      <polyline points="15 12 19 16 15 20" />
+    </Stroke>
+  );
+}
+
+export function KeyboardIcon(props: { className?: string }) {
+  return (
+    <Stroke className={props.className}>
+      <rect x="2.5" y="6" width="19" height="12" rx="2" />
+      <path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10" />
+    </Stroke>
+  );
+}

@@ -1,4 +1,4 @@
-import { forbidden, redirect } from "next/navigation";
+import { forbidden } from "next/navigation";
 import type { Metadata } from "next";
 import { requireGuildAccess } from "../../../../lib/authz";
 import { ControlApiError } from "../../../../lib/control-api";
@@ -7,6 +7,7 @@ import { moduleHref } from "../../../../lib/module-href";
 import { orderModulesBySection } from "../../../../lib/sections";
 import { BotOffline } from "../../../../components/BotOffline";
 import { BotMessagesBrowser, type BrowserModule } from "../../../../components/BotMessagesBrowser";
+import { redirectToLogin } from "../../../../lib/auth-redirect";
 
 export async function generateMetadata({
   params,
@@ -42,7 +43,7 @@ export default async function BotMessagesPage({
   try {
     const access = await requireGuildAccess(id);
     if (!access.ok) {
-      if (access.status === 401) redirect("/login");
+      if (access.status === 401) await redirectToLogin();
       forbidden();
     }
 
@@ -79,7 +80,7 @@ export default async function BotMessagesPage({
             <p className="page-eyebrow">Server</p>
             <h1 className="page-title">Bot messages</h1>
             <p className="page-summary">
-              The messages the bot sends, in one place. Pick a feature, or search for a message. Short text such as button labels and names is under Labels and text on each feature's settings page.
+              The messages the bot sends, in one place. Pick a feature, or search for a message. Short text such as button labels and names is with each feature's other settings.
             </p>
           </div>
         </div>

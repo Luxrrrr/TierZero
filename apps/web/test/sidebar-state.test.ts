@@ -1,6 +1,6 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { isSidebarShortcut, parseSidebarMode, shortcutLabel, toggledMode } from "../lib/sidebar-state.ts";
+import { isEditableTarget, isSidebarShortcut, parseSidebarMode, shortcutLabel, toggledMode } from "../lib/sidebar-state.ts";
 
 const press = (over: Partial<Parameters<typeof isSidebarShortcut>[0]> = {}) => ({
   key: "b",
@@ -55,5 +55,22 @@ describe("shortcutLabel", () => {
   test("names the modifier for the platform", () => {
     assert.equal(shortcutLabel(true), "⌘B");
     assert.equal(shortcutLabel(false), "Ctrl+B");
+  });
+});
+
+describe("isEditableTarget", () => {
+  test("text boxes, text fields, selects and editable areas keep Ctrl+B for themselves", () => {
+    assert.equal(isEditableTarget({ tagName: "TEXTAREA" }), true);
+    assert.equal(isEditableTarget({ tagName: "INPUT", type: "text" }), true);
+    assert.equal(isEditableTarget({ tagName: "INPUT", type: "search" }), true);
+    assert.equal(isEditableTarget({ tagName: "SELECT" }), true);
+    assert.equal(isEditableTarget({ tagName: "DIV", isContentEditable: true }), true);
+  });
+
+  test("buttons, switches and the page itself let it through", () => {
+    assert.equal(isEditableTarget({ tagName: "BUTTON" }), false);
+    assert.equal(isEditableTarget({ tagName: "INPUT", type: "checkbox" }), false);
+    assert.equal(isEditableTarget({ tagName: "BODY" }), false);
+    assert.equal(isEditableTarget(null), false);
   });
 });

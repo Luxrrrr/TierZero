@@ -1,6 +1,5 @@
 import Link from "next/link";
 import type { Metadata } from "next";
-import { redirect } from "next/navigation";
 import { auth } from "../../lib/auth";
 import { getAuthorizedGuildIds } from "../../lib/authz";
 import { botGuilds } from "../../lib/guild-data";
@@ -12,6 +11,7 @@ import { HelpNav } from "../../components/HelpNav";
 import { CheckIcon, ChevronDownIcon, FolderIcon, OverviewIcon, SetupIcon } from "../../components/Icons";
 import { Sidebar } from "../../components/Sidebar";
 import { signOutAction } from "../guilds/actions";
+import { redirectToLogin } from "../../lib/auth-redirect";
 
 export const metadata: Metadata = {
   title: "Help",
@@ -23,6 +23,7 @@ const SECTION_LINKS = [
   { id: "quick-setup", label: "Quick setup" },
   { id: "commands", label: "Commands" },
   { id: "tasks", label: "Common tasks" },
+  { id: "shortcuts", label: "Shortcuts" },
   { id: "trouble", label: "Troubleshooting" },
 ];
 
@@ -37,7 +38,7 @@ const SECTION_LINKS = [
  */
 export default async function HelpPage() {
   const session = await auth();
-  if (!session?.user?.id) redirect("/login");
+  if (!session?.user?.id) return redirectToLogin();
   const user = { name: session.user.name, image: session.user.image };
 
   let guilds: BotGuildSummary[] = [];
@@ -175,8 +176,10 @@ export default async function HelpPage() {
         <p className="help-lead">
           A feature&apos;s settings page shows every option it has, which is a
           lot if you are still deciding what you want. Quick setup asks only the
-          few questions a feature needs, one screen at a time, and turns it on
-          at the end.
+          few questions a feature needs, one screen at a time, and turns each
+          feature on when you save its step. A feature that would still do
+          nothing, such as Automod with every rule off, keeps your answers and
+          stays off until it has what it needs.
         </p>
         <div className="help-grid help-grid-wide">
           <article className="help-card">
@@ -216,8 +219,10 @@ export default async function HelpPage() {
           <p>The slash commands members type in Discord.</p>
         </div>
         <p className="help-lead">
-          Turning a feature on adds its commands to your server. The Commands
-          page lists every one of them, and lets you do three things to each.
+          Turning a feature on adds its commands to your server, and turning it
+          off takes them away again. The Commands page lists every one of them,
+          marks the ones whose feature is off, and lets you do three things to
+          each.
         </p>
         <div className="help-grid help-grid-three">
           <article className="help-card help-card-compact">
@@ -229,11 +234,18 @@ export default async function HelpPage() {
           </article>
           <article className="help-card help-card-compact">
             <h3>Limit who can use it</h3>
-            <p>Pick roles, and only members with one of them see it.</p>
+            <p>
+              Pick roles, and only members with one of them can run it. Everyone
+              still sees it in their list, since Discord cannot hide a command by
+              role. To hide it, choose members with a permission instead.
+            </p>
           </article>
           <article className="help-card help-card-compact">
             <h3>Limit where it works</h3>
-            <p>Pick channels it should not work in.</p>
+            <p>
+              Pick the only channels it works in, or the channels it should not
+              work in. A category covers every channel in it.
+            </p>
           </article>
         </div>
         <p className="help-footnote">
@@ -249,13 +261,28 @@ export default async function HelpPage() {
         <div className="card faq">
           <details>
             <summary>
+              Get started on a server
+              <ChevronDownIcon />
+            </summary>
+            <div className="faq-body">
+              Pick the server under <Link href="/guilds">Your servers</Link>. Every
+              feature starts off. Switch one on from the overview, or open quick
+              setup, which asks a few questions per feature. To check the bot is
+              working, switch on Utility and type /ping in Discord. If a feature&apos;s
+              tile says the bot is missing a permission, give the bot&apos;s role that
+              permission in Discord&apos;s Server Settings, Roles.
+            </div>
+          </details>
+          <details>
+            <summary>
               Add the bot to another server
               <ChevronDownIcon />
             </summary>
             <div className="faq-body">
               Open <Link href="/guilds">Your servers</Link> and use the invite
-              link there. You need the Manage Server permission on a server for
-              it to appear in this dashboard.
+              link there. It asks Discord for every permission the features use,
+              so leave them ticked. You need the Manage Server permission on a
+              server for it to appear in this dashboard.
             </div>
           </details>
           <details>
@@ -295,6 +322,47 @@ export default async function HelpPage() {
         </div>
       </section>
 
+      <section className="help-section" id="shortcuts">
+        <div className="help-head">
+          <h2>Keyboard shortcuts</h2>
+          <p>On a Mac, use Cmd where this says Ctrl.</p>
+        </div>
+        <div className="card">
+          <dl className="help-shortcuts">
+            <div>
+              <dt>
+                <kbd>Ctrl</kbd> + <kbd>B</kbd>
+              </dt>
+              <dd>Folds the sidebar away or brings it back. In a message text box it makes the selected text bold instead.</dd>
+            </div>
+            <div>
+              <dt>
+                <kbd>Ctrl</kbd> + <kbd>I</kbd>, <kbd>Ctrl</kbd> + <kbd>U</kbd>
+              </dt>
+              <dd>In a message text box, italic and underline.</dd>
+            </div>
+            <div>
+              <dt>
+                <kbd>/</kbd>
+              </dt>
+              <dd>Jumps to the search box on the Commands and Bot messages pages.</dd>
+            </div>
+            <div>
+              <dt>
+                <kbd>Ctrl</kbd> + <kbd>S</kbd>
+              </dt>
+              <dd>Saves a feature&apos;s settings page.</dd>
+            </div>
+            <div>
+              <dt>
+                <kbd>Esc</kbd>
+              </dt>
+              <dd>Closes the panel or dialog that is open.</dd>
+            </div>
+          </dl>
+        </div>
+      </section>
+
       <section className="help-section" id="trouble">
         <div className="help-head">
           <h2>When something looks wrong</h2>
@@ -308,8 +376,9 @@ export default async function HelpPage() {
             <div className="faq-body">
               The dashboard and the bot are two separate programs. This message
               means the bot is not running, or the dashboard cannot reach it.
-              Whoever installed TierZero can check that the bot is started. Your
-              settings are safe, since they are stored in the database.
+              Whoever installed TierZero can start it again; the page checks by
+              itself every few seconds and carries on once the bot answers. Your
+              settings are safe, since they are kept on disk.
             </div>
           </details>
           <details>
@@ -325,14 +394,16 @@ export default async function HelpPage() {
           </details>
           <details>
             <summary>
-              A role will not stay selected
+              A role is greyed out
               <ChevronDownIcon />
             </summary>
             <div className="faq-body">
               The bot cannot give out a role that sits above its own in your
-              server&apos;s role list. Those roles are shown greyed out. Move the
-              bot&apos;s role above them in Discord&apos;s server settings and
-              they become selectable.
+              server&apos;s role list, so where a setting hands a role to members
+              (a role menu, a welcome role, a level reward) those roles are greyed
+              out. Move the bot&apos;s role above them in Discord&apos;s server
+              settings and they become selectable. Settings that only check a
+              role, such as who can use a command, offer every role.
             </div>
           </details>
           <details>
@@ -341,10 +412,13 @@ export default async function HelpPage() {
               <ChevronDownIcon />
             </summary>
             <div className="faq-body">
-              Check the feature is on, then check the command is not hidden or
-              limited to roles you do not have on the Commands page. Discord can
-              take a few seconds to catch up. If it still does not appear,
-              leaving and rejoining the server refreshes what Discord shows you.
+              Check the feature is on, then check on the Commands page that the
+              command is not switched off and is not limited to members with a
+              permission you do not have. A role limit does not hide a command.
+              Discord can take a few seconds to catch up. If it still does not
+              appear, press Ctrl+R in Discord to reload it. If the server overview
+              says Discord did not accept the commands, add the bot again with
+              the invite link on Your servers.
             </div>
           </details>
           <details>

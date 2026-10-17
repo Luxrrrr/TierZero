@@ -146,7 +146,7 @@ function ReplyFields({
         </div>
         <textarea
           ref={target.ref as RefObject<HTMLTextAreaElement>}
-          onFocus={target.onFocus}
+          onFocus={target.onFocus} onKeyDown={target.onKeyDown}
           className="textarea"
           rows={3}
           placeholder="What to say. {user} is whoever used it."
@@ -239,7 +239,7 @@ function RoleFields({
         <label className="field-label" htmlFor={`${id}-role`}>
           Role
         </label>
-        <RolePicker id={`${id}-role`} guildId={guildId} value={action.roleId || undefined} onChange={(roleId) => onChange({ ...action, roleId: roleId ?? "" })} />
+        <RolePicker id={`${id}-role`} guildId={guildId} assigns value={action.roleId || undefined} onChange={(roleId) => onChange({ ...action, roleId: roleId ?? "" })} />
         {errorAt(errors, `${path}.roleId`) ? <p className="field-error">{errorAt(errors, `${path}.roleId`)}</p> : null}
         <p className="field-hint">The bot can only give roles below its own highest role.</p>
       </div>
@@ -250,7 +250,7 @@ function RoleFields({
         <input
           id={`${id}-confirm`}
           ref={confirm.ref as RefObject<HTMLInputElement>}
-          onFocus={confirm.onFocus}
+          onFocus={confirm.onFocus} onKeyDown={confirm.onKeyDown}
           className="input"
           placeholder="Leave empty for the usual message"
           maxLength={MESSAGE_LIMITS.confirmation}
@@ -269,7 +269,7 @@ function TextBox({ value, onChange, label, placeholder, max }: { value: string; 
   return (
     <input
       ref={target.ref as RefObject<HTMLInputElement>}
-      onFocus={target.onFocus}
+      onFocus={target.onFocus} onKeyDown={target.onKeyDown}
       className="input"
       aria-label={label}
       placeholder={placeholder}
@@ -285,7 +285,7 @@ function UrlBox({ value, onChange, label }: { value: string; onChange(next: stri
   return (
     <input
       ref={target.ref as RefObject<HTMLInputElement>}
-      onFocus={target.onFocus}
+      onFocus={target.onFocus} onKeyDown={target.onKeyDown}
       className="input"
       aria-label={label}
       placeholder="https://"
@@ -374,9 +374,9 @@ export function ButtonsEditor({
                   </button>
                 ))}
               </div>
-              <label className="embed-inline" title="A disabled button shows greyed out and can't be pressed">
-                <Switch checked={button.disabled} onChange={(next) => set(i, { disabled: next })} aria-label={`Button ${i + 1} disabled`} />
-                <span>Off</span>
+              <label className="embed-inline" title="A greyed out button can't be pressed">
+                <Switch checked={button.disabled} onChange={(next) => set(i, { disabled: next })} aria-label={`Button ${i + 1} greyed out`} />
+                <span>Greyed out</span>
               </label>
               <button type="button" className="icon-btn" aria-label={`Remove button ${i + 1}`} onClick={() => onChange(buttons.filter((_, j) => j !== i))}>
                 <TrashIcon />
@@ -507,9 +507,9 @@ function SelectCard({
       <div className="component-head">
         <strong className="component-kind">{kind?.label ?? "Menu"}</strong>
         <span className="component-spacer" />
-        <label className="embed-inline" title="A disabled menu shows greyed out and can't be used">
-          <Switch checked={select.disabled} onChange={(next) => onChange({ disabled: next })} aria-label={`Menu ${index + 1} disabled`} />
-          <span>Off</span>
+        <label className="embed-inline" title="A greyed out menu can't be used">
+          <Switch checked={select.disabled} onChange={(next) => onChange({ disabled: next })} aria-label={`Menu ${index + 1} greyed out`} />
+          <span>Greyed out</span>
         </label>
         <button type="button" className="icon-btn" aria-label={`Remove menu ${index + 1}`} onClick={onRemove}>
           <TrashIcon />

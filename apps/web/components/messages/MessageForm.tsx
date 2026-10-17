@@ -1,7 +1,9 @@
 "use client";
 
-import { useState, type RefObject } from "react";
-import { MESSAGE_LIMITS, emptyEmbed, type MessageButton, type MessageEmbed, type MessageError, type MessageSelect } from "@tier0/core";
+import { useMemo, useState, type RefObject } from "react";
+import { MESSAGE_LIMITS, MESSAGE_VARIABLES, emptyEmbed, type MessageButton, type MessageEmbed, type MessageError, type MessageSelect } from "@tier0/core";
+import { mentionTokens, unknownVariables } from "../../lib/message-variables";
+import { useChannels, useRoles } from "../form";
 import { PlusIcon } from "../Icons";
 import { EmbedEditor } from "./EmbedEditor";
 import { ButtonsEditor, SelectsEditor } from "./ComponentsEditor";
@@ -53,6 +55,11 @@ function MessageFormBody({ guildId, value, onChange, errors, variables, showReac
   const [addedEmbed, setAddedEmbed] = useState<number | null>(null);
   const target = useToolTarget(value.content, (content) => onChange({ ...value, content }), textLabel, "full");
   const shown = problems ?? errors;
+  // A name the bot does not know is sent exactly as typed, braces and all, which is easy to miss in a preview.
+  const unknown = useMemo(
+    () => unknownVariables(value, (variables ?? MESSAGE_VARIABLES).map((variable) => variable.name)),
+    [value, variables],
+  );
 
   return (
     <div className="msg-form">
@@ -70,7 +77,7 @@ function MessageFormBody({ guildId, value, onChange, errors, variables, showReac
         <textarea
           id="msg-content"
           ref={target.ref as RefObject<HTMLTextAreaElement>}
-          onFocus={target.onFocus}
+          onFocus={target.onFocus} onKeyDown={target.onKeyDown}
           className="textarea"
           rows={5}
           placeholder="Write the message. Use the tools above for formatting, variables, times, mentions and emoji."
@@ -78,6 +85,7 @@ function MessageFormBody({ guildId, value, onChange, errors, variables, showReac
           onChange={(event) => onChange({ ...value, content: event.target.value })}
         />
         {errors.find((e) => e.path === "content") ? <p className="field-error">{errors.find((e) => e.path === "content")?.message}</p> : null}
+        <MentionKey guildId={guildId} text={value.content} />
       </div>
 
       {value.embeds.map((embed, index) => (
@@ -136,6 +144,21 @@ function MessageFormBody({ guildId, value, onChange, errors, variables, showReac
         <ReactionsEditor guildId={guildId} reactions={value.reactions} errors={errors} onChange={(reactions) => onChange({ ...value, reactions })} />
       ) : null}
 
+      {unknown.length > 0 ? (
+        <div className="msg-warning" role="status">
+          <p className="msg-problems-title">
+            {unknown.length === 1 ? "A variable this message does not know" : "Variables this message does not know"}
+          </p>
+          <ul>
+            {unknown.slice(0, 6).map((name) => (
+              <li key={name}>
+                <code>{`{${name}}`}</code> is sent exactly as typed. Check the spelling, or pick one from Variables.
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
       {shown.length > 0 ? (
         <div className="msg-problems" role="alert">
           <p className="msg-problems-title">
@@ -149,5 +172,32 @@ function MessageFormBody({ guildId, value, onChange, errors, variables, showReac
         </div>
       ) : null}
     </div>
+  );
+}
+
+/**
+ * What each raw mention in the text is. The text box has to show `<#123...>`
+ * as Discord stores it, so the name of the channel, role or member is listed
+ * under it instead.
+ */
+function MentionKey({ guildId, text }: { guildId: string; text: string }) {
+  const tokens = useMemo(() => mentionTokens(text), [text]);
+  const { channels } = useChannels(guildId);
+  const { roles } = useRoles(guildId);
+  if (tokens.length === 0) return null;
+  const nameOf = (kind: string, id: string) =>
+    kind === "channel"
+      ? `#${channels.find((channel) => channel.id === id)?.name ?? "deleted channel"}`
+      : kind === "role"
+        ? `@${roles.find((role) => role.id === id)?.name ?? "deleted role"}`
+        : "a member";
+  return (
+    <ul className="msg-mention-key" aria-label="Mentions in this text">
+      {tokens.slice(0, 8).map((entry) => (
+        <li key={entry.token}>
+          <code>{entry.token}</code> is {nameOf(entry.kind, entry.id)}
+        </li>
+      ))}
+    </ul>
   );
 }

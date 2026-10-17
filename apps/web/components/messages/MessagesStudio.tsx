@@ -1,9 +1,10 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   MESSAGE_LIMITS,
   discordTimestamp,
+  emptyEmbed,
   parseMessage,
   type MessageButton,
   type MessageEmbed,
@@ -13,17 +14,24 @@ import {
   type MessageLibrary,
   type MessageTemplateDto,
 } from "@tier0/core";
-import { Combobox } from "../form";
+import { Combobox, useChannels } from "../form";
 import { ChevronDownIcon, FolderIcon, MessagesIcon, PencilIcon, PlusIcon, SearchIcon, TrashIcon } from "../Icons";
+import { useUnsavedGuard } from "../../lib/unsaved-guard";
+import { UNREACHABLE, readFailure } from "../../lib/bot-errors";
 import { MessageForm } from "./MessageForm";
 import { MessagePreview, type PreviewContext } from "./MessagePreview";
-import { SendDialog } from "./SendDialog";
+import { SendDialog, type ScheduledSend } from "./SendDialog";
+import { SentList, type SentMessage } from "./SentList";
 
 interface Props {
   guildId: string;
   guildName: string;
   memberCount: number;
   initial: MessageLibrary;
+  /** Messages queued to go out later. */
+  schedules: ScheduledSend[];
+  /** The template named in the address, opened straight away. */
+  initialTemplateId?: number | null;
   botName: string;
 }
 
@@ -43,6 +51,23 @@ const SAVED_LINGER_MS = 2500;
 
 type Notice = { kind: "ok" | "error"; text: string } | null;
 
+const BLANK_EMBED = JSON.stringify(emptyEmbed());
+
+/** An embed just added and not yet touched has nothing wrong with it worth shouting about. */
+function untouchedEmbeds(embeds: MessageEmbed[]): Set<number> {
+  return new Set(embeds.flatMap((embed, index) => (JSON.stringify(embed) === BLANK_EMBED ? [index] : [])));
+}
+
+/** Keeps the open template in the address, so a reload or a shared link opens it again. */
+function rememberTemplate(id: number | null) {
+  const url = new URL(window.location.href);
+  if (id === null) url.searchParams.delete("template");
+  else url.searchParams.set("template", String(id));
+  window.history.replaceState(window.history.state, "", url);
+}
+
+const REPEAT_LABEL: Record<ScheduledSend["repeat"], string> = { once: "Once", daily: "Every day", weekly: "Every week" };
+
 const snapshot = (draft: Draft) => JSON.stringify(draft);
 const draftOf = (template: MessageTemplateDto): Draft => ({
   name: template.name,
@@ -60,14 +85,20 @@ const draftOf = (template: MessageTemplateDto): Draft => ({
  * it. Nothing is sent until the Send dialog is confirmed, and a saved template
  * is only ever changed by pressing Save.
  */
-export function MessagesStudio({ guildId, guildName, memberCount, initial, botName }: Props) {
+export function MessagesStudio({ guildId, guildName, memberCount, initial, schedules: initialSchedules, initialTemplateId = null, botName }: Props) {
+  const opening = initialTemplateId === null ? undefined : initial.templates.find((template) => template.id === initialTemplateId);
   const [library, setLibrary] = useState<MessageLibrary>(initial);
-  const [selectedId, setSelectedId] = useState<number | null>(null);
-  const [draft, setDraft] = useState<Draft>(BLANK);
-  const [baseline, setBaseline] = useState<string>(snapshot(BLANK));
+  const [selectedId, setSelectedId] = useState<number | null>(opening?.id ?? null);
+  const [draft, setDraft] = useState<Draft>(opening ? draftOf(opening) : BLANK);
+  const [baseline, setBaseline] = useState<string>(snapshot(opening ? draftOf(opening) : BLANK));
+  const [schedules, setSchedules] = useState<ScheduledSend[]>(initialSchedules);
+  const [folderError, setFolderError] = useState<string | null>(null);
+  const { channels } = useChannels(guildId);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<Notice>(null);
   const [sending, setSending] = useState(false);
+  const [replacing, setReplacing] = useState<SentMessage | null>(null);
+  const [sentRevision, setSentRevision] = useState(0);
   const [query, setQuery] = useState("");
   const [collapsed, setCollapsed] = useState<Set<number>>(new Set());
   const [newFolder, setNewFolder] = useState<string | null>(null);
@@ -98,8 +129,15 @@ export function MessagesStudio({ guildId, guildName, memberCount, initial, botNa
     };
   }, [guildId, guildName, memberCount, botName]);
   const errors: MessageError[] = parsed.ok ? [] : parsed.errors;
-  const nothingYet = draft.content.trim() === "" && draft.embeds.length === 0 && draft.buttons.length === 0 && draft.reactions.length === 0;
-  const shownErrors = nothingYet ? [] : errors;
+  const untouched = untouchedEmbeds(draft.embeds);
+  const nothingYet =
+    draft.content.trim() === "" && draft.embeds.length === untouched.size && draft.buttons.length === 0 && draft.reactions.length === 0;
+  const shownErrors = nothingYet
+    ? []
+    : errors.filter((error) => {
+        const embed = /^embeds\[(\d+)\]/.exec(error.path);
+        return !(embed && untouched.has(Number(embed[1])));
+      });
 
   const call = useCallback(
     async (method: string, path: string, body?: unknown): Promise<{ ok: boolean; data: unknown; error: string }> => {
@@ -109,10 +147,10 @@ export function MessagesStudio({ guildId, guildName, memberCount, initial, botNa
           headers: body === undefined ? undefined : { "content-type": "application/json" },
           body: body === undefined ? undefined : JSON.stringify(body),
         });
-        const data = (await res.json().catch(() => ({}))) as { error?: string };
-        return { ok: res.ok, data, error: res.ok ? "" : (data.error ?? "That did not work. Try again.") };
+        if (!res.ok) return { ok: false, data: null, error: (await readFailure(res)).message };
+        return { ok: true, data: (await res.json().catch(() => ({}))) as unknown, error: "" };
       } catch {
-        return { ok: false, data: null, error: "The dashboard could not reach the bot. Check that it is running, then try again." };
+        return { ok: false, data: null, error: UNREACHABLE };
       }
     },
     [guildId],
@@ -123,36 +161,50 @@ export function MessagesStudio({ guildId, guildName, memberCount, initial, botNa
     if (next?.kind === "ok") window.setTimeout(() => setNotice((current) => (current === next ? null : current)), SAVED_LINGER_MS);
   }
 
-  /** Leaving a message with unsaved edits asks first, because nothing else would bring them back. */
-  function confirmLeave(): boolean {
-    return !dirty || window.confirm("You have changes that are not saved. Discard them?");
-  }
+  const canSave = !busy && dirty && draft.name.trim() !== "" && parsed.ok;
+
+  // Leaving the page, or another template, with unsaved edits asks first, because nothing else would bring them back.
+  const guard = useUnsavedGuard({
+    dirty,
+    onSave: canSave ? () => save() : undefined,
+    onDiscard: () => setDraft(JSON.parse(baseline) as Draft),
+  });
+
+  useEffect(() => {
+    rememberTemplate(selectedId);
+  }, [selectedId]);
 
   function open(template: MessageTemplateDto) {
-    if (template.id === selectedId || !confirmLeave()) return;
-    const next = draftOf(template);
-    setSelectedId(template.id);
-    setDraft(next);
-    setBaseline(snapshot(next));
-    setNotice(null);
+    if (template.id === selectedId) return;
+    guard.confirmLeave(() => {
+      const next = draftOf(template);
+      setSelectedId(template.id);
+      setDraft(next);
+      setBaseline(snapshot(next));
+      setNotice(null);
+    });
   }
 
   function startNew(folderId: number | null = null) {
-    if (!confirmLeave()) return;
-    const next = { ...BLANK, folderId };
-    setSelectedId(null);
-    setDraft(next);
-    setBaseline(snapshot(BLANK));
-    setNotice(null);
+    guard.confirmLeave(() => {
+      const next = { ...BLANK, folderId };
+      setSelectedId(null);
+      setDraft(next);
+      setBaseline(snapshot(next));
+      setNotice(null);
+    });
   }
 
-  async function save() {
-    if (busy) return;
+  async function save(): Promise<boolean> {
+    if (busy) return false;
     setBusy(true);
     const body = { name: draft.name, folderId: draft.folderId, content: draft.content, embeds: draft.embeds, buttons: draft.buttons, selects: draft.selects, reactions: draft.reactions };
     const result = await call(selectedId === null ? "POST" : "PATCH", selectedId === null ? "templates" : `templates/${selectedId}`, body);
     setBusy(false);
-    if (!result.ok) return flash({ kind: "error", text: result.error });
+    if (!result.ok) {
+      flash({ kind: "error", text: result.error });
+      return false;
+    }
     const saved = result.data as MessageTemplateDto;
     setLibrary((current) => ({
       ...current,
@@ -162,6 +214,15 @@ export function MessagesStudio({ guildId, guildName, memberCount, initial, botNa
     setBaseline(snapshot(draftOf(saved)));
     setDraft(draftOf(saved));
     flash({ kind: "ok", text: "Saved" });
+    return true;
+  }
+
+  async function cancelSchedule(entry: ScheduledSend) {
+    if (!window.confirm(`Cancel "${entry.label}"? It will not be sent.`)) return;
+    const result = await call("DELETE", `schedules/${entry.id}`);
+    // Already gone, most likely sent a moment ago: the list should not keep showing it either way.
+    if (!result.ok && !/not found/i.test(result.error)) return flash({ kind: "error", text: result.error });
+    setSchedules((current) => current.filter((item) => item.id !== entry.id));
   }
 
   async function duplicate() {
@@ -197,16 +258,18 @@ export function MessagesStudio({ guildId, guildName, memberCount, initial, botNa
     const name = (newFolder ?? "").trim();
     if (name === "") return setNewFolder(null);
     const result = await call("POST", "folders", { name });
-    if (!result.ok) return flash({ kind: "error", text: result.error });
+    if (!result.ok) return setFolderError(result.error);
     const folder = result.data as MessageFolderDto;
     setLibrary((current) => ({ ...current, folders: [...current.folders, folder].sort((a, b) => a.name.localeCompare(b.name)) }));
     setNewFolder(null);
+    setFolderError(null);
   }
 
   async function renameFolder() {
     if (!renaming) return;
     const result = await call("PATCH", `folders/${renaming.id}`, { name: renaming.name });
-    if (!result.ok) return flash({ kind: "error", text: result.error });
+    if (!result.ok) return setFolderError(result.error);
+    setFolderError(null);
     const folder = result.data as MessageFolderDto;
     setLibrary((current) => ({
       ...current,
@@ -245,6 +308,7 @@ export function MessagesStudio({ guildId, guildName, memberCount, initial, botNa
       template.embeds.length > 0
         ? `${template.embeds.length} ${template.embeds.length === 1 ? "embed" : "embeds"}`
         : "Text";
+    const sent = template.lastSentAt ? new Date(template.lastSentAt) : null;
     return (
       <li key={template.id}>
         <button
@@ -255,7 +319,9 @@ export function MessagesStudio({ guildId, guildName, memberCount, initial, botNa
         >
           <MessagesIcon />
           <span className="msg-template-name">{template.name}</span>
-          <span className="msg-template-meta">{kind}</span>
+          <span className="msg-template-meta" title={sent ? `Last sent ${sent.toLocaleString()}` : undefined}>
+            {sent ? `${kind} · sent ${sent.toLocaleDateString([], { month: "short", day: "numeric" })}` : kind}
+          </span>
         </button>
       </li>
     );
@@ -266,8 +332,8 @@ export function MessagesStudio({ guildId, guildName, memberCount, initial, botNa
     ...library.folders.map((folder) => ({ value: String(folder.id), label: folder.name })),
   ];
 
-  const canSave = !busy && dirty && draft.name.trim() !== "" && parsed.ok;
   const canSend = parsed.ok;
+  const channelName = (id: string) => channels.find((channel) => channel.id === id)?.name;
 
   return (
     <div className="msg-studio">
@@ -309,14 +375,27 @@ export function MessagesStudio({ guildId, guildName, memberCount, initial, botNa
                 placeholder="Folder name"
                 maxLength={MESSAGE_LIMITS.folderName}
                 value={newFolder}
-                onChange={(event) => setNewFolder(event.target.value)}
+                aria-invalid={folderError ? true : undefined}
+                aria-describedby={folderError ? "msg-folder-error" : undefined}
+                onChange={(event) => {
+                  setNewFolder(event.target.value);
+                  setFolderError(null);
+                }}
                 onKeyDown={(event) => {
-                  if (event.key === "Escape") setNewFolder(null);
+                  if (event.key === "Escape") {
+                    setNewFolder(null);
+                    setFolderError(null);
+                  }
                 }}
               />
               <button type="submit" className="btn btn-secondary btn-sm">
                 Add
               </button>
+              {folderError ? (
+                <p className="field-error msg-inline-error" id="msg-folder-error" role="alert">
+                  {folderError}
+                </p>
+              ) : null}
             </form>
           ) : null}
 
@@ -348,14 +427,27 @@ export function MessagesStudio({ guildId, guildName, memberCount, initial, botNa
                       aria-label="Folder name"
                       maxLength={MESSAGE_LIMITS.folderName}
                       value={renaming.name}
-                      onChange={(event) => setRenaming({ id: folder.id, name: event.target.value })}
+                      aria-invalid={folderError ? true : undefined}
+                      aria-describedby={folderError ? "msg-rename-error" : undefined}
+                      onChange={(event) => {
+                        setRenaming({ id: folder.id, name: event.target.value });
+                        setFolderError(null);
+                      }}
                       onKeyDown={(event) => {
-                        if (event.key === "Escape") setRenaming(null);
+                        if (event.key === "Escape") {
+                          setRenaming(null);
+                          setFolderError(null);
+                        }
                       }}
                     />
                     <button type="submit" className="btn btn-secondary btn-sm">
                       Save
                     </button>
+                    {folderError ? (
+                      <p className="field-error msg-inline-error" id="msg-rename-error" role="alert">
+                        {folderError}
+                      </p>
+                    ) : null}
                   </form>
                 ) : (
                   <div className="msg-folder-head">
@@ -403,6 +495,35 @@ export function MessagesStudio({ guildId, guildName, memberCount, initial, botNa
 
           {needle !== "" && visible.length === 0 ? <p className="msg-empty">No template matches that.</p> : null}
         </div>
+
+        {schedules.length > 0 ? (
+          <section className="msg-schedules" aria-labelledby="msg-schedules-title">
+            <h2 className="cmd-section-title" id="msg-schedules-title">
+              Scheduled
+            </h2>
+            <ul>
+              {schedules.map((entry) => {
+                const at = new Date(entry.runAt);
+                const where = channelName(entry.channelId);
+                return (
+                  <li key={entry.id} className="msg-schedule">
+                    <span className="msg-schedule-text">
+                      <span className="msg-schedule-name">{entry.label}</span>
+                      <span className="msg-schedule-meta">
+                        {at.toLocaleString([], { dateStyle: "medium", timeStyle: "short" })} · {REPEAT_LABEL[entry.repeat]}
+                        {where ? ` · #${where}` : ""}
+                      </span>
+                      {entry.lastError ? <span className="msg-schedule-error">Last time it was not sent: {entry.lastError}</span> : null}
+                    </span>
+                    <button type="button" className="icon-btn" aria-label={`Cancel ${entry.label}`} onClick={() => void cancelSchedule(entry)}>
+                      <TrashIcon />
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+        ) : null}
       </aside>
 
       <section className="msg-editor" aria-label="Message editor">
@@ -442,7 +563,9 @@ export function MessagesStudio({ guildId, guildName, memberCount, initial, botNa
                 {notice.text}
               </span>
             ) : dirty ? (
-              <span className="msg-notice is-dirty">Unsaved changes</span>
+              <span className="msg-notice is-dirty">
+                {draft.name.trim() === "" && parsed.ok ? "Unsaved. Name it to save it." : "Unsaved changes"}
+              </span>
             ) : null}
             {selectedId !== null ? (
               <>
@@ -454,7 +577,15 @@ export function MessagesStudio({ guildId, guildName, memberCount, initial, botNa
                 </button>
               </>
             ) : null}
-            <button type="button" className="btn btn-secondary btn-sm" disabled={!canSend} onClick={() => setSending(true)}>
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              disabled={!canSend}
+              onClick={() => {
+                setReplacing(null);
+                setSending(true);
+              }}
+            >
               Send…
             </button>
             <button type="button" className="btn btn-primary btn-sm" disabled={!canSave} onClick={() => void save()}>
@@ -477,16 +608,39 @@ export function MessagesStudio({ guildId, guildName, memberCount, initial, botNa
             <MessagePreview message={{ content: draft.content, embeds: draft.embeds, buttons: draft.buttons, selects: draft.selects, reactions: draft.reactions }} context={previewContext} />
           </div>
         </div>
+
+        {selectedId !== null ? (
+          <SentList
+            guildId={guildId}
+            templateId={selectedId}
+            revision={sentRevision}
+            channelName={channelName}
+            onReplace={(entry) => {
+              if (!parsed.ok) return flash({ kind: "error", text: "Fix the problems in the message before replacing a sent one with it." });
+              setReplacing(entry);
+              setSending(true);
+            }}
+          />
+        ) : null}
       </section>
 
       {sending && parsed.ok ? (
         <SendDialog
           guildId={guildId}
           message={parsed.value}
-          templateId={selectedId !== null && !dirty ? selectedId : null}
+          templateId={selectedId}
+          label={draft.name.trim()}
           context={previewContext}
-          onClose={() => setSending(false)}
+          replacing={replacing}
+          onClose={() => {
+            setSending(false);
+            setReplacing(null);
+          }}
+          onScheduled={(entry) =>
+            setSchedules((current) => [...current, entry].sort((a, b) => a.runAt.localeCompare(b.runAt)))
+          }
           onSent={() => {
+            setSentRevision((current) => current + 1);
             if (selectedId === null) return;
             const at = new Date().toISOString();
             setLibrary((current) => ({
@@ -496,6 +650,7 @@ export function MessagesStudio({ guildId, guildName, memberCount, initial, botNa
           }}
         />
       ) : null}
+      {guard.host}
     </div>
   );
 }

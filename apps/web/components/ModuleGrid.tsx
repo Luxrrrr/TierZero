@@ -9,6 +9,8 @@ import { orderModulesBySection, sectionCounts } from "../lib/sections";
 interface Props {
   guildId: string;
   modules: ModuleView[];
+  /** By module id, the permissions the bot lacks for it on this server. */
+  missingPermissions?: Record<string, string[]>;
 }
 
 type Filter = "all" | ModuleCategory;
@@ -18,7 +20,7 @@ type Filter = "all" | ModuleCategory;
  * it. The filter is deliberately not persisted: it is a way to find a tile, not
  * a preference.
  */
-export function ModuleGrid({ guildId, modules }: Props) {
+export function ModuleGrid({ guildId, modules, missingPermissions = {} }: Props) {
   const [filter, setFilter] = useState<Filter>("all");
   // The entrance plays once, on load. Tiles that appear because a chip was
   // pressed would otherwise all fade in again, which reads as a reload.
@@ -73,6 +75,7 @@ export function ModuleGrid({ guildId, modules }: Props) {
               module={module}
               index={index}
               animate={!filtered}
+              missingPermissions={missingPermissions[module.id]}
             />
           ))}
         </div>

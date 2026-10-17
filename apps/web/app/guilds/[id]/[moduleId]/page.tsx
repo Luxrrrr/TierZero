@@ -8,6 +8,7 @@ import { toModuleView } from "../../../../lib/module-view";
 import { SECTIONS } from "../../../../lib/sections";
 import { BotOffline } from "../../../../components/BotOffline";
 import { ModulePage } from "../../../../components/ModulePage";
+import { ModuleNotices } from "../../../../components/ModuleNotices";
 
 export async function generateMetadata({
   params,
@@ -61,6 +62,7 @@ export default async function ModuleSettingsPage({
         serverName={guild?.name ?? "your server"}
         eyebrow={module.alwaysOn ? "Bot messages" : (section?.heading ?? "Feature")}
         module={toModuleView(module)}
+        lead={<ModuleNotices guildId={id} moduleId={module.id} />}
       />
     );
   } catch (error) {

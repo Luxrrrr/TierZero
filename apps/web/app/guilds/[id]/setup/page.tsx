@@ -1,15 +1,16 @@
 import Link from "next/link";
 import type { Metadata } from "next";
-import { forbidden, redirect } from "next/navigation";
+import { forbidden } from "next/navigation";
 import type { FieldDescriptor } from "@tier0/core";
 import { requireGuildAccess } from "../../../../lib/authz";
 import { ControlApiError } from "../../../../lib/control-api";
 import { guildModules } from "../../../../lib/guild-data";
 import { statusLine, toModuleViews } from "../../../../lib/module-view";
 import { availableFlows, hasGuidedSetup } from "../../../../lib/guided";
-import { SECTIONS } from "../../../../lib/sections";
+import { SECTIONS, orderModulesBySection } from "../../../../lib/sections";
 import { BotOffline } from "../../../../components/BotOffline";
 import { ChevronRightIcon, InfoIcon } from "../../../../components/Icons";
+import { redirectToLogin } from "../../../../lib/auth-redirect";
 
 export const metadata: Metadata = {
   title: "Quick setup",
@@ -26,14 +27,15 @@ export default async function QuickSetupPage({ params }: { params: Promise<{ id:
   try {
     const access = await requireGuildAccess(id);
     if (!access.ok) {
-      if (access.status === 401) redirect("/login");
+      if (access.status === 401) await redirectToLogin();
       forbidden();
     }
 
     const modules = toModuleViews(await guildModules(id));
-    const flows = availableFlows(modules.map((module) => module.id));
-    const guided = modules.filter((module) =>
-      hasGuidedSetup(module.schema as unknown as FieldDescriptor),
+    // A bundle of one feature is the same as that feature's own run below, so it is only listed there.
+    const flows = availableFlows(modules.map((module) => module.id)).filter((flow) => flow.modules.length > 1);
+    const guided = orderModulesBySection(
+      modules.filter((module) => hasGuidedSetup(module.schema as unknown as FieldDescriptor)),
     );
 
     return (
@@ -44,8 +46,8 @@ export default async function QuickSetupPage({ params }: { params: Promise<{ id:
             <h1 className="page-title">Set things up the short way</h1>
             <p className="page-summary">
               A few questions per feature instead of a page of settings. Each
-              run turns the feature on as it goes, and everything it asks about
-              can be changed afterwards.
+              feature is turned on when you save its step, unless it would still
+              do nothing, and everything it asks about can be changed afterwards.
             </p>
           </div>
         </div>
@@ -66,7 +68,7 @@ export default async function QuickSetupPage({ params }: { params: Promise<{ id:
         ) : null}
 
         {flows.length > 0 ? (
-          <section>
+          <section className="setup-hub-section">
             <div className="section-title">
               <h2>Set up in one go</h2>
               <p>
@@ -96,7 +98,7 @@ export default async function QuickSetupPage({ params }: { params: Promise<{ id:
         ) : null}
 
         {guided.length > 0 ? (
-          <section>
+          <section className="setup-hub-section">
             <div className="section-title">
               <h2>One feature at a time</h2>
               <p>

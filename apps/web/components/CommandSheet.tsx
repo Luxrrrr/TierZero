@@ -4,6 +4,7 @@ import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
 import type { MessageBody } from "@tier0/core";
 import type { GuildCommandState } from "../lib/control-api";
 import { permissionChoices, shortLabel } from "../lib/command-permissions";
+import { channelModeOf, channelSummary, type ChannelMode } from "../lib/commands";
 import { Combobox, MultiChannelPicker, MultiRolePicker } from "./form";
 import { AlertIcon, ChevronDownIcon, XIcon } from "./Icons";
 import { ReplyEditor } from "./messages/ReplyEditor";
@@ -13,6 +14,8 @@ export interface CommandValues {
   enabled: boolean;
   allowRoles: string[];
   denyChannels: string[];
+  /** When not empty, the only channels it works in. */
+  allowChannels: string[];
   permissions: string | null;
   ephemeral: boolean | null;
   customReply: MessageBody | null;
@@ -33,7 +36,15 @@ function whoOf(value: CommandValues): Who {
 interface Props {
   guildId: string;
   command: GuildCommandState;
+  /** False when the command's feature is off, which keeps it out of Discord whatever is set here. */
+  featureOn: boolean;
+  featureName: string;
   value: CommandValues;
+  /**
+   * Set when this is one part of a command, such as /ticket close, to the
+   * whole command's name. A part has no permission or reply of its own.
+   */
+  partOf?: string;
   status: SaveState;
   onPatch(change: Partial<CommandValues>): void;
   onClose(): void;
@@ -46,7 +57,7 @@ export function changedCount(value: CommandValues): number {
   return [
     value.permissions !== null,
     value.allowRoles.length > 0,
-    value.denyChannels.length > 0,
+    value.denyChannels.length > 0 || value.allowChannels.length > 0,
     value.ephemeral !== null,
     value.customReply !== null,
   ].filter(Boolean).length;
@@ -59,9 +70,10 @@ export function changedCount(value: CommandValues): number {
  * Everything saves as it is changed except the reply text, which is typed and
  * so waits for Save.
  */
-export function CommandSheet({ guildId, command, value, status, onPatch, onClose }: Props) {
+export function CommandSheet({ guildId, command, featureOn, featureName, value, partOf, status, onPatch, onClose }: Props) {
   const [open, setOpen] = useState<Section>("who");
   const [who, setWho] = useState<Who>(() => whoOf(value));
+  const [where, setWhere] = useState<ChannelMode>(() => channelModeOf(value));
   const [editingReply, setEditingReply] = useState(false);
   const sheetRef = useRef<HTMLElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
@@ -80,6 +92,7 @@ export function CommandSheet({ guildId, command, value, status, onPatch, onClose
   // Another command, or a reset, puts the answer back to what is stored.
   useEffect(() => {
     setWho(whoOf(value));
+    setWhere(channelModeOf(value));
   }, [command.name]);
 
   useEffect(() => {
@@ -89,21 +102,20 @@ export function CommandSheet({ guildId, command, value, status, onPatch, onClose
   const displayName = command.kind === "slash" ? `/${command.name}` : command.name;
   const replyIsPrivate = value.ephemeral ?? command.privateByDefault;
   const changed = changedCount(value);
-  const choices = permissionChoices(command.defaultPermissions);
+  const choices = partOf ? [] : permissionChoices(command.defaultPermissions);
 
   const whoSummary =
     value.allowRoles.length > 0
       ? `${value.allowRoles.length} ${value.allowRoles.length === 1 ? "role" : "roles"}`
       : value.permissions === null
-        ? defaultLabelShort(command.defaultPermissions)
+        ? partOf
+          ? `Same as ${partOf}`
+          : defaultLabelShort(command.defaultPermissions)
         : value.permissions === "everyone"
           ? "Everyone"
           : shortLabel(value.permissions);
   const stricter = choices.filter((choice) => !choice.isDefault);
-  const channelsSummary =
-    value.denyChannels.length === 0
-      ? "Everywhere"
-      : `Off in ${value.denyChannels.length} ${value.denyChannels.length === 1 ? "channel" : "channels"}`;
+  const channelsSummary = channelSummary(value);
   const replySummary = [command.repliesVary ? "Varies" : replyIsPrivate ? "Private" : "Public", value.customReply !== null ? "custom reply" : null]
     .filter(Boolean)
     .join(" · ");
@@ -198,19 +210,34 @@ export function CommandSheet({ guildId, command, value, status, onPatch, onClose
               className="link-button"
               onClick={() => {
                 setWho("default");
-                onPatch({
-                  permissions: null,
-                  allowRoles: [],
-                  denyChannels: [],
-                  ephemeral: null,
-                  customReply: null,
-                });
+                setWhere("everywhere");
+                // A part has only these three; the bot refuses the others for it.
+                onPatch(
+                  partOf
+                    ? { allowRoles: [], denyChannels: [], allowChannels: [] }
+                    : { permissions: null, allowRoles: [], denyChannels: [], allowChannels: [], ephemeral: null, customReply: null },
+                );
               }}
             >
               Reset all
             </button>
           ) : null}
         </div>
+
+        {partOf ? (
+          <p className="sheet-feature-off" role="note">
+            Discord can&apos;t hide part of a command: everyone who can see {partOf} sees every part of it. When this
+            part is off, or limited to roles or channels, the bot answers with a message instead of running it.
+            {value.enabled ? null : " It is off now."}
+          </p>
+        ) : null}
+
+        {featureOn ? null : (
+          <p className="sheet-feature-off" role="note">
+            {featureName} is off, so this command is not in Discord. What you set here is kept and applies once
+            it is on.
+          </p>
+        )}
 
         <div className="sheet-body">
           <section className="sheet-acc">
@@ -221,8 +248,12 @@ export function CommandSheet({ guildId, command, value, status, onPatch, onClose
                   {[
                     {
                       id: "default" as const,
-                      title: defaultLabelShort(command.defaultPermissions) === "Everyone" ? "Everyone" : `Members with ${defaultLabelShort(command.defaultPermissions)}`,
-                      hint: "How the command ships",
+                      title: partOf
+                        ? `Same as ${partOf}`
+                        : defaultLabelShort(command.defaultPermissions) === "Everyone"
+                          ? "Everyone"
+                          : `Members with ${defaultLabelShort(command.defaultPermissions)}`,
+                      hint: partOf ? "Whoever can use the whole command" : "How the command ships",
                       isDefault: true,
                     },
                     ...(stricter.length > 0
@@ -238,8 +269,9 @@ export function CommandSheet({ guildId, command, value, status, onPatch, onClose
                     {
                       id: "roles" as const,
                       title: "Only certain roles",
-                      hint:
-                        command.defaultPermissions === null
+                      hint: partOf
+                        ? `Everyone who can use ${partOf} sees this part, but only these roles can run it`
+                        : command.defaultPermissions === null
                           ? "Everyone sees it, but only these roles can run it"
                           : `Still hidden from members without ${defaultLabelShort(command.defaultPermissions)}`,
                       isDefault: false,
@@ -314,26 +346,66 @@ export function CommandSheet({ guildId, command, value, status, onPatch, onClose
           </section>
 
           <section className="sheet-acc">
-            {head("channels", "Where it works", channelsSummary, value.denyChannels.length > 0)}
+            {head("channels", "Where it works", channelsSummary, value.denyChannels.length > 0 || value.allowChannels.length > 0)}
             {open === "channels" ? (
               <div className="sheet-acc-body" id={`${ids.visibility}-channels`}>
-                <span className="field-label" id={ids.channelsLabel}>
-                  Not in these channels
-                </span>
-                <MultiChannelPicker
-                  id={ids.channels}
-                  guildId={guildId}
-                  types={["text"]}
-                  values={value.denyChannels}
-                  emptyLabel="Works everywhere"
-                  addLabel="Add a channel"
-                  aria-labelledby={ids.channelsLabel}
-                  onChange={(next) => onPatch({ denyChannels: next })}
-                />
+                <div role="radiogroup" aria-label="Where it works">
+                  {[
+                    { id: "everywhere" as const, title: "Everywhere", hint: "How the command ships" },
+                    { id: "only" as const, title: "Only in these channels", hint: "Anywhere else, it says it is turned off there" },
+                    { id: "except" as const, title: "Everywhere except these channels", hint: "Those channels get a message saying it is turned off" },
+                  ].map((option) => (
+                    <div key={option.id} className="sheet-option-wrap" data-selected={where === option.id ? "true" : undefined}>
+                      <button
+                        type="button"
+                        role="radio"
+                        aria-checked={where === option.id}
+                        className="sheet-option"
+                        onClick={() => {
+                          if (where === option.id) return;
+                          setWhere(option.id);
+                          // One list at a time keeps what the summary says true.
+                          if (option.id === "everywhere") onPatch({ denyChannels: [], allowChannels: [] });
+                          else if (option.id === "only") onPatch({ denyChannels: [] });
+                          else onPatch({ allowChannels: [] });
+                        }}
+                      >
+                        <span className="sheet-radio" aria-hidden="true" />
+                        <span className="sheet-option-text">
+                          {option.title}
+                          <small>{option.hint}</small>
+                        </span>
+                        {option.id === "everywhere" ? <span className="choice-tag">Default</span> : null}
+                      </button>
+
+                      {where === option.id && option.id !== "everywhere" ? (
+                        <div className="sheet-option-body">
+                          <span className="field-label" id={ids.channelsLabel}>
+                            {option.id === "only" ? "Works in" : "Turned off in"}
+                          </span>
+                          <MultiChannelPicker
+                            id={ids.channels}
+                            guildId={guildId}
+                            types={["text", "voice", "forum", "category"]}
+                            values={option.id === "only" ? value.allowChannels : value.denyChannels}
+                            emptyLabel={option.id === "only" ? "Pick at least one channel" : "Pick the channels"}
+                            addLabel="Add a channel"
+                            aria-labelledby={ids.channelsLabel}
+                            onChange={(next) => onPatch(option.id === "only" ? { allowChannels: next } : { denyChannels: next })}
+                          />
+                          <p className="field-hint">
+                            A category covers every channel in it, and a channel covers its threads.
+                          </p>
+                        </div>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
               </div>
             ) : null}
           </section>
 
+          {partOf ? null : (
           <section className="sheet-acc">
             {head("reply", "Reply", replySummary, value.ephemeral !== null || value.customReply !== null)}
             {open === "reply" ? (
@@ -402,6 +474,7 @@ export function CommandSheet({ guildId, command, value, status, onPatch, onClose
               </div>
             ) : null}
           </section>
+          )}
         </div>
 
         <footer className="sheet-foot">

@@ -5,7 +5,7 @@
  * drift apart.
  */
 
-export type ModuleArea = "moderation";
+export type ModuleArea = "moderation" | "tickets";
 
 export interface Hostable {
   id: string;
@@ -18,14 +18,21 @@ export interface Hostable {
  */
 const AREA_PRIMARY: Record<ModuleArea, string> = {
   moderation: "moderation",
+  tickets: "tickets",
 };
 
 const AREA_SETTINGS_PATH: Record<ModuleArea, string> = {
   moderation: "mod/settings",
+  tickets: "tickets/settings",
 };
 
 export function isHosted(module: Hostable): module is Hostable & { area: ModuleArea } {
-  return module.area === "moderation";
+  return typeof module.area === "string" && Object.hasOwn(AREA_PRIMARY, module.area);
+}
+
+/** Where an area's own pages start, which is where the sidebar entry for it points. */
+export function areaHref(guildId: string, area: ModuleArea): string {
+  return `/guilds/${guildId}/${area === "moderation" ? "mod" : area}`;
 }
 
 /** The page that configures this module. */

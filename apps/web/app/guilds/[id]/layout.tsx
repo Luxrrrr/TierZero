@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { forbidden, redirect } from "next/navigation";
 import { auth } from "../../../lib/auth";
-import { accessibleGuilds, guildAccess } from "../../../lib/guild-access";
+import { accessibleGuilds, guildAccess, guildHome } from "../../../lib/guild-access";
 import { ControlApiError } from "../../../lib/control-api";
 import { botGuilds, guildModules } from "../../../lib/guild-data";
 import { toModuleViews } from "../../../lib/module-view";
@@ -10,12 +10,15 @@ import { Sidebar } from "../../../components/Sidebar";
 import { BotOffline } from "../../../components/BotOffline";
 import { captureDashboardUrl } from "../../../lib/dashboard-url-sync";
 import { signOutAction } from "../actions";
+import { PreviewServerProvider } from "../../../components/messages/PreviewServer";
+import { guildIconUrl } from "../../../lib/discord-cdn";
 
 /**
  * The shell for one server. Managers get the full navigation, built from the
  * module list the page below reads too (both calls go through the
- * request-scoped cache). Staff who cannot manage the server get a navigation
- * with only Moderation, and their module list is never fetched.
+ * request-scoped cache). Staff and ticket handlers who cannot manage the
+ * server get a navigation with only Moderation or Tickets, and their module
+ * list is never fetched.
  *
  * This layout does not guard the settings pages: each one checks Manage Server
  * itself, since a layout does not rerun when only the page beneath it changes.
@@ -58,25 +61,34 @@ export default async function GuildLayout({
           <Sidebar
             user={user}
             guilds={guilds}
+            homes={Object.fromEntries(guilds.map((entry) => [entry.id, guildHome(entry.id, accessible)]))}
             currentGuild={guild}
             modules={toModuleViews(modules)}
             canManage={access.manager}
             canModerate={access.staffRole !== null}
+            canHandleTickets={access.ticketLevel !== null}
             signOutAction={signOutAction}
           />
         }
       >
-        {children}
+        <PreviewServerProvider
+          server={guild ? { name: guild.name, memberCount: guild.memberCount, iconUrl: guildIconUrl(guild.id, guild.icon, 256) ?? "" } : null}
+        >
+          {children}
+        </PreviewServerProvider>
       </AppShell>
     );
   } catch (error) {
     // redirect() and forbidden() signal themselves by throwing, so anything
     // that is not a control API failure has to carry on up.
     if (!(error instanceof ControlApiError)) throw error;
+    // The bot is what knows the server's name and features, but the way around
+    // the server is worth keeping while it is away; every page checks access again.
+    const placeholder = { id, name: "This server", icon: null, memberCount: 0 };
     return (
       <AppShell
-        title="Server"
-        sidebar={<Sidebar user={user} guilds={[]} modules={[]} signOutAction={signOutAction} />}
+        title="Bot not running"
+        sidebar={<Sidebar user={user} guilds={[placeholder]} currentGuild={placeholder} modules={[]} signOutAction={signOutAction} />}
       >
         <BotOffline />
       </AppShell>

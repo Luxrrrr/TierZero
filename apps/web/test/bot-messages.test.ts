@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { embedReply, plainReply, s, type MessageBody } from "@tier0/core";
 import {
   collectMessageRows,
+  contextFreeHelp,
   countByModule,
   featureSearch,
   featureSummaries,
@@ -467,6 +468,11 @@ describe("most changed", () => {
   test("shows only edited ones when asked", () => {
     assert.deepEqual(run([welcomeLike, automod], { automod: { noticeMessage: say("Stop") } }, true), ["Automod notice"]);
   });
+
+  test("points the ticket panel entry at the first panel in the list", () => {
+    const tickets = moduleFrom("tickets", "Tickets", s.object({ panels: s.array(s.object({ name: s.string({ default: "" }), message: sample("Panel message", "Open a ticket") })) }));
+    assert.deepEqual(run([tickets], { tickets: { panels: [{ name: "Support", message: say("Need help?") }] } }), ["Ticket panel"]);
+  });
 });
 
 describe("the feature in the address", () => {
@@ -510,4 +516,15 @@ test("every default message of the test features is a plain default, not an edit
     const view = viewOf(row, { welcome: {}, roles: {}, system: {} }, {});
     assert.equal(view.edited, false, row.key);
   }
+});
+
+describe("contextFreeHelp", () => {
+  test("drops a sentence that points at a control on the settings page", () => {
+    assert.equal(contextFreeHelp("Posted in the channel above."), "");
+    assert.equal(contextFreeHelp("Sent when a member joins. Posted in the channel above."), "Sent when a member joins.");
+  });
+
+  test("keeps help that reads anywhere", () => {
+    assert.equal(contextFreeHelp("Sent when a member joins."), "Sent when a member joins.");
+  });
 });

@@ -113,3 +113,26 @@ export function sectionCounts<M extends { category: ModuleCategory }>(
 export function sectionHeading(id: ModuleCategory): string {
   return SECTIONS.find((section) => section.id === id)?.heading ?? id;
 }
+
+/**
+ * The short mark each feature gets in the folded sidebar: its first letter, or
+ * two letters where features would otherwise share one, so Leveling and Log
+ * channel do not both read "L". Two words give their initials, one word its
+ * first two letters.
+ */
+export function railMarks(names: readonly string[]): Map<string, string> {
+  const first = (name: string) => name.trim().charAt(0).toUpperCase();
+  const counts = new Map<string, number>();
+  for (const name of names) counts.set(first(name), (counts.get(first(name)) ?? 0) + 1);
+  const marks = new Map<string, string>();
+  for (const name of names) {
+    if ((counts.get(first(name)) ?? 0) < 2) {
+      marks.set(name, first(name));
+      continue;
+    }
+    const words = name.trim().split(/\s+/).filter(Boolean);
+    const second = words.length > 1 ? (words[1]?.charAt(0) ?? "") : (words[0]?.charAt(1) ?? "");
+    marks.set(name, `${first(name)}${words.length > 1 ? second.toUpperCase() : second.toLowerCase()}`);
+  }
+  return marks;
+}
