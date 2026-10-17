@@ -82,12 +82,12 @@ The first run builds both images and takes a few minutes.
 Open this link, replacing `YOUR_APPLICATION_ID` with the Application ID:
 
 ```
-https://discord.com/oauth2/authorize?client_id=YOUR_APPLICATION_ID&permissions=1391837965526&scope=bot%20applications.commands
+https://discord.com/oauth2/authorize?client_id=YOUR_APPLICATION_ID&permissions=1495454444758&scope=bot%20applications.commands
 ```
 
-Choose your server and confirm. The link requests every permission any feature uses: managing roles and channels, kick, ban, timeout, managing and reading messages, and viewing the audit log. A permission isn't used until you switch on the feature that needs it. If you only want some features, grant fewer permissions now and open the link again later.
+Choose your server and confirm. The link requests every permission any feature uses: View Channels, Send Messages, Send Messages in Threads, Embed Links, Attach Files, Read Message History, Add Reactions, Use External Emojis, Mention @everyone, Manage Messages, Manage Channels, Manage Roles, Manage Webhooks, Manage Threads, Create Public Threads, Create Private Threads, Kick, Ban, Timeout Members and View Audit Log. A permission isn't used until you switch on the feature that needs it. If you only want some features, grant fewer permissions now and open the link again later. A feature that is missing one says so on the server's overview. The **Invite** button on Your servers uses the same link. The number is also in `apps/web/lib/invite.ts`, with what each permission is for.
 
-Then open <http://localhost:8080> and sign in with Discord. The first account to sign in becomes the owner of the install. The owner can use the moderation area on every server and decides which other people can (see [Moderator access](#moderator-access)). Your server is listed if you have Manage Server on it and the bot is a member.
+Then open <http://localhost:8080>. A fresh install shows **Set up TierZero**: sign in with Discord, then click **Make me the owner**. That account becomes the owner of the install, unless `INSTANCE_OWNER_ID` in `.env` names someone else, which always wins. Until it is claimed, every page sends you back to this screen. The owner can use the moderation area on every server and decides which other people can (see [Moderator access](#moderator-access)). Your server is listed if you have Manage Server on it and the bot is a member.
 
 ## 4. Configure it
 
@@ -172,7 +172,7 @@ For your own devices, the short name (`http://my-pc:8080`) also reaches the dash
 
 Nginx, Caddy or Traefik work too. Point the proxy at port 8080, give it a certificate, and add the redirect in the Developer Portal as above.
 
-One thing to check. When you save something in the moderation area (a note, a removal, a staff change), the dashboard makes sure the request came from its own page and not from some other website tricking your browser into sending it. It does that by comparing the site address the browser reports in the `Origin` header with the `Host` header, or the first `X-Forwarded-Host`, that the request arrived with. If your proxy replaces `Host` with an internal name and doesn't set `X-Forwarded-Host`, the two never match and every save fails with "This request did not come from the dashboard". Nginx replaces `Host` by default, so add this to the location block:
+One thing to check. When you save something in the dashboard (a setting, a command change, a note, a removal, a staff change), the dashboard makes sure the request came from its own page and not from some other website tricking your browser into sending it. It does that by comparing the site address the browser reports in the `Origin` header with the `Host` header, or the first `X-Forwarded-Host`, that the request arrived with. If your proxy replaces `Host` with an internal name and doesn't set `X-Forwarded-Host`, the two never match and every save fails with "This request did not come from the dashboard". Nginx replaces `Host` by default, so add this to the location block:
 
 ```
 proxy_set_header Host $host;

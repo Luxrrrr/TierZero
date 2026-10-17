@@ -7,13 +7,13 @@
 | Moderation | Warn, timeout, kick, ban and temporary bans, with numbered cases and role hierarchy checks. |
 | Moderation dashboard | Member records, staff notes, actions from the web or Discord's right-click menu, statistics, a log of staff activity and CSV export. |
 | Automod | Seven rules: invites, links, capitals, repeated text, mentions, banned words, rate limiting. |
-| Tickets | A button that opens a private channel with your staff. |
+| Tickets | Panels members use to open a private channel or thread with the right staff. |
 | Welcome messages | Greetings, farewells and roles on join. |
-| Role menus | Members pick their roles from buttons. |
+| Role menus | Members pick their roles from buttons or a dropdown. |
 | Log channel | Posts edits, deletions, joins, role changes and more into a Discord channel. |
-| Leveling | XP, role rewards and a leaderboard. No image cards. |
-| News and patch notes | RSS feeds and Steam patch notes, posted as embeds. |
-| Messages | Build a message or embed, save it as a template, sort templates into folders and send it to any channel. |
+| Leveling | XP, role rewards and a leaderboard, with an optional public web page for it. No image cards. |
+| News and patch notes | RSS feeds, YouTube channels and Steam patch notes, posted as embeds. |
+| Message creator | Build a message or embed, save it as a template, sort templates into folders, and send it to any channel now, later or on repeat. Replace a message the bot already sent. |
 | Bot messages | Every message the bot sends, found by feature or by search, each one editable. |
 | Utility | Server and member info. |
 
@@ -27,7 +27,11 @@ Good to know:
 
 ## In detail
 
-Every feature is a module, and a module that's off does nothing. Most settings are optional. Leave one blank and that part stays quiet.
+Every feature is a module, and a module that's off does nothing. Most settings are optional. Leave one blank and that part stays quiet. A feature that's switched on but has nothing to do yet, such as welcome messages with no channel, shows **Needs setup** instead of **On**, with what to fill in. If the bot's role is missing a Discord permission a feature needs, that feature's tile on the server overview names it.
+
+Keyboard shortcuts are listed on the Help page. Ctrl+B (Cmd+B on a Mac) folds the sidebar away, except while you are typing in a box. In a message's text it makes the selected text bold.
+
+Changes on a settings page are kept until you press **Save changes** (or Ctrl+S). If you click away to another page with changes not saved, the dashboard asks whether to save them, discard them or stay. Lists of rows, such as role menu options or feeds, can be put in a different order with the arrow buttons on each row (or by dragging its number), and **Duplicate** in an open row adds a copy right after it.
 
 - [Quick setup](#quick-setup)
 - [Commands](#commands)
@@ -45,15 +49,21 @@ Every feature is a module, and a module that's off does nothing. Most settings a
 
 ## Quick setup
 
-Quick setup in the sidebar asks only for the few settings a feature can't work without, one feature per screen, and switches the feature on at the end. **Moderation** and **Tickets** walk through several related features together, and every feature that has a quick setup is listed on its own below them.
+Quick setup in the sidebar asks only for the few settings a feature can't work without, one feature per screen, and switches each feature on as you save its screen. A feature that would still do nothing, such as Automod with every rule off, keeps your answers but stays off, and the screen says what it still needs. **Moderation** walks through moderation and automod together, and every feature that has a quick setup is listed on its own below it. The last screen says which features are still off or have nothing to do, and what to fill in.
 
 Nothing is locked in. Settings it doesn't ask about keep their values, skipping a step leaves that feature as it was, and you can change anything later on the feature's own page. Features made of repeating rows, like role menus, have no quick setup.
+
+**Tickets** has a quick setup of its own, under Tickets in the sidebar. It asks where the panel goes, which roles answer, whether tickets open as private channels (and in which category) or as threads, and optionally where closed tickets are logged. It then saves your answers, turns Tickets on and posts the panel, and ends by saying whether members can open a ticket, or what still stops them. It covers the first panel and its first ticket type; more panels and types are added under Settings.
 
 ![Quick setup asking for the few settings a feature needs](images/quick-setup.png)
 
 ## Commands
 
-The Commands page lists every command on the server, including the right-click entries. Each one can be switched off, limited to certain roles and channels, or hidden from members without a chosen permission. You can also decide whether its reply is private or public, and for /ping, /serverinfo, /userinfo, /rank, /leaderboard, /warn, /kick, /ban, /unban and /timeout, write the reply yourself with the same editor as the [Message creator](#message-creator): text, embeds, buttons, menus and variables, plus reactions on a public reply. The editor starts from what the command says now, and each command has its own variables, such as `{user}` and `{case}` for /warn. Discord can't hide a command by role, so the role list blocks use but doesn't hide it.
+The Commands page lists every command on the server, including the right-click entries. A command is only in Discord while its feature is on: the commands of a feature that's off are marked **Feature off**, with a button to turn the feature on, and the overview's count of commands in Discord leaves them out. Each command can be switched off, limited to certain roles, limited to certain channels, or hidden from members without a chosen permission. You can also decide whether its reply is private or public, and for /ping, /serverinfo, /userinfo, /rank, /leaderboard, /warn, /kick, /ban, /unban and /timeout, write the reply yourself with the same editor as the [Message creator](#message-creator): text, embeds, buttons, menus and variables, plus reactions on a public reply. The editor starts from what the command says now, and each command has its own variables, such as `{user}` and `{case}` for /warn. Discord can't hide a command by role, so the role list blocks use but doesn't hide it: everyone still sees it, and only those roles can run it. To hide a command, choose members with a permission instead.
+
+**Where it works** is everywhere, only in the channels you pick, or everywhere except the channels you pick. A category stands for every channel in it, and a channel for its threads. Anywhere a command is turned off, it answers with the "turned off in this channel" reply from [Bot messages](#bot-messages).
+
+Some commands have parts, like `/ticket close` and `/ticket claim`. Press **parts** under such a command to list them. Each part can be switched off and limited to roles and channels of its own, on top of what the whole command allows. Discord can't hide part of a command, so everyone who sees `/ticket` sees all of its parts. A part that is off answers with the "switched off" reply from [Bot messages](#bot-messages), and a limited part answers like a limited command. Who sees a command and how it replies stay set on the whole command.
 
 ![The Commands page with a hidden command and role limits](images/commands.png)
 
@@ -61,7 +71,7 @@ The Commands page lists every command on the server, including the right-click e
 
 ## Message creator
 
-The Message creator page builds messages and embeds for the bot to post, such as rules, announcements or event notices. You edit on the left and see the message drawn the way Discord shows it on the right. Each embed has a **Name** that only you see in the editor, which helps when a message has several. It is never sent.
+The Message creator page builds messages and embeds for the bot to post, such as rules, announcements or event notices. The preview beside the editor draws the message the way Discord shows it, with your server's real name and member count. In a narrow window it sits above the editor. A picture whose address comes from a variable is shown as a frame, since the real picture is only known when the bot sends. Each embed has a **Name** that only you see in the editor, which helps when a message has several. It is never sent.
 
 ![The Message creator page with a saved template, its live preview and the editor](images/messages.png)
 
@@ -81,16 +91,24 @@ Above each text box there are tools to insert:
 
 | Tool | What it adds |
 | --- | --- |
-| Variables | A name in braces that the bot fills in when it sends: `{server}`, `{members}`, `{channel}`, `{channel.name}`, `{date}`, `{time}`, `{now}`, `{sender}` and `{bot}`. The preview fills them in with stand-ins. |
+| Variables | A name in braces that the bot fills in when it sends: `{server}`, `{members}`, `{channel}`, `{channel.name}`, `{date}`, `{time}`, `{now}`, `{sender}`, `{bot}` and `{server.icon}`. The preview fills them in with stand-ins. A name in braces the message doesn't know is sent exactly as typed, and the editor lists it under the message so a typo is caught. |
 | Time | A Discord timestamp. You pick a date, time and style (short time, long date, relative and so on), and each reader sees it in their own timezone. |
 | Mention | A role, a channel, @everyone, @here, or a member by user ID. |
 | Emoji | Your server's custom emoji and a set of common ones. |
 
-Name a message and press Save to keep it as a template. Folders group templates, one level deep. Deleting a folder moves its templates out and deletes nothing.
+A mention is stored the way Discord stores it, such as `<#1200000000000000008>`, so the editor lists under the text box which channel, role or member each one is.
+
+Name a message and press Save to keep it as a template. Folders group templates, one level deep. Deleting a folder moves its templates out and deletes nothing. The open template is in the address, so a reload or a shared link opens it again, and the list shows when each template was last sent. Leaving the page, or opening another template, with changes not saved asks first.
 
 Send posts it to the channel you pick, after a confirmation that shows the message once more. The bot needs View Channel and Send Messages there, and Embed Links for an embed. Each send has its own options: send under another name and picture (through a webhook, which needs Manage Webhooks in that channel), send silently, pin it, publish it to followers of an announcement channel, hide link previews, read it out loud, start a thread on it, and reply to a message. These are chosen when you send and aren't saved with the template.
 
 A sent message can mention people and roles. @everyone and @here only ping when you turn on "Let @everyone and @here ping" for that send, and Discord still ignores them unless the bot has the Mention Everyone permission.
+
+**Schedule** in the same dialog sends it later instead: pick a channel, a date and time in your own time zone, and whether it goes once, every day or every week. What goes out is the message as it was when you scheduled it, so editing the template afterwards doesn't change it. Scheduled messages are listed under **Scheduled** below the templates, where one can be cancelled. A message that repeats keeps its time of day, and if the bot was off when one was due, it goes out once when the bot is back rather than once for every missed day. If a repeating send fails, the list shows why.
+
+**Replace a sent message** puts the message in the editor in place of one TierZero already sent. Pick it from the messages sent from the Message creator, or paste its link (in Discord, open the message's menu and choose Copy Message Link). Only messages TierZero sent can be replaced, including ones sent under another name. Its buttons start doing what the new version says, and its reactions stay as they are.
+
+Every message sent from the Message creator, now or on a schedule, is kept on a list. An open template shows where it was sent under **Sent**, newest first, each with a link to the message in Discord and a **Replace** button that puts the template as it is now in its place. Taking one off the list leaves the message in Discord. Nothing is removed from the list by itself.
 
 ### Messages the bot sends by itself
 
@@ -104,9 +122,9 @@ Messages written before the editor existed are kept and show up as plain text in
 
 ## Bot messages
 
-The Bot messages page lists every message the bot sends, from every feature, in one place. Use it to find a message without knowing which feature it belongs to, or to see all the wording on a server at a glance. It's in the sidebar under Messages.
+The Bot messages page lists every message the bot sends, from every feature, in one place. Use it to find a message without knowing which feature it belongs to, or to see all the wording on a server at a glance. It's in the sidebar, below the Message creator.
 
-The page opens on a card for each feature, with how many messages it has and how many you've changed. A short **Most changed** row above the cards goes straight to the messages people reword most, such as the welcome greeting, the automod notice and the ticket panel. Click a card to see that feature's messages, grouped the way its settings page groups them. A feature with more than twelve messages opens with its groups closed. **Expand all** opens them. Use **All features** to go back. The feature is in the address, so the browser's back button and a reload keep your place.
+The page opens on a card for each feature, with how many messages it has and how many you've changed. A short **Common messages** row above the cards goes straight to a fixed set of messages members see first, such as the welcome greeting, the automod notice and the first ticket panel. Click a card to see that feature's messages, grouped the way its settings page groups them. A feature with more than twelve messages opens with its groups closed. **Expand all** opens them. Use **All features** to go back. The feature is in the address, so the browser's back button and a reload keep your place.
 
 Each message is one row: a dot for the kind of message, its name, the first line of what it says now, and an **Edit** button. The dot is red for a refusal or error, green for something that went through, amber for a warning and gold for a notice. Its name is also in the row for screen readers. The **i** button on a row says when the bot sends it, and the same line is at the top of the editor. Edit opens the same editor as the settings pages, and the message is saved the moment you confirm it, with no separate Save. A message you've changed has an **Edited** tag. **Reset** puts the original wording back.
 
@@ -114,7 +132,7 @@ Each message is one row: a dot for the kind of message, its name, the first line
 - **Edited only** shows just what you've changed, on the cards, in a feature and in search.
 - A feature that's switched off still lists its messages, dimmed, so you can write them before you turn it on.
 - Command replies are listed too, under **Command replies** in the feature the command belongs to. They open the same editor as the Commands page.
-- **Open settings** at the top of a feature goes to that feature's own page. Short pieces of text that aren't messages, such as a channel name, a button label or the reason in the audit log, aren't on this page. They are under **Labels and text** on the feature's page.
+- **Open settings** at the top of a feature goes to that feature's own page. Short pieces of text that aren't messages, such as a channel name, a button label or the reason in the audit log, aren't on this page. They are under **Labels and text** on the feature's page, or **Buttons and form text** for tickets.
 
 The first group, **Bot replies**, belongs to the bot itself rather than to a feature. It has no switch and is always on. Under **Replies and errors** it holds what members are told when a command's feature is switched off, when a command is turned off in a channel or limited to roles they don't have (`{roles}` lists the allowed ones), and when a command fails. It also holds what a role button or menu says when the role no longer exists, sits above the bot's own, can't be changed, or was given or taken away, when a message's buttons are no longer active, and when a button, menu or form stops with an error. A button's own confirmation, if you wrote one, is used instead of the server's usual one. Each is shown only to the person it answers.
 
@@ -159,6 +177,65 @@ Two collapsed sections lower on the settings page hold everything else the modul
 
 Two kinds of text can't be edited from here. The names and descriptions of the commands and of their options are registered with Discord and can't be changed after the fact. The lines the bot writes to [Staff activity](#staff-activity) are shown in the dashboard, not in Discord. If an edited message ends up too long once the variables are filled in, the bot sends the default one instead.
 
+### Reason presets
+
+Reasons you give often can be kept ready under **Reason presets** in the Moderation settings. A preset has a name (up to 60 characters), a reason (up to 500) and, if you want, a length. You can keep 25.
+
+- **In the dashboard**, the action form for a warn, timeout, kick or ban has a **Preset** box. Picking one fills in the reason and, for a timeout or a ban, the length. You can still edit both before you send. A timeout is never longer than 28 days, so a longer preset length is cut to that and the form says so.
+- **In the right-click forms**, the first 25 presets are in a dropdown above the reason box. Pick one, or write your own reason in the box. A reason you write wins.
+- **In `/warn`, `/timeout`, `/kick` and `/ban`**, the `reason` box suggests your presets as you type. Picking a suggestion, or typing a preset's name yourself, uses that preset's reason. If you gave no length, a timeout or a ban starts at the preset's length.
+
+The reason on the case, in the member's message and in the mod log is the preset's reason, not its name.
+
+### Warnings that expire
+
+**Warnings stop counting after**, in the Escalation part of the Moderation settings, makes warnings run out. Leave it empty and they count for good. With a length set, a warning older than that is marked expired. It stays on the record and in the CSV, but it no longer counts toward the member's warning total or toward automatic escalation. This covers warnings from moderators and from automod. The Members list, the member's page, Member actions and escalation all use the same rule, so they agree. The Members list shows how many of a member's warnings have expired next to the ones that count.
+
+### Automatic escalation
+
+Escalation rules let the bot act by itself when a member collects warnings. Under **Automatic escalation** in the Moderation settings, add up to ten rules. Each has:
+
+- **Warnings**, from 2 to 50, and **Within the last (days)**. A window of 0 counts every warning on the record.
+- **Then**: time out (with a length), kick, or ban (with a length, or empty for permanent).
+- An optional **Name**, which is shown on the case. Without one the case says what the rule counts, such as "3 warnings in 30 days, then time out".
+
+After every warning, whether a moderator or automod gave it, the bot counts the member's warnings against the rules. A rule fires when the count reaches its number. It fires once for each run of warnings. After it fires it waits for new warnings, so the same three warnings don't set it off again. When more than one rule is reached, the one that needs the most warnings acts, and on a tie the one listed first.
+
+The action is a case of its own, with the bot as the moderator. It says it was automatic and shows which rule fired and how many warnings it counted. It is posted to the mod log, the member gets the usual direct message if that is on, and [Staff activity](#staff-activity) gets a line for it. When a moderator's warning in the dashboard sets off a rule, the form says so. An automatic case is not itself a warning, so one rule can't set off another.
+
+The bot leaves some members alone: the server owner, the bot, anyone on the Access list, administrators, anyone with a role listed under **Roles never escalated**, and anyone the bot's role can't act on. It also skips an action that would change nothing, such as banning someone already banned or timing out someone who has a longer timeout running. The reason is written to the bot's log. In automod, each rule that warns has **Count its warnings toward automatic escalation**, on by default.
+
+Removing an automatic case from the record doesn't make the rule fire again for the same warnings.
+
+### Raid tools
+
+The **Raid tools** tab is for admins and the owner. It needs Moderation switched on, and locking channels needs the bot to have the Manage Roles permission.
+
+**Join-rate alert.** In the **Raid** part of the Moderation settings, turn on **Join-rate alert** and choose how many members joining within how long counts as a raid. When it goes off, the bot posts in the mod log channel and, if you ticked **Lock the server down as well**, locks every channel a lockdown covers, for as long as you set or until someone unlocks. It goes off once for a burst, then stays quiet for at least five minutes. The count is kept in memory, so a restart in the middle of a burst loses the joins counted so far.
+
+**Lockdown.** Pick channels on the tab, or press **Lock all**, and give a length or leave it open. A locked channel stops @everyone from sending messages, sending in threads, starting threads, adding reactions and speaking. Members can still read and see it. Channels members can't see are skipped, and so are the ones listed under **Channels a lockdown leaves alone** in the settings. Before it changes a channel the bot saves what the @everyone overwrite said about each of those permissions. Unlocking puts back exactly that: a permission that was allowed is allowed again, a denied one is denied again, and one that was left to roles is left to roles. Any other change made to the channel in the meantime is kept. If the lock created the overwrite and nothing else uses it, the overwrite is removed again. The saved state is in the database, so a restart in between loses nothing, and a lockdown with a length ends on time after one. The end is a Moderation task, so it waits while Moderation is switched off and runs once it is back on. Locks and unlocks on a server run one at a time, and a channel that is already locked keeps the state saved when it was first locked. The bot can post a notice in each channel it locks and unlocks, and you can edit both notices.
+
+`/lockdown channel`, `/lockdown server` and `/lockdown end` do the same from Discord. Discord shows them to members with Manage Channels, so admin staff without that permission need the command allowed for them on the Commands page. The bot itself accepts both. Each lock and unlock is a line in Staff activity.
+
+**Mass ban or kick.** Paste user IDs (up to 200), or choose a window of up to seven days in which people joined. **Preview** lists exactly who would be acted on, and who would be skipped and why: yourself, the bot, the server owner, staff, someone whose top role is at or above yours, or someone the bot can't act on. Nothing runs until you hold the confirm button under the preview, and changing anything after the preview throws it away. The bot works out who would be acted on again when you confirm and refuses if it is no longer the same list, even when the number of members is the same. Only one mass action runs per server at a time, and a second request made while one is starting or running is refused. The page shows the progress and lists each member that failed. Every member actioned gets a case, and one line goes to Staff activity. Members are not sent a message.
+
+### Ban appeals
+
+Turn on **Let banned members appeal** in the **Appeals** part of the Moderation settings. The direct message a member gets when they are banned then carries an **Appeal this ban** button. Bans made before you turned it on have no button.
+
+The button opens a form in the member's direct messages. It asks one question, which you can reword, and takes 10 to 2,000 characters. An appeal is filed against the ban the member is under. These rules apply:
+
+- Only a member Discord has banned can appeal.
+- One appeal per ban can wait at a time.
+- After a denial the member waits **Wait after a denied appeal** (7 days unless you change it, and 0 lets them try again at once) before appealing the same ban again.
+- A member can press the button or send the form five times in ten minutes.
+
+New appeals are posted in the channel you choose, or the mod log channel if you don't, with a link to the Appeals tab.
+
+The **Appeals** tab is for admins and the owner. It shows pending appeals by default, with filters for the decided ones. Opening one shows the member's text next to the ban, their whole record, their notes and their other appeals. **Accept** lifts the ban the same way a normal unban does, so it becomes a case and appears in the mod log. **Deny** keeps the ban. Both take an optional message that is sent to the member. Every decision is a line in Staff activity. Deciding needs Moderation switched on. If the member can't be sent a message, because they no longer share a server with the bot or don't accept messages from it, the dashboard says so after the decision is saved.
+
+Everything the member is told is a message you can edit in the same part of the settings: the post about a new appeal, the accepted and denied messages, and the replies to the button, such as the one for a cooldown.
+
 ## Moderation dashboard
 
 The Moderation area in the sidebar is where staff read a member's record, leave notes, take back a mistaken action and see how moderation is going. It shows the cases the moderation and automod features record, so there's nothing extra to switch on.
@@ -167,18 +244,21 @@ The Moderation area in the sidebar is where staff read a member's record, leave 
 | --- | --- | --- |
 | Overview | Statistics | Staff |
 | Members | Everyone with something on file | Staff |
-| Actions | The log of every case | Staff |
-| Audit | What staff have changed | Admins and the owner |
+| Mod logs | Member actions (every case) and Staff activity (what staff changed) | Staff. Staff activity is for admins and the owner |
+| Server logs | What happened on the server | Admins and the owner, and moderators if the owner allows it |
+| Appeals | Ban appeals to read and decide | Admins and the owner |
+| Raid tools | Lockdown, and mass ban or kick | Admins and the owner |
 | Access | Who can use all of this | The owner |
-| Settings | Moderation and Automod settings | Anyone with Manage Server |
+| Settings | Moderation, Automod and Server logs settings | Anyone with Manage Server |
+| Danger zone | Deleting whole logs | The owner |
 
-A search box in the header finds a member from any tab. Press Ctrl+K (Cmd+K on a Mac), or `/` when you're not typing in a field.
+A search box in the header finds a member from any tab. Press Ctrl+K (Cmd+K on a Mac). On a phone the tabs scroll sideways, and the edge fades where more tabs are hidden. Someone with Manage Server who isn't staff is taken straight to the Settings tab.
 
 ![The Overview tab: totals, actions per day and a breakdown by type](images/moderation-overview.png)
 
 ### Who can use it
 
-- **The owner of the install** is the first account that signed in, or the user ID in `INSTANCE_OWNER_ID`. The owner can use Moderation on every server the bot is in.
+- **The owner of the install** is the account that clicked **Make me the owner** on the first-run screen, or the user ID in `INSTANCE_OWNER_ID`. The owner can use Moderation on every server the bot is in.
 - **Everyone else** can use it only on servers where the owner has added them, as a Moderator or an Admin. The owner does that on the Access tab, by name or Discord user ID, even before the person has opened the dashboard.
 - **Manage Server** doesn't make someone staff. It opens the Settings tab and nothing else under Moderation. Being staff doesn't give access to a server's settings either.
 
@@ -192,7 +272,7 @@ A search box in the header finds a member from any tab. Press Ctrl+K (Cmd+K on a
 | Kick, ban, unban | No | Yes | Yes |
 | Read staff activity, export member actions as CSV | No | Yes | Yes |
 | Open the server logs | If the owner allows it | Yes | Yes |
-| Delete the server logs | No | Yes | Yes |
+| Delete the server logs (in the Danger zone) | No | No | Yes |
 | Edit or delete others' notes, restore deleted notes | No | Yes | Yes |
 | Put a removed action back | No | Yes | Yes |
 | Take a kick, ban or unban off a record | No | No | Yes |
@@ -203,7 +283,7 @@ Anyone can edit or delete their own notes.
 
 ### Member records
 
-The Members tab lists everyone with an action or note on file. You can filter to members who are restricted right now, have notes, or were acted on in the last seven days. A member's page shows their roles, join date and account age, and a timeline of actions, notes and (for admins and the owner) staff activity, each labeled with what it is.
+The Members tab lists everyone with an action or note on file, automod's actions included (the shield in the Actions column). You can filter to members who are restricted right now, have notes, or were acted on in the last seven days, and sort by the most recent action, the most actions, the most notes or name. A sort applies as soon as you pick it. A member's page shows their roles, join date and account age, and a timeline of actions, notes and (for admins and the owner) staff activity, each labeled with what it is. Staff changes to a case or note are kept in that entry's history, under its details, rather than listed again beside it. A long timeline shows the newest 30 entries first, with **Show older** for the rest. Times on a member's page are in your own time zone and say which one, while the logs use UTC.
 
 Notes are for staff only. Members never see them and the bot never sends them to Discord. A note is up to 2,000 characters and a member can carry 200.
 
@@ -215,7 +295,7 @@ Nothing disappears from the timeline when it's removed. A removed action or dele
 
 ### Taking action
 
-The **Take action** button on a member's page offers what your level allows, and only what fits the member. Unban shows for someone banned, Clear timeout only while a timeout is running. Each choice opens a short form with a reason (up to 500 characters, and required if the Moderation setting says so) and, for timeouts and bans, a length. A ban can also delete up to 7 days of the member's messages.
+The **Take action** button on a member's page offers what your level allows, and only what fits the member. Whether someone is banned or timed out is checked with Discord, so Unban shows for anyone Discord has banned, even with no ban case on the record. Clear timeout shows only while a timeout is running. An action the bot would refuse stays in the menu, greyed out with the reason: the member is the server owner, the bot, yourself, has a top role level with or above yours or the bot's, or has left the server. **Change timeout** on someone already timed out shows when the current timeout ends, starts with no length picked, and warns you when the new end is sooner than the current one. Each choice opens a short form with a reason (up to 500 characters, and required if the Moderation setting says so) and, for timeouts and bans, a length. A ban can also delete up to 7 days of the member's messages.
 
 Warns, timeouts, kicks and bans also have an **Attach messages** section. It lists the member's latest messages in any channel you can read, deleted ones included, and you tick the ones that belong on the case (up to 10). You can also paste a message link for one that isn't listed. Attached messages show on the case in the member's timeline and under Member actions. The list comes from the Messages part of [Server logs](#server-logs) when that is on. Without it, the bot only remembers the last three days in memory, and that is empty after a restart, so a link is the way to attach anything older. A message that was edited has a dropdown with every version, and the case keeps all of them. Once you tick it, choose which version broke the rules, the original or any edit. The case shows that version first, marked as the one the member was warned for, with the rest under the dropdown. This works the same for a message that was edited and then deleted. A deleted one carries a red Deleted label. File names are kept, but the files stay on Discord and their links can stop working. CSV exports include the links only.
 
@@ -261,9 +341,9 @@ An edited case shows a blue **Case edited by staff** note with who and when, on 
 
 Three levels, each stronger than the last.
 
-**Remove from record** keeps the entry on the timeline, struck through, with your name, the time and a required reason. It stops counting in totals, statistics, `/history` and `/case`. Moderators and admins can remove warns and timeouts (automod's included). Only the owner can remove a kick, ban or unban. Removing a timeout that's still running also lifts it in Discord, unless the member has left, the bot ranks below them, or another timeout on them is still in force.
+**Remove from record** keeps the entry on the timeline, struck through, with your name, the time and a required reason. It stops counting in totals, statistics, `/history` and `/case`. Moderators and admins can remove warns and timeouts (automod's included). Only the owner can remove a kick, ban or unban. Removing a timeout that's still running also lifts it in Discord, unless the member has left, the bot ranks below them, or another timeout on them is still in force. Removing a ban that's still in force also lifts the ban in Discord, so the record and Discord agree. The dialog says so, and the button reads **Remove and lift the ban**. The Discord ban stays if another ban case on the member is still in force, and Staff activity records what happened in Discord.
 
-**Restore** puts a removed action or deleted note back. Admins and the owner can. It never contacts Discord, so a restored timeout isn't reapplied and a restored ban isn't repeated.
+**Restore** puts a removed action or deleted note back. Admins and the owner can. It never changes anything in Discord, so a restored timeout isn't reapplied and a restored ban isn't repeated. A restored ban only counts as in force if Discord still has the member banned.
 
 **Purge forever** is for an entry that shouldn't exist at all. Only the owner can, after typing `purge`. It deletes the entry and every audit entry about it, and leaves no trace. It can't be undone. SQLite may keep the deleted bytes inside `tier0.db` until they're overwritten, and older backups still contain it, so it isn't secure erasure. The `/purge` command that bulk deletes messages is unrelated.
 
@@ -285,7 +365,7 @@ The Server logs tab is a searchable record of what happened in the server, so st
 - **Voice:** joining, leaving and moving between voice channels, and being server muted or deafened.
 - **Server:** server settings, invites and emojis.
 
-Who did something comes from Discord's audit log, so the bot needs the View Audit Log permission, which the invite link already asks for. Without it the log still works and entries just don't say who.
+Who did something comes from Discord's audit log, so the bot needs the View Audit Log permission, which the invite link already asks for. Without it the log still works and entries just don't say who. Things the bot did for one of its features, such as making a ticket channel, show under the bot's own name. Only what an automod rule did shows as Automod.
 
 The tab has two views. **Events** is the timeline of everything above. Every filter applies as soon as you change it and shows as a chip you can take off:
 
@@ -300,16 +380,18 @@ An entry's **Details** show what changed, before and after.
 ![Entries opened to show what changed, with a button for the message's history](images/server-logs-details.png)
 
 ![The date range picker, with shortcuts and a calendar](images/server-logs-dates.png)
- A message entry links to the message with all its versions. The filtered view is in the address, so you can bookmark it or send it to another moderator.
+
+A message entry links to the message with all its versions. The filtered view is in the address, so you can bookmark it or send it to another moderator.
 
 **Messages** is the saved text itself.
 
 ![The Messages view with filters, a deleted message and an edited one](images/server-logs-messages.png)
- Search by words, member, channel and dates, and show only deleted or edited messages. A search also matches earlier versions, so an edited message is found by what it said before. Deleted messages are labelled in red, with who deleted them when the bot could tell: the author, a moderator, Automod or the bot. Moderator deletions need the **View Audit Log** permission. Discord records nothing when members delete their own messages, so with no matching audit entry the message is shown as deleted by its author. Messages deleted before this was recorded, or ones the bot never saw, are just labelled Deleted. Edited messages have a dropdown with each version. A message with no text says what it did carry, such as a file or a sticker. Tick messages from one member and choose **Take action** to open the action form with them already attached.
+
+Search by words, member, channel and dates, and show only deleted or edited messages. A search also matches earlier versions, so an edited message is found by what it said before. Deleted messages are labelled in red, with who deleted them when the bot could tell: the author, a moderator, Automod or the bot. Moderator deletions need the **View Audit Log** permission. Discord records nothing when members delete their own messages, so with no matching audit entry the message is shown as deleted by its author. Messages deleted before this was recorded, or ones the bot never saw, are just labelled Deleted. Edited messages have a dropdown with each version. A message with no text says what it did carry, such as a file or a sticker. Tick messages from one member and choose **Take action** to open the action form with them already attached.
 
 Staff only see channels they can read in Discord, so the logs can't be used to get into a private channel. Admins and the owner can always open the tab. Moderators can if you switch on **Let moderators open the server logs**.
 
-The logs are stored in this installation's database, not on Discord, and Messages holds everything members type, so tell your members. You choose how many days to keep (30 by default) and old entries are deleted automatically. You can leave channels out, such as private staff ones. Switching a kind off, or the feature off, stops saving but doesn't delete what's there. **Delete the logs** on the tab does, for everyone, and is recorded in Staff activity. Files members attach aren't copied: Messages keeps their names and links, which stop working when Discord removes the file.
+The logs are stored in this installation's database, not on Discord, and Messages holds everything members type, so tell your members. You choose how many days to keep (30 by default) and old entries are deleted automatically. You can leave channels out, such as private staff ones. Switching a kind off, or the feature off, stops saving but doesn't delete what's there. The owner can delete the logs from the [Danger zone](#danger-zone), which the **Delete logs** button on the tab opens. Admins can't. Files members attach aren't copied: Messages keeps their names and links, which stop working when Discord removes the file.
 
 A server that already had the message log on keeps it, now as the Messages part of Server logs with the same days and settings. The other kinds start off for those servers.
 
@@ -325,25 +407,29 @@ Cases made by commands and automod are the actions themselves, under Member acti
 
 ### Statistics
 
-The Overview tab covers 7, 30 or 90 days, in UTC, ending today. The tiles count actions (excluding removed ones), warns, timeouts, kicks and bans, removed cases and notes written. Each compares with the previous period of the same length, and a fall in actions, warns, timeouts or kicks and bans shows as an improvement. The comparison only appears when there's older data to compare with.
+The Overview tab covers the last 7, 30 or 90 days, All time, or a Custom range you pick with a start and end date (up to two years). Days are in UTC. All time starts from the first action or note on record. The tiles count actions (excluding removed ones), warns, timeouts, kicks and bans, removed cases and notes written. Each compares with the previous period of the same length, and a fall in actions, warns, timeouts or kicks and bans shows as an improvement. The comparison only appears when there's older data to compare with, so All time never shows one.
+
+The chart shows one point per day for ranges up to three months. Longer ranges show one point per week, and ranges over two years show one per month.
+
+**Download CSV** saves the figures for the range you're looking at as a spreadsheet file: one row per day (or week or month, matching the chart), a row of totals, and a row for each moderator.
 
 Below the tiles:
 
 - **Right now:** timeouts and bans in force, and members with anything on record. Not limited to the range.
 - **Repeat actions:** the share of members actioned again within 30 days of an earlier action. It appears once at least five members were actioned. Automod, unbans and cleared timeouts don't count.
 - **Automod:** what automod's rules did in the range, which rules fired most, and a link to Member actions filtered to automod.
-- **Moderators:** who did what. Automod is one of the rows, always called Automod and shown with a shield instead of the bot's Discord name and picture. It looks the same in the action log, on a member's timeline and in the CSV export.
 - **Busiest hours:** actions by hour of the day, in UTC.
-- **Moderators:** who acted, how much, and when they last did. Selecting a name opens Member actions for them.
+- **Moderators:** who acted, how much, and when they last did. Selecting a name opens Member actions for them. Automod is one of the rows, always called Automod and shown with a shield instead of the bot's Discord name and picture. It looks the same in the action log, on a member's timeline and in the CSV export.
+- **Recent activity:** the latest actions. Automod's say which rule acted, by its name, such as Banned words or Rate limit.
 - **Most actioned members:** the ten with the most actions.
 
 ### Member actions
 
-Member actions, on the Mod logs tab, lists every case, newest first. You can filter by type, state (in force, expired, removed or on record), source (manual or automod) and moderator, and search the reason, a case number or a member ID. It doesn't search by name.
+Member actions, on the Mod logs tab, lists every case, newest first. You can filter by type, state (in force, expired, removed or on record), source (manual or automod) and moderator, and search the reason, a case number (with or without the `#`) or a member ID. It doesn't search by name. An automod case shows its rule by name in a tag before the reason. Asking for a page past the end of a list says so and links to the last page, here and on the other lists.
 
 ![Mod logs, with the switch between Member actions and Staff activity](images/mod-logs.png)
 
-Admins and the owner can export the current filter as a CSV, newest first, up to 5,000 rows. Removed entries are included. Names are looked up from Discord, so the oldest cases in a large export can have blank names, and the ID columns are always filled in. Cells that start with `=`, `+`, `-` or `@` get an apostrophe in front so a spreadsheet won't treat them as formulas. Strip it if you load the file anywhere else.
+Admins and the owner can export the current filter as a CSV, newest first, up to 5,000 rows. Removed entries are included. The state column uses the same words as the page (in force, expired, on record, removed), and an automod case's reason starts with its rule's name. Names are looked up from Discord, so the oldest cases in a large export can have blank names, and the ID columns are always filled in. Cells that start with `=`, `+`, `-` or `@` get an apostrophe in front so a spreadsheet won't treat them as formulas. Strip it if you load the file anywhere else.
 
 ### Access tab
 
@@ -353,13 +439,13 @@ The owner adds staff to a server, switches them between Moderator and Admin, and
 
 ### Danger zone
 
-The owner has a **Danger zone** tab that no one else sees. It deletes whole logs for good: Member actions (every case on every record), Staff activity, the Server log events and the saved messages. Tick any number of them, then hold the button for three seconds while a red bar fills it, so a stray click does nothing. Letting go early cancels. One entry is left in Staff activity saying who deleted what.
+The owner has a **Danger zone** tab that no one else sees. It deletes whole logs for good: Member actions (every case on every record), Staff activity, the Server log events and the saved messages. Each shows how many items it holds. Tick any number of them, then hold the button for three seconds while a red bar fills it, so a stray click does nothing. Letting go early cancels. One entry is left in Staff activity saying who deleted what. It can't be undone, so back up `tier0.db` in the data folder first if you might want the logs back. Staff notes, staff access and settings aren't touched. Deleting Member actions while keeping Staff activity leaves the entries about those cases, which then open the member's record instead of a case that's gone. The Server logs tab's **Delete logs** button leads here.
 
 ![The Danger zone with two logs ticked and the hold button](images/danger-zone.png)
 
 ### Settings tab
 
-Moderation and Automod settings live here, with a switch at the top to move between them. They're the usual settings forms, and the old pages for them redirect here. Opening the tab needs Manage Server, which a staff role doesn't include.
+Moderation, Automod and Server logs settings live here, with a switch at the top to move between them. They're the usual settings forms, and the old pages for them redirect here. Leaving a form with changes that aren't saved, by the switch, another tab or the browser's Back button, asks first. Opening the tab needs Manage Server, which a staff role doesn't include.
 
 ![The Moderation settings on the Settings tab](images/moderation-settings.png)
 
@@ -397,7 +483,7 @@ What each rule reads:
 
 - **Invites** looks for `discord.gg/code` and `discord.com/invite/code`. Allowed invites can be a bare code or a pasted link, with or without a query string.
 - **Links** looks at the address of every `http` or `https` link. Allowed domains can be pasted as a whole link, such as `https://youtube.com/watch?v=1`, and only the domain is used. A domain also covers its subdomains. A link whose address isn't a valid domain (stray symbols, or a name followed by `@`) counts as not allowed.
-- **Banned words** matches whole words in any alphabet, so a Cyrillic or accented word works, and punctuation next to a word doesn't hide it (`damn!`). The record and the log post list which entries of your list matched, not the member's whole message.
+- **Banned words** matches whole words in any alphabet, so a Cyrillic or accented word works, and punctuation next to a word doesn't hide it (`damn!`). The record and the log post list which entries of your list matched, not the member's whole message. A `*` in a word stands for a short run of characters with no space in it, so `free*nitro` catches `freenitro` and `free-nitro` but not `free games and nitro`. A star covers up to 32 characters, a word can hold two stars, and a word with more is matched exactly as written. The **Patterns** list takes regular expressions for owners who know them, matched without regard to case against the first 2,000 characters of a message. A pattern is checked when you save, and one that could run for a very long time is refused with the reason under the setting: repeating a group that repeats or is optional (`(a+)+`, `(a?b?)+`), references back to an earlier group, lookahead and lookbehind, a repeat above 100, and too many repeats in one pattern. In a pattern, `*` and `+` cover at most 32 characters. If a pattern still takes more than 50 milliseconds on a message, automod stops using it on that server for an hour and writes a warning to the bot's log. A match from a pattern is reported as the pattern, as a word is reported as the word.
 
 Automod reads edits as well as new messages, since an edit is an easy way past a filter. An edit is only checked when its text changed, and it doesn't count as another message toward rate limiting or repeated text. A message is acted on once, even if Discord sends several updates for it.
 
@@ -411,56 +497,179 @@ Each trip also keeps the message itself on the case, as a moderator's attached m
 
 Three things automod says are edited with the message editor, and a section of small pieces sits below them.
 
-- **Notice in the channel** is posted where the message was removed and deleted again after the time in **How long the notice stays**: 8 seconds unless you change it, up to 5 minutes, anything under 2 seconds is taken as 2, and `0s` leaves the notice up. Besides the variables every message has, it understands `{user}` (a mention), `{userId}`, `{rule}`, `{ruleKey}` (the rule's own name, `rateLimit` for example, whatever `{rule}` is set to show), `{action}` (what was done: delete, warn, timeout, or several such as delete and warn), `{reason}`, `{reasonNote}`, `{outcome}`, `{outcomeTitle}` and `{duration}`. `{reasonNote}` is a colon, a space and the reason, or nothing. `{outcome}` is chosen from what actually happened, for example your message was removed, you were timed out, your message was removed and you were warned, or your message was removed and you were timed out. When all that happened was a warning, it says that message tripped automod. The default is an embed that says `{outcomeTitle} ({rule}{reasonNote}).`, with `{user}` as plain text above it so the member is still notified. `{outcomeTitle}` is `{outcome}` with a capital letter.
+- **Notice in the channel** is posted where the message was removed and deleted again after the time in **How long the notice stays**: 8 seconds unless you change it, up to 5 minutes, anything under 2 seconds is taken as 2, and `0s` leaves the notice up. Besides the variables every message has, it understands `{user}` (a mention), `{userId}`, `{rule}`, `{ruleKey}` (the rule's internal key, `rateLimit` for example, whatever `{rule}` is set to show, so best kept out of what members see), `{action}` (what was done: delete, warn, timeout, or several such as delete and warn), `{reason}`, `{reasonNote}`, `{outcome}`, `{outcomeTitle}` and `{duration}`. `{reasonNote}` is a colon, a space and the reason, or nothing. `{outcome}` is chosen from what actually happened, for example your message was removed, you were timed out, your message was removed and you were warned, or your message was removed and you were timed out. When all that happened was a warning, it says that message tripped automod. The default is an embed that says `{outcomeTitle} ({rule}{reasonNote}).`, with `{user}` as plain text above it so the member is still notified. `{outcomeTitle}` is `{outcome}` with a capital letter.
 - **Log posts** are the embeds sent to the log channel, one for each thing a rule can do (delete, warn, time out) so that each keeps its own colour. A rule that does several things uses the post for the strongest one that happened. They understand the same variables except `{outcome}` and `{reasonNote}`, plus `{match}` (the invite code, domain or banned words that matched, in code blocks so nothing becomes a link), `{problems}` (what the bot couldn't do), `{case}`, `{caseUrl}` and `{memberUrl}`. The default post shows these as **Matched** and **Not carried out** fields, which are left out when empty. `{match}` and `{problems}` aren't available in the channel notice. `{reason}` is a dash when there is nothing to add.
 
 - **Direct message to the member** is off until you turn on **Also message the member privately**. It goes to the member whose message tripped a rule, so they know why without the channel seeing, and it carries the same fixed reason as the notice and never what they wrote. The default is an embed that says `In {server}, {outcome} ({rule}{reasonNote}).` It understands `{user}`, `{userId}`, `{rule}`, `{ruleKey}`, `{action}`, `{reason}`, `{reasonNote}`, `{outcome}` and `{duration}`. It mentions nobody, and a member with direct messages closed is skipped.
-- **Labels and text** is a collapsed section at the bottom. It holds how each rule is named in `{rule}` (by default the rule's own name, as the notice has always shown it, so "rateLimit" rather than "Rate limit"; type the name you want members to see), the reason given for each rule, the eight phrases `{outcome}` is chosen from, the words `{action}` joins (delete, warn, timeout, and the comma and "and" between them), the dash used when there is no reason, the four lines that say what the bot couldn't do, the reason written to Discord's audit log when a member is timed out (`Automod: {rule}`), and how lengths of time are written. The case on the dashboard keeps the rule's own name, whatever you call it here.
+- **Labels and text** is a collapsed section at the bottom. It holds how each rule is named in `{rule}` (by default in words, such as "banned words" and "rate limit", lower case because the notice uses it mid-sentence), the reason given for each rule, the eight phrases `{outcome}` is chosen from, the words `{action}` joins (delete, warn, timeout, and the comma and "and" between them), the dash used when there is no reason, the four lines that say what the bot couldn't do, the reason written to Discord's audit log when a member is timed out (`Automod: {rule}`), and how lengths of time are written. Earlier versions used the rules' internal keys as their names, such as "bannedWords", and members saw those. A name you saved back then that is still the key is read as the new default, and anything you typed yourself is kept. The dashboard always shows each rule by its name, such as Banned words, on the Overview, the member's record, Member actions and the CSV export.
 
 Both are shown on the module's settings page, and the log posts only when a log channel is set. A message that comes out too long once filled in is replaced by the default. The automod lines in [Staff activity](#staff-activity) are shown in the dashboard and aren't editable here.
 
 ## Welcome messages
 
-Greetings on join, farewells on leave, an optional direct message to each, and roles given on arrival. The greeting and the farewell are posted in the channel you pick, and nothing is posted while that is empty. Each of the four messages is edited with the message builder, so it can be an embed, carry an image or use any of the other variables. They start as a short line in an embed, and the join greeting mentions the member above it so they get notified. Edit any of them to change that. Besides the variables every message has, they understand `{user}` (a mention), `{username}`, `{server}` and `{memberCount}`. The two direct messages are off until you switch them on, and are only sent if the member allows DMs. A message you wrote before the builder existed is kept, and one that was set to send as an embed becomes an embed with the same text. These four are all the module says, so there is no other wording to change. The bot can't give a role above its own. It logs that and carries on with the rest of the join.
+Greetings on join, farewells on leave, an optional direct message to each, and roles given on arrival. The greeting and the farewell are posted in the channel you pick, and nothing is posted while that is empty. Each of the four messages is edited with the message builder, so it can be an embed, carry an image or use any of the other variables. They start as a short line in an embed, and the join greeting mentions the member above it so they get notified. Edit any of them to change that. Besides the variables every message has, they understand `{user}` (a mention), `{username}`, `{server}` and `{memberCount}`. The two direct messages are off until you switch them on, and are only sent if the member allows DMs. A message you wrote before the builder existed is kept, and one that was set to send as an embed becomes an embed with the same text. These four are all the module says, so there is no other wording to change.
+
+Roles can be given as soon as someone joins, after a wait you choose (from a minute to a week, and only if they are still on the server), or once they accept the rules in Discord's membership screening. A server without screening gets them on join either way. The bot can't give a role above its own, so the role picker greys those out. If one is moved above it later, the bot logs that and carries on with the rest of the join.
+
+Bots are left out by default: a bot that joins or leaves gets no greeting, farewell, direct message or roles. Switch **Leave bots out** off to treat them like everyone else. A server that saved welcome settings before this switch existed keeps its old behaviour, so bots are still greeted and given roles there until you switch it on.
+
+The feature shows **Needs setup** until it has something to do: a greeting channel, a farewell channel, a direct message or a role.
 
 ![Welcome message settings with a live preview](images/welcome-settings.png)
 
 ## Role menus
 
-Members pick roles from buttons on a menu you publish to a channel. Buttons keep working after the message leaves the bot's cache, need no message content permission, and give the member a private confirmation. Publishing a menu again edits the existing message. Mark a menu exclusive and picking one option clears the others, which suits a rank or a main platform.
+Members pick roles from a menu you post to a channel, either as buttons (one per role, five to a row, each in the colour you choose) or as a dropdown, which is tidier for a long list and can show a second line under each role. Both keep working after the message leaves the bot's cache, need no message content permission, and give the member a private confirmation. Picking a role you have takes it off again.
 
-The message above a menu's buttons is edited with the message builder, with `{menu}` for the menu's name. The buttons themselves come from the menu's options and are added under whatever you write, so the builder doesn't offer buttons for it. A menu saved with a title and description keeps them as an embed. Under **Replies** you can reword the private confirmations: one when a role is given and one when it is taken away, both with `{role}` and `{menu}`, and the one `/rolemenu` shows after publishing a menu, with `{menu}` and `{menuChannel}`. The refusals are there too, and also private: a menu name `/rolemenu` can't find (`{name}`), a menu whose channel was deleted, a menu the bot couldn't post or update, a button on a menu that was removed, a button whose role was taken off the menu, and a role above the bot's own (`{role}` and `{menu}`). The whole group is called **Replies and errors**. These replies start out as embeds.
+Each menu's row on the dashboard has a **Post in Discord** button and a line saying whether it is posted, where, and whether you have changed it since. Changes reach the posted menu when you press the button again, which edits the message in place rather than posting a second one, even after a rename. A menu moved to another channel is posted there and its old message deleted. Removing a menu from the list deletes its message when you save. `/rolemenu` does the same as the button from Discord, and suggests your menus as you type.
+
+Mark a menu exclusive and picking one role clears the others, which suits a rank or a main platform. Otherwise you can cap how many of its roles a member holds at once. A menu can also be limited to members who have a particular role, such as a verified role.
+
+**What picking a role does** decides whether a pick works both ways. A menu that only gives suits a rules or verify button: picking a role the member already has changes nothing and tells them so. A menu that only takes away suits dropping a notification role: nothing is given, and someone without the role is told there was nothing to remove. Every menu starts out giving and taking back, as menus always have.
+
+The message above a menu is edited with the message builder, with `{menu}` for the menu's name, and the preview shows the buttons or dropdown under it. They come from the menu's roles and are added under whatever you write, so the builder doesn't offer buttons for it. A menu saved with a title and description keeps them as an embed. Under **Replies and errors** you can reword the private confirmations: one when a button gives a role and one when it takes one away, two for a button on a menu that only gives or only takes (the member already has the role, or doesn't have it), all with `{role}` and `{menu}`, one after a pick from a dropdown with `{roles}` (the menu's roles the member has now) and `{menu}`, and the one `/rolemenu` shows after publishing a menu, with `{menu}` and `{menuChannel}`. The refusals are there too, and also private: a menu name `/rolemenu` can't find (`{name}`), a menu whose channel was deleted, a menu the bot couldn't post or update, a button on a menu that was removed, a button whose role was taken off the menu, a role above the bot's own, a role Discord refused to change (both with `{role}` and `{menu}`), a member without the role the menu needs (`{required}` and `{menu}`), and a member already holding as many of its roles as it allows (`{max}` and `{menu}`). These replies start out as embeds. **Labels and text** holds the word used for `{roles}` when the member has none of the menu's roles left.
+
+The feature shows **Needs setup** until it has a menu, and its quick setup asks for one. A menu added there still has to be posted with **Post in Discord** on its row.
 
 ![A role menu being edited with its options](images/role-menus.png)
 
 ## Tickets
 
-A panel with a button. A member presses it, gives a subject and gets a private channel with your support team. The channel denies the whole server and grants access back to the opener, your support roles and the bot, whatever other roles anyone has. Transcripts (sent to a channel you pick when the ticket closes) and auto-close (the clock resets when anyone speaks) are optional. A member who's hit their ticket limit is told so.
+Members open a ticket from a panel: a message with buttons, or a menu, that you post in a channel. Each button or menu option is a **ticket type**, such as Support, Billing or Reports, and each type has its own **handlers** (the roles that work its tickets), its own questions, category, first message and rules. A server can have several panels. A server set up before types existed keeps working as one panel with one type called Support, with the same button, question, category and roles it had.
 
-The panel, the first message inside a new ticket, the transcript post and the short replies are all edited with the message builder, and each starts as what the bot posts now. The short replies and the closing and transcript posts start as embeds; edit any of them to change that. The button on the panel and the Close ticket button in a ticket are added by the bot under your message, so you can't change them there, only their labels: the panel button's is in the panel settings and the Close ticket button's is under Labels and text. Variables, besides the ones every message has:
+A ticket is a private channel, or a private thread under the panel's channel if the type is set to open threads. A channel denies the whole server and lets back in the opener, the type's handlers, your admin roles, any observer roles, roles with Manage Server or Manage Channels, and the bot, whatever other roles anyone has. A thread adds the opener, then up to 50 members holding the handler, admin or observer roles, handlers first. Threads need no category and have no channel limit.
 
-- First message in a ticket: `{user}`, `{username}`, `{subject}`, `{title}` (the subject, or "New ticket" when there is none), `{number}`, `{ticket}` and `{supportRoles}`. The mentions in it do ping, so keep `{supportRoles}` if the team should be notified.
-- Closing: `{closedBy}`, `{reason}`, `{number}` and `{ending}`, which is a colon and the reason when `/ticket close` was given one and a full stop otherwise. The default is "Closing this ticket{ending}".
-- Transcript post: `{number}`, `{user}`, `{subject}`, `{closedBy}` and `{ticketName}`. The transcript is still attached as a text file.
-- Reply when a ticket is opened: `{ticket}`, `{number}` and `{subject}`. Only the member sees it.
-- `/ticket add` and `/ticket remove`: `{member}`, `{staff}` and `{number}`.
-- `/ticket panel`: `{panelChannel}`. Only the person who ran it sees it.
+Each ticket has a number counted per server, starting at 1, which is what members and staff see: `#12` in messages, in the dashboard and in transcript files. Tickets from before this was added were numbered in the order they opened.
 
-A panel saved with a title and body keeps them as an embed in the same colour.
+### Opening a ticket
 
-The refusals and failures are messages too, under **Replies and errors**, in three groups, and only the person they are for sees them. **Who may do what** covers someone who isn't allowed to post the panel, close a ticket, add a member or remove one, using a ticket command outside a ticket, closing a ticket that is already closed, and a ticket whose channel has gone. **Opening a ticket** covers a deleted or full category, a member at their limit (`{openCount}` and `{limit}`; there is one wording for a limit of one ticket and one for a higher limit), a missing category when the form is sent in, and Discord refusing to create the channel. **Posting the panel** covers a missing panel channel and a channel the bot can't post in.
+When a member picks a type, the bot checks, in this order: the blocklist under **General**, the roles allowed or blocked for that type, how many of that type they already have open, and the wait between tickets if the type has one. For a channel type it then needs room in the type's category. Discord allows 50 channels in one, and once it is full, or if it is not set or was deleted, new tickets go to the **Overflow category** if you set one. If anything stops the member, they're told why, privately.
 
-**Labels and text** holds the short strings that go to Discord rather than being sent as a message: the title and question on the form members fill in, the Close ticket button, the name of the ticket channel (`ticket-{username}` to start with, tidied to lowercase letters, digits, hyphens and underscores after it is filled in), the channel topic with and without a subject (`{tag}`, `{username}` and `{subject}`), the reason Discord's audit log records when a ticket closes (`{tag}`), the name used for an automatic close ("Auto-close"), and the file name of the transcript (`ticket-{number}.txt`). The transcript text has its own sub-group: the first line, who opened it, the subject line, who closed it, the line for a ticket nobody wrote in, the heading above each message, the line for each attachment, and the stand-ins for a message with no text and an author the bot doesn't know. Each is filled in from the ticket and starts as the wording the transcript has always had.
+A type can ask up to five questions in a form before the ticket opens. The answers are shown under the first message (switch off **Show the answers under the first message** to hide them), and the first answer becomes the ticket's subject. A type with no questions opens straight away.
 
-An automatic close doesn't post anything in the ticket by default. Switch on **Post the closing message first** under **Inactivity** and the closing message is posted just before the channel is deleted, with the reason set to what you put in **Reason given for an automatic close** ("No activity in this ticket"). The channel is deleted straight away, so the message is mainly there to appear in the transcript.
+The first message pings the roles chosen under **Who to ping when a ticket opens**: the handlers, other roles, or nobody. The starting first message names them with `{pingRoles}`, so changing the choice changes who is pinged without editing the message. A thread always pings the handlers too, which lets in any the bot could not add itself.
+
+The channel name pattern can use `{username}`, `{type}` and `{number}`. Letters of any alphabet are kept, so a member named in Cyrillic or Japanese gets a channel named after them.
+
+Under **Automation**, **Working hours** sets when the team answers, as rows of a day and a time, in the time zone you give (UTC when empty). A ticket opened outside them gets a message under its first one saying when the team is back. With no rows, every time counts as working hours. The bot adds a **Close ticket** button and a **Claim** button under it. A type with claiming switched off gets only the Close button.
+
+### The panel's buttons
+
+In **Settings**, under **Panels**, the preview of each panel message shows what members see under it: one button per ticket type, five to a row, or a menu holding every type when **Members pick a type from** is set to a menu. Click a button, or an option of the menu, to change it right there:
+
+- **Button text** (or **Option text** in a menu). Leave it empty to use the type's name. Discord allows 80 characters on a button.
+- **Emoji**, a normal emoji or a custom one written as `<:name:id>`.
+- **Colour**, one of blurple, grey, green or red, for a button. A menu option has a **Description** instead, the quieter line under its text.
+- **Move left** and **Move right** (up and down in a menu) change the order.
+- **All settings for this ticket type** opens the type further down the page.
+
+Clicking the menu itself changes its placeholder, the grey text shown before anything is picked. Left empty, Discord shows "Make a selection". The dashed **Add a ticket type** at the end adds a new type with its own button. A panel can have 25 types, which is as many buttons or menu options as Discord allows on one message.
+
+These edits are part of the settings like any other, so they're kept when you press **Save changes**. To change the panel in Discord, post it or update it from the panel list at the top of Panels.
+
+The buttons the bot adds under its own messages are shown and edited the same way: Close ticket and Claim under the first message of a type, and in the Messages part, Reopen and Delete ticket under **Closed, channel kept** and Close and Keep open under **Asked to close**. Click one to change its text and its colour.
+
+### Working a ticket
+
+Everything here is under `/ticket`. Staff are the type's handlers, your admin roles and anyone with Manage Channels or Manage Server. The dashboard counts them the same way: Manage Channels works every type's tickets there too, but only Manage Server opens Settings.
+
+- `/ticket claim` or the Claim button marks you as handling it, and the button turns into Unclaim. A handler can't take over or drop someone else's claim, but an admin can. Switch on **A claim stops other handlers writing** under General and the other handlers can still read a claimed ticket but not send messages in it. They can still close it, move it and change its priority and members. This works in channels only, as threads have no per-role permissions.
+- `/ticket priority` sets low, normal, high or urgent. The priority shows in the channel topic.
+- `/ticket rename` renames the channel. Discord only allows two renames in ten minutes, so a third one waits its turn: the bot says so, and it goes through by itself within ten minutes.
+- `/ticket transfer` moves the ticket to another type. Its handlers, observers and category become the new type's, the claim is dropped and the new handlers are pinged.
+- `/ticket add` and `/ticket remove` let a member in or take them out. The opener can add people too. Only staff can remove them, and the opener can't be removed.
+- `/ticket reply` sends one of the server's **Saved replies** in the ticket, under your name, with `{user}`, `{staff}`, `{number}`, `{type}` and `{ticket}` filled in. Start typing to pick one. Saved replies are set up in their own part of Settings.
+- `/ticket note` adds a note only staff can read, in the dashboard. Nothing is posted in Discord.
+- `/ticket info` shows the ticket's type, priority, opener and who is handling it, to staff and the opener.
+- `/ticket transcript` gives staff a link to the ticket in the dashboard, once the bot knows the dashboard's address.
+- `/ticket panel` posts every panel, or the one you pick. If a panel is already posted in its channel, the message is updated in place instead of posting a second one.
+
+Each part of `/ticket` can be switched off or limited to roles and channels on its own, on the Commands page or in the Commands part of the ticket settings. See [Commands](#commands).
+
+### Closing
+
+The Close ticket button and `/ticket close` close a ticket. The opener may close their own unless the type says otherwise, and a type can ask for a reason in a short form first. `/ticket request-close` asks the opener instead. They get Close and Keep open buttons, and if they don't answer within the time set under General, the ticket closes by itself.
+
+What happens to the channel is up to you, under **When a ticket closes**:
+
+- **Delete the channel**, as before. The transcript is what remains.
+- **Lock and keep the channel**. Members can still read it but not write, and it moves to the closed category if you set one. A thread is locked and archived. The closed notice has Reopen and Delete ticket buttons, and the channel is deleted after the number of days you set (0 keeps it until staff delete it). A kept ticket can be reopened with the button or `/ticket reopen`. The opener can reopen it too unless the type leaves that to staff, as long as they could open a ticket of that type now: the blocklist, the type's roles and its limit of open tickets apply. The wait between tickets does not, since nothing new is opened. A change to the number of days applies to channels already kept.
+
+If someone deletes a ticket's channel in Discord, the ticket is marked closed.
+
+When the member who opened a ticket leaves the server, **When the opener leaves the server** under General decides what happens: say so in the ticket (the default, which also marks the ticket in the dashboard), close it, or do nothing.
+
+### Transcripts
+
+While **Keep transcripts in the dashboard** is on, every message in an open ticket is saved as it's sent, edited or deleted, so the transcript doesn't depend on the channel still being there. When a ticket closes the bot also reads the channel's last 500 messages and saves any it missed, for example while it was offline. Messages are saved the way Discord shows them: formatting, mentions, custom emoji, embeds, buttons, replies and stickers. Reactions are saved when the ticket closes. Tickets closed before an update keep what was saved for them then, so an older transcript can look plainer or have no messages at all. Attached files stay on Discord and only links to them are saved, so a file deleted on Discord is gone from the transcript too. Set **Delete saved messages after this many days** to clear old transcripts. The ticket itself and its details stay. A manager can also delete one transcript by hand; the ticket then records who deleted it and when, so the two can be told apart.
+
+When a ticket closes, the bot can also post the transcript file to the log channel, send it to the opener by direct message, and post a short summary of the ticket to the log channel. The summary has a View in dashboard button once the bot knows the dashboard's address. A type can send its transcripts to a channel of its own.
+
+### Ratings and reminders
+
+With ratings on, the opener gets a direct message after the ticket closes with buttons from 1 to 5. Picking one saves it and opens a short form for an optional comment. The thanks message is sent when that form is sent; closing the form keeps the rating without a thanks. Only the first rating counts. A type can switch ratings on or off for itself.
+
+Under **Automation**, auto-close closes a ticket nobody has written in for the time you set, and the clock starts again whenever someone writes. A type can use its own time or never close by itself. Changing these, or moving a ticket to another type, applies to the tickets already open, counted from their last message, and switching auto-close off stops the closes already planned. The staff reminder pings the handlers once if nobody but the opener has written after the time you set. Every one of these times is at least a minute.
+
+### Replies from the dashboard
+
+Staff can answer a ticket from the dashboard. The reply is posted in the ticket under their Discord name and avatar, through a webhook the bot creates in the channel. Without Manage Webhooks the bot posts it itself, with the staff member's name in bold on the first line. A reply can ping the people in the ticket and its handler and admin roles, never `@everyone`, `@here` or any other role, and a hint under the box says so.
+
+Under the box, **Saved replies** lists the server's saved replies. Search by name or text, pick one with the arrow keys and Enter, and it goes into the box at the cursor with `{user}`, `{number}` and the rest already filled in, ready to edit before sending.
+
+**Attach** adds files, and files can also be dropped on the box or pasted into it, such as a screenshot. A reply carries up to 10 files and 8 MB in all. A file that would break either limit is left out, with a line saying which and why, and the rest are kept. A bar shows the upload, and a failed send keeps the text and the files. Leaving a half-written reply asks first.
+
+### The ticket workspace
+
+Tickets has its own section in the dashboard with four tabs. Who sees what depends on who they are. Anyone with Manage Server, and the instance owner, sees everything, including **Settings**. Someone holding a handler role sees the tickets of the types they handle and nothing else. A role listed under **Admin roles** in General sees and works every ticket but has no Settings tab. A handler who can't manage the server doesn't need to be listed anywhere else, because the bot reads their roles from Discord each time. The server shows up for them on Your servers and in the server switcher, marked Tickets, and opens straight on the Inbox.
+
+- **Inbox** lists open tickets with a search box and filters for type, priority and whether a ticket is yours, unclaimed or anyone's. **My queue** shows the open tickets you claimed or answered first. A blue dot marks a ticket where the member wrote last and nobody has answered, and the time on each row is its last activity. Pick one to read the conversation, which refreshes by itself every few seconds while the tab is open. The side panel shows the opener, their answers, who is in the ticket, a timeline of what happened, and **internal notes**, which only staff see and are never sent to Discord. From the header you can claim, change the priority, move the ticket to another type, ask the opener whether it can close, close it and reopen it. The channel can be renamed from **Rename** beside its name in the side panel. Tickets are shown by their per-server number everywhere.
+  - **Live list.** While the tab is in front, the list checks for changes every 15 seconds. New tickets wait behind a **N new tickets** button instead of moving the rows while you read; other activity, such as a member writing or someone closing a ticket, brings the list up to date by itself once the pointer and keyboard focus are out of it. The browser tab's title starts with how many tickets are waiting on staff, as in `(3) Tickets`. **Desktop alerts** is a button, off until you press it and your browser asks: while it is on, a tab in the background checks once a minute and shows an alert when a ticket opens or another one starts waiting on staff. The choice is kept per server in that browser only.
+  - **Keyboard.** `j` and `k` open the next and previous ticket, `c` claims the open ticket, `r` goes to the reply box, `/` goes to the search box and `?` lists them. They do nothing while you are typing in a box.
+  - **Adding people.** **Add** in the People list finds a member by name. Pick one from the results, or type a name and press Enter to add the one member who has it. The member must be in the server.
+  - A ticket whose opener has left the server says so above the conversation, with when. A thread ticket names the channel it sits in and links to it.
+- **Transcripts** is the archive of closed tickets, with the same search plus rating and handler filters. Select a row, or **Read**, to open its transcript. It looks like the ticket did in Discord, in Discord's dark colours, with the channel's name at the top. Deleted messages stay visible to staff, dimmed and marked. **Show ticket activity** adds claims, priority changes and the like between the messages, in a style of their own; staff notes are only in the side panel. A closed ticket in the Inbox shows the same view and has an **Open transcript** button. A transcript downloads as a web page that looks the same, with times in UTC, or as a text file. Next to each row, the download button opens a small menu with both. If the messages are gone, the page says whether a manager deleted them, naming who and when, or the retention period ran out, and offers no downloads. Discord's own font isn't free to share, so the transcript uses a close substitute. A manager can delete a transcript, which removes the saved messages and leaves a line in an audit record.
+- **Stats** shows tickets open now, opened and closed over 7, 30 or 90 days, the median time to a first answer and to close, ratings, and a breakdown by type and by handler. The name of a type or handler opens the list of their tickets.
+- **Settings** is the same settings form as the other features, split into Panels, General, Transcripts, Ratings, Automation, Saved replies and Messages. The Panels part has a **Health** card and a list headed **In Discord now** with every panel's state: posted, changed since it was posted, still up in a channel it was moved from, deleted in Discord, posted by the older version, or not posted. **Check again** asks Discord whether each message is still there. Update or Post puts the panel up from the settings you saved, and moves it if its channel changed, taking the old message down. Before it posts a panel with a type that cannot open tickets yet, such as one with no category, it says which type and why and asks you to confirm. The Health card lists what would stop tickets working: a missing category, a full one, a deleted panel message, a custom emoji from another server, a type with no handlers. Its heading says how much is wrong, such as one ticket type of eight, and each item opens the panel or type it is about. **General** has **Blocked members**, which finds members by name. The Commands part has the `/ticket` switches.
+
+A server with nothing set up yet sees three steps at the top of the Inbox and of Settings, and **Quick setup** (see [Quick setup](#quick-setup)) is the shorter way through them.
+
+Replies and every action in the workspace go through the same code as the slash commands, so the two never disagree. Nothing in Discord depends on the dashboard, so a server that never opens it loses nothing.
+
+### Messages and labels
+
+Every message the bot sends about a ticket is edited with the message builder and starts as what the bot posts now. The panel and the first message of each type are under **Panels**. Everything else is in **Messages**, under **What the bot says**: one list, in the order a ticket meets them.
+
+- **When a ticket opens**: the reply the opener sees with a link to their ticket.
+- **While a ticket is open**: claimed, unclaimed, priority changed, moved to another type, renamed, member added and removed, asked to close and kept open.
+- **When a ticket closes**: closing, closed with the channel kept, reopened, the transcript post, the transcript sent to the opener and the closed ticket summary.
+- **Ratings and reminders**: the rating request, the thanks and the reminder to staff.
+- **Commands the team runs**: what `/ticket panel`, `/ticket note`, `/ticket transcript` and `/ticket info` reply.
+- **When something goes wrong**: the refusals and errors, folded into **Not allowed**, **Cannot open a ticket** (including the blocklist, the wait between tickets and the roles a type allows) and **Cannot do that right now**. Click one to open it.
+
+Each row says when the message is sent and who sees it: **Public** for everyone in the channel, **Only them** for the person it answers, or **Direct message**. Beside that is the start of what it says now, with variables shown as small tags, and whether it is the **Default** or **Customised**. **Edit** opens the message builder and **Reset** goes back to the default. The search box looks through the names, the when lines and the wording, and **Customised only** shows just the ones you changed. A message whose switch is off, such as the transcript post while posting the file is off, says it isn't sent for now. The transcript, rating and reminder messages are also with their own settings, and an edit in either place is the same edit.
+
+The buttons and menus the bot adds itself aren't part of those messages. Close ticket and Claim show under the first message of a type, Reopen and Delete ticket under **Closed, channel kept**, and Close and Keep open under **Asked to close**. Click one to change its text and colour (see [The panel's buttons](#the-panels-buttons)). The rating buttons are always 1 to 5.
+
+Variables in the first message, besides the ones every message has: `{user}`, `{username}`, `{subject}`, `{title}` (the subject, or "New ticket" when there is none), `{number}`, `{ticket}`, `{supportRoles}`, `{type}`, `{priority}`, `{answers}` (every answer as a list), `{answer1}` to `{answer5}`, `{claimedBy}`, `{handlers}` and `{pingRoles}`. Only the roles picked under **Who to ping when a ticket opens** are pinged, and `{pingRoles}` names them, so keep it in the text. `{answers}` and `{answer1}` to `{answer5}` are cut to 1000 characters, and the answers shown under the first message are shortened to fit Discord's limits, so long answers never replace your message with the starting one. The first message is filled in again when the ticket is claimed or moved, so `{claimedBy}` and `{type}` stay current. Each message lists its own variables in the editor.
+
+**Buttons and form text**, below the messages, holds the short strings that go to Discord rather than being sent as a message. Each one has a **Reset** link once you change it.
+
+- **Buttons**: the text and colour of Close ticket, Claim, Unclaim, Reopen, Delete ticket, and Close and Keep open on a close request.
+- **Forms and channels**: the form title, the form that asks why a ticket is closed, the channel topic with and without a subject (`{tag}`, `{username}`, `{subject}`, `{type}` and `{priority}`), the names of the priorities, the reason Discord's audit log records when a ticket closes (`{tag}`), and the name and reason used for an automatic close.
+- **Transcript file**: the file's name and every line of its wording.
+
+The channel name pattern is under **General**, and a type can have its own.
 
 ![Ticket panel settings with a preview](images/tickets-settings.png)
 
 ## Log channel
 
-Found under **More** in the sidebar, since most servers use [Server logs](#server-logs) instead. Posts what changed on the server into a channel you pick, so staff who stay in Discord see it as it happens. It doesn't keep anything searchable. It posts: message edits and deletions, joins and departures, nickname and role changes, channels and roles created and deleted, bans and unbans. Every category has its own switch. Entries for messages the bot never cached say what's known and leave out the rest. An edit that didn't change the text, like a link preview loading, is skipped. The log channel isn't logged about itself, and bot messages are skipped unless you ask for them.
+Found under **More** in the sidebar, since most servers use [Server logs](#server-logs) instead. Posts what changed on the server into a channel you pick, so staff who stay in Discord see it as it happens. It doesn't keep anything searchable. It posts: message edits and deletions, joins and departures, nickname and role changes, channels and roles created and deleted, bans and unbans, kicks, timeouts and timeouts lifted early, members joining, leaving and moving between voice channels, invites created and deleted, threads created, deleted and archived, emoji and stickers added, changed or removed, and changes to the server's own settings (name, description, icon, banner, verification level, inactive channel and timeout, system and rules channels, owner). Every category has its own switch. Kicks and timeouts are on from the start, like the original kinds. Voice, invites, threads, emoji, stickers and server settings start off, since they can be busy. A kick is read from the server's audit log, so it needs the bot to have View Audit Log, and a kicked member also gets the usual departure entry. A timeout that runs out by itself isn't posted, only one lifted early. Entries for messages the bot never cached say what's known and leave out the rest. An edit that didn't change the text, like a link preview loading, is skipped. The log channels aren't logged about themselves, and bot messages and bots in voice are skipped unless you switch on **Log what bots do**. **Channels to ignore** takes text, voice and forum channels, and covers the threads inside them too, as well as voice activity and invites for those channels.
 
-Every kind of entry has its own message under **How each entry looks**, edited with the same message builder as everywhere else, and it starts out as the entry the bot posts today. Each one has variables for what happened, such as `{author}`, `{content}`, `{before}` and `{after}` for messages, `{member}` for joins, departures and bans, `{reason}` for a ban, `{new.channel}` and `{old.channel}` for channels, and `{new.role}` and `{old.role}` for roles. The editor lists them for each entry. A line whose variable is empty is left out, which is how a ban with no reason has no reason line, and how a nickname change doesn't show the role lines. Nickname and role changes share one entry. Put the variables in the embed rather than the message text: text from a deleted or edited message can contain mentions, and an embed never pings anyone. Which events are posted is still chosen with the switches, not by the messages.
+Everything goes to the log channel unless you open **Separate channels** and give a kind of entry a channel of its own: message deletions and edits, members (joins, departures, nicknames and role changes), channels and roles created or deleted, bans, kicks and timeouts, voice channel activity, invites, threads, emoji and stickers, and server setting changes. A kind left empty still goes to the log channel.
+
+Every kind of entry has its own message under **How each entry looks**, edited with the same message builder as everywhere else, and it starts out as the entry the bot posts today. Each one has variables for what happened, such as `{author}`, `{content}`, `{before}` and `{after}` for messages, `{member}` for joins, departures, bans, kicks, timeouts and voice, `{reason}` for a ban or a kick, `{moderator}` for a kick, `{until}` for a timeout, `{channel}`, `{from}` and `{to}` for voice, `{invite}`, `{inviter}`, `{uses}` and `{expires}` for invites, `{thread}` and `{owner}` for threads, `{emoji}` and `{sticker}`, `{changes}` for server settings and stickers, `{new.channel}` and `{old.channel}` for channels, and `{new.role}` and `{old.role}` for roles. The editor lists them for each entry. A line whose variable is empty is left out, which is how a ban with no reason has no reason line, and how a nickname change doesn't show the role lines. Nickname and role changes share one entry. Put the variables in the embed rather than the message text: text from a deleted or edited message can contain mentions, and an embed never pings anyone. Which events are posted is still chosen with the switches, not by the messages.
 
 When the bot doesn't know something, it writes a stand-in into the variable. Under **Labels and text** you can reword all five: the author of a message the bot never saw ("Unknown (not cached)"), a deleted message it couldn't read ("Unavailable (message was not cached)"), the text before an edit it never saw ("Unavailable (not cached)"), the text after an edit that has none ("Unavailable"), and a member with no nickname ("(none)").
 
@@ -470,30 +679,38 @@ Posts what's new from sources you can't follow with Discord's Follow button.
 
 ![News feeds and Steam patch note channels with their status](images/news-feeds.png)
 
-**News feeds** take any RSS or Atom address: a site, a subreddit with `.rss` added, a YouTube channel's feed. Each has its own channel, an optional name above the post, and an optional role to ping.
+**News feeds** take any RSS or Atom address, a subreddit with `.rss` added, or the address of a site or a YouTube channel or playlist page, in which case the bot reads the feed the page links to. YouTube needs no account or key for this. An address without `https://` gets it added, and anything that isn't a web address is refused when you save. Each feed has its own channel, an optional name above the post, and an optional role to ping. The same address can be listed for more than one channel, and each gets every new item.
 
-**Patch notes** come from Steam, per game, by the number in the game's store address. The developer's own announcements are used, not news site reposts. Games are listed under each channel, so one channel can carry your shooters and another your RPGs, and a game can appear under several. Each post is an embed with the game's logo, name and title, with an optional ping per channel. A post counts as patch notes when Steam tags it that way or its title says so ("Patch 2.31", "Hotfix 1.2"), and announcements about an update that hasn't shipped are skipped. Per game, you choose patch notes only or every announcement.
+**Patch notes** come from Steam, per game: paste the game's store address, or just the number in it. The developer's own announcements are used, not news site reposts. Games are listed under each channel, so one channel can carry your shooters and another your RPGs, and a game can appear under several. Each post is an embed with the game's logo, name and title, with an optional ping per channel. A post counts as patch notes when Steam tags it that way or its title says so ("Patch 2.31", "Hotfix 1.2"), and announcements about an update that hasn't shipped are skipped. Per game, you choose patch notes only or every announcement.
 
 A new source posts its newest item once, to show it works, then only new items. If a source suddenly returns a lot, such as a feed that was down for a week, at most five are posted. Sources are checked every 15 minutes by default and never more often than every 5.
 
 - `/feeds status` shows what's watched, when each source was last checked, and why one isn't working.
 - `/feeds send` posts the latest items from one feed or game now (up to ten, oldest first). Give it part of a name or address, and if that matches several sources it lists them. The scheduled checks won't repeat what it sent. Only members who can manage the server see `/feeds` by default.
 
-The post for news items and the post for patch notes are each a message you can rewrite, under **Post** in their sections, and they start out as the embed described above. News items have `{source}`, `{title}`, `{link}`, `{description}`, `{image}`, `{published}` and `{role}`. Patch notes have `{game}`, `{game.id}`, `{title}`, `{link}`, `{description}`, `{logo}`, `{published}` and `{role}`. `{description}` is already cut to the length the bot uses (400 characters for news, 900 for patch notes), and a variable that is empty, such as the picture of an item that has none, is simply left out. The role you pick to ping is not added by itself: it arrives as `{role}`, which the starting message has as its text, so keep `{role}` in the text if you still want the ping. `{published.iso}` is the same moment in the form an embed's time setting needs. Rewriting the post applies to every feed or game, not to one of them. The replies to `/feeds status` and `/feeds send` start as embeds. The answer to `/feeds send` can be reworded from the Commands page with `{posted}`, `{count}`, `{source}` and `{problem}`.
+The post for news items and the post for patch notes are each a message you can rewrite, under **Post** in their sections, and they start out as the embed described above. News items have `{source}`, `{title}`, `{link}`, `{description}`, `{image}`, `{published}` and `{role}`. Patch notes have `{game}`, `{game.id}`, `{title}`, `{link}`, `{description}`, `{logo}`, `{published}` and `{role}`. `{description}` is already cut to the length the bot uses (400 characters for news, 900 for patch notes), and a variable that is empty, such as the picture of an item that has none, is simply left out. The role you pick to ping is not added by itself: it arrives as `{role}`, which the starting message has as its text, so keep `{role}` in the text if you still want the ping. `{published.iso}` is the same moment in the form an embed's time setting needs. Rewriting the post applies to every feed or game. To give one feed, or one patch notes channel, a post of its own, switch on **Use a post of its own** in its row. The replies to `/feeds status` and `/feeds send` start as embeds. The answer to `/feeds send` can be reworded from the Commands page with `{posted}`, `{count}`, `{source}` and `{problem}`.
 
 The rest of what the commands say is under **Replies and errors**, four short messages that only the person who ran the command sees: nothing is being watched, what `/feeds status` shows (`{lines}` is one line per source and `{count}` how many), nothing matches what was typed after `/feeds send` (`{query}`), and more than one source matches (`{query}` and `{sources}`). The list is cut to 1900 characters, as it always was, so the text you put around it still fits in Discord's 2000.
 
-**Labels and text** holds the words those replies are built from. Each source's line in `/feeds status` has three forms: not checked yet (`{source}`), working (`{source}` and `{checked}`), and a problem (`{source}`, `{checked}` and `{problem}`). **Sentence for a send that stopped early** fills `{problem}` in the reply to `/feeds send` and understands `{error}`. **Problem descriptions** are the sixteen short reasons a source can fail, such as the site being too slow, an address that isn't a feed, or a deleted channel, with `{status}` in the two that quote a status code. They are written down when a source is checked, so a reworded one shows up beside the source after its next check.
+**Labels and text** holds the words those replies are built from. Each source's line in `/feeds status` has three forms: not checked yet (`{source}`), working (`{source}` and `{checked}`), and a problem (`{source}`, `{checked}` and `{problem}`). **Sentence for a send that stopped early** fills `{problem}` in the reply to `/feeds send` and understands `{error}`. **Problem descriptions** are the twenty short reasons a source can fail, such as the site being too slow, an address that can't be found, an address that isn't a feed, or a deleted channel, with `{status}` in the two that quote a status code. They are written down when a source is checked, so a reworded one shows up beside the source after its next check.
 
 The messages beside each source on the dashboard, such as "Send latest posts", are not in the bot's Discord replies and keep their fixed wording.
 
 Feed addresses are fetched from the public internet only. An address pointing at the bot's own machine or network is refused, which matters when people other than the operator can reach the dashboard.
 
+The feature shows **Needs setup** until it has a feed or a patch notes channel.
+
 ## Leveling
 
-XP for taking part, levels, and roles at thresholds you choose. Each message is worth a random amount inside a range you set, so nobody can count to the next level, and a cooldown means a burst of one-word messages isn't worth more than a conversation. Role rewards either stack or replace. A role can carry an XP multiplier, and when a member has several, only the biggest applies. Rank and the leaderboard are plain embeds. There's no generated image card, since drawing one adds a native dependency that makes every install harder.
+XP for taking part, levels, and roles at thresholds you choose. Each message is worth a random amount inside a range you set, so nobody can count to the next level, and a cooldown means a burst of one-word messages isn't worth more than a conversation. Role rewards either stack or replace. A member who leaves and comes back gets their rewards back. A reward you add later reaches members already past its level the next time they level up, or straight away with **Give to members who qualify** on its row. A role can carry an XP multiplier, and when a member has several, only the biggest applies. Channels that earn no XP cover the threads inside them. Rank and the leaderboard are plain embeds.
 
-The replies to `/rank` and `/leaderboard` are edited from the Commands page, and the level-up announcement is a message under **Level-up announcements**. The announcement mentions the member above an embed so they are notified, and the empty-leaderboard replies are embeds too. Under **Replies and errors**, two more messages cover `/leaderboard` when there is nothing to show: one for a server where nobody has earned experience yet, and one for a page past the last (`{page}` is the page that was asked for). Under **Labels and text**, **Rank for a member with no experience** is what `{rank}` says in `/rank` for someone who hasn't earned any ("Unranked" to start with), and **Line for each member on the leaderboard** is how every row of `{leaderboard}` is written. It understands `{position}`, `{name}`, `{level}` and `{xp}`.
+Level-ups can be announced in one channel, in the channel the member was talking in, or by direct message, or not at all. Servers that had an announcement channel before keep announcing there.
+
+Switch on **Public leaderboard** and the leaderboard gets a web page anyone with the link can open, without signing in. It lists members in order, 50 to a page, with their server name, picture and level, and nothing else. Members who have left show as "Former member". The Leveling page shows the page's exact address once it's on. That address is built from the dashboard's own address, so the dashboard has to be reachable from the internet for anyone else to open it. The address is taken from **Dashboard address** in the moderation settings, or else from the address you last opened the dashboard at, unless that was this computer only. While there isn't one, the Leveling page says so instead of showing an address. `/rank` and `/leaderboard` get a **Full leaderboard** button that opens the page, and the button is left out while the page is off or has no address. In a reply you wrote yourself, `{leaderboard.url}` is the address. Search engines are asked not to list the page unless you switch on **Let search engines list the page**. The page is refreshed at most once a minute, and anyone opening it many times in a short while is asked to wait. Names come from the members the bot already knows, and the bot asks Discord for the rest only a limited number of times a minute. When that limit is reached, a page you opened recently is shown as it was, and a page nobody has opened shows "Member" in place of names it couldn't look up. Visitors are told apart by the address your reverse proxy adds to `X-Forwarded-For`. Without a proxy in front of the dashboard they can't be told apart, so the limit on all visitors together is what protects the bot. Any member can leave themselves off the page with `/leaderboard-privacy` and **Hide me**, and come back with **Show me**. `/rank` and `/leaderboard` in Discord still show them.
+
+`/xp give`, `/xp take`, `/xp set` and `/xp reset` change one member's experience, and their rewards follow the new level. Only members who can manage the server see `/xp` by default. There's no generated image card, since drawing one adds a native dependency that makes every install harder.
+
+The replies to `/rank` and `/leaderboard` are edited from the Commands page, and the level-up announcement is a message under **Level-up announcements**. The announcement mentions the member above an embed so they are notified, and the empty-leaderboard replies are embeds too. Under **Replies and errors**, two more messages cover `/leaderboard` when there is nothing to show: one for a server where nobody has earned experience yet, and one for a page past the last (`{page}` is the page that was asked for). Two more are what `/xp` tells the moderator who used it: one after give, take or set (`{member}`, `{xp}` and `{level}`), and one after a reset (`{member}`). The last two are what `/leaderboard-privacy` tells the member who used it, one for Hide me and one for Show me. Under **Labels and text**, **Rank for a member with no experience** is what `{rank}` says in `/rank` for someone who hasn't earned any ("Unranked" to start with), and **Line for each member on the leaderboard** is how every row of `{leaderboard}` is written. It understands `{position}`, `{name}`, `{level}` and `{xp}`.
 
 ![Leveling settings](images/leveling-settings.png)
 

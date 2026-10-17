@@ -42,27 +42,61 @@ The settings page is generated from `settings`, and `ctx.settings` is typed from
 | `s.string({ multiline, min, max })` | string | text input or textarea |
 | `s.integer({ min, max })` | number | number input |
 | `s.boolean()` | boolean | switch |
-| `s.duration({ max })` | milliseconds | number input with a unit |
+| `s.duration({ min, max })` | milliseconds | number input with a unit |
 | `s.channel({ types })` | snowflake | channel picker, filtered by type and grouped by category |
-| `s.role()` | snowflake | role picker, roles the bot can't assign greyed out |
+| `s.role({ assigns })` | snowflake | role picker. Every role can be picked unless `assigns: true`, which greys out roles above the bot's own |
 | `s.choice({ options })` | string | select |
-| `s.emoji()` | string | text input for a unicode or `<:name:id>` emoji |
-| `s.template({ placeholders })` | string | textarea with insertable placeholders and a preview |
+| `s.emoji()` | string | picker of the server's own emoji and a set of standard ones, or a pasted one |
+| `s.template({ placeholders, samples })` | string | textarea with insertable placeholders and a preview |
 | `s.message({ starting, variables, delivery })` | message body | a preview and an Edit message button that opens the message editor |
-| `s.array(field, { min, max, unique, default })` | array | chips, tags or removable rows, depending on the item. A list of choices with `unique: true` is a multi-select |
+| `s.array(field, { min, max, unique, default, item })` | array | chips, tags or rows, depending on the item. A list of choices with `unique: true` is a multi-select |
 | `s.object({ ... })` | object | a card at the top level, a subgroup inside one |
 
 Every builder takes `label`, `help` and `optional`. A field with a `default` falls back to it when the stored settings lack the key, so adding a setting needs no migration.
+
+`s.duration` takes `min` and `max` written like `"1m"` and `"28d"`. Written input outside them is refused ("must be at least 1 minute"). A number, which is the stored form, is pulled inside them instead, because every read of saved settings goes through the same parse and a refusal there leaves the module unconfigured. Adding a `min` to an existing setting therefore raises a lower stored value to the `min` on the next read. Without `min`, zero is allowed.
+
+`s.emoji` accepts one emoji as people see it (joined emoji and flags included) or Discord's `<:name:id>`. The dashboard turns a typed `:name:` into the server's emoji of that name, which it gets from `GET /guilds/:id/emojis` on the control API (`{ id, name, animated, url }[]`). Without that route the picker offers the standard set only.
+
+`s.template` takes `samples`, the values its preview shows for each placeholder, as in `samples: { position: "1", xp: "1,250" }`. Common names (`user`, `username`, `level`, `memberCount`) have stand-ins already, and `{server}` shows the real server's name. `preview: "channel"` previews the text as the channel name Discord would make of it (`# ticket-fragmuffin`) instead of as a message.
+
+`s.string({ url: true })` holds a whole http(s) address, such as a feed's, and refuses anything else. The dashboard gives it a whole row. Like every validator it also runs on read, so adding it to a setting that may already hold a bad address needs an `upgrade` that clears or fixes those values, or the module stops loading its settings.
 
 ### Extra keys
 
 These don't change parsing. The dashboard reads them.
 
-`essential: true` marks a setting the module can't do anything without. It's usually `optional` too, since the module has to load before anyone configures it. The dashboard shows the module as needing setup and lists the empty fields.
+`essential: true` marks a setting the module can't do anything without. It's usually `optional` too, since the module has to load before anyone configures it. While the module is on and the field is empty, the module's header, the sidebar and the overview say **Needs setup** instead of **On**, and the page lists the empty fields.
 
 ```ts
 channel: s.channel({ types: ["text"], optional: true, essential: true, label: "Log channel" }),
 ```
+
+`essential: "<set>"` is for a module that needs one of several settings rather than one in particular. Give every member of the set the same name, anywhere in the schema (nested groups included, list rows not). The module needs setup while none of them is filled in; a switch counts as filled while it is on, a list once it has a row. The page then asks for "one of" the members by label, and the quick setup asks about all of them.
+
+```ts
+// Welcome does something once it greets, says goodbye or sends a DM.
+join: s.object({
+  channel: s.channel({ optional: true, essential: "target", label: "Channel to greet in" }),
+  roles: s.array(s.role({ assigns: true }), { essential: "target", label: "Roles to give on join" }),
+  sendDm: s.boolean({ default: false, essential: "target", label: "Send the new member a direct message" }),
+}),
+leave: s.object({
+  channel: s.channel({ optional: true, essential: "target", label: "Channel to post departures in" }),
+  sendDm: s.boolean({ default: false, essential: "target", label: "Send a departing member a direct message" }),
+}),
+// Role menus: one set of one, so an empty list reads as Needs setup.
+menus: s.array(menuField, { essential: true, label: "Role menus" }),
+// Feeds: either kind of source.
+news: s.object({ feeds: s.array(feed, { essential: "source", label: "News feeds" }) }),
+patchNotes: s.object({ destinations: s.array(destination, { essential: "source", label: "Steam games" }) }),
+```
+
+A list with `essential: true` works the same way as a channel: an empty list is missing. Label every essential field, since the label is what the owner reads. A group's `enabled` switch in a set is named by the group's label, so automod can tag each rule's switch `essential: "rules"` and read "Needs setup" while every rule is off, listing the rules by name.
+
+`assigns: true` on a role field means the bot gives that role to members (a join role, a role menu option, a level reward, a mute role). Only there does the picker grey out roles above the bot's own and say why. Leave it off for a role the bot only checks or mentions (exemptions, who may run a command, ticket handlers, pings), so staff roles above the bot can still be picked. On a list of roles, put it on the item: `s.array(s.role({ assigns: true }))`.
+
+`item: "<noun>"` on an `s.array` of objects names one row for the Add button, singular and lower case: `item: "game"` reads "Add game" rather than a guess made from the label.
 
 `when: { field, equals }` makes a field apply only when a sibling has a value. Leave out `equals` to mean "any value". Use `includes` instead when the sibling is a list: `when: { field: "actions", includes: "timeout" }` applies while that list contains the value. The dashboard greys the field out and explains why using the sibling's label, so don't repeat that in `help`. Naming a sibling that doesn't exist fails the tests.
 
@@ -96,7 +130,33 @@ invites: s.object(
 ),
 ```
 
-`guided: true` includes a setting in the quick setup. The quick setup shows the fields tagged `guided` plus every `essential` one, through the normal form renderer. Tag only what someone has to decide before the feature works. A module that tags nothing has no quick setup. Settings it doesn't show keep their values, and a tagged field's `when` sibling is pulled in too.
+`section: "<name>"` on a top-level setting puts it in a named part of the settings page, for a module with enough settings to split it. Settings sharing a value are drawn together, in schema order, with a list of the parts beside the form; top-level settings that name no section go in a last part. `#section-<name>` in the address opens a part. Only top-level settings may carry it.
+
+`layout` on a top-level `s.object` changes how the group is drawn, for a group too long to read as a stack of fields. `layout: "messages"` draws every message in it, at any depth, as one list: a row per message with its label, its `help` as the line saying when it is sent, a line of what it says now, a Default or Customised tag, and Edit and Reset buttons, with a search box and a Customised only filter above. `layout: "fields"` draws its settings as labelled inputs in two columns, each with a Reset link once it differs from its default. Either way the group declares its headings in `topics`, in the order they are drawn, and each setting names its heading with `topic: "<id>"`. A `topic` on a nested group applies to everything in it that names no other. A heading with `within: "<id>"` is drawn inside that heading, closed until opened, which suits a run of refusals few owners need. A nested group in a `fields` list whose label matches its heading is drawn as that heading's own fields, and any other keeps a small title of its own. Settings that name no heading go under a last one named after the group, and a heading with nothing under it is left out.
+
+```ts
+messages: s.object(
+  {
+    claimed: s.message({ label: "Claimed", help: "Posted in the ticket when a handler claims it.", topic: "open", audience: "public", starting: CLAIMED }),
+    refusals: s.object({ notStaff: replyField("notStaff") }, { topic: "notAllowed" }),
+  },
+  {
+    label: "What the bot says",
+    layout: "messages",
+    topics: [
+      { id: "open", label: "While a ticket is open" },
+      { id: "wrong", label: "When something goes wrong" },
+      { id: "notAllowed", label: "Not allowed", within: "wrong" },
+    ],
+  },
+),
+```
+
+A message in another group may also name a heading of a messages list, and is then listed there as well as in its own place. Both show the same setting. A message inside a list row can't, since each row has its own wording. The Bot messages page files a feature's messages under these headings too. The schema check fails a `topic` no list declares, a heading nested more than once, a `layout` below the top level, anything but messages in a messages list and a message in a fields list. Changing a group's layout or moving settings between headings doesn't change what is stored, so it needs no `upgrade`.
+
+`s.string({ generated: true })` is a stable id for a row in a list, which other records point at. The dashboard draws nothing for it, leaves it out of row summaries, and fills it with eight random hex characters when a row is added (the shape `generatedId()` from `@tier0/core` makes, for code outside the browser), so renaming or reordering rows doesn't break those links. It must match `GENERATED_ID` (up to 32 letters, digits, `-` and `_`) and may be missing, so old rows parse; fill those in from an `upgrade`. Only list rows may carry one.
+
+`guided: true` includes a setting in the quick setup. The quick setup shows the fields tagged `guided` plus every `essential` one (every member of an essential set too), through the normal form renderer, and saving a step turns that feature on. A `collapsible` group it shows open still carries its `summary` line, so a switched-on rule says what it does. Tag only what someone has to decide before the feature works. A module that tags nothing has no quick setup. Settings it doesn't show keep their values, and a tagged field's `when` sibling is pulled in too.
 
 ```ts
 modLogChannel: s.channel({ types: ["text"], optional: true, guided: true, label: "Mod log channel" }),
@@ -133,6 +193,8 @@ Write defaults with `embedReply(text, kind, { ping?, title? })`, which gives a c
 | `components` | `true` | `false` hides buttons and menus entirely. |
 | `note` | none | A caveat shown beside the preview, for a setting that covers more than one situation. |
 | `compact` | `false` | `true` draws the setting as one row: the label, a one-line summary of the text, and the Edit message button, with no preview. Consecutive compact messages form one divided list. Use it for a group of minor messages, and leave the message a page is about with its preview. |
+| `audience` | none | Who sees it, shown beside the message in a messages list: `"public"` for everyone in the channel, `"private"` for the person it answers, `"dm"` for a direct message. |
+| `attach` | none | The buttons or menu the feature adds under the message itself, drawn under the preview and editable there. `{ kind: "list", list, label, ... }` makes one button per row of a sibling list, or one menu when `mode` says so. `{ kind: "buttons", buttons }` is a fixed set whose text and colour live in other settings. Paths starting with `/` are read from the top of the module's settings, and the schema check fails one that names no setting. |
 
 The parsed value is a `MessageBody`. A value stored while the setting was still an `s.template` string is accepted and read as a message that is only that text, so changing a setting from `s.template` to `s.message` loses nothing. Anything that is missing or blank falls back to `starting`, and a message that fails Discord's limits is a validation error like any other.
 
@@ -162,8 +224,8 @@ Keep the upgrade in a file that doesn't import discord.js so its tests are plain
 
 Anything a member, a moderator or a server owner can read because of your module is a setting with the current wording as its default. Nothing the bot says should need a code change to reword. Two kinds, kept apart:
 
-- **Messages**: anything sent to a channel, a direct message or an interaction, including an ephemeral refusal or error. Use `s.message` with the variables the text needs (`{role}`, `{limit}`) and a `help` that says when it fires. Put them in one `collapsible` group with `compact: true` on each, called "Replies and errors", with sub-groups by feature if there are many. Send through `ctx.send`, `ctx.reply` or `ctx.edit`, passing the default as `fallback`.
-- **Short strings Discord limits**: modal titles and labels (45), placeholders (100), button labels (80), select options (100), channel names, topics, webhook names (80) and audit-log reasons (512). Use `s.string` or `s.template` with `max` set to Discord's limit and the placeholders declared, in a separate collapsible group called "Labels and text". Sanitise a channel name after its variables are filled in.
+- **Messages**: anything sent to a channel, a direct message or an interaction, including an ephemeral refusal or error. Use `s.message` with the variables the text needs (`{role}`, `{limit}`) and a `help` that says when it fires. Put them in one `collapsible` group with `compact: true` on each, called "Replies and errors", with sub-groups by feature if there are many. A module with many messages can draw that group with `layout: "messages"` instead, as tickets does. Send through `ctx.send`, `ctx.reply` or `ctx.edit`, passing the default as `fallback`.
+- **Short strings Discord limits**: modal titles and labels (45), placeholders (100), button labels (80), select options (100), channel names, topics, webhook names (80) and audit-log reasons (512). Use `s.string` or `s.template` with `max` set to Discord's limit and the placeholders declared, in a separate collapsible group called "Labels and text", or a group with `layout: "fields"`. Sanitise a channel name after its variables are filled in.
 
 Shared code that can refuse something (a hierarchy check, a policy function) returns a stable code and the values, not a sentence. The place that replies looks the sentence up in the module's settings. Refusals shown in the dashboard to moderators, rather than in Discord, keep the dashboard's wording. Command names, descriptions and option descriptions are registered with Discord at sync time under fixed limits, so they are not settings.
 
@@ -202,13 +264,13 @@ export default defineModule({
 });
 ```
 
-`moderation` is the only area. Moderation and automod settings live on the Moderation Settings tab (`/guilds/:id/mod/settings` and `.../automod`), the old module pages redirect there, and the sidebar doesn't list them twice. The tab needs Manage Server, which staff roles don't include.
+There are two areas. `moderation`: moderation and automod settings live on the Moderation Settings tab (`/guilds/:id/mod/settings` and `.../automod`). `tickets`: the tickets settings live on the Tickets Settings tab (`/guilds/:id/tickets/settings`), and the module's own address is the ticket inbox. Either way the old module pages lead there, and the sidebar doesn't list the module twice. The Settings tabs need Manage Server, which staff roles and ticket handler roles don't include.
 
 Link to a module's settings with `moduleHref` from `apps/web/lib/module-href.ts`. It returns the hosted address when there is one.
 
 ## Rows
 
-A setting that's a list of objects (feeds, role menus, reward tiers) is drawn as one row per entry. `rows` adds a status line and buttons to those rows without dashboard code. The key is the list's schema path without indices.
+A setting that's a list of objects (feeds, role menus, reward tiers) is drawn as one row per entry. Owners can move a row up or down (the arrow buttons, Alt+Up and Alt+Down, or dragging its number) and duplicate it, which gives every generated id in the copy a fresh value. The stored order is the order on screen, so where row order matters to members, such as buttons, read the list in order. `rows` adds a status line and buttons to those rows without dashboard code. The key is the list's schema path without indices.
 
 ```ts
 rows: {
@@ -231,13 +293,42 @@ rows: {
 
 `tone` is `ok`, `problem` or `idle`. An action's `input` is a normal settings object, validated by the bot like any other. `message` is shown to whoever pressed the button.
 
-Both hooks see the settings as last saved, never a draft, so the dashboard disables the buttons while there are unsaved changes. A row arrives as a `RowRef`: its indexed path (`patchNotes.destinations[0].games[1]`), the row, and the object holding the list.
+Both hooks see the settings as last saved, never a draft, so the dashboard disables the buttons while there are unsaved changes, and dims each row's last status as possibly out of date (a row that was edited shows none). A row arrives as a `RowRef`: its indexed path (`patchNotes.destinations[0].games[1]`), the row, and the object holding the list.
+
+A `message` or a refusal from the bot is shown to the owner as it is when it reads as a sentence. Network error codes inside it (`getaddrinfo ENOTFOUND`, `ECONNREFUSED` and the like) are rewritten into plain words by the dashboard, but a module should still say what went wrong in its own words.
+
+## Notices
+
+`notices(ctx)` returns lines drawn above the settings form, for what depends on this server's saved state rather than the schema, such as the address of a page the module serves. Each is `{ tone: "info" | "attention", text, link? }`, where `link.href` is a dashboard path or a full address. The page reads them when it is opened and after every save. A hook that throws is logged and shows nothing.
+
+```ts
+async notices(ctx) {
+  if (!ctx.settings.publicPage.enabled) return [];
+  return [{ tone: "info", text: "The page is at https://bot.example.com/leaderboard/1." }];
+},
+```
+
+## Unsaved changes on a dashboard page
+
+Pages built from the schema already ask before an edit is lost. A page with a draft of its own (the Message creator, a settings screen written by hand) uses the same guard from `apps/web/lib/unsaved-guard.tsx`:
+
+```tsx
+const guard = useUnsavedGuard({ dirty, onSave: save, onDiscard: discard });
+// render {guard.host} once in the page; navigate from code with
+guard.confirmLeave(() => router.push(href));
+```
+
+While `dirty` is true, any in-app link (sidebar, tabs, buttons that are links), the browser's Back button and `confirmLeave` ask "Leave without saving?" with Stay, Discard changes, and Save and leave when `onSave` is given. `onSave` resolves true once saved; false keeps the person on the page. Closing the tab still gets the browser's own prompt. Mark a link `data-unsaved-guard="ignore"` to let it through.
 
 ## Commands
 
 Command names are unique across all modules, and the registry throws on a duplicate at startup. A command whose reply an owner may rewrite declares `response: { starting, placeholders }`. `starting` is the message the editor opens with, written to match what the command says now, and each placeholder has a name, a description and a sample for the preview. In the handler, call `ctx.customReply?.({ ...values })` and send that when it isn't null; otherwise reply the way the command always has.
 
 Commands are registered per server and re-synced, debounced by five seconds, when a module is toggled or an override changes.
+
+Subcommands come from what `build()` registers: the registry lists them as `subcommands` on the command summary, keyed `command sub` or `command group sub` (`ticket close`). Each key gets its own `CommandOverride` row with `enabled`, `allowRoles` and the channel rules; the router checks the whole command first, then the part, and answers a part that is off with the `commandOff` system message. A part has no permission, visibility or reply of its own, and changing one doesn't re-register anything, since Discord can't hide a subcommand. A module needs nothing extra for this.
+
+An option built with `setAutocomplete(true)` gets its suggestions from the command's `autocomplete(interaction, ctx)`, which answers with `interaction.respond`. It's only called while the module is on in that server, and the role and channel rules aren't checked since nothing runs. A command without it answers with an empty list.
 
 ### Right-click entries
 
@@ -279,6 +370,14 @@ All optional, and only called for servers where the module is on.
 | `channelCreate(channel, ctx)` / `channelDelete` | a channel is created or deleted |
 | `roleCreate(role, ctx)` / `roleDelete` | a role is created or deleted |
 | `banAdd(ban, ctx)` / `banRemove(ban, ctx)` | a ban is placed or lifted |
+| `messageDeleteBulk(messages, channel, ctx)` | a purge, once for the whole batch |
+| `channelUpdate(before, after, ctx)` / `roleUpdate` / `guildUpdate` | a channel, role or the server's own settings changed |
+| `threadCreate(thread, ctx)` / `threadDelete` / `threadUpdate(before, after, ctx)` | a thread is started, deleted, or archived, locked or renamed |
+| `voiceStateUpdate(before, after, ctx)` | joining, leaving or moving voice, muting and deafening |
+| `inviteCreate(invite, ctx)` / `inviteDelete` | an invite is made or deleted |
+| `emojiCreate(emoji, ctx)` / `emojiUpdate(before, after, ctx)` / `emojiDelete` | an emoji is added, renamed or removed |
+| `stickerCreate(sticker, ctx)` / `stickerUpdate(before, after, ctx)` / `stickerDelete` | a sticker is added, changed or removed |
+| `auditLogEntry(entry, ctx)` | a new line in the server's audit log. The only way to see a kick. Needs View Audit Log |
 
 Partials are on, so an object the bot never cached arrives with most fields null. Handle that. Each handler runs in its own try/catch, so a throw is logged with the module id and the other modules still get the event.
 
@@ -312,6 +411,14 @@ modals: {
 ```
 
 The router splits the id and hands the interaction to the module that owns it, so two modules can each have a `confirm` button.
+
+A button sent by direct message arrives with no server. List its action in `directMessage` and start the id's rest with the server's id, and the router finds the server from that. The handler gets the whole rest, server id included, and still has to check that the person may act.
+
+```ts
+directMessage: ["rate", "rateComment"],
+
+new ButtonBuilder().setCustomId(customId("tickets", "rate", `${ctx.guild.id}:${ticket.id}:5`));
+```
 
 ## Deferred work
 

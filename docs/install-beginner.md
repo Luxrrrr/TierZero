@@ -165,17 +165,18 @@ The first time, it downloads and builds everything it needs. That takes a few mi
 Paste this into your browser's address bar. Replace `YOUR_APPLICATION_ID` with the Application ID from your notepad before you press Enter:
 
 ```
-https://discord.com/oauth2/authorize?client_id=YOUR_APPLICATION_ID&permissions=1391837965526&scope=bot%20applications.commands
+https://discord.com/oauth2/authorize?client_id=YOUR_APPLICATION_ID&permissions=1495454444758&scope=bot%20applications.commands
 ```
 
-Choose your server and click **Authorize**. The bot appears in your member list. It asks for every permission its features might need, and it doesn't use one until you switch on the feature that needs it.
+Choose your server and click **Authorize**. The bot appears in your member list. It asks for every permission its features might need, and it doesn't use one until you switch on the feature that needs it. Leave them all ticked: if one is missing later, the feature it belongs to says so on your server's overview. The Invite button on the dashboard's **Your servers** page uses the same link.
 
 ## Step 8: Sign in
 
 1. Open your browser and go to <http://localhost:8080>. That address means port 8080 on this computer, which is where the dashboard runs.
-2. Choose to sign in with Discord and approve.
+2. The first time, it shows **Set up TierZero**. Choose to sign in with Discord and approve.
+3. It then asks whether this account should own the install. Click **Make me the owner**.
 
-The first person to sign in becomes the owner of the install. The owner can use the moderation part of the dashboard on every server and decides who else can. Make sure that's you.
+The owner can use the moderation part of the dashboard on every server, decides who else can, and installs updates. Make sure that's you. Until someone clicks **Make me the owner**, every visit to the dashboard comes back to this screen.
 
 Your server appears in the list. If it doesn't, you need the Manage Server permission there and the bot has to have joined it in step 7. You need both.
 
