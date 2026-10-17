@@ -51,14 +51,14 @@ const SHARED: MessageVariable[] = [
 export const NEWS_VARIABLES: MessageVariable[] = [
   { name: "source", description: "The feed's name", sample: "Example Gazette" },
   ...SHARED,
-  { name: "image", description: "The post's picture, empty when it has none", sample: "https://example.com/cover.png" },
+  { name: "image", description: "The post's picture, empty when it has none", sample: "" },
 ];
 
 export const STEAM_VARIABLES: MessageVariable[] = [
   { name: "game", description: "The game's name as written in the dashboard", sample: "Counter-Strike 2" },
   { name: "game.id", description: "The game's Steam app ID", sample: "730" },
   ...SHARED,
-  { name: "logo", description: "The game's logo, for an image or thumbnail", sample: "https://example.com/logo.png" },
+  { name: "logo", description: "The game's logo, for an image or thumbnail", sample: "" },
 ];
 
 const truncate = (value: string, max: number): string =>

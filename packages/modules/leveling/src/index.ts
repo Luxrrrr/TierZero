@@ -1,10 +1,12 @@
-import { SlashCommandBuilder } from "discord.js";
-import type { GuildMember } from "discord.js";
+import { PermissionFlagsBits, SlashCommandBuilder } from "discord.js";
+import type { ChatInputCommandInteraction, GuildMember, Message } from "discord.js";
 import { defineModule, isRoleAssignable, s } from "@tier0/core";
-import type { Infer, ModuleContext } from "@tier0/core";
+import type { Infer, ModuleContext, ModuleNotice, RowHooks } from "@tier0/core";
 import { prisma } from "@tier0/db";
 import {
+  adjustXp,
   applyMultiplier,
+  MAX_XP,
   canAward,
   highestMultiplierPercent,
   levelForXp,
@@ -19,12 +21,21 @@ import {
   LEADERBOARD_STARTING,
   LEVEL_UP_MESSAGE,
   PAST_END_LEADERBOARD,
+  PRIVACY_HIDDEN,
+  PRIVACY_SHOWN,
   RANK_PLACEHOLDERS,
   RANK_STARTING,
+  XP_CHANGED,
+  XP_RESET,
   labelsGroup,
   leaderboardLine,
   replyField,
+  upgradeAnnounce,
+  upgradeLayout,
 } from "./messages.js";
+import { publicPageUrl, setHidden } from "./public-page.js";
+
+export { clampPage, publicLeaderboard, PUBLIC_PAGE_SIZE, type PublicLeaderboard, type PublicMember } from "./public-page.js";
 
 const settingsSchema = s.object({
   xp: s.object(
@@ -34,92 +45,245 @@ const settingsSchema = s.object({
     },
     {
       label: "Experience per message",
-      help: "A random amount in this range is awarded, so activity cannot be gamed by sending identical short messages.",
+      help: "A random amount in this range is awarded, so activity cannot be gamed by sending identical short messages. If the minimum is above the maximum, the two are swapped.",
     },
   ),
-  cooldown: s.duration({
-    label: "Cooldown between awards",
-    help: "How long a member must wait between messages that earn experience.",
-    default: "60s",
-    max: "1h",
-  }),
+  earning: s.object(
+    {
+      cooldown: s.duration({
+        label: "Cooldown between awards",
+        help: "How long a member must wait between messages that earn experience. 0 lets every message earn.",
+        default: "60s",
+        min: "0s",
+        max: "1h",
+      }),
+      noXpChannels: s.array(s.channel({ types: ["text", "voice", "forum"] }), {
+        label: "Channels that earn no experience",
+        help: "Threads inside these channels earn none either.",
+      }),
+      noXpRoles: s.array(s.role(), {
+        label: "Roles that earn no experience",
+      }),
+      multipliers: s.array(
+        s.object({
+          role: s.role({ label: "Role" }),
+          percent: s.integer({
+            label: "Percent of normal experience",
+            help: "100 is normal, 200 is double.",
+            min: 0,
+            max: 1000,
+            default: 100,
+          }),
+        }),
+        {
+          label: "Experience multipliers",
+          item: "multiplier",
+          help: "A member with more than one of these roles gets the highest percentage that applies.",
+        },
+      ),
+    },
+    { label: "Earning experience" },
+  ),
   announce: s.object(
     {
+      where: s.choice({
+        label: "Announce level-ups",
+        options: [
+          { value: "off", label: "Don't announce them" },
+          { value: "channel", label: "In one channel", description: "Every level-up is posted in the channel below." },
+          { value: "current", label: "Where they levelled up", description: "Posted in the channel the member was talking in." },
+          { value: "dm", label: "By direct message", description: "Only the member sees it. A mention in it does not notify." },
+        ],
+        default: "off",
+        guided: true,
+      }),
       channel: s.channel({
         label: "Announce level-ups in",
         types: ["text"],
         optional: true,
         guided: true,
+        when: { field: "where", equals: "channel" },
       }),
       message: s.message({
         label: "Level-up message",
+        help: "Not sent while level-ups are not announced.",
         starting: LEVEL_UP_MESSAGE,
         variables: [
           { name: "user", description: "The member who levelled up, as a mention", sample: "@Ada" },
           { name: "level", description: "The level they reached", sample: "5" },
         ],
-        when: { field: "channel" },
       }),
     },
     {
       label: "Level-up announcements",
-      help: "Leave the channel unset to turn announcements off.",
+      upgrade: upgradeAnnounce,
     },
   ),
-  roleRewards: s.array(
-    s.object({
-      level: s.integer({ label: "Level", min: 1 }),
-      role: s.role({ label: "Role" }),
-    }),
+  rewards: s.object(
     {
-      label: "Role rewards",
-      help: "Roles granted automatically when a member reaches the given level.",
+      roles: s.array(
+        s.object({
+          level: s.integer({ label: "Level", min: 1 }),
+          role: s.role({ label: "Role to give", assigns: true }),
+        }),
+        {
+          label: "Rewards",
+          item: "reward",
+          help: "Roles given automatically when a member reaches the level, and given back if they leave and rejoin. A reward added later reaches members already past its level when they next level up, or straight away with Give to members who qualify on its row.",
+        },
+      ),
+      stack: s.boolean({
+        label: "Keep every earned reward role",
+        help: "When off, only the highest reward a member qualifies for is kept, and lower ones are removed as they level up.",
+        default: true,
+      }),
     },
+    { label: "Role rewards" },
   ),
-  stackRewards: s.boolean({
-    label: "Keep every earned reward role",
-    help: "When off, only the highest reward a member qualifies for is kept, and lower ones are removed as they level up.",
-    default: true,
-  }),
-  noXpChannels: s.array(s.channel({ types: ["text"] }), {
-    label: "Channels that earn no experience",
-  }),
-  noXpRoles: s.array(s.role(), {
-    label: "Roles that earn no experience",
-  }),
+  publicPage: s.object(
+    {
+      enabled: s.boolean({
+        label: "Public leaderboard page",
+        help: "A page anyone with the link can open in a browser, without signing in. It shows each member's server name, picture and level, and nothing else. Members can leave themselves off it with /leaderboard-privacy.",
+        default: false,
+      }),
+      indexed: s.boolean({
+        label: "Let search engines list the page",
+        help: "Off, the page asks search engines not to list it, so only people with the link find it.",
+        default: false,
+        when: { field: "enabled", equals: true },
+      }),
+    },
+    { label: "Public leaderboard" },
+  ),
   replies: s.object(
     {
       leaderboardEmpty: replyField("leaderboardEmpty"),
       leaderboardPastEnd: replyField("leaderboardPastEnd"),
+      xpChanged: replyField("xpChanged"),
+      xpReset: replyField("xpReset"),
+      privacyHidden: replyField("privacyHidden"),
+      privacyShown: replyField("privacyShown"),
     },
     {
       label: "Replies and errors",
-      help: "What /leaderboard says when there is nothing to show. The level-up message is under Level-up announcements.",
+      help: "What /leaderboard says when there is nothing to show, what /xp says to the moderator who used it, and what /leaderboard-privacy says. The level-up message is under Level-up announcements.",
       collapsible: true,
     },
   ),
   labels: labelsGroup,
-  multipliers: s.array(
-    s.object({
-      role: s.role({ label: "Role" }),
-      percent: s.integer({
-        label: "Percent of normal experience",
-        help: "100 is normal, 200 is double.",
-        min: 0,
-        max: 1000,
-        default: 100,
-      }),
-    }),
-    {
-      label: "Experience multipliers",
-      help: "A member with more than one of these roles gets the highest percentage that applies.",
-    },
-  ),
-});
+}, { upgrade: upgradeLayout });
 
 type Settings = Infer<typeof settingsSchema>;
+type Ctx = ModuleContext<Settings>;
 
 const LEADERBOARD_PAGE_SIZE = 10;
+
+/** The public page's address while it is on and the dashboard has an address, else empty. */
+async function pageUrl(ctx: Ctx): Promise<string> {
+  if (!ctx.settings.publicPage.enabled) return "";
+  return publicPageUrl(await ctx.dashboardUrl(), ctx.guild.id);
+}
+
+async function publicPageNotices(ctx: Ctx): Promise<ModuleNotice[]> {
+  if (!ctx.settings.publicPage.enabled) return [];
+  const url = publicPageUrl(await ctx.dashboardUrl(), ctx.guild.id);
+  if (url === "") {
+    return [
+      {
+        tone: "attention",
+        text: "The public leaderboard is on, but this dashboard has no address that people outside this computer can open, so nobody can reach the page yet. Once the dashboard can be reached from the internet, enter its address as Dashboard address in the moderation settings.",
+        link: { href: `/guilds/${ctx.guild.id}/mod/settings`, label: "Open the moderation settings" },
+      },
+    ];
+  }
+  return [
+    {
+      tone: "info",
+      text: `The public leaderboard is at ${url}. /rank and /leaderboard link to it.`,
+      link: { href: url, label: "Open the page" },
+    },
+  ];
+}
+
+/** Members a reward sync looks at in one go. */
+const SYNC_LIMIT = 5000;
+/**
+ * Members whose roles one press changes. Role changes are rate limited by
+ * Discord, so this keeps a press to well under a minute; members already in
+ * line cost no request, so the next press carries on where this one stopped.
+ */
+const CHANGE_LIMIT = 100;
+/** Discord returns at most this many members per request. */
+const FETCH_CHUNK = 100;
+
+/** Stores a member's new total and level, then brings their reward roles in line with it. */
+async function setXp(ctx: Ctx, userId: string, xp: number): Promise<{ xp: number; level: number }> {
+  const level = levelForXp(xp);
+  await prisma.levelMember.upsert({
+    where: { guildId_userId: { guildId: ctx.guild.id, userId } },
+    create: { guildId: ctx.guild.id, userId, xp, level },
+    update: { xp, level },
+  });
+  const member = await ctx.guild.members.fetch(userId).catch(() => null);
+  if (member) await applyRoleRewards(member, ctx.settings, level);
+  return { xp, level };
+}
+
+async function runXp(interaction: ChatInputCommandInteraction, ctx: Ctx): Promise<void> {
+  const sub = interaction.options.getSubcommand();
+  const target = interaction.options.getUser("member", true);
+  const mention = `<@${target.id}>`;
+
+  if (sub === "reset") {
+    await setXp(ctx, target.id, 0);
+    await ctx.reply(interaction, ctx.settings.replies.xpReset, { member: mention }, { fallback: XP_RESET });
+    return;
+  }
+
+  const amount = interaction.options.getInteger("amount", true);
+  const row = await prisma.levelMember.findUnique({
+    where: { guildId_userId: { guildId: ctx.guild.id, userId: target.id } },
+  });
+  const change = sub === "give" ? "give" : sub === "take" ? "take" : "set";
+  const result = await setXp(ctx, target.id, adjustXp(row?.xp ?? 0, change, amount));
+  await ctx.reply(interaction, ctx.settings.replies.xpChanged, { member: mention, ...result }, { fallback: XP_CHANGED });
+}
+
+const rewardRows: RowHooks<Settings> = {
+  actions: {
+    sync: {
+      label: "Give to members who qualify",
+      help: "Gives this reward to members who are already at or past its level, and with Keep every earned reward role off, takes lower rewards from them.",
+      async run({ ctx, row }) {
+        const level = Number(row.row["level"]);
+        if (!Number.isInteger(level)) return { ok: false, message: "That reward is incomplete. Fill it in and save first." };
+
+        const rows = await prisma.levelMember.findMany({
+          where: { guildId: ctx.guild.id, level: { gte: level } },
+          orderBy: { xp: "desc" },
+          take: SYNC_LIMIT,
+        });
+        if (rows.length === 0) return { ok: true, message: `Nobody has reached level ${level} yet.` };
+
+        let changed = 0;
+        scan: for (let i = 0; i < rows.length; i += FETCH_CHUNK) {
+          const chunk = rows.slice(i, i + FETCH_CHUNK);
+          const members = await ctx.guild.members.fetch({ user: chunk.map((entry) => entry.userId) }).catch(() => null);
+          for (const entry of chunk) {
+            const member = members?.get(entry.userId);
+            if (member && (await applyRoleRewards(member, ctx.settings, entry.level)) > 0) changed += 1;
+            if (changed >= CHANGE_LIMIT) break scan;
+          }
+        }
+        const who = changed === 1 ? "1 member" : `${changed} members`;
+        if (changed >= CHANGE_LIMIT) return { ok: true, message: `Updated the rewards of ${who}. Press it again to carry on with the rest.` };
+        const more = rows.length === SYNC_LIMIT ? ` Only the ${SYNC_LIMIT} members with the most experience were checked.` : "";
+        return { ok: true, message: changed === 0 ? `Everyone who qualifies already has their rewards.${more}` : `Updated the rewards of ${who}.${more}` };
+      },
+    },
+  },
+};
 
 /**
  * Timestamp of each member's last award, held in process memory, not the
@@ -185,6 +349,7 @@ export default defineModule({
           need,
           rank: rank ? `#${rank}` : ctx.settings.labels.unranked,
           progress: renderProgressBar(into, need),
+          "leaderboard.url": await pageUrl(ctx),
         };
         const custom = ctx.customReply?.(values);
         if (custom) await interaction.reply(custom);
@@ -240,13 +405,82 @@ export default defineModule({
           return leaderboardLine(ctx.settings.labels.leaderboardLine, { position, name, level: row.level, xp: row.xp });
         });
 
-        const values = { leaderboard: lines.join("\n"), page };
+        const values = { leaderboard: lines.join("\n"), page, "leaderboard.url": await pageUrl(ctx) };
         const custom = ctx.customReply?.(values);
         if (custom) await interaction.reply(custom);
         else await ctx.reply(interaction, LEADERBOARD_STARTING, values, { ephemeral: false });
       },
     },
+    {
+      name: "leaderboard-privacy",
+      description: "Leave yourself off the public leaderboard page, or come back to it.",
+      build: () =>
+        new SlashCommandBuilder()
+          .setName("leaderboard-privacy")
+          .setDescription("Leave yourself off the public leaderboard page, or come back to it.")
+          .addStringOption((option) =>
+            option
+              .setName("choice")
+              .setDescription("Whether the page shows you.")
+              .setRequired(true)
+              .addChoices({ name: "Hide me", value: "hide" }, { name: "Show me", value: "show" }),
+          ),
+      async run(interaction, ctx) {
+        const hide = interaction.options.getString("choice", true) === "hide";
+        await setHidden(ctx.guild.id, interaction.user.id, hide);
+        await (hide
+          ? ctx.reply(interaction, ctx.settings.replies.privacyHidden, {}, { fallback: PRIVACY_HIDDEN })
+          : ctx.reply(interaction, ctx.settings.replies.privacyShown, {}, { fallback: PRIVACY_SHOWN }));
+      },
+    },
+    {
+      name: "xp",
+      description: "Give, take, set or reset a member's experience.",
+      build: () =>
+        new SlashCommandBuilder()
+          .setName("xp")
+          .setDescription("Give, take, set or reset a member's experience.")
+          .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
+          .addSubcommand((sub) =>
+            sub
+              .setName("give")
+              .setDescription("Add experience to a member.")
+              .addUserOption((option) => option.setName("member").setDescription("Who to give it to.").setRequired(true))
+              .addIntegerOption((option) =>
+                option.setName("amount").setDescription("How much experience.").setRequired(true).setMinValue(1).setMaxValue(MAX_XP),
+              ),
+          )
+          .addSubcommand((sub) =>
+            sub
+              .setName("take")
+              .setDescription("Remove experience from a member.")
+              .addUserOption((option) => option.setName("member").setDescription("Who to take it from.").setRequired(true))
+              .addIntegerOption((option) =>
+                option.setName("amount").setDescription("How much experience.").setRequired(true).setMinValue(1).setMaxValue(MAX_XP),
+              ),
+          )
+          .addSubcommand((sub) =>
+            sub
+              .setName("set")
+              .setDescription("Set a member's experience to an exact amount.")
+              .addUserOption((option) => option.setName("member").setDescription("Whose experience to set.").setRequired(true))
+              .addIntegerOption((option) =>
+                option.setName("amount").setDescription("Their new total.").setRequired(true).setMinValue(0).setMaxValue(MAX_XP),
+              ),
+          )
+          .addSubcommand((sub) =>
+            sub
+              .setName("reset")
+              .setDescription("Set a member's experience back to 0.")
+              .addUserOption((option) => option.setName("member").setDescription("Whose experience to reset.").setRequired(true)),
+          ),
+      run: runXp,
+    },
   ],
+
+  rows: { "rewards.roles": rewardRows },
+
+  notices: publicPageNotices,
 
   events: {
     async messageCreate(message, ctx) {
@@ -258,19 +492,21 @@ export default defineModule({
       if (!member) return;
 
       const settings = ctx.settings;
-      if (settings.noXpChannels.includes(message.channelId)) return;
-      if (member.roles.cache.some((role) => settings.noXpRoles.includes(role.id))) return;
+      // A thread earns what the channel it is in earns.
+      const parentId = message.channel.isThread() ? message.channel.parentId : null;
+      if (settings.earning.noXpChannels.includes(message.channelId) || (parentId && settings.earning.noXpChannels.includes(parentId))) return;
+      if (member.roles.cache.some((role) => settings.earning.noXpRoles.includes(role.id))) return;
 
       const key = cooldownKey(ctx.guild.id, member.id);
       const now = Date.now();
       const last = lastAwardAt.get(key);
-      if (last !== undefined && !canAward(last, now, settings.cooldown)) return;
+      if (last !== undefined && !canAward(last, now, settings.earning.cooldown)) return;
 
       lastAwardAt.set(key, now);
       if (lastAwardAt.size > MAX_TRACKED_MEMBERS) lastAwardAt.clear();
 
       const roleIds = member.roles.cache.map((role) => role.id);
-      const percent = highestMultiplierPercent(roleIds, settings.multipliers);
+      const percent = highestMultiplierPercent(roleIds, settings.earning.multipliers);
       const gained = applyMultiplier(xpForMessage(settings.xp.min, settings.xp.max), percent);
       if (gained <= 0) return;
 
@@ -294,24 +530,39 @@ export default defineModule({
       });
 
       await applyRoleRewards(member, settings, newLevel);
-      await announceLevelUp(member, ctx, settings, newLevel);
+      // A level that went down, after a moderator took experience away, is not announced.
+      if (newLevel > row.level) await announceLevelUp(member, message, ctx, newLevel);
+    },
+
+    async memberJoin(member, ctx) {
+      // Experience outlives a departure, so a member who comes back gets their rewards back.
+      if (ctx.settings.rewards.roles.length === 0) return;
+      const row = await prisma.levelMember.findUnique({
+        where: { guildId_userId: { guildId: ctx.guild.id, userId: member.id } },
+      });
+      if (row && row.level > 0) await applyRoleRewards(member, ctx.settings, row.level);
     },
   },
 
   requires: ["ManageRoles"],
 });
 
+/** Brings a member's reward roles in line with their level. Resolves to how many roles were changed. */
 async function applyRoleRewards(
   member: GuildMember,
   settings: Settings,
   level: number,
-): Promise<void> {
-  if (settings.roleRewards.length === 0) return;
+): Promise<number> {
+  if (settings.rewards.roles.length === 0) return 0;
 
-  const desired = new Set(resolveRewardRoles(level, settings.roleRewards, settings.stackRewards));
-  const configuredRoleIds = new Set(settings.roleRewards.map((reward) => reward.role));
+  const desired = new Set(resolveRewardRoles(level, settings.rewards.roles, settings.rewards.stack));
+  const configuredRoleIds = new Set(settings.rewards.roles.map((reward) => reward.role));
 
   const botHighest = member.guild.members.me?.roles.highest.position ?? 0;
+  let changed = 0;
+  const done = () => {
+    changed += 1;
+  };
 
   for (const roleId of desired) {
     if (member.roles.cache.has(roleId)) continue;
@@ -324,37 +575,37 @@ async function applyRoleRewards(
       );
       continue;
     }
-    await member.roles.add(roleId).catch((error: unknown) => {
+    await member.roles.add(roleId).then(done, (error: unknown) => {
       console.error(`[leveling] could not add role ${roleId} in guild ${member.guild.id}:`, error);
     });
   }
 
-  if (settings.stackRewards) return;
+  if (settings.rewards.stack) return changed;
 
   for (const roleId of configuredRoleIds) {
     if (desired.has(roleId)) continue;
     if (!member.roles.cache.has(roleId)) continue;
-    await member.roles.remove(roleId).catch((error: unknown) => {
+    await member.roles.remove(roleId).then(done, (error: unknown) => {
       console.error(
         `[leveling] could not remove role ${roleId} in guild ${member.guild.id}:`,
         error,
       );
     });
   }
+  return changed;
 }
 
-async function announceLevelUp(
-  member: GuildMember,
-  ctx: ModuleContext<Settings>,
-  settings: Settings,
-  level: number,
-): Promise<void> {
-  const channelId = settings.announce.channel;
-  if (!channelId) return;
-
-  const channel = ctx.guild.channels.cache.get(channelId);
-  if (!channel?.isTextBased()) return;
+async function announceLevelUp(member: GuildMember, message: Message, ctx: Ctx, level: number): Promise<void> {
+  const { where, channel: channelId, message: body } = ctx.settings.announce;
+  const values = { user: `<@${member.id}>`, level };
 
   // A failed send is logged by ctx.send and must not hold up the next message.
-  await ctx.send(channel, settings.announce.message, { user: `<@${member.id}>`, level }, { fallback: LEVEL_UP_MESSAGE });
+  if (where === "dm") {
+    await ctx.send(member.user, body, values, { fallback: LEVEL_UP_MESSAGE });
+    return;
+  }
+  const target =
+    where === "current" ? message.channel : where === "channel" && channelId ? ctx.guild.channels.cache.get(channelId) : undefined;
+  if (!target?.isTextBased()) return;
+  await ctx.send(target, body, values, { fallback: LEVEL_UP_MESSAGE });
 }

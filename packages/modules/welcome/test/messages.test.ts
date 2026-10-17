@@ -102,6 +102,24 @@ describe("a greeting saved as a plain string", () => {
   });
 });
 
+describe("Leave bots out", () => {
+  const ignoreBots = (stored: unknown) => (resolve(stored) as unknown as { ignoreBots: boolean }).ignoreBots;
+
+  test("is on for a server with nothing stored", () => {
+    assert.equal(ignoreBots({}), true);
+    assert.equal(ignoreBots(undefined), true);
+  });
+
+  test("is off for settings saved before the switch existed, so bots are still welcomed", () => {
+    assert.equal(ignoreBots({ join: { channel: CHANNEL, roles: [] } }), false);
+  });
+
+  test("keeps a value that was saved", () => {
+    assert.equal(ignoreBots({ ignoreBots: true, join: { channel: CHANNEL } }), true);
+    assert.equal(ignoreBots({ ignoreBots: false }), false);
+  });
+});
+
 describe("upgradeGroup", () => {
   test("leaves a current value alone and is idempotent", () => {
     const current = { channel: CHANNEL, message: plainReply("Hi"), sendDm: false, dm: plainReply("DM") };

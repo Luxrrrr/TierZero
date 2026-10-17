@@ -314,6 +314,38 @@ export const serverLogEvents: Handlers = {
     });
   },
 
+  async threadUpdate(before: ThreadChannel, after: ThreadChannel, ctx) {
+    // Discord also archives a thread by itself once it goes quiet; that is recorded the same way.
+    if (before.archived === after.archived || after.archived === null) return;
+    const archived = after.archived === true;
+    await record(ctx.guild, ctx.settings, {
+      type: archived ? "thread.archive" : "thread.unarchive",
+      channel: { id: after.id, name: after.name },
+      summary: `The thread ${after.name} was ${archived ? "archived" : "reopened"}${after.parent ? ` in #${after.parent.name}` : ""}`,
+    });
+  },
+
+  async stickerCreate(sticker, ctx) {
+    const actor = await executorOf(ctx.guild, AuditLogEvent.StickerCreate, sticker.id, 6_000);
+    await record(ctx.guild, ctx.settings, { type: "sticker.create", actor, summary: `The sticker ${sticker.name} was added` });
+  },
+
+  async stickerUpdate(before, after, ctx) {
+    const changes: ServerLogChange[] = [
+      ...change("Name", before.name, after.name),
+      ...change("Description", before.description, after.description),
+      ...change("Related emoji", before.tags, after.tags),
+    ];
+    if (changes.length === 0) return;
+    const actor = await executorOf(ctx.guild, AuditLogEvent.StickerUpdate, after.id, 6_000);
+    await record(ctx.guild, ctx.settings, { type: "sticker.update", actor, summary: `The sticker ${after.name} was changed`, details: { changes } });
+  },
+
+  async stickerDelete(sticker, ctx) {
+    const actor = await executorOf(ctx.guild, AuditLogEvent.StickerDelete, sticker.id, 6_000);
+    await record(ctx.guild, ctx.settings, { type: "sticker.delete", actor, summary: `The sticker ${sticker.name} was removed` });
+  },
+
   async roleCreate(role, ctx) {
     const actor = await executorOf(ctx.guild, AuditLogEvent.RoleCreate, role.id, 6_000);
     await record(ctx.guild, ctx.settings, { type: "role.create", actor, summary: `The role ${role.name} was created` });

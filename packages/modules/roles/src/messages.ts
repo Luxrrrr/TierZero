@@ -14,6 +14,9 @@ export const MENU_MESSAGE: MessageBody = {
 export const GAVE_MESSAGE: MessageBody = embedReply("Gave you **{role}**.", "success");
 export const REMOVED_MESSAGE: MessageBody = embedReply("Removed **{role}**.", "success");
 export const PUBLISHED_MESSAGE: MessageBody = embedReply('Published "{menu}" in {menuChannel}.', "success");
+export const UPDATED_MESSAGE: MessageBody = embedReply("Your roles from {menu} are now: {roles}.", "success");
+export const ALREADY_HAD_MESSAGE: MessageBody = embedReply("You already have **{role}**.", "info");
+export const DID_NOT_HAVE_MESSAGE: MessageBody = embedReply("You don't have **{role}**, so there was nothing to remove.", "info");
 
 export const MENU_VARIABLES = [{ name: "menu", description: "The menu's name", sample: "Platforms" }];
 
@@ -21,6 +24,16 @@ export const TOGGLE_VARIABLES = [
   { name: "role", description: "The name of the role", sample: "Gamers" },
   { name: "menu", description: "The name of the menu the button is on", sample: "Platforms" },
 ];
+
+export const UPDATED_VARIABLES = [
+  { name: "roles", description: "The names of the menu's roles the member has now, or a stand-in from Labels and text when there are none", sample: "PC, Console" },
+  { name: "menu", description: "The name of the menu", sample: "Platforms" },
+];
+
+export const DEFAULT_LABELS = {
+  noRoles: "none",
+  placeholder: "Pick your roles",
+} as const;
 
 export const PUBLISHED_VARIABLES = [
   { name: "menu", description: "The menu's name", sample: "Platforms" },
@@ -34,7 +47,10 @@ export type ProblemKey =
   | "postFailed"
   | "inactive"
   | "optionGone"
-  | "cannotAssign";
+  | "cannotAssign"
+  | "roleChangeFailed"
+  | "needsRole"
+  | "tooMany";
 
 interface ProblemDefinition {
   label: string;
@@ -47,7 +63,7 @@ interface ProblemDefinition {
 export const PROBLEMS: Record<ProblemKey, ProblemDefinition> = {
   noMenu: {
     label: "Menu not found",
-    help: "Shown to a moderator who runs /rolemenu with a name that is not on the list of menus.",
+    help: "Shown to someone who runs /rolemenu with a name that is not on the list of menus.",
     starting: embedReply('No role menu named "{name}" is configured. Add one on the dashboard first.', "error"),
     variables: [{ name: "name", description: "The name that was typed", sample: "Platforms" }],
   },
@@ -82,6 +98,30 @@ export const PROBLEMS: Record<ProblemKey, ProblemDefinition> = {
     starting: embedReply("I can't give you **{role}** because that role sits above my own highest role. Ask an admin to move my role above it.", "error"),
     variables: TOGGLE_VARIABLES,
   },
+  roleChangeFailed: {
+    label: "Role could not be changed",
+    help: "Shown to a member when Discord refuses to give or take a role, usually because the bot lacks Manage Roles.",
+    starting: embedReply("I couldn't change **{role}**. Ask an admin to check that I have Manage Roles.", "error"),
+    variables: TOGGLE_VARIABLES,
+  },
+  needsRole: {
+    label: "Member lacks the required role",
+    help: "Shown to a member who uses a menu that needs a role they do not have.",
+    starting: embedReply("You need the **{required}** role to use {menu}.", "error"),
+    variables: [
+      { name: "required", description: "The name of the role the menu needs", sample: "Verified" },
+      { name: "menu", description: "The name of the menu", sample: "Platforms" },
+    ],
+  },
+  tooMany: {
+    label: "Member already has the most roles allowed",
+    help: "Shown to a member who picks a role from a menu with a limit when they already hold as many of its roles as it allows.",
+    starting: embedReply("You can have at most {max} roles from {menu}. Remove one first.", "error"),
+    variables: [
+      { name: "max", description: "The most roles the menu allows", sample: "2" },
+      { name: "menu", description: "The name of the menu", sample: "Platforms" },
+    ],
+  },
 };
 
 export const problemField = (key: ProblemKey): Field<MessageBody> =>
@@ -89,6 +129,7 @@ export const problemField = (key: ProblemKey): Field<MessageBody> =>
     label: PROBLEMS[key].label,
     help: PROBLEMS[key].help,
     note: "Only the person it is shown to sees this.",
+    audience: "private",
     starting: PROBLEMS[key].starting,
     variables: PROBLEMS[key].variables ?? [],
     delivery: "dm",

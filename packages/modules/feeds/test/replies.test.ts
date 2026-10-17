@@ -83,8 +83,17 @@ describe("the failure descriptions", () => {
     assert.equal(describeFailure(new FeedFailure("siteStatus", { status: 503 })), "the site answered with status 503");
     assert.equal(describeFailure(new FeedFailure("steamStatus", { status: 500 })), "Steam answered with status 500");
     assert.equal(describeFailure("not an error"), "something went wrong");
-    assert.equal(describeFailure(new Error("boom")), "boom");
-    assert.equal(describeFailure(new Error("x".repeat(500))).length, 200);
+  });
+
+  test("name a network error for what the owner can do, and never pass on the system's own text", () => {
+    const system = (code: string) => Object.assign(new Error(`getaddrinfo ${code} retro-corner.example`), { code });
+    assert.equal(describeFailure(system("ENOTFOUND")), "that address could not be found. Check it is spelled right");
+    assert.equal(describeFailure(system("ECONNREFUSED")), DEFAULT_FAILURES.refused);
+    assert.equal(describeFailure(system("ECONNRESET")), DEFAULT_FAILURES.connectionLost);
+    assert.equal(describeFailure(system("CERT_HAS_EXPIRED")), DEFAULT_FAILURES.badCertificate);
+    assert.equal(describeFailure(system("ERR_TLS_CERT_ALTNAME_INVALID")), DEFAULT_FAILURES.badCertificate);
+    assert.equal(describeFailure(new Error("boom")), "something went wrong");
+    assert.equal(describeFailure(system("ENOTFOUND"), { ...DEFAULT_FAILURES, notFound: "no such site" }), "no such site");
   });
 
   test("the layers that throw them still carry the old message", async () => {
@@ -141,6 +150,19 @@ describe("/feeds status", () => {
       lines: ["Never: not checked yet", `Fine: checked ${when}, working`, `Broken: checked ${when}, problem: the site answered with status 500`].join("\n"),
       count: 3,
     });
+  });
+
+  test("a feed is tracked per channel, and one checked before that shows what was known of its address", async () => {
+    const other = "123456789012345679";
+    const stored = { news: { feeds: [feed("Here", "http://127.0.0.1:9/b.xml"), { name: "There", url: "http://127.0.0.1:9/b.xml", channel: other }] } };
+    const checkedAt = new Date(1_790_000_000_000);
+    await prisma.feedCursor.create({ data: { guildId: GUILD, sourceKey: "rss:http://127.0.0.1:9/b.xml", checkedAt } });
+    await prisma.feedCursor.create({
+      data: { guildId: GUILD, sourceKey: `rss:http://127.0.0.1:9/b.xml:${other}`, checkedAt, lastError: "the site answered with status 500" },
+    });
+    await command.run(interaction("status"), context(stored));
+    const when = "<t:1790000000:R>";
+    assert.equal(told[0]?.values.lines, `Here: checked ${when}, working\nThere: checked ${when}, problem: the site answered with status 500`);
   });
 
   test("the line formats can be reworded", async () => {
@@ -239,7 +261,7 @@ describe("what the dashboard is told", () => {
   test("the labels are one collapsible group", () => {
     assert.equal(fields.labels?.collapsible, true);
     const labels = fields.labels?.fields as Record<string, FieldDescriptor>;
-    assert.equal(Object.keys(labels.problems?.fields as object).length, 16);
+    assert.equal(Object.keys(labels.problems?.fields as object).length, 20);
     assert.deepEqual(labels.statusProblem?.placeholders, ["source", "checked", "problem"]);
     assert.equal(labels.statusNever?.default, DEFAULT_LABELS.statusNever);
   });

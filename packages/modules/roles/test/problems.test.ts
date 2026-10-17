@@ -24,6 +24,9 @@ const TODAY = {
   inactive: "This menu is no longer active. Ask a moderator to republish it.",
   optionGone: "That option is no longer part of this menu.",
   cannotAssign: "I can't give you **{role}** because that role sits above my own highest role. Ask an admin to move my role above it.",
+  roleChangeFailed: "I couldn't change **{role}**. Ask an admin to check that I have Manage Roles.",
+  needsRole: "You need the **{required}** role to use {menu}.",
+  tooMany: "You can have at most {max} roles from {menu}. Remove one first.",
 } as const;
 
 type Replies = Record<keyof typeof TODAY, MessageBody>;
@@ -110,7 +113,7 @@ describe("the replies", () => {
     assert.equal(group?.collapsible, true);
     assert.equal(group?.label, "Replies and errors");
     const fields = Object.values(group?.fields as Record<string, FieldDescriptor>);
-    assert.equal(fields.length, 10);
+    assert.equal(fields.length, 16);
     assert.ok(fields.every((field) => field.kind === "message" && field.compact === true));
   });
 });

@@ -51,6 +51,7 @@ export const replyField = (key: ReplyKey): Field<MessageBody> =>
     label: REPLIES[key].label,
     help: REPLIES[key].help,
     note: "Only the person who ran the command sees this.",
+    audience: "private",
     starting: REPLIES[key].starting,
     variables: REPLIES[key].variables,
     delivery: "dm",
@@ -116,6 +117,10 @@ export const labelsGroup = s.object(
         notAFeed: problem("Address is not an RSS or Atom feed", "notAFeed"),
         channelGone: problem("Channel deleted", "channelGone"),
         postFailed: problem("Post could not be sent", "postFailed"),
+        notFound: problem("Address could not be found", "notFound"),
+        refused: problem("Site refused the connection", "refused"),
+        connectionLost: problem("Connection was cut off", "connectionLost"),
+        badCertificate: problem("Site's certificate is not valid", "badCertificate"),
         unknown: problem("Anything else", "unknown"),
       },
       {

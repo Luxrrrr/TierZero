@@ -1,4 +1,4 @@
-import type { RowRef } from "@tier0/core";
+import type { MessageBody, RowRef } from "@tier0/core";
 import type { FeedsContext } from "./settings.js";
 
 export type Scope = "patch" | "all";
@@ -6,7 +6,17 @@ export type Scope = "patch" | "all";
 export type FeedRow = FeedsContext["settings"]["news"]["feeds"][number];
 
 export type Source =
-  | { kind: "rss"; key: string; label: string; search: string; row: FeedRow }
+  | {
+      kind: "rss";
+      key: string;
+      /** Where this feed's progress was kept before feeds were tracked per channel. */
+      legacyKey: string;
+      label: string;
+      search: string;
+      row: FeedRow;
+      /** The feed's own post, when it has one. */
+      message: MessageBody | undefined;
+    }
   | {
       kind: "steam";
       key: string;
@@ -17,40 +27,71 @@ export type Source =
       scope: Scope;
       channel: string;
       mention: string | undefined;
+      message: MessageBody | undefined;
     };
 
 /**
- * The sources the settings ask for, one per key. A repeated address is read
- * once. A game listed under two channels is two sources, since each channel
- * has its own idea of what it has already been shown.
+ * A feed is tracked per channel, so the same address listed for two channels
+ * posts to both, each remembering what it has shown.
+ */
+export const rssKey = (url: string, channel: string): string => `rss:${url}:${channel}`;
+
+const ownMessage = (holder: Record<string, unknown>): MessageBody | undefined =>
+  holder["custom"] === true ? (holder["message"] as MessageBody | undefined) : undefined;
+
+function rssSource(row: FeedRow & { url: string }): Source {
+  const name = typeof row.name === "string" && row.name !== "" ? row.name : undefined;
+  return {
+    kind: "rss",
+    key: rssKey(row.url, row.channel),
+    legacyKey: `rss:${row.url}`,
+    label: name ?? row.url,
+    search: `${name ?? ""} ${row.url}`,
+    row,
+    message: ownMessage(row as unknown as Record<string, unknown>),
+  };
+}
+
+function steamSource(game: Record<string, unknown>, destination: Record<string, unknown>): Source | null {
+  const appId = Number(game["appId"]);
+  const name = game["name"];
+  const channel = destination["channel"];
+  if (!Number.isInteger(appId) || appId <= 0 || typeof name !== "string" || typeof channel !== "string") return null;
+  return {
+    kind: "steam",
+    key: `steam:${appId}:${channel}`,
+    label: `${name} in <#${channel}>`,
+    search: `${name} ${appId}`,
+    appId,
+    game: name,
+    scope: game["scope"] === "all" ? "all" : "patch",
+    channel,
+    mention: typeof destination["mention"] === "string" ? destination["mention"] : undefined,
+    message: ownMessage(destination),
+  };
+}
+
+/**
+ * The sources the settings ask for, one per key. The same address listed twice
+ * for one channel is read once. A game listed under two channels is two
+ * sources, since each channel has its own idea of what it has already been shown.
  */
 export function sourcesOf(settings: FeedsContext["settings"]): Source[] {
   const sources = new Map<string, Source>();
 
   if (settings.news.enabled) {
     for (const row of settings.news.feeds) {
-      const key = `rss:${row.url}`;
-      if (!sources.has(key)) {
-        sources.set(key, { kind: "rss", key, label: row.name ?? row.url, search: `${row.name ?? ""} ${row.url}`, row });
-      }
+      // A row whose address was cleared as unreadable waits for a new one.
+      if (!row.url) continue;
+      const source = rssSource({ ...row, url: row.url });
+      if (!sources.has(source.key)) sources.set(source.key, source);
     }
   }
   if (settings.patchNotes.enabled) {
     for (const destination of settings.patchNotes.destinations) {
       for (const game of destination.games) {
-        const key = `steam:${game.appId}:${destination.channel}`;
-        if (sources.has(key)) continue;
-        sources.set(key, {
-          kind: "steam",
-          key,
-          label: `${game.name} in <#${destination.channel}>`,
-          search: `${game.name} ${game.appId}`,
-          appId: game.appId,
-          game: game.name,
-          scope: game.scope === "all" ? "all" : "patch",
-          channel: destination.channel,
-          mention: destination.mention,
-        });
+        const source = steamSource(game as unknown as Record<string, unknown>, destination as unknown as Record<string, unknown>);
+        if (source && !sources.has(source.key)) sources.set(source.key, source);
       }
     }
   }
@@ -68,29 +109,7 @@ export function sourceForRow(listPath: string, ref: RowRef): Source | null {
     const url = row["url"];
     const channel = row["channel"];
     if (typeof url !== "string" || url === "" || typeof channel !== "string") return null;
-    const name = typeof row["name"] === "string" && row["name"] !== "" ? row["name"] : undefined;
-    return {
-      kind: "rss",
-      key: `rss:${url}`,
-      label: name ?? url,
-      search: `${name ?? ""} ${url}`,
-      row: row as FeedRow,
-    };
+    return rssSource(row as unknown as FeedRow & { url: string });
   }
-
-  const appId = row["appId"];
-  const game = row["name"];
-  const channel = parent["channel"];
-  if (typeof appId !== "number" || typeof game !== "string" || typeof channel !== "string") return null;
-  return {
-    kind: "steam",
-    key: `steam:${appId}:${channel}`,
-    label: `${game} in <#${channel}>`,
-    search: `${game} ${appId}`,
-    appId,
-    game,
-    scope: row["scope"] === "all" ? "all" : "patch",
-    channel,
-    mention: typeof parent["mention"] === "string" ? parent["mention"] : undefined,
-  };
+  return steamSource(row, parent);
 }

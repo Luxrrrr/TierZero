@@ -41,7 +41,7 @@ async function runStatus(interaction: ChatInputCommandInteraction, ctx: FeedsCon
 
   const { labels } = ctx.settings;
   const lines = sources.map((source) => {
-    const cursor = byKey.get(source.key);
+    const cursor = byKey.get(source.key) ?? (source.kind === "rss" ? byKey.get(source.legacyKey) : undefined);
     if (!cursor?.checkedAt) return applyVariables(labels.statusNever, { source: source.label });
     const checked = `<t:${Math.floor(cursor.checkedAt.getTime() / 1000)}:R>`;
     return cursor.lastError
@@ -100,7 +100,7 @@ async function runSend(interaction: ChatInputCommandInteraction, ctx: FeedsConte
 export default defineModule({
   id: "feeds",
   name: "News and patch notes",
-  summary: "Posts new items from RSS feeds and Steam patch notes, so announcements never depend on a channel being followable.",
+  summary: "Posts new items from RSS feeds, YouTube channels and Steam patch notes, so announcements never depend on a channel being followable.",
   category: "engagement",
 
   settings: settingsSchema,

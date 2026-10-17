@@ -133,6 +133,17 @@ export function canAward(lastAwardAtMs: number, nowMs: number, cooldownMs: numbe
   return nowMs - lastAwardAtMs >= cooldownMs;
 }
 
+/** The most experience a member can hold, inside the database column's range. */
+export const MAX_XP = 2_000_000_000;
+
+export type XpChange = "give" | "take" | "set";
+
+/** A moderator's change to a member's experience, kept between zero and the most a member can hold. */
+export function adjustXp(current: number, change: XpChange, amount: number): number {
+  const next = change === "give" ? current + amount : change === "take" ? current - amount : amount;
+  return Math.min(MAX_XP, Math.max(0, Math.trunc(next)));
+}
+
 /**
  * Which reward roles a member at `level` should hold. With stacking, every
  * reward at or below the level applies; without it, only the single highest

@@ -33,6 +33,16 @@ export function valuesFor(member: MemberLike): Record<string, string> {
   };
 }
 
+/**
+ * Whether a new member's roles are given now, later from a scheduled task, or
+ * when they finish membership screening, which the bot hears about as an update.
+ */
+export function rolesTiming(when: string, pending: boolean | null | undefined): "now" | "later" | "screening" {
+  if (when === "delay") return "later";
+  if (when === "screening" && pending === true) return "screening";
+  return "now";
+}
+
 const isBlank = (value: unknown): boolean => typeof value === "string" && value.trim() === "";
 
 /**
@@ -54,4 +64,15 @@ export function upgradeGroup(stored: Record<string, unknown>): Record<string, un
   if (isBlank(next.dm)) delete next.dm;
   if (next.dm !== undefined && next.dm !== null && typeof next.sendDm !== "boolean") next.sendDm = true;
   return next;
+}
+
+/**
+ * Servers that saved welcome settings before "Leave bots out" existed had bots
+ * greeted, messaged and given roles, and a "Bots" auto-role relies on that. The
+ * switch is off for them until the owner turns it on. A server that has stored
+ * nothing gets the new default.
+ */
+export function upgradeWelcome(stored: Record<string, unknown>): Record<string, unknown> {
+  if (stored.ignoreBots !== undefined || Object.keys(stored).length === 0) return stored;
+  return { ...stored, ignoreBots: false };
 }

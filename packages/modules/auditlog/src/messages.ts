@@ -33,7 +33,25 @@ export type AuditEvent =
   | "roleCreate"
   | "roleDelete"
   | "banAdd"
-  | "banRemove";
+  | "banRemove"
+  | "memberTimeout"
+  | "memberTimeoutEnd"
+  | "memberKick"
+  | "voiceJoin"
+  | "voiceLeave"
+  | "voiceMove"
+  | "inviteCreate"
+  | "inviteDelete"
+  | "threadCreate"
+  | "threadDelete"
+  | "threadArchive"
+  | "emojiCreate"
+  | "emojiUpdate"
+  | "emojiDelete"
+  | "stickerCreate"
+  | "stickerUpdate"
+  | "stickerDelete"
+  | "serverUpdate";
 
 /** What each log entry looks like until the owner writes something else. */
 export const STARTING: Record<AuditEvent, MessageBody> = {
@@ -68,6 +86,42 @@ export const STARTING: Record<AuditEvent, MessageBody> = {
   roleDelete: post("Role deleted", COLOR_REMOVE, [field("Role", "{old.role}")]),
   banAdd: post("Member banned", COLOR_REMOVE, [field("Member", "{member}"), field("Reason", "{reason}")]),
   banRemove: post("Member unbanned", COLOR_ADD, [field("Member", "{member}")]),
+  memberTimeout: post("Member timed out", COLOR_EDIT, [field("Member", "{member}", true), field("Until", "{until}", true)]),
+  memberTimeoutEnd: post("Timeout removed", COLOR_ADD, [field("Member", "{member}")]),
+  memberKick: post("Member kicked", COLOR_REMOVE, [
+    field("Member", "{member}", true),
+    field("Moderator", "{moderator}", true),
+    field("Reason", "{reason}"),
+  ]),
+  voiceJoin: post("Joined voice", COLOR_ADD, [field("Member", "{member}", true), field("Channel", "{channel}", true)]),
+  voiceLeave: post("Left voice", COLOR_REMOVE, [field("Member", "{member}", true), field("Channel", "{channel}", true)]),
+  voiceMove: post("Moved voice channel", COLOR_NEUTRAL, [
+    field("Member", "{member}"),
+    field("From", "{from}", true),
+    field("To", "{to}", true),
+  ]),
+  inviteCreate: post("Invite created", COLOR_ADD, [
+    field("Invite", "{invite}", true),
+    field("Channel", "{channel}", true),
+    field("Created by", "{inviter}", true),
+    field("Uses", "{uses}", true),
+    field("Expires", "{expires}", true),
+  ]),
+  inviteDelete: post("Invite deleted", COLOR_REMOVE, [field("Invite", "{invite}", true), field("Channel", "{channel}", true)]),
+  threadCreate: post("Thread created", COLOR_ADD, [
+    field("Thread", "{thread}", true),
+    field("In", "{channel}", true),
+    field("Started by", "{owner}", true),
+  ]),
+  threadDelete: post("Thread deleted", COLOR_REMOVE, [field("Thread", "{thread}", true), field("In", "{channel}", true)]),
+  threadArchive: post("Thread archived", COLOR_NEUTRAL, [field("Thread", "{thread}", true), field("In", "{channel}", true)]),
+  emojiCreate: post("Emoji added", COLOR_ADD, [field("Emoji", "{emoji}")]),
+  emojiUpdate: post("Emoji renamed", COLOR_EDIT, [field("Before", "{before}", true), field("After", "{after}", true)]),
+  emojiDelete: post("Emoji removed", COLOR_REMOVE, [field("Emoji", "{emoji}")]),
+  stickerCreate: post("Sticker added", COLOR_ADD, [field("Sticker", "{sticker}")]),
+  stickerUpdate: post("Sticker changed", COLOR_EDIT, [field("Sticker", "{sticker}"), field("Changes", "{changes}")]),
+  stickerDelete: post("Sticker removed", COLOR_REMOVE, [field("Sticker", "{sticker}")]),
+  serverUpdate: post("Server settings changed", COLOR_EDIT, [field("Changes", "{changes}")]),
 };
 
 /** The stand-ins used when something is not known. The defaults are the words the log has always used. */
@@ -128,6 +182,16 @@ const AUTHOR: MessageVariable = {
   sample: "@Ada (ada)",
 };
 const MESSAGE_CHANNEL: MessageVariable = { name: "message.channel", description: "The channel the message was in, as a link", sample: "#general" };
+const VOICE_CHANNEL: MessageVariable = { name: "channel", description: "The voice channel, as a link followed by its name", sample: "#Squad 1 (Squad 1)" };
+const INVITE: MessageVariable = { name: "invite", description: "The invite's code", sample: "nightraid" };
+const INVITE_CHANNEL: MessageVariable = { name: "channel", description: "The channel the invite leads to, as a link. Empty when it is not known", sample: "#welcome" };
+const THREAD_PARENT: MessageVariable = { name: "channel", description: "The channel or forum the thread is in, as a link. Empty when it is not known", sample: "#looking-for-group" };
+const STICKER: MessageVariable = { name: "sticker", description: "The sticker's name", sample: "gg" };
+const MODERATOR: MessageVariable = {
+  name: "moderator",
+  description: "Who did it, as a mention followed by their username. Empty when Discord does not say",
+  sample: "@Rook (rook)",
+};
 
 /** The label and variables the settings page offers for each entry. */
 export const ENTRIES: Record<AuditEvent, { label: string; help: string; variables: MessageVariable[] }> = {
@@ -210,6 +274,117 @@ export const ENTRIES: Record<AuditEvent, { label: string; help: string; variable
     help: "Posted when a ban is lifted. Needs the unbans switch above.",
     variables: [MEMBER],
   },
+  memberTimeout: {
+    label: "Member timed out",
+    help: "Posted when a member is timed out, or a timeout is made longer. Needs the timeouts switch above.",
+    variables: [MEMBER, { name: "until", description: "When the timeout ends, as a date and how long from now", sample: "<t:1700000000:f> (<t:1700000000:R>)" }],
+  },
+  memberTimeoutEnd: {
+    label: "Timeout removed",
+    help: "Posted when someone lifts a timeout early. One that runs out on its own is not posted. Needs the timeouts lifted switch above.",
+    variables: [MEMBER],
+  },
+  memberKick: {
+    label: "Member kicked",
+    help: "Posted when someone is kicked, as well as the departure entry. Needs the kicks switch above.",
+    variables: [
+      MEMBER,
+      MODERATOR,
+      { name: "reason", description: "The reason given, cut to 1024 characters. Empty when there is none", sample: "Spamming the lobby" },
+    ],
+  },
+  voiceJoin: {
+    label: "Joined voice",
+    help: "Posted when a member joins a voice channel. Needs the joining voice switch above.",
+    variables: [MEMBER, VOICE_CHANNEL],
+  },
+  voiceLeave: {
+    label: "Left voice",
+    help: "Posted when a member leaves voice. Needs the leaving voice switch above.",
+    variables: [MEMBER, VOICE_CHANNEL],
+  },
+  voiceMove: {
+    label: "Moved voice channel",
+    help: "Posted when a member moves from one voice channel to another. Needs the moving between voice channels switch above.",
+    variables: [
+      MEMBER,
+      { name: "from", description: "The channel they left, as a link followed by its name", sample: "#Squad 1 (Squad 1)" },
+      { name: "to", description: "The channel they moved to, as a link followed by its name", sample: "#Squad 2 (Squad 2)" },
+    ],
+  },
+  inviteCreate: {
+    label: "Invite created",
+    help: "Posted when an invite link is made. Needs the invites created switch above.",
+    variables: [
+      INVITE,
+      INVITE_CHANNEL,
+      { name: "inviter", description: "Who made it, as a mention followed by their username. Empty when Discord does not say", sample: "@Rook (rook)" },
+      { name: "uses", description: "How many times it can be used", sample: "Up to 10" },
+      { name: "expires", description: "When it stops working, or Never", sample: "<t:1700000000:R>" },
+    ],
+  },
+  inviteDelete: {
+    label: "Invite deleted",
+    help: "Posted when an invite link is deleted. Needs the invites deleted switch above.",
+    variables: [INVITE, INVITE_CHANNEL],
+  },
+  threadCreate: {
+    label: "Thread created",
+    help: "Posted when a thread or forum post is started. Needs the threads created switch above.",
+    variables: [
+      { name: "thread", description: "The thread, as a link followed by its name", sample: "#lfg-tonight (lfg-tonight)" },
+      THREAD_PARENT,
+      { name: "owner", description: "Who started it, as a mention. Empty when Discord does not say", sample: "@Rook" },
+    ],
+  },
+  threadDelete: {
+    label: "Thread deleted",
+    help: "Posted when a thread is deleted. Needs the threads deleted switch above.",
+    variables: [{ name: "thread", description: "The name of the thread that was deleted", sample: "lfg-tonight" }, THREAD_PARENT],
+  },
+  threadArchive: {
+    label: "Thread archived",
+    help: "Posted when a thread is archived, by someone or by Discord after it goes quiet. Needs the threads archived switch above.",
+    variables: [{ name: "thread", description: "The thread, as a link followed by its name", sample: "#lfg-tonight (lfg-tonight)" }, THREAD_PARENT],
+  },
+  emojiCreate: {
+    label: "Emoji added",
+    help: "Posted when an emoji is uploaded. Needs the emoji switch above.",
+    variables: [{ name: "emoji", description: "The emoji itself followed by its name", sample: ":gg: (gg)" }],
+  },
+  emojiUpdate: {
+    label: "Emoji renamed",
+    help: "Posted when an emoji is renamed. Needs the emoji switch above.",
+    variables: [
+      { name: "before", description: "Its old name", sample: "gg" },
+      { name: "after", description: "Its new name, followed by the emoji itself", sample: "goodgame :goodgame:" },
+    ],
+  },
+  emojiDelete: {
+    label: "Emoji removed",
+    help: "Posted when an emoji is deleted. Needs the emoji switch above.",
+    variables: [{ name: "emoji", description: "The name of the emoji that was removed", sample: "gg" }],
+  },
+  stickerCreate: {
+    label: "Sticker added",
+    help: "Posted when a sticker is uploaded. Needs the stickers switch above.",
+    variables: [STICKER],
+  },
+  stickerUpdate: {
+    label: "Sticker changed",
+    help: "Posted when a sticker's name, description or emoji changes. Needs the stickers switch above.",
+    variables: [STICKER, { name: "changes", description: "One line for each thing that changed", sample: "Name: gg to goodgame" }],
+  },
+  stickerDelete: {
+    label: "Sticker removed",
+    help: "Posted when a sticker is deleted. Needs the stickers switch above.",
+    variables: [STICKER],
+  },
+  serverUpdate: {
+    label: "Server settings changed",
+    help: "Posted when the server's name, description, icon, banner, verification level, inactive channel or timeout, system or rules channel, or owner changes. Needs the server settings switch above.",
+    variables: [{ name: "changes", description: "One line for each setting that changed, cut to 1024 characters", sample: "Name: Night Raid to Night Raiders" }],
+  },
 };
 
 interface Tagged {
@@ -284,3 +459,101 @@ export const banValues = (user: Tagged, reason: string | null | undefined): Repl
   member: person(user),
   reason: reason ? truncate(reason) : "",
 });
+
+const seconds = (ms: number): number => Math.floor(ms / 1000);
+
+export const timeoutValues = (user: Tagged, until: number): ReplyValues => ({
+  member: person(user),
+  until: `<t:${seconds(until)}:f> (<t:${seconds(until)}:R>)`,
+});
+
+export const kickValues = (user: Tagged, moderator: Tagged | null, reason: string | null | undefined): ReplyValues => ({
+  member: person(user),
+  moderator: moderator ? person(moderator) : "",
+  reason: reason ? truncate(reason) : "",
+});
+
+interface Named {
+  id: string;
+  name: string;
+}
+
+const linked = (channel: Named): string => `<#${channel.id}> (${channel.name})`;
+
+export const voiceValues = (user: Tagged, channel: Named): ReplyValues => ({ member: person(user), channel: linked(channel) });
+
+export const voiceMoveValues = (user: Tagged, from: Named, to: Named): ReplyValues => ({ member: person(user), from: linked(from), to: linked(to) });
+
+export interface InviteLike {
+  code: string;
+  channelId: string | null;
+  inviter?: Tagged | null;
+  maxUses?: number | null;
+  expiresTimestamp?: number | null;
+}
+
+export const inviteValues = (invite: InviteLike): ReplyValues => ({
+  invite: invite.code,
+  channel: invite.channelId ? `<#${invite.channelId}>` : "",
+  inviter: invite.inviter ? person(invite.inviter) : "",
+  uses: invite.maxUses ? `Up to ${invite.maxUses}` : "No limit",
+  expires: invite.expiresTimestamp ? `<t:${seconds(invite.expiresTimestamp)}:R>` : "Never",
+});
+
+export const inviteDeleteValues = (invite: Pick<InviteLike, "code" | "channelId">): ReplyValues => ({
+  invite: invite.code,
+  channel: invite.channelId ? `<#${invite.channelId}>` : "",
+});
+
+export interface ThreadLike extends Named {
+  parentId: string | null;
+  ownerId?: string | null;
+}
+
+export const threadValues = (thread: ThreadLike): ReplyValues => ({
+  thread: linked(thread),
+  channel: thread.parentId ? `<#${thread.parentId}>` : "",
+  owner: thread.ownerId ? `<@${thread.ownerId}>` : "",
+});
+
+export const threadDeleteValues = (thread: ThreadLike): ReplyValues => ({
+  thread: thread.name,
+  channel: thread.parentId ? `<#${thread.parentId}>` : "",
+});
+
+interface EmojiLike {
+  id: string;
+  name: string | null;
+  animated?: boolean | null;
+}
+
+const showEmoji = (emoji: EmojiLike): string => `<${emoji.animated ? "a" : ""}:${emoji.name ?? "emoji"}:${emoji.id}>`;
+
+export const emojiCreateValues = (emoji: EmojiLike): ReplyValues => ({ emoji: `${showEmoji(emoji)} (${emoji.name ?? ""})` });
+export const emojiUpdateValues = (before: EmojiLike, after: EmojiLike): ReplyValues => ({
+  before: before.name ?? "",
+  after: `${after.name ?? ""} ${showEmoji(after)}`,
+});
+export const emojiDeleteValues = (emoji: EmojiLike): ReplyValues => ({ emoji: emoji.name ?? "" });
+
+export interface StickerLike {
+  name: string;
+  description: string | null;
+  tags: string | null;
+}
+
+export const stickerValues = (sticker: Pick<StickerLike, "name">): ReplyValues => ({ sticker: sticker.name });
+
+/** One line per thing that changed on a sticker. Empty when nothing a reader would notice did. */
+export function stickerChanges(before: StickerLike, after: StickerLike): string[] {
+  const lines: string[] = [];
+  const add = (label: string, a: string | null, b: string | null) => {
+    if ((a ?? "") !== (b ?? "")) lines.push(`${label}: ${a || "(none)"} to ${b || "(none)"}`);
+  };
+  add("Name", before.name, after.name);
+  add("Description", before.description, after.description);
+  add("Emoji", before.tags, after.tags);
+  return lines;
+}
+
+export const changesValues = (lines: string[]): ReplyValues => ({ changes: truncate(lines.join("\n")) });

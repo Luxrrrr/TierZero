@@ -1,5 +1,6 @@
 import { ChannelType, type NewsChannel, type TextChannel } from "discord.js";
 import { prisma } from "@tier0/db";
+import { discoverFeedLink } from "./address.js";
 import { FeedFailure, describeFailure, type FailureTexts } from "./failures.js";
 import { safeFetch } from "./net.js";
 import { NEWS_MESSAGE, STEAM_MESSAGE, deliver, newsValues, steamValues } from "./messages.js";
@@ -50,7 +51,7 @@ async function pollSource(
   steamPosts: (appId: number, scope: Scope) => Promise<SteamPost[]>,
 ): Promise<void> {
   const where = { guildId_sourceKey: { guildId: ctx.guild.id, sourceKey: source.key } };
-  const cursor = await prisma.feedCursor.findUnique({ where });
+  const cursor = await readCursor(ctx, source);
   const seen = readSeen(cursor?.seen);
 
   let remembered = seen ?? [];
@@ -110,7 +111,25 @@ async function postEach<T extends { id: string }>(
 const withoutUnposted = (seen: string[], unposted: string[]): string[] =>
   unposted.length === 0 ? seen : seen.filter((id) => !unposted.includes(id));
 
-async function fetchFeed(url: string): Promise<FeedItem[]> {
+/**
+ * The progress of a source, or for a feed tracked before feeds were kept per
+ * channel, the progress it had then, so the change does not post old items again.
+ */
+async function readCursor(ctx: FeedsContext, source: Source) {
+  const cursor = await prisma.feedCursor.findUnique({
+    where: { guildId_sourceKey: { guildId: ctx.guild.id, sourceKey: source.key } },
+  });
+  if (cursor || source.kind !== "rss") return cursor;
+  return prisma.feedCursor.findUnique({
+    where: { guildId_sourceKey: { guildId: ctx.guild.id, sourceKey: source.legacyKey } },
+  });
+}
+
+/** Pages whose feed was found through the link in their head, so the page is read once rather than every check. */
+const discovered = new Map<string, string>();
+const MAX_DISCOVERED = 1000;
+
+async function download(url: string) {
   const response = await safeFetch(url, {
     accept: "application/rss+xml, application/atom+xml, application/xml, text/xml;q=0.9, */*;q=0.5",
   });
@@ -118,12 +137,34 @@ async function fetchFeed(url: string): Promise<FeedItem[]> {
     throw new FeedFailure("rateLimited");
   }
   if (response.status !== 200) throw new FeedFailure("siteStatus", { status: response.status });
+  return response;
+}
 
-  const { items } = parseFeed(response.body);
+function newestFirst(items: FeedItem[]): FeedItem[] {
   // Feeds are nearly always newest first, but nothing requires it.
   return items.every((item) => item.publishedAt)
     ? [...items].sort((a, b) => (b.publishedAt?.getTime() ?? 0) - (a.publishedAt?.getTime() ?? 0))
     : items;
+}
+
+/**
+ * Reads a feed. An address that turns out to be a web page, such as a site's
+ * home page or a YouTube channel, is read through the feed the page links to.
+ */
+async function fetchFeed(url: string): Promise<FeedItem[]> {
+  const target = discovered.get(url) ?? url;
+  const response = await download(target);
+  try {
+    return newestFirst(parseFeed(response.body).items);
+  } catch (error) {
+    if (!(error instanceof FeedFailure) || target !== url) throw error;
+    const link = discoverFeedLink(response.body, response.url);
+    if (!link || link === url) throw error;
+    const items = newestFirst(parseFeed((await download(link)).body).items);
+    if (discovered.size >= MAX_DISCOVERED) discovered.clear();
+    discovered.set(url, link);
+    return items;
+  }
 }
 
 async function fetchSteam(appId: number, scope: Scope): Promise<SteamPost[]> {
@@ -150,7 +191,8 @@ function textChannel(ctx: FeedsContext, id: string): TextChannel | NewsChannel {
 
 async function postFeedItem(ctx: FeedsContext, source: Source & { kind: "rss" }, item: FeedItem): Promise<void> {
   const channel = textChannel(ctx, source.row.channel);
-  await deliver(ctx, channel, ctx.settings.news.message, newsValues(source.label, item, source.row.mention), NEWS_MESSAGE);
+  const message = source.message ?? ctx.settings.news.message;
+  await deliver(ctx, channel, message, newsValues(source.label, item, source.row.mention), NEWS_MESSAGE);
 }
 
 async function postSteamPost(
@@ -160,7 +202,7 @@ async function postSteamPost(
 ): Promise<void> {
   const channel = textChannel(ctx, source.channel);
   const values = steamValues(source.game, source.appId, post, source.mention);
-  await deliver(ctx, channel, ctx.settings.patchNotes.message, values, STEAM_MESSAGE);
+  await deliver(ctx, channel, source.message ?? ctx.settings.patchNotes.message, values, STEAM_MESSAGE);
 }
 
 export interface SendResult {
@@ -196,7 +238,7 @@ export async function sendLatest(ctx: FeedsContext, source: Source, count: numbe
     ctx.settings.labels.problems,
   );
 
-  const cursor = await prisma.feedCursor.findUnique({ where });
+  const cursor = await readCursor(ctx, source);
   const known = readSeen(cursor?.seen) ?? [];
   const sent = ordered.map((item) => item.id).filter((id) => !outcome.unposted.includes(id));
   const seen = JSON.stringify([...new Set([...sent, ...known])].slice(0, 200));

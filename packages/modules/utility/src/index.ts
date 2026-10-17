@@ -24,6 +24,11 @@ export default defineModule({
   // Nothing to configure here: the replies are edited on the Commands page.
   settings: s.object({}),
 
+  // A page with no settings at all reads as broken without a line saying that is expected.
+  async notices() {
+    return [{ tone: "info" as const, text: "There is nothing to set up for this feature. Use Customize on a command below to reword its reply." }];
+  },
+
   commands: [
     {
       name: "ping",
