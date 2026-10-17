@@ -12,22 +12,28 @@ model Guild {
   name     String
   joinedAt DateTime @default(now())
 
-  modules          GuildModule[]
-  overrides        CommandOverride[]
-  infractions      Infraction[]
-  tasks            ScheduledTask[]
-  menus            ReactionRoleMenu[]
-  tickets          Ticket[]
-  levels           LevelMember[]
-  feeds            FeedCursor[]
-  notes            ModNote[]
-  audits           ModAudit[]
-  staff            StaffMember[]
-  messageFolders   MessageFolder[]
-  messageTemplates MessageTemplate[]
+  modules             GuildModule[]
+  overrides           CommandOverride[]
+  infractions         Infraction[]
+  tasks               ScheduledTask[]
+  menus               ReactionRoleMenu[]
+  tickets             Ticket[]
+  levels              LevelMember[]
+  feeds               FeedCursor[]
+  notes               ModNote[]
+  audits              ModAudit[]
+  staff               StaffMember[]
+  messageFolders      MessageFolder[]
+  messageTemplates    MessageTemplate[]
   messageInteractions MessageInteraction[]
+  messageSends        MessageSend[]
   loggedMessages      LoggedMessage[]
   serverLogEntries    ServerLogEntry[]
+  ticketPanelPosts    TicketPanelPost[]
+  ticketCooldowns     TicketCooldown[]
+  ticketAudits        TicketAudit[]
+  appeals             Appeal[]
+  lockedChannels      LockedChannel[]
 
   /// The last case number handed out here. It only ever goes up, so a number
   /// that was purged is never given to a different case.
@@ -163,8 +169,14 @@ model Infraction {
   editedBy    String?
   /// Messages a moderator attached, copied as they read when the action was taken, as JSON.
   evidence    String    @default("[]")
+  /// Set on a case the bot took by itself because an escalation rule fired, as JSON
+  /// `{ ruleId, rule, warns, windowMs, fromCase }`. Null for every other case.
+  automatic   String?
+  /// False for an automod warning whose rule is set not to count toward escalation.
+  escalates   Boolean   @default(true)
 
-  guild Guild @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  guild   Guild    @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  appeals Appeal[]
 
   @@unique([guildId, caseNumber])
   @@index([guildId, userId])
@@ -201,10 +213,16 @@ model ReactionRoleMenu {
   @@index([guildId])
 }
 
-/// One support ticket, keyed by the channel opened for it.
+/// One ticket. `id` is the internal key, shared across every server on the
+/// instance; `number` is what people see (`#42`), counted per server. The
+/// type, panel and names are copied in when the ticket opens so it still reads
+/// right after a type is removed or a member leaves.
 model Ticket {
   id        Int       @id @default(autoincrement())
   guildId   String
+  /// The number in this server, handed out when the ticket opens. Null only on a
+  /// row made some other way, which then shows its id.
+  number    Int?
   channelId String    @unique
   openerId  String
   subject   String?
@@ -213,9 +231,174 @@ model Ticket {
   closedAt  DateTime?
   closedBy  String?
 
+  typeId           String?
+  panelId          String?
+  typeName         String    @default("")
+  /// JSON `[{ label, value }]`, the answers to the type's form in order.
+  answers          String    @default("[]")
+  claimedById      String?
+  claimedAt        DateTime?
+  /// One of TICKET_PRIORITIES in packages/core/src/tickets.ts.
+  priority         String    @default("normal")
+  /// The first message from someone other than the opener and not a bot.
+  firstResponseAt  DateTime?
+  lastActivityAt   DateTime  @default(now())
+  closeReason      String?
+  closedByName     String?
+  rating           Int?
+  ratingComment    String?
+  ratedAt          DateTime?
+  /// `channel` or `thread`.
+  mode             String    @default("channel")
+  /// Closed but the channel was kept, locked, so it can be reopened.
+  archived         Boolean   @default(false)
+  channelName      String    @default("")
+  openerName       String    @default("")
+  messageCount     Int       @default(0)
+  reopenedCount    Int       @default(0)
+  closeRequestedAt DateTime?
+  /// The first message in the ticket, whose Claim button the bot swaps for Unclaim.
+  controlsMessageId String?
+  /// Who sent the message that set `firstResponseAt`, for the per-handler stats.
+  firstResponderId  String?
+  /// Set when a manager deleted the stored messages, kept so the transcript can say who and when.
+  transcriptDeletedAt     DateTime?
+  transcriptDeletedById   String?
+  transcriptDeletedByName String?
+  /// Set when the retention period removed the stored messages.
+  messagesPrunedAt  DateTime?
+  /// The opener left the server while the ticket was open.
+  openerLeftAt      DateTime?
+
+  guild    Guild           @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  messages TicketMessage[]
+  notes    TicketNote[]
+  events   TicketEvent[]
+
+  @@unique([guildId, number])
+  @@index([guildId, status])
+  @@index([guildId, openedAt])
+  @@index([guildId, typeId, status])
+  @@index([guildId, claimedById])
+}
+
+/// A message in a ticket, stored as it happens so the transcript outlives the
+/// channel. Attachment files stay on Discord; only their links are kept.
+model TicketMessage {
+  id            Int       @id @default(autoincrement())
+  ticketId      Int
+  messageId     String
+  authorId      String
+  authorName    String
+  authorAvatar  String?
+  authorIsStaff Boolean   @default(false)
+  /// The author's top role colour as `#rrggbb`, null when no role colours them.
+  authorColor   String?
+  /// A bot or a webhook, which Discord tags APP.
+  authorBot     Boolean   @default(false)
+  /// Discord id of the message this one replies to.
+  replyToId     String?
+  content       String    @default("")
+  /// JSON `[{ name, url, contentType, size }]`.
+  attachments   String    @default("[]")
+  /// JSON, full embeds as `TicketEmbedDto`. Rows from before 2026-10-20 hold only `{ title, description }`.
+  embeds        String    @default("[]")
+  /// JSON `[{ components: [button or select] }]`, rows of buttons and menus as drawn.
+  components    String    @default("[]")
+  /// JSON `[{ id, name, format }]`.
+  stickers      String    @default("[]")
+  /// JSON `[{ emoji: { id, name, animated }, count }]`, read when the ticket closes.
+  reactions     String    @default("[]")
+  /// JSON `{ users, roles, channels }`, each mapping an id to `{ name, color }` as it was when stored.
+  mentions      String    @default("{}")
+  createdAt     DateTime  @default(now())
+  editedAt      DateTime?
+  deletedAt     DateTime?
+  edits         Int       @default(0)
+  /// `discord`, or `dashboard` for a reply sent from the workspace.
+  source        String    @default("discord")
+
+  ticket Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  @@unique([ticketId, messageId])
+  @@index([ticketId, createdAt])
+}
+
+/// Staff-only notes on a ticket. Never sent to Discord.
+model TicketNote {
+  id         Int      @id @default(autoincrement())
+  ticketId   Int
+  authorId   String
+  authorName String
+  body       String
+  createdAt  DateTime @default(now())
+
+  ticket Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  @@index([ticketId, createdAt])
+}
+
+/// Something that happened to a ticket, for its timeline. `kind` is one of
+/// TICKET_EVENT_KINDS in packages/core/src/tickets.ts and `detail` is JSON.
+model TicketEvent {
+  id        Int      @id @default(autoincrement())
+  ticketId  Int
+  kind      String
+  actorId   String?
+  actorName String?
+  detail    String   @default("{}")
+  createdAt DateTime @default(now())
+
+  ticket Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  @@index([ticketId, createdAt])
+}
+
+/// Where a panel was last posted, so it can be edited in place. A row with an
+/// empty `messageId` records a panel the version before panels were tracked
+/// posted somewhere unknown.
+model TicketPanelPost {
+  id        Int      @id @default(autoincrement())
+  guildId   String
+  panelId   String
+  channelId String
+  messageId String
+  postedAt  DateTime @default(now())
+  /// A fingerprint of what was posted, to tell when the settings changed since.
+  hash      String   @default("")
+
   guild Guild @relation(fields: [guildId], references: [id], onDelete: Cascade)
 
-  @@index([guildId, status])
+  @@unique([guildId, panelId])
+}
+
+/// A member may not open another ticket of this type before `until`.
+model TicketCooldown {
+  guildId String
+  userId  String
+  typeId  String
+  until   DateTime
+
+  guild Guild @relation(fields: [guildId], references: [id], onDelete: Cascade)
+
+  @@unique([guildId, userId, typeId])
+}
+
+/// Manager actions on tickets that leave nothing else behind, such as a
+/// deleted transcript. `detail` is JSON.
+model TicketAudit {
+  id        Int      @id @default(autoincrement())
+  guildId   String
+  actorId   String
+  actorName String
+  kind      String
+  ticketId  Int?
+  detail    String   @default("{}")
+  createdAt DateTime @default(now())
+
+  guild Guild @relation(fields: [guildId], references: [id], onDelete: Cascade)
+
+  @@index([guildId, createdAt])
 }
 
 /// Per-member experience. This is the only table written on a hot path, one
@@ -293,6 +476,52 @@ model ModAudit {
   @@index([noteId])
 }
 
+/// A banned member asking for the ban on one case to be lifted, sent from the
+/// button on the ban's direct message. Banned members are not in the server, so
+/// this cannot be a ticket. `status` is pending, accepted or denied.
+model Appeal {
+  id            Int       @id @default(autoincrement())
+  guildId       String
+  userId        String
+  infractionId  Int
+  caseNumber    Int
+  text          String
+  status        String    @default("pending")
+  createdAt     DateTime  @default(now())
+  decidedAt     DateTime?
+  decidedBy     String?
+  decidedByName String?
+  /// What the member was told with the decision.
+  response      String?
+
+  guild      Guild      @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  infraction Infraction @relation(fields: [infractionId], references: [id], onDelete: Cascade)
+
+  @@index([guildId, status, createdAt])
+  @@index([guildId, userId])
+  @@index([infractionId])
+}
+
+/// A channel the bot locked during a lockdown, with what the @everyone
+/// overwrite said about each permission it changed, so unlocking puts back
+/// exactly that and leaves every other permission alone. Kept in the database
+/// so a restart in the middle of a lockdown does not lose the way back.
+model LockedChannel {
+  guildId   String
+  channelId String
+  /// JSON `{ had: boolean, bits: { [name]: "allow" | "deny" | "unset" } }`.
+  previous  String
+  lockedAt  DateTime  @default(now())
+  lockedBy  String
+  reason    String?
+  /// When the lockdown lifts by itself, if it was given a length.
+  endsAt    DateTime?
+
+  guild Guild @relation(fields: [guildId], references: [id], onDelete: Cascade)
+
+  @@id([guildId, channelId])
+}
+
 /// Who may open the mod dashboard for a server, and at what level. The
 /// instance owner is implied everywhere and never listed here.
 model StaffMember {
@@ -346,6 +575,26 @@ model MessageTemplate {
   folder MessageFolder? @relation(fields: [folderId], references: [id], onDelete: SetNull)
 
   @@index([guildId, folderId])
+}
+
+/// Where a message from the Message creator went, so a template can list its sends
+/// and a sent message can be edited later. `templateId` is null for a message that
+/// was not sent from a template, and is kept as a plain number so deleting a
+/// template leaves its history readable.
+model MessageSend {
+  id         Int      @id @default(autoincrement())
+  guildId    String
+  templateId Int?
+  channelId  String
+  messageId  String
+  /// Sent through a webhook with a chosen name, so it can only be edited the same way.
+  viaWebhook Boolean  @default(false)
+  sentAt     DateTime @default(now())
+
+  guild Guild @relation(fields: [guildId], references: [id], onDelete: Cascade)
+
+  @@unique([guildId, messageId])
+  @@index([guildId, templateId, sentAt])
 }
 
 /// What the buttons and menus of a message that was sent do. Kept per message, so
