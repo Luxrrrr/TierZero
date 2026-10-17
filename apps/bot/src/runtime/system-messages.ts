@@ -51,6 +51,11 @@ export function timeoutRemovalReason(template: string | undefined, caseNumber: n
   return applyVariables(template ?? LABEL_DEFAULTS.timeoutRemovalReason, { case: String(caseNumber), actor }).slice(0, REASON_LIMIT);
 }
 
+/** The reason written to the audit log when removing a ban case on the dashboard unbans the member. */
+export function banRemovalReason(template: string | undefined, caseNumber: number, actor: string): string {
+  return applyVariables(template ?? LABEL_DEFAULTS.banRemovalReason, { case: String(caseNumber), actor }).slice(0, REASON_LIMIT);
+}
+
 /**
  * Fills in one of the bot's own messages. The owner's version is tried first;
  * if it no longer fits Discord's limits once its variables are in, the default

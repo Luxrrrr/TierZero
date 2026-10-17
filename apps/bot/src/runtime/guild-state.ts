@@ -14,7 +14,7 @@ import type {
 import { prisma } from "@tier0/db";
 import { LABEL_DEFAULTS, SYSTEM_MODULE_ID, type SystemSettings } from "@tier0/module-system";
 import { matchesPayload, namespaceKind } from "./task-payload.js";
-import { parseIdList, type CommandSettings } from "./command-policy.js";
+import { parseChannelRules, parseIdList, type CommandSettings } from "./command-policy.js";
 import { storedReply } from "./command-reply.js";
 import { resolveDashboardUrl } from "./dashboard-url.js";
 import { editMessage, replyMessage, sendMessage } from "./send-message.js";
@@ -29,10 +29,23 @@ export interface Resync {
   schedule(guildId: string): void;
 }
 
-export interface CommandState extends CommandSummary {
+/** One part of a command, with what the owner set for it alone. */
+export interface SubcommandState {
+  name: string;
+  key: string;
+  description: string;
   enabled: boolean;
   allowRoles: string[];
   denyChannels: string[];
+  allowChannels: string[];
+}
+
+export interface CommandState extends Omit<CommandSummary, "subcommands"> {
+  subcommands: SubcommandState[];
+  enabled: boolean;
+  allowRoles: string[];
+  denyChannels: string[];
+  allowChannels: string[];
   permissions: string | null;
   ephemeral: boolean | null;
   customReply: MessageBody | null;
@@ -101,9 +114,12 @@ export class GuildState {
     const row = await prisma.commandOverride.findUnique({
       where: { guildId_command: { guildId, command } },
     });
+    const channels = row ? parseChannelRules(row.denyChannels) : { deny: [], allow: [] };
     const policy: CommandSettings = {
+      enabled: row?.enabled ?? true,
       allowRoles: row ? parseIdList(row.allowRoles) : [],
-      denyChannels: row ? parseIdList(row.denyChannels) : [],
+      denyChannels: channels.deny,
+      allowChannels: channels.allow,
       ephemeral: row?.ephemeral ?? null,
       customReply: storedReply(row),
       permissions: row?.permissions ?? null,
@@ -175,6 +191,7 @@ export class GuildState {
         const moderation = await this.settings(guild.id, "moderation");
         return resolveDashboardUrl(moderation?.dashboardUrl);
       },
+      peer: async (peerId) => (peerId !== moduleId && (await this.isEnabled(guild.id, peerId)) ? this.context(guild, peerId) : null),
       update: async (patch) => {
         const merged = { ...settings, ...patch };
         const parsed = module.settings.parse(merged);
@@ -221,14 +238,27 @@ export class GuildState {
         // which is the default the dashboard has to show as such.
         const commands = summary.commands.map((command) => {
           const override = byCommand.get(command.name);
+          const channels = override ? parseChannelRules(override.denyChannels) : { deny: [], allow: [] };
           return {
             ...command,
             enabled: override?.enabled ?? true,
             allowRoles: override ? parseIdList(override.allowRoles) : [],
-            denyChannels: override ? parseIdList(override.denyChannels) : [],
+            denyChannels: channels.deny,
+            allowChannels: channels.allow,
             permissions: override?.permissions ?? null,
             ephemeral: override?.ephemeral ?? null,
             customReply: storedReply(override ?? null),
+            subcommands: command.subcommands.map((part) => {
+              const own = byCommand.get(part.key);
+              const rules = own ? parseChannelRules(own.denyChannels) : { deny: [], allow: [] };
+              return {
+                ...part,
+                enabled: own?.enabled ?? true,
+                allowRoles: own ? parseIdList(own.allowRoles) : [],
+                denyChannels: rules.deny,
+                allowChannels: rules.allow,
+              };
+            }),
           };
         });
         return { ...summary, enabled: summary.alwaysOn || (row?.enabled ?? false), settings, commands };
@@ -407,6 +437,12 @@ function taskQueue(guildId: string, moduleId: string): ScheduledWork {
         where: { id: { in: doomed.map((row) => row.id) } },
       });
       return doomed.length;
+    },
+
+    async reschedule(kind, runAt, payload = {}) {
+      const text = JSON.stringify(payload);
+      const moved = await prisma.scheduledTask.updateMany({ where: { guildId, kind: namespaced(kind), payload: text }, data: { runAt } });
+      if (moved.count === 0) await prisma.scheduledTask.create({ data: { guildId, kind: namespaced(kind), runAt, payload: text } });
     },
   };
 }

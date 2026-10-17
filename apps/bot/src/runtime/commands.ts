@@ -2,7 +2,7 @@ import { REST, Routes } from "discord.js";
 import type { MessageBody, ModuleRegistry } from "@tier0/core";
 import { prisma } from "@tier0/db";
 import type { GuildState } from "./guild-state.js";
-import { EVERYONE } from "./command-policy.js";
+import { EVERYONE, parseChannelRules, serializeChannelRules } from "./command-policy.js";
 
 const RESYNC_DELAY_MS = 5_000;
 
@@ -11,6 +11,7 @@ export interface CommandPatch {
   enabled?: boolean;
   allowRoles?: string[];
   denyChannels?: string[];
+  allowChannels?: string[];
   permissions?: string | null;
   ephemeral?: boolean | null;
   /** A full reply, or null to go back to what the command says. */
@@ -24,8 +25,19 @@ export interface CommandPatch {
  * cached by Discord for around an hour and looks identical everywhere, which
  * would break the per-server visibility the dashboard promises.
  */
+/** What the last registration for a guild did, for the dashboard's count. */
+export interface SyncStatus {
+  /** How many commands Discord accepted, or null before the first registration finished. */
+  registered: number | null;
+  /** True while a change is waiting out the debounce. */
+  pending: boolean;
+  /** Why the last registration failed, or null when it worked. */
+  failed: string | null;
+}
+
 export class CommandSync {
   private readonly pending = new Map<string, NodeJS.Timeout>();
+  private readonly results = new Map<string, { registered: number | null; failed: string | null }>();
 
   constructor(
     private readonly rest: REST,
@@ -50,10 +62,22 @@ export class CommandSync {
 
   async run(guildId: string): Promise<void> {
     const payload = await this.resolve(guildId);
-    await this.rest.put(
-      Routes.applicationGuildCommands(this.applicationId, guildId),
-      { body: payload },
-    );
+    try {
+      await this.rest.put(
+        Routes.applicationGuildCommands(this.applicationId, guildId),
+        { body: payload },
+      );
+    } catch (error) {
+      const previous = this.results.get(guildId)?.registered ?? null;
+      this.results.set(guildId, { registered: previous, failed: error instanceof Error ? error.message : String(error) });
+      throw error;
+    }
+    this.results.set(guildId, { registered: payload.length, failed: null });
+  }
+
+  status(guildId: string): SyncStatus {
+    const result = this.results.get(guildId);
+    return { registered: result?.registered ?? null, pending: this.pending.has(guildId), failed: result?.failed ?? null };
   }
 
   /** Upserts a command override and schedules the resync it implies. */
@@ -61,7 +85,18 @@ export class CommandSync {
     guildId: string,
     command: string,
     patch: CommandPatch,
+    { resync = true }: { resync?: boolean } = {},
   ): Promise<void> {
+    // Both channel lists live in one column, so changing one keeps the other.
+    let channels: string | undefined;
+    if (patch.denyChannels !== undefined || patch.allowChannels !== undefined) {
+      const existing = await prisma.commandOverride.findUnique({ where: { guildId_command: { guildId, command } } });
+      const before = existing ? parseChannelRules(existing.denyChannels) : { deny: [], allow: [] };
+      channels = serializeChannelRules({
+        deny: patch.denyChannels ?? before.deny,
+        allow: patch.allowChannels ?? before.allow,
+      });
+    }
     await prisma.commandOverride.upsert({
       where: { guildId_command: { guildId, command } },
       create: {
@@ -69,7 +104,7 @@ export class CommandSync {
         command,
         enabled: patch.enabled ?? true,
         allowRoles: JSON.stringify(patch.allowRoles ?? []),
-        denyChannels: JSON.stringify(patch.denyChannels ?? []),
+        denyChannels: channels ?? "[]",
         permissions: patch.permissions ?? null,
         ephemeral: patch.ephemeral ?? null,
         responseBody: patch.customReply ? JSON.stringify(patch.customReply) : null,
@@ -79,9 +114,7 @@ export class CommandSync {
         ...(patch.allowRoles !== undefined
           ? { allowRoles: JSON.stringify(patch.allowRoles) }
           : {}),
-        ...(patch.denyChannels !== undefined
-          ? { denyChannels: JSON.stringify(patch.denyChannels) }
-          : {}),
+        ...(channels !== undefined ? { denyChannels: channels } : {}),
         // Null clears an override back to the command's own behaviour, so
         // these are written whenever they are present at all.
         ...(patch.permissions !== undefined ? { permissions: patch.permissions } : {}),
@@ -96,7 +129,8 @@ export class CommandSync {
     // write has to invalidate it here. Leaving that to the caller means it
     // eventually gets forgotten.
     this.state.invalidate(guildId);
-    this.schedule(guildId);
+    // One part of a command changes nothing Discord holds: the bot alone enforces it.
+    if (resync) this.schedule(guildId);
   }
 
   /** visible = commands of enabled modules, minus anything switched off. */

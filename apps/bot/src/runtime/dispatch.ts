@@ -172,6 +172,40 @@ export function registerEventDispatch({ client, state }: Deps): void {
     await deliver(state, emoji.guild, "emojiDelete", (handler, ctx) => (handler as EventHandlers["emojiDelete"])(emoji, ctx));
   });
 
+  client.on(Events.ThreadUpdate, async (before, after) => {
+    await deliver(state, after.guild, "threadUpdate", (handler, ctx) =>
+      (handler as EventHandlers["threadUpdate"])(before, after, ctx),
+    );
+  });
+
+  // A sticker's guild is only filled in when it is cached, so the server is looked up by id.
+  const stickerGuild = (sticker: { guildId: string | null }): Guild | undefined =>
+    sticker.guildId ? client.guilds.cache.get(sticker.guildId) : undefined;
+
+  client.on(Events.GuildStickerCreate, async (sticker) => {
+    const guild = stickerGuild(sticker);
+    if (!guild) return;
+    await deliver(state, guild, "stickerCreate", (handler, ctx) => (handler as EventHandlers["stickerCreate"])(sticker, ctx));
+  });
+
+  client.on(Events.GuildStickerUpdate, async (before, after) => {
+    const guild = stickerGuild(after);
+    if (!guild) return;
+    await deliver(state, guild, "stickerUpdate", (handler, ctx) =>
+      (handler as EventHandlers["stickerUpdate"])(before, after, ctx),
+    );
+  });
+
+  client.on(Events.GuildStickerDelete, async (sticker) => {
+    const guild = stickerGuild(sticker);
+    if (!guild) return;
+    await deliver(state, guild, "stickerDelete", (handler, ctx) => (handler as EventHandlers["stickerDelete"])(sticker, ctx));
+  });
+
+  client.on(Events.GuildAuditLogEntryCreate, async (entry, guild) => {
+    await deliver(state, guild, "auditLogEntry", (handler, ctx) => (handler as EventHandlers["auditLogEntry"])(entry, ctx));
+  });
+
   client.on(Events.GuildRoleCreate, async (role) => {
     await deliver(state, role.guild, "roleCreate", (handler, ctx) =>
       (handler as EventHandlers["roleCreate"])(role, ctx),
@@ -207,7 +241,7 @@ function registerComponentDispatch({ client, state }: Deps): void {
   client.on(Events.InteractionCreate, async (interaction) => {
     const isComponent = interaction.isMessageComponent();
     const isModal = interaction.isModalSubmit();
-    if ((!isComponent && !isModal) || !interaction.guild) return;
+    if (!isComponent && !isModal) return;
 
     const parsed = parseCustomId(interaction.customId);
     if (!parsed) return;
@@ -218,9 +252,12 @@ function registerComponentDispatch({ client, state }: Deps): void {
       : module?.modals?.[parsed.action];
     if (!module || !handler) return;
 
-    if (!(await state.isEnabled(interaction.guild.id, module.id))) return;
+    const guild = interaction.guild ?? directMessageGuild(client, module.directMessage, parsed);
+    if (!guild) return;
 
-    const ctx = await state.context(interaction.guild, module.id);
+    if (!(await state.isEnabled(guild.id, module.id))) return;
+
+    const ctx = await state.context(guild, module.id);
     if (!ctx) return;
 
     try {
@@ -231,7 +268,18 @@ function registerComponentDispatch({ client, state }: Deps): void {
     } catch (error) {
       console.error(`[${module.id}] ${parsed.action} interaction failed:`, error);
       // Without an answer Discord tells the member "This interaction failed", which says nothing about what to do.
-      if (interaction.isRepliable()) await replySystem(state, interaction, interaction.guild, "componentFailed");
+      if (interaction.isRepliable()) await replySystem(state, interaction, guild, "componentFailed");
     }
   });
+}
+
+/**
+ * The server a button pressed in a direct message acts on, for an action the
+ * module allows there. The id names the server first; one the bot is not in
+ * gives nothing, so the press is ignored like any stale button.
+ */
+function directMessageGuild(client: Client, allowed: string[] | undefined, parsed: { action: string; rest: string }): Guild | null {
+  if (!allowed?.includes(parsed.action)) return null;
+  const guildId = parsed.rest.split(":")[0] ?? "";
+  return client.guilds.cache.get(guildId) ?? null;
 }

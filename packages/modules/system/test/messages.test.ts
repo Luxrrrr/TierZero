@@ -23,6 +23,7 @@ function resolve(stored: unknown): SystemSettings {
 /** What the router and the component handlers said before any of it could be edited. */
 const TODAY: Record<(typeof SYSTEM_MESSAGE_KEYS)[number], string> = {
   featureOff: "That feature is switched off on this server.",
+  commandOff: "That command is switched off on this server.",
   channelOff: "That command is turned off in this channel.",
   noRole: "You do not have a role that is allowed to use that command.",
   commandFailed: "That command did not finish. The server log has the details.",
@@ -39,6 +40,7 @@ const TODAY: Record<(typeof SYSTEM_MESSAGE_KEYS)[number], string> = {
 /** Everything the bot says on its own account is a failure to report, except the two role confirmations. */
 const KIND: Record<(typeof SYSTEM_MESSAGE_KEYS)[number], keyof typeof REPLY_COLOR> = {
   featureOff: "error",
+  commandOff: "error",
   channelOff: "error",
   noRole: "error",
   commandFailed: "error",
@@ -115,6 +117,8 @@ describe("the system module", () => {
   test("only accepts the placeholders the audit reason is filled in with", () => {
     assert.equal(registry.resolveSettings("system", { labels: { timeoutRemovalReason: "{case} by {actor}" } }).ok, true);
     assert.equal(registry.resolveSettings("system", { labels: { timeoutRemovalReason: "{who}" } }).ok, false);
+    assert.equal(registry.resolveSettings("system", { labels: { banRemovalReason: "Unbanned: case {case}, {actor}" } }).ok, true);
+    assert.equal(registry.resolveSettings("system", { labels: { banRemovalReason: "{who}" } }).ok, false);
   });
 });
 
@@ -169,5 +173,6 @@ describe("what the dashboard is told", () => {
 
   test("the audit reason default fills in the way the dashboard used to word it", () => {
     assert.equal(applyVariables(LABEL_DEFAULTS.timeoutRemovalReason, { case: "12", actor: "Ada" }), "Case #12 removed by Ada");
+    assert.equal(applyVariables(LABEL_DEFAULTS.banRemovalReason, { case: "12", actor: "Ada" }), "Case #12 was removed from the record by Ada");
   });
 });

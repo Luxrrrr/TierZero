@@ -8,6 +8,22 @@ const TICK_MS = 15_000;
 const DEFER_MS = 60_000;
 const KEEP_UNRUNNABLE_MS = 7 * 24 * 60 * 60_000;
 
+/** One row of scheduled work, as a built-in handler receives it. */
+export interface DueTask {
+  id: number;
+  guildId: string;
+  kind: string;
+  runAt: Date;
+  payload: Record<string, unknown>;
+}
+
+/**
+ * Work the bot itself schedules rather than a module, keyed by the whole kind,
+ * such as a message the dashboard queued for later. Its row is kept while the
+ * guild is not loaded, the way a module's is.
+ */
+export type BuiltInTasks = Record<string, (task: DueTask) => Promise<void>>;
+
 /**
  * Runs work that was scheduled for later: lifting a temporary ban, closing an
  * idle ticket.
@@ -27,6 +43,7 @@ export class Scheduler {
     private readonly client: Client,
     private readonly registry: ModuleRegistry,
     private readonly state: GuildState,
+    private readonly builtIn: BuiltInTasks = {},
   ) {}
 
   start(): void {
@@ -58,6 +75,11 @@ export class Scheduler {
       });
 
       for (const task of due) {
+        const own = Object.hasOwn(this.builtIn, task.kind) ? this.builtIn[task.kind] : undefined;
+        if (own) {
+          await this.runBuiltIn(own, task, now);
+          continue;
+        }
         const split = splitKind(task.kind);
         const handler = split ? this.registry.get(split.moduleId)?.tasks?.[split.kind] : undefined;
         if (!split || !handler) {
@@ -73,9 +95,10 @@ export class Scheduler {
 
         // Delete first. A handler that throws must not leave the row behind to
         // be retried forever on every tick. A handler that wants another go
-        // schedules it itself.
+        // schedules it itself. Deleting is also the claim: a row someone
+        // cancelled since this batch was read is gone, and must not run.
         this.stuckSince.delete(task.id);
-        await prisma.scheduledTask.delete({ where: { id: task.id } }).catch(() => undefined);
+        if (!(await this.claim(task.id))) continue;
         try {
           await handler(parsePayload(task.payload), ctx);
         } catch (error) {
@@ -86,6 +109,34 @@ export class Scheduler {
       console.error("Scheduler tick failed:", error);
     } finally {
       this.running = false;
+    }
+  }
+
+  private async runBuiltIn(
+    handler: (task: DueTask) => Promise<void>,
+    task: { id: number; guildId: string; kind: string; runAt: Date; payload: string },
+    now: Date,
+  ): Promise<void> {
+    if (!this.client.guilds.cache.get(task.guildId)) {
+      await this.defer(task, now);
+      return;
+    }
+    // Deleted first for the same reason as a module's work: a throw must not repeat forever.
+    this.stuckSince.delete(task.id);
+    if (!(await this.claim(task.id))) return;
+    try {
+      await handler({ ...task, payload: parsePayload(task.payload) });
+    } catch (error) {
+      console.error(`Scheduled ${task.kind} failed:`, error);
+    }
+  }
+
+  /** Removes the row and says whether this call was the one that did, so a cancelled task is not run. */
+  private async claim(id: number): Promise<boolean> {
+    try {
+      return (await prisma.scheduledTask.deleteMany({ where: { id } })).count === 1;
+    } catch {
+      return false;
     }
   }
 

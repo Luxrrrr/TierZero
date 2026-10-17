@@ -7,6 +7,7 @@ import { embedReply, type MessageBody, type MessageVariable } from "@tier0/core"
  */
 export const SYSTEM_MESSAGE_KEYS = [
   "featureOff",
+  "commandOff",
   "channelOff",
   "noRole",
   "commandFailed",
@@ -24,6 +25,7 @@ export type SystemMessageKey = (typeof SYSTEM_MESSAGE_KEYS)[number];
 
 export const SYSTEM_MESSAGES: Record<SystemMessageKey, MessageBody> = {
   featureOff: embedReply("That feature is switched off on this server.", "error"),
+  commandOff: embedReply("That command is switched off on this server.", "error"),
   channelOff: embedReply("That command is turned off in this channel.", "error"),
   noRole: embedReply("You do not have a role that is allowed to use that command.", "error"),
   commandFailed: embedReply("That command did not finish. The server log has the details.", "error"),
@@ -46,6 +48,7 @@ const ROLE: MessageVariable = { name: "role", description: "The role's name", sa
 
 export const SYSTEM_VARIABLES: Record<SystemMessageKey, MessageVariable[]> = {
   featureOff: [COMMAND, FEATURE],
+  commandOff: [{ ...COMMAND, sample: "/ticket close" }],
   channelOff: [COMMAND, { name: "channel", description: "The channel the command was used in, as a link", sample: "#general" }],
   noRole: [
     COMMAND,
@@ -72,6 +75,10 @@ export const SYSTEM_INFO: Record<SystemMessageKey, SystemMessageInfo> = {
   featureOff: {
     label: "A feature is switched off",
     help: "Sent when someone uses a command whose feature is turned off on this server.",
+  },
+  commandOff: {
+    label: "A command or part of one is switched off",
+    help: "Sent when someone uses a part of a command, such as /ticket close, that the Commands page switched off. Discord still lists every part of a command, so the bot answers with this. A whole command that is off leaves Discord within a few seconds.",
   },
   channelOff: {
     label: "A command is turned off in this channel",
@@ -126,6 +133,7 @@ export const LABEL_DEFAULTS = {
   webhookName: "TierZero messages",
   defaultSender: "the dashboard",
   timeoutRemovalReason: "Case #{case} removed by {actor}",
+  banRemovalReason: "Case #{case} was removed from the record by {actor}",
 } as const;
 
 export type SystemLabels = { [K in keyof typeof LABEL_DEFAULTS]: string };

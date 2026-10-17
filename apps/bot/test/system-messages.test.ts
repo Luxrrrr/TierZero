@@ -8,6 +8,7 @@ import {
   replySystem,
   systemBody,
   systemLabels,
+  banRemovalReason,
   timeoutRemovalReason,
   type SystemSource,
 } from "../dist/runtime/system-messages.js";
@@ -194,5 +195,16 @@ describe("timeoutRemovalReason", () => {
 
   test("never exceeds what Discord keeps of an audit-log reason", () => {
     assert.equal(timeoutRemovalReason("{actor}", 1, "x".repeat(600)).length, 512);
+  });
+});
+
+describe("banRemovalReason", () => {
+  test("is the reason the unban always carried, by default", () => {
+    assert.equal(banRemovalReason(undefined, 42, "FragMuffin"), "Case #42 was removed from the record by FragMuffin");
+  });
+
+  test("uses the owner's wording, cut to what Discord keeps", () => {
+    assert.equal(banRemovalReason("Appeal accepted by {actor}, case {case}", 9, "Kairo"), "Appeal accepted by Kairo, case 9");
+    assert.equal(banRemovalReason("{actor}", 1, "x".repeat(600)).length, 512);
   });
 });

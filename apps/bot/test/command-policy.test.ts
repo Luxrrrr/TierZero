@@ -1,6 +1,6 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { checkCommandPolicy, parseIdList, permissionOverrideAllowed } from "../src/runtime/command-policy.ts";
+import { checkCommandPolicy, parseChannelRules, parseIdList, permissionOverrideAllowed, serializeChannelRules } from "../src/runtime/command-policy.ts";
 
 const OPEN = { allowRoles: [] as string[], denyChannels: [] as string[] };
 
@@ -87,5 +87,50 @@ describe("permissionOverrideAllowed", () => {
     assert.equal(permissionOverrideAllowed("0", null), false);
     assert.equal(permissionOverrideAllowed("-1", null), false);
     assert.equal(permissionOverrideAllowed("ban", null), false);
+  });
+});
+
+describe("channel allow list", () => {
+  test("only the listed channels run it", () => {
+    const policy = { ...OPEN, allowChannels: ["bots"] };
+    assert.equal(checkCommandPolicy(policy, "bots", []).allowed, true);
+    assert.deepEqual(checkCommandPolicy(policy, "general", []), { allowed: false, reason: "channel" });
+  });
+
+  test("a thread of a listed channel and a channel in a listed category count", () => {
+    assert.equal(checkCommandPolicy({ ...OPEN, allowChannels: ["bots"] }, "thread", [], ["bots", "category"]).allowed, true);
+    assert.equal(checkCommandPolicy({ ...OPEN, allowChannels: ["category"] }, "general", [], ["category"]).allowed, true);
+  });
+
+  test("the deny list still wins inside an allowed category", () => {
+    const policy = { ...OPEN, allowChannels: ["category"], denyChannels: ["quiet"] };
+    assert.equal(checkCommandPolicy(policy, "quiet", [], ["category"]).allowed, false);
+  });
+
+  test("a deny on a channel covers its threads", () => {
+    assert.equal(checkCommandPolicy({ ...OPEN, denyChannels: ["general"] }, "thread", [], ["general"]).allowed, false);
+  });
+
+  test("a direct message is never refused for its channel", () => {
+    assert.equal(checkCommandPolicy({ ...OPEN, allowChannels: ["bots"] }, null, []).allowed, true);
+  });
+});
+
+describe("parseChannelRules", () => {
+  test("a plain list is the deny list older versions wrote", () => {
+    assert.deepEqual(parseChannelRules('["a"]'), { deny: ["a"], allow: [] });
+  });
+
+  test("reads both lists back from the object form", () => {
+    assert.deepEqual(parseChannelRules(serializeChannelRules({ deny: ["a"], allow: ["b"] })), { deny: ["a"], allow: ["b"] });
+  });
+
+  test("writes the plain list while there is no allow list", () => {
+    assert.equal(serializeChannelRules({ deny: ["a"], allow: [] }), '["a"]');
+  });
+
+  test("damaged text reads as no rules", () => {
+    assert.deepEqual(parseChannelRules("nope"), { deny: [], allow: [] });
+    assert.deepEqual(parseChannelRules('{"allow":[1,"b"]}'), { deny: [], allow: ["b"] });
   });
 });

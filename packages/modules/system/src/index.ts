@@ -29,6 +29,7 @@ const settings = s.object({
       commands: s.object(
         {
           featureOff: entry("featureOff"),
+          commandOff: entry("commandOff"),
           channelOff: entry("channelOff"),
           noRole: entry("noRole"),
           commandFailed: entry("commandFailed"),
@@ -85,6 +86,13 @@ const settings = s.object({
         label: "Reason on the Discord timeout lifted from the dashboard",
         help: "Written to the server's audit log when a case is removed on the dashboard and its timeout is lifted. Discord keeps at most 512 characters.",
         default: LABEL_DEFAULTS.timeoutRemovalReason,
+        max: 512,
+        placeholders: ["case", "actor"],
+      }),
+      banRemovalReason: s.template({
+        label: "Reason on the Discord ban lifted from the dashboard",
+        help: "Written to the server's audit log when a ban case is removed on the dashboard and the member is unbanned. Discord keeps at most 512 characters.",
+        default: LABEL_DEFAULTS.banRemovalReason,
         max: 512,
         placeholders: ["case", "actor"],
       }),

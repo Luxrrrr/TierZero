@@ -18,7 +18,9 @@ const UNCACHED = "100000000000000003";
 let dir: string;
 let prisma: { $disconnect(): Promise<void> } & Record<string, never>;
 let makeScheduler: () => { tick(now?: Date): Promise<void> };
+let makeSchedulerWith: (builtIn: Record<string, (task: { payload: Record<string, unknown> }) => Promise<void>>) => { tick(now?: Date): Promise<void> };
 let invalidate: (guildId: string) => void;
+let tasksOf: () => Promise<import("@tier0/core").ScheduledWork>;
 let ran: Record<string, unknown>[] = [];
 
 before(async () => {
@@ -73,7 +75,9 @@ before(async () => {
   const client = { guilds: { cache: new Map([[GUILD, { id: GUILD }]]) } } as never;
   const state = new GuildState(client, registry);
   invalidate = (guildId) => state.invalidate(guildId);
+  tasksOf = async () => (await state.context({ id: GUILD } as never, "sample"))!.tasks;
   makeScheduler = () => new Scheduler(client, registry, state);
+  makeSchedulerWith = (builtIn) => new Scheduler(client, registry, state, builtIn as never);
 });
 
 after(async () => {
@@ -208,5 +212,91 @@ describe("Scheduler", () => {
     await makeScheduler().tick();
 
     assert.equal(await pending(), 0, "an unclaimed row is dropped, not retried forever");
+  });
+});
+
+describe("rescheduling", () => {
+  test("moves the pending row with the same payload, and adds one when there is none", async () => {
+    await setEnabled(true);
+    await prisma.scheduledTask.deleteMany();
+    const tasks = await tasksOf();
+    const later = new Date(Date.now() + 3_600_000);
+    const latest = new Date(Date.now() + 7_200_000);
+    await tasks.reschedule("remember", later, { channelId: "1" });
+    await tasks.reschedule("remember", latest, { channelId: "1" });
+    await tasks.reschedule("remember", later, { channelId: "2" });
+    const rows = await prisma.scheduledTask.findMany({ orderBy: { id: "asc" } });
+    assert.deepEqual(
+      rows.map((row: { payload: string; runAt: Date }) => [row.payload, row.runAt.getTime()]),
+      [
+        ['{"channelId":"1"}', latest.getTime()],
+        ['{"channelId":"2"}', later.getTime()],
+      ],
+    );
+    await prisma.scheduledTask.deleteMany();
+  });
+});
+
+describe("work the bot schedules itself", () => {
+  test("runs under its own kind, with no module behind it", async () => {
+    await prisma.scheduledTask.deleteMany();
+    await prisma.scheduledTask.create({ data: { guildId: GUILD, kind: "messages:send", runAt: past(), payload: JSON.stringify({ label: "Patch night" }) } });
+
+    await makeSchedulerWith({ "messages:send": async (task) => void ran.push(task.payload) }).tick();
+
+    assert.deepEqual(ran, [{ label: "Patch night" }]);
+    assert.equal(await pending(), 0);
+  });
+
+  test("a send cancelled while an earlier one in the same batch runs is not sent", async () => {
+    await prisma.scheduledTask.deleteMany();
+    const early = await prisma.scheduledTask.create({ data: { guildId: GUILD, kind: "messages:send", runAt: new Date(Date.now() - 5000), payload: JSON.stringify({ label: "first" }) } });
+    const late = await prisma.scheduledTask.create({ data: { guildId: GUILD, kind: "messages:send", runAt: new Date(Date.now() - 1000), payload: JSON.stringify({ label: "second" }) } });
+    assert.ok(early.id !== late.id);
+
+    await makeSchedulerWith({
+      "messages:send": async (task) => {
+        ran.push(task.payload);
+        await prisma.scheduledTask.deleteMany({ where: { id: late.id } });
+      },
+    }).tick();
+
+    assert.deepEqual(ran, [{ label: "first" }]);
+    assert.equal(await pending(), 0);
+  });
+
+  test("is kept while its guild is not loaded", async () => {
+    await prisma.scheduledTask.create({ data: { guildId: UNCACHED, kind: "messages:send", runAt: past(), payload: "{}" } });
+
+    await makeSchedulerWith({ "messages:send": async (task) => void ran.push(task.payload) }).tick();
+
+    assert.equal(ran.length, 0);
+    assert.equal(await pending(), 1);
+    await prisma.scheduledTask.deleteMany();
+  });
+
+  test("a repeating message is queued again, and a failed send is noted on the next one", async () => {
+    const { scheduledSendRunner } = await import("../dist/control/message-schedules.js");
+    const client = { guilds: { cache: new Map([[GUILD, { id: GUILD }]]) } } as never;
+    const sends: Record<string, unknown>[] = [];
+    const runner = scheduledSendRunner(
+      client,
+      async (_guild: unknown, payload: Record<string, unknown>) => {
+        sends.push(payload);
+        return { status: 403, body: { error: "The bot can't send messages in #news." } };
+      },
+      async () => ({}) as never,
+    );
+    const runAt = new Date(Date.now() - 60_000);
+    const payload = { message: { content: "Patch night" }, options: { channelId: "200000000000000002" }, repeat: "daily", label: "Patch night", templateId: null, sender: "" };
+
+    await runner({ id: 0, guildId: GUILD, kind: "messages:send", runAt, payload });
+
+    assert.equal(sends[0]?.content, "Patch night");
+    const rows = await prisma.scheduledTask.findMany();
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0]!.runAt.getTime(), runAt.getTime() + 86_400_000);
+    assert.equal(JSON.parse(rows[0]!.payload).lastError, "The bot can't send messages in #news.");
+    await prisma.scheduledTask.deleteMany();
   });
 });

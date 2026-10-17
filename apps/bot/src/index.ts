@@ -16,9 +16,12 @@ import { GuildState } from "./runtime/guild-state.js";
 import { CommandSync } from "./runtime/commands.js";
 import { registerEventDispatch } from "./runtime/dispatch.js";
 import { Scheduler } from "./runtime/scheduler.js";
-import { handleCommand } from "./runtime/router.js";
+import { handleAutocomplete, handleCommand } from "./runtime/router.js";
 import { registerMessageComponents } from "./runtime/message-components.js";
 import { startControlApi } from "./control/server.js";
+import { SCHEDULED_SEND, scheduledSendRunner } from "./control/message-schedules.js";
+import { sendMessage } from "./control/messages.js";
+import { systemLabels } from "./runtime/system-messages.js";
 import { config } from "./config.js";
 
 const registry = new ModuleRegistry();
@@ -55,7 +58,9 @@ const state = new GuildState(client, registry);
 const rest = new REST().setToken(config.token);
 const commands = new CommandSync(rest, config.applicationId, registry, state);
 
-const scheduler = new Scheduler(client, registry, state);
+const scheduler = new Scheduler(client, registry, state, {
+  [SCHEDULED_SEND]: scheduledSendRunner(client, sendMessage, (guildId) => systemLabels(state, guildId)),
+});
 
 registerEventDispatch({ client, state });
 registerMessageComponents(client, state);
@@ -100,6 +105,10 @@ client.on(Events.GuildCreate, async (guild) => {
 });
 
 client.on(Events.InteractionCreate, async (interaction) => {
+  if (interaction.isAutocomplete()) {
+    await handleAutocomplete({ registry, state }, interaction);
+    return;
+  }
   if (!(interaction.isChatInputCommand() || interaction.isContextMenuCommand()) || !interaction.guild) return;
   await handleCommand({ registry, state }, interaction);
 });

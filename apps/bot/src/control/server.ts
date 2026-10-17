@@ -2,15 +2,27 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { timingSafeEqual } from "node:crypto";
 import { ChannelType, type Client, type NonThreadGuildBasedChannel } from "discord.js";
 import { parseMessage, type MessageBody, type ModuleRegistry } from "@tier0/core";
-import { permissionOverrideAllowed } from "../runtime/command-policy.js";
+import { partPatchProblem, permissionOverrideAllowed, resolveCommandKey } from "../runtime/command-policy.js";
 import type { GuildState } from "../runtime/guild-state.js";
 import type { CommandSync } from "../runtime/commands.js";
+import { prisma } from "@tier0/db";
 import { config } from "../config.js";
 import { systemLabels } from "../runtime/system-messages.js";
 import { rowStatuses, runRowAction } from "./rows.js";
-import { handleMessages } from "./messages.js";
+import { customEmojis, handleMessages } from "./messages.js";
 import { handleMod } from "./mod/index.js";
+import { handleTickets } from "./tickets/index.js";
 import { rawHeaders, type Reply } from "./mod/types.js";
+import { leaderboardPage, moduleNotices } from "./public-pages.js";
+
+/** Which of these channels belong to a ticket. A database failure marks none, which only shows them as usual. */
+async function ticketChannelIds(guildId: string, channelIds: string[]): Promise<Set<string>> {
+  if (channelIds.length === 0) return new Set();
+  const rows = await prisma.ticket
+    .findMany({ where: { guildId, channelId: { in: channelIds } }, select: { channelId: true } })
+    .catch(() => []);
+  return new Set(rows.map((row) => row.channelId));
+}
 
 interface Deps {
   client: Client;
@@ -60,6 +72,10 @@ export function startControlApi({ client, registry, state, commands }: Deps): vo
           // own URL and asks the CDN for the size that surface needs.
           icon: guild.icon,
           memberCount: guild.memberCount,
+          // What the bot may do server-wide, by Discord's permission names, so the
+          // dashboard can say which feature is missing one. Null before the bot's
+          // own member is cached.
+          permissions: guild.members.me ? guild.members.me.permissions.toArray() : null,
         })),
       );
     }
@@ -116,6 +132,46 @@ export function startControlApi({ client, registry, state, commands }: Deps): vo
         body: parsed,
       });
       return reply ? sendReply(reply) : send(404, { error: "not found" });
+    }
+
+    const ticketsMatch = /^\/guilds\/(\d+)\/tickets\/(.+)$/.exec(url.pathname);
+    if (ticketsMatch) {
+      const [, guildId, rest] = ticketsMatch;
+      const guild = guildId === undefined ? undefined : client.guilds.cache.get(guildId);
+      if (!guild || rest === undefined) return send(404, { error: "guild not found" });
+
+      let parsed: unknown = undefined;
+      if (req.method !== "GET") {
+        const body = await readJsonBody(req);
+        if (!body.ok) return send(400, { error: body.error });
+        parsed = body.value;
+      }
+      const segments = decodeSegments(rest);
+      if (!segments) return send(400, { error: "the path is not valid" });
+      const reply = await handleTickets({
+        client,
+        guild,
+        state,
+        method: req.method ?? "GET",
+        segments,
+        query: url.searchParams,
+        body: parsed,
+      });
+      return reply ? sendReply(reply) : send(404, { error: "not found" });
+    }
+
+    // Read only. The public leaderboard page, and the lines a module shows above its settings.
+    const leaderboardMatch = /^\/guilds\/(\d+)\/leaderboard$/.exec(url.pathname);
+    if (leaderboardMatch && req.method === "GET") {
+      const reply = await leaderboardPage(state, client.guilds.cache.get(leaderboardMatch[1] ?? ""), url.searchParams.get("page"));
+      return send(reply.status, reply.body);
+    }
+    const noticesMatch = /^\/guilds\/(\d+)\/modules\/([^/]+)\/notices$/.exec(url.pathname);
+    if (noticesMatch && req.method === "GET") {
+      const guild = client.guilds.cache.get(noticesMatch[1] ?? "");
+      if (!guild) return send(404, { error: "guild not found" });
+      const reply = await moduleNotices(registry, state, guild, noticesMatch[2] ?? "");
+      return send(reply.status, reply.body);
     }
 
     const rowsMatch =/^\/guilds\/(\d+)\/modules\/([^/]+)\/rows\/([^/]+)\/(status|actions\/([^/]+))$/.exec(
@@ -206,7 +262,11 @@ export function startControlApi({ client, registry, state, commands }: Deps): vo
       }
       const guild = guildId === undefined ? undefined : client.guilds.cache.get(guildId);
       if (!guild || commandName === undefined) return send(404, { error: "guild not found" });
-      if (!registry.ownerOf(commandName)) return send(404, { error: "unknown command" });
+      const target = resolveCommandKey(
+        registry.describe().flatMap((module) => module.commands),
+        commandName,
+      );
+      if (!target) return send(404, { error: "unknown command" });
 
       if (req.method !== "PATCH") return send(404, { error: "not found" });
 
@@ -216,10 +276,11 @@ export function startControlApi({ client, registry, state, commands }: Deps): vo
         return send(400, { error: "body must be a JSON object" });
       }
 
-      const { enabled, allowRoles, denyChannels, permissions, ephemeral, customReply } = body.value as {
+      const { enabled, allowRoles, denyChannels, allowChannels, permissions, ephemeral, customReply } = body.value as {
         enabled?: unknown;
         allowRoles?: unknown;
         denyChannels?: unknown;
+        allowChannels?: unknown;
         permissions?: unknown;
         ephemeral?: unknown;
         customReply?: unknown;
@@ -233,11 +294,17 @@ export function startControlApi({ client, registry, state, commands }: Deps): vo
       if (denyChannels !== undefined && !isStringArray(denyChannels)) {
         return send(400, { error: "denyChannels must be a list of channel IDs" });
       }
+      if (allowChannels !== undefined && !isStringArray(allowChannels)) {
+        return send(400, { error: "allowChannels must be a list of channel IDs" });
+      }
 
-      const summary = registry
-        .describe()
-        .flatMap((module) => module.commands)
-        .find((command) => command.name === commandName);
+      if (target.kind === "part") {
+        const problem = partPatchProblem(body.value as Record<string, unknown>);
+        if (problem) return send(400, { error: problem });
+        await commands.setOverride(guild.id, target.key, { enabled, allowRoles, denyChannels, allowChannels }, { resync: false });
+        return send(200, { ok: true });
+      }
+      const summary = target.command;
 
       if (permissions !== undefined && permissions !== null) {
         if (
@@ -274,6 +341,7 @@ export function startControlApi({ client, registry, state, commands }: Deps): vo
         enabled,
         allowRoles,
         denyChannels,
+        allowChannels,
         permissions: permissions as string | null | undefined,
         ephemeral: ephemeral as boolean | null | undefined,
         customReply: reply,
@@ -281,26 +349,28 @@ export function startControlApi({ client, registry, state, commands }: Deps): vo
       return send(200, { ok: true });
     }
 
-    const guildMatch = /^\/guilds\/(\d+)\/(channels|roles|reload)$/.exec(url.pathname);
+    const guildMatch = /^\/guilds\/(\d+)\/(channels|roles|emojis|command-sync|reload)$/.exec(url.pathname);
     if (guildMatch) {
       const [, guildId, resource] = guildMatch;
       const guild = guildId === undefined ? undefined : client.guilds.cache.get(guildId);
       if (!guild) return send(404, { error: "guild not found" });
 
       if (resource === "channels") {
+        const pickable = guild.channels.cache.filter((c): c is NonThreadGuildBasedChannel => PICKABLE.has(c.type));
+        // A ticket's own channel makes no sense as a place to send to or log in, so pickers can leave it out.
+        const tickets = await ticketChannelIds(guild.id, [...pickable.keys()]);
         return send(
           200,
-          guild.channels.cache
-            .filter((c): c is NonThreadGuildBasedChannel => PICKABLE.has(c.type))
-            .map((c) => ({
-              id: c.id,
-              name: c.name,
-              type: c.type,
-              // The dashboard groups the picker by category and orders it the
-              // way Discord does, which needs both of these.
-              parentId: c.parentId,
-              position: c.position,
-            })),
+          pickable.map((c) => ({
+            id: c.id,
+            name: c.name,
+            type: c.type,
+            // The dashboard groups the picker by category and orders it the
+            // way Discord does, which needs both of these.
+            parentId: c.parentId,
+            position: c.position,
+            ...(tickets.has(c.id) ? { ticket: true } : {}),
+          })),
         );
       }
 
@@ -319,6 +389,14 @@ export function startControlApi({ client, registry, state, commands }: Deps): vo
               assignable: role.position < ceiling,
             })),
         );
+      }
+
+      if (resource === "command-sync" && req.method === "GET") {
+        return send(200, commands.status(guild.id));
+      }
+
+      if (resource === "emojis" && req.method === "GET") {
+        return send(200, customEmojis(guild));
       }
 
       if (resource === "reload" && req.method === "POST") {

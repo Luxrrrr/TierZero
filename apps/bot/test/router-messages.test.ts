@@ -43,6 +43,7 @@ function settingsWith(stored: unknown): SystemSettings {
 }
 
 const policy = (overrides: Partial<Awaited<ReturnType<RouterState["commandPolicy"]>>> = {}) => ({
+  enabled: true,
   allowRoles: [] as string[],
   denyChannels: [] as string[],
   ephemeral: null,
@@ -241,5 +242,63 @@ describe("commandLabel", () => {
   test("puts a slash on a slash command and leaves a right-click entry alone", () => {
     assert.equal(commandLabel({ commandName: "rank", isChatInputCommand: () => true } as never), "/rank");
     assert.equal(commandLabel({ commandName: "Report message", isChatInputCommand: () => false } as never), "Report message");
+  });
+});
+
+describe("one part of a command", () => {
+  function partInteraction(subcommand: string, group: string | null = null) {
+    const made = fakeInteraction();
+    Object.assign(made.interaction, {
+      options: { getSubcommand: () => subcommand, getSubcommandGroup: () => group },
+    });
+    return made;
+  }
+
+  function stateWith(parts: Record<string, ReturnType<typeof policy>>): RouterState {
+    return { ...fakeState(), commandPolicy: async (_guild: string, key: string) => parts[key] ?? policy() };
+  }
+
+  test("switched off is refused, naming the part, while the rest of the command runs", async () => {
+    ran = 0;
+    const state = stateWith({ "rank reset": policy({ enabled: false }) });
+    const off = partInteraction("reset");
+    await run(state, off.interaction);
+    assert.equal(ran, 0);
+    assert.equal(descOf(off.sent[0]?.payload), "That command is switched off on this server.");
+    assert.equal(off.sent[0]?.payload.flags, MessageFlags.Ephemeral);
+
+    const on = partInteraction("show");
+    await run(state, on.interaction);
+    assert.equal(ran, 1);
+    assert.equal(on.sent.length, 0);
+  });
+
+  test("names the part in the owner's wording", async () => {
+    const settings = settingsWith({ replies: { commands: { commandOff: body("{command} is off here.") } } });
+    const state = { ...stateWith({ "rank reset": policy({ enabled: false }) }), systemSettings: async () => settings };
+    const { interaction, sent } = partInteraction("reset");
+    await run(state, interaction);
+    assert.equal(sent[0]?.payload.content, "/rank reset is off here.");
+  });
+
+  test("keeps its own role and channel limits", async () => {
+    ran = 0;
+    const state = stateWith({ "rank reset": policy({ allowRoles: [ROLE_A] }), "rank season wipe": policy({ denyChannels: [CHANNEL_ID] }) });
+    const limited = partInteraction("reset");
+    await run(state, limited.interaction);
+    assert.equal(descOf(limited.sent[0]?.payload), "You do not have a role that is allowed to use that command.");
+    const grouped = partInteraction("wipe", "season");
+    await run(state, grouped.interaction);
+    assert.equal(descOf(grouped.sent[0]?.payload), "That command is turned off in this channel.");
+    assert.equal(ran, 0);
+  });
+
+  test("the whole command's limits still come first", async () => {
+    ran = 0;
+    const state = stateWith({ rank: policy({ allowRoles: [ROLE_B] }) });
+    const { interaction, sent } = partInteraction("show");
+    await run(state, interaction);
+    assert.equal(ran, 0);
+    assert.equal(descOf(sent[0]?.payload), "You do not have a role that is allowed to use that command.");
   });
 });

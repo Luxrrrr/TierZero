@@ -23,6 +23,7 @@ import { LABEL_DEFAULTS, type SystemLabels } from "@tier0/module-system";
 import { saveInteractions } from "../runtime/message-components.js";
 import { firstEmptyLimitedMenu, namesOf, toDiscordPayload } from "./message-payload.js";
 import { ok, refuse, type Reply } from "./mod/types.js";
+import { createSchedule, deleteSchedule, listSchedules } from "./message-schedules.js";
 
 export interface MessagesRequest {
   guild: Guild;
@@ -121,6 +122,31 @@ export async function handleMessages(request: MessagesRequest): Promise<Reply | 
   if (method === "GET" && area === "emojis" && rawId === undefined) return listEmojis(guild);
 
   if (method === "POST" && area === "send" && rawId === undefined) return sendMessage(guild, payload, labels);
+  if (method === "POST" && area === "edit" && rawId === undefined) return editSentMessage(guild, payload, labels);
+
+  if (method === "GET" && area === "templates" && rawId !== undefined && segments[2] === "sends" && segments.length === 3) {
+    const id = idOf(rawId);
+    if (id === null) return refuse(400, "That template id is not valid.");
+    return listSends(guild.id, id);
+  }
+  if (area === "sends") {
+    if (method === "GET" && rawId === undefined) return listSends(guild.id, null);
+    if (method === "DELETE" && rawId !== undefined) {
+      const id = idOf(rawId);
+      if (id === null) return refuse(400, "That sent message id is not valid.");
+      return forgetSend(guild.id, id);
+    }
+  }
+
+  if (area === "schedules") {
+    if (method === "GET" && rawId === undefined) return listSchedules(guild.id);
+    if (method === "POST" && rawId === undefined) return createSchedule(guild, payload);
+    if (method === "DELETE" && rawId !== undefined) {
+      const id = idOf(rawId);
+      if (id === null) return refuse(400, "That scheduled message id is not valid.");
+      return deleteSchedule(guild.id, id);
+    }
+  }
 
   return null;
 }
@@ -292,19 +318,27 @@ async function deleteTemplate(guildId: string, id: number): Promise<Reply> {
   return ok({ ok: true });
 }
 
-/** The server's custom emoji, so the dashboard can offer them beside the unicode ones. */
+export interface CustomEmoji {
+  id: string;
+  name: string;
+  animated: boolean;
+  url: string;
+}
+
+/** The server's custom emoji the bot can use, for pickers that offer them beside the unicode ones. */
+export function customEmojis(guild: Guild): CustomEmoji[] {
+  return guild.emojis.cache
+    .filter((emoji) => emoji.available !== false && emoji.name !== null)
+    .map((emoji) => ({
+      id: emoji.id,
+      name: emoji.name ?? "",
+      animated: emoji.animated === true,
+      url: emoji.imageURL({ size: 64 }),
+    }));
+}
+
 function listEmojis(guild: Guild): Reply {
-  return ok(
-    guild.emojis.cache
-      .filter((emoji) => emoji.available !== false && emoji.name !== null)
-      .map((emoji) => ({
-        id: emoji.id,
-        name: emoji.name ?? "",
-        animated: emoji.animated === true,
-        token: `<${emoji.animated ? "a" : ""}:${emoji.name ?? ""}:${emoji.id}>`,
-        url: emoji.imageURL({ size: 64 }),
-      })),
-  );
+  return ok(customEmojis(guild).map((emoji) => ({ ...emoji, token: `<${emoji.animated ? "a" : ""}:${emoji.name}:${emoji.id}>` })));
 }
 
 /** What each variable becomes for this send. The preview in the dashboard uses the same names. */
@@ -320,6 +354,7 @@ function variableValues(guild: Guild, channel: { id: string; name: string }, sen
     now: discordTimestamp(now, "f"),
     sender,
     bot: guild.members.me?.displayName ?? guild.client.user.username,
+    "server.icon": guild.iconURL({ size: 256 }) ?? "",
   };
 }
 
@@ -333,7 +368,82 @@ async function webhookFor(channel: TextChannel | NewsChannel, botId: string, nam
   return existing ?? channel.createWebhook({ name });
 }
 
-async function sendMessage(guild: Guild, payload: Record<string, unknown>, labels: SystemLabels): Promise<Reply> {
+/** One message the Message creator sent, as the bot keeps it. */
+export interface SendRecord {
+  guildId: string;
+  templateId: number | null;
+  channelId: string;
+  messageId: string;
+  viaWebhook: boolean;
+}
+
+export interface SendDto {
+  id: number;
+  templateId: number | null;
+  /** Null when it was not sent from a template, or the template has since been deleted. */
+  templateName: string | null;
+  channelId: string;
+  messageId: string;
+  url: string;
+  viaWebhook: boolean;
+  sentAt: string;
+}
+
+/** How many sends one list answers with. Older ones stay stored; nothing is pruned. */
+export const SENDS_PAGE = 100;
+
+export type RecordSend = (record: SendRecord) => Promise<void>;
+
+export const recordSend: RecordSend = async (record) => {
+  await prisma.messageSend.create({ data: record });
+};
+
+/** Discord's own link for a message, the same one Copy Message Link gives. */
+export function messageUrl(guildId: string, channelId: string, messageId: string): string {
+  return `https://discord.com/channels/${guildId}/${channelId}/${messageId}`;
+}
+
+export function sendDto(
+  row: { id: number; guildId: string; templateId: number | null; channelId: string; messageId: string; viaWebhook: boolean; sentAt: Date },
+  templateNames: ReadonlyMap<number, string>,
+): SendDto {
+  return {
+    id: row.id,
+    templateId: row.templateId,
+    templateName: row.templateId === null ? null : (templateNames.get(row.templateId) ?? null),
+    channelId: row.channelId,
+    messageId: row.messageId,
+    url: messageUrl(row.guildId, row.channelId, row.messageId),
+    viaWebhook: row.viaWebhook,
+    sentAt: row.sentAt.toISOString(),
+  };
+}
+
+/** The newest sends of one template, or of the whole server when `templateId` is null, with how many there are in all. */
+async function listSends(guildId: string, templateId: number | null): Promise<Reply> {
+  const where = templateId === null ? { guildId } : { guildId, templateId };
+  const [rows, total, templates] = await Promise.all([
+    prisma.messageSend.findMany({ where, orderBy: { sentAt: "desc" }, take: SENDS_PAGE }),
+    prisma.messageSend.count({ where }),
+    prisma.messageTemplate.findMany({ where: { guildId }, select: { id: true, name: true } }),
+  ]);
+  const names = new Map(templates.map((template) => [template.id, template.name]));
+  return ok({ sends: rows.map((row) => sendDto(row, names)), total });
+}
+
+/** Takes a message off the list. The message itself stays in Discord. */
+async function forgetSend(guildId: string, id: number): Promise<Reply> {
+  const removed = await prisma.messageSend.deleteMany({ where: { id, guildId } });
+  if (removed.count === 0) return refuse(404, "That sent message is not on the list any more.");
+  return ok({ ok: true });
+}
+
+export async function sendMessage(
+  guild: Guild,
+  payload: Record<string, unknown>,
+  labels: SystemLabels,
+  record: RecordSend = recordSend,
+): Promise<Reply> {
   const parsed = parseMessage(payload);
   if (!parsed.ok) return messageErrors(parsed.errors);
 
@@ -440,11 +550,92 @@ async function sendMessage(guild: Guild, payload: Record<string, unknown>, label
     await sent.startThread({ name: choice.threadName }).catch(() => warnings.push("The thread could not be started. The bot needs Create Public Threads."));
   }
 
-  const templateId = typeof payload.templateId === "number" ? payload.templateId : null;
-  if (templateId !== null) {
-    await prisma.messageTemplate
-      .updateMany({ where: { id: templateId, guildId: guild.id }, data: { lastSentAt: new Date() } })
-      .catch(() => undefined);
-  }
+  const asked = typeof payload.templateId === "number" && Number.isInteger(payload.templateId) ? payload.templateId : null;
+  // Only a template of this server is named on the record, so a stray id cannot attach a send to someone else's.
+  const templateId =
+    asked === null
+      ? null
+      : await prisma.messageTemplate
+          .updateMany({ where: { id: asked, guildId: guild.id }, data: { lastSentAt: new Date() } })
+          .then((result) => (result.count > 0 ? asked : null))
+          .catch(() => null);
+  await record({ guildId: guild.id, templateId, channelId: channel.id, messageId: sent.id, viaWebhook: asOther }).catch((error) => {
+    console.error("messages: could not record the send:", error);
+    warnings.push("The message was sent, but it could not be added to the list of sent messages, so replacing it later needs its link.");
+  });
   return ok({ ok: true, messageId: sent.id, url: sent.url, warnings });
+}
+
+/** A link Discord gives for a message: Copy Message Link in its menu. */
+export function parseMessageLink(value: unknown): { guildId: string; channelId: string; messageId: string } | null {
+  const match = /^https?:\/\/(?:\w+\.)?discord(?:app)?\.com\/channels\/(\d{17,20})\/(\d{17,20})\/(\d{17,20})\/?$/.exec(typeof value === "string" ? value.trim() : "");
+  if (!match?.[1] || !match[2] || !match[3]) return null;
+  return { guildId: match[1], channelId: match[2], messageId: match[3] };
+}
+
+const NOT_OURS = "That message was not sent by TierZero. Discord only lets whoever sent a message edit it.";
+
+/**
+ * Replaces a message the bot sent earlier with the one in the editor. Discord
+ * lets only the sender edit, so a message sent under another name is edited
+ * through the same webhook that sent it.
+ */
+async function editSentMessage(guild: Guild, payload: Record<string, unknown>, labels: SystemLabels): Promise<Reply> {
+  const parsed = parseMessage(payload);
+  if (!parsed.ok) return messageErrors(parsed.errors);
+
+  const link = parseMessageLink(payload.link);
+  if (!link) return refuse(400, "Paste the link to the message. In Discord, open the message's menu and choose Copy Message Link.");
+  if (link.guildId !== guild.id) return refuse(400, "That message is on another server.");
+
+  const channel = guild.channels.cache.get(link.channelId) ?? (await guild.channels.fetch(link.channelId).catch(() => null));
+  if (!channel || !channel.isTextBased() || channel.isDMBased()) return refuse(404, "The channel of that message was not found.");
+
+  const message = await channel.messages.fetch(link.messageId).catch(() => null);
+  if (!message) return refuse(404, "That message was not found. It may have been deleted, or the bot cannot read that channel.");
+
+  const sender = typeof payload.sender === "string" && payload.sender.trim() !== "" ? payload.sender.trim().slice(0, 80) : labels.defaultSender;
+  const filled = parseMessage(applyVariablesToMessage(parsed.value, variableValues(guild, channel, sender)));
+  if (!filled.ok) {
+    return refuse(400, `Once the variables are filled in, the message no longer fits Discord's limits: ${filled.errors[0]?.message ?? "it is too long."}`);
+  }
+  const names = namesOf(guild, { role: labels.unknownRole, channel: labels.unknownChannel });
+  const emptyMenu = firstEmptyLimitedMenu(filled.value, names);
+  if (emptyMenu >= 0) {
+    return refuse(400, `Menu ${emptyMenu + 1} is limited to channels or roles that no longer exist. Pick some that do, or clear the limit.`);
+  }
+
+  const body = {
+    ...toDiscordPayload(filled.value, names),
+    // Left out, Discord would keep the old text under a message that now has none.
+    content: filled.value.content,
+    allowedMentions: { parse: payload.allowEveryone === true ? (["users", "roles", "everyone"] as const) : (["users", "roles"] as const) },
+  };
+
+  const botId = guild.client.user.id;
+  try {
+    if (message.webhookId) {
+      const home = channel.isThread() ? channel.parent : channel;
+      if (!home || !("fetchWebhooks" in home)) return refuse(403, NOT_OURS);
+      const hooks = await home.fetchWebhooks().catch(() => null);
+      if (!hooks) return refuse(403, `Editing a message sent under another name needs the bot to have Manage Webhooks in #${home.name}.`);
+      const hook = hooks.find((entry) => entry.id === message.webhookId && entry.owner?.id === botId);
+      if (!hook) return refuse(403, NOT_OURS);
+      await hook.editMessage(message.id, { ...body, ...(channel.isThread() ? { threadId: channel.id } : {}) });
+    } else if (message.author.id === botId) {
+      await message.edit(body);
+    } else {
+      return refuse(403, NOT_OURS);
+    }
+  } catch (error) {
+    console.error("messages: edit failed:", error);
+    return refuse(400, "Discord refused the change. Check the bot's permissions in that channel and try again.");
+  }
+
+  const warnings: string[] = [];
+  await saveInteractions(guild.id, channel.id, message.id, filled.value).catch(() => {
+    warnings.push("The message was changed, but its buttons and menus won't respond, because the bot couldn't save what they do.");
+  });
+  if (filled.value.reactions.length > 0) warnings.push("Reactions are only added when a message is first sent, so they were left as they are.");
+  return ok({ ok: true, messageId: message.id, url: message.url, warnings });
 }
