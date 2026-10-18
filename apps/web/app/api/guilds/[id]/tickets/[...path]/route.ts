@@ -76,11 +76,12 @@ async function handle(method: string, request: Request, { params }: Params) {
     body = { ...sent, actor: session.actor };
   }
 
-  const target = ticketTarget(path, new URL(request.url).searchParams, session.discordUserId, method);
+  const search = new URL(request.url).searchParams;
+  const target = ticketTarget(path, search, session.discordUserId, method);
   const download = transcriptDownload(method, path);
 
   try {
-    const reply = await ticketsRequest(id, target, { method, body, timeoutMs: ticketProxyTimeoutMs(method, path) });
+    const reply = await ticketsRequest(id, target, { method, body, timeoutMs: ticketProxyTimeoutMs(method, path, search), signal: request.signal });
     if (download && reply.file) {
       const filename = downloadFileName(reply.file.disposition, download.filename);
       return new Response(reply.file.text, { status: 200, headers: transcriptHeaders(download.format, filename) });

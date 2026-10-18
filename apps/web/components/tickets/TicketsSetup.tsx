@@ -125,6 +125,8 @@ export function TicketsSetup({ guildId, serverName, settings, enabled }: Props) 
     setPhase("working");
     const result = await ticketsClient.postPanel(guildId, panelId);
     const after = await ticketsClient.context(guildId);
+    // The tab strip's note was worked out before the panel existed in Discord.
+    router.refresh();
     const context = after.ok ? after.value : known;
     if (!result.ok) {
       setOutcome({ posted: null, context, stopped: `The panel was not posted. ${result.error}` });

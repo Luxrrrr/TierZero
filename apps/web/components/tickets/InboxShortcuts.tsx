@@ -50,6 +50,19 @@ export function InboxShortcuts({ listId }: { listId: string }) {
         field.focus();
         return;
       }
+      if (action === "replyLatest") {
+        if (!document.querySelector("[data-shortcut='reply']")) return;
+        event.preventDefault();
+        window.dispatchEvent(new CustomEvent("tk-reply-latest"));
+        return;
+      }
+      if (action === "new") {
+        const button = document.querySelector<HTMLButtonElement>("[data-shortcut='new-ticket']");
+        if (!button || button.getAttribute("aria-disabled") === "true") return;
+        event.preventDefault();
+        button.click();
+        return;
+      }
       if (action === "claim") {
         const button = document.querySelector<HTMLButtonElement>("[data-shortcut='claim']");
         if (!button || button.getAttribute("aria-disabled") === "true") return;

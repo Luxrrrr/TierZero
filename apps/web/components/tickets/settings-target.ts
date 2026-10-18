@@ -4,13 +4,23 @@ import { readSettingsTarget, targetIndexes, type SettingsTarget } from "../../li
 
 /**
  * Takes the reader from a health line or a first-run step to the exact
- * setting it is about: the Panels part of the page, then the panel's row and
- * the type's row inside it, opened. The form's lists mark themselves with
+ * setting it is about: the Panels part of the page, then the panel's row opened,
+ * and the type's sheet over it. The form's lists mark themselves with
  * their settings path, so this finds them without knowing how they are drawn.
  */
 
 const frame = () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
 const calm = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+/** A row opens over a few frames and its contents cannot take focus until it has, so try for a moment. */
+async function focusWhenShown(find: () => HTMLElement | null | undefined): Promise<void> {
+  for (let attempt = 0; attempt < 30; attempt += 1) {
+    const target = find();
+    target?.focus({ preventScroll: true });
+    if (target && document.activeElement === target) return;
+    await frame();
+  }
+}
 
 async function showPanelsPart(): Promise<void> {
   if (window.location.hash !== "#section-panels") {
@@ -36,9 +46,13 @@ export async function openSettingsTarget(
 ): Promise<void> {
   await showPanelsPart();
   if (options.post) {
-    const strip = document.querySelector<HTMLElement>(".tk-strip");
-    strip?.scrollIntoView({ block: "start", behavior: calm() ? "auto" : "smooth" });
-    strip?.querySelector<HTMLElement>(".tk-strip-actions .btn-primary, .tk-strip-actions .btn-secondary:last-of-type")?.focus({ preventScroll: true });
+    // The first panel that is not up yet, or the first panel when all are.
+    const rows = [...(document.querySelector<HTMLElement>('[data-list-path="panels"]')?.querySelectorAll<HTMLElement>(":scope > .list-item") ?? [])];
+    const waiting = rows.findIndex((row) => row.querySelector("[data-panel-state]")?.getAttribute("data-panel-state") !== "posted");
+    const row = await openRow("panels", waiting === -1 ? 0 : waiting);
+    if (!row) return;
+    row.scrollIntoView({ block: "start", behavior: calm() ? "auto" : "smooth" });
+    await focusWhenShown(() => row.querySelector<HTMLElement>("[data-panel-post]"));
     return;
   }
   const at = target ? targetIndexes(target, panels) : null;
@@ -50,7 +64,8 @@ export async function openSettingsTarget(
   const row = at.type === null ? panelRow : ((await openRow(`panels[${at.panel}].types`, at.type)) ?? panelRow);
   if (!row) return;
   row.scrollIntoView({ block: "start", behavior: calm() ? "auto" : "smooth" });
-  row.querySelector<HTMLElement>(".list-item-body input, .list-item-body button")?.focus({ preventScroll: true });
+  // A type opens in a sheet that takes focus itself; a panel's own row needs it moved in.
+  if (at.type === null) await focusWhenShown(() => row.querySelector<HTMLElement>(".list-item-body input, .list-item-body button"));
 }
 
 /**

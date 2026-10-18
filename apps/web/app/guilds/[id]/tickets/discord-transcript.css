@@ -1,45 +1,130 @@
 /* The frame around the transcript view in the ticket workspace. The view
    itself is styled by TRANSCRIPT_CSS from @tier0/core, shared with the
-   downloaded file; only what belongs to the dashboard lives here. */
+   downloaded file, which draws it in Discord's colours. Here the same
+   variables are pointed at the dashboard's tokens, so the conversation follows
+   the dashboard's theme and the content (names, colours, embeds, buttons)
+   stays what Discord shows. */
 
 .tk-discord {
-  background: #313338;
-  color-scheme: dark;
+  background: transparent;
+}
+
+.tk-discord .dt {
+  --dt-bg: var(--surface);
+  --dt-bg-alt: var(--surface-2);
+  --dt-bg-deep: var(--surface-3);
+  --dt-text: var(--text);
+  --dt-strong: var(--text);
+  --dt-muted: var(--text-tertiary);
+  --dt-faint: var(--text-tertiary);
+  --dt-soft: var(--text-secondary);
+  --dt-link: var(--info);
+  --dt-line: var(--border);
+  --dt-hover: var(--surface-hover);
+  --dt-mention-bg: var(--info-soft);
+  --dt-mention-text: var(--info);
+  --dt-danger: var(--danger);
+  --dt-danger-text: var(--danger);
+  --dt-danger-bg: var(--danger-soft);
+  --dt-chip: var(--surface-3);
+  --dt-quote-bar: var(--border-strong);
+  --dt-reply-line: var(--border-strong);
+  --dt-file-line: var(--border);
+  --dt-file-icon: var(--info);
+  --dt-spoiler-hover: var(--border-strong);
+  --dt-spoiler-open: var(--surface-3);
+  --dt-welcome-icon: var(--surface-3);
+  --dt-activity-line: var(--accent-ring);
+  --dt-activity-bg: var(--accent-soft);
+  --dt-activity-text: var(--accent-text);
+  --dt-btn-secondary: var(--surface-3);
+  --dt-btn-secondary-text: var(--text);
+  --dt-btn-secondary-ring: var(--border-strong);
+  --dt-btn-height: var(--control-height-sm);
+  --dt-btn-radius: var(--radius-md);
+  --dt-btn-size: var(--text-sm);
+  --dt-embed-border: 1px solid var(--border);
+  --dt-embed-radius: var(--radius-md);
+  --dt-reaction-border: var(--border);
+  --dt-reaction-radius: var(--radius-full);
+  --dt-font: var(--font-sans);
+  --dt-mono: var(--font-mono);
+  --dt-size: var(--text-base);
+  --dt-lh: 1.5rem;
+  --dt-small: var(--text-sm);
+  --dt-small-lh: 1.25rem;
+  --dt-meta: var(--text-xs);
+  --dt-pad: var(--space-5);
+  --dt-pad-right: var(--space-5);
+  --dt-gap: var(--space-3);
+  --dt-avatar: 2.25rem;
+  --dt-row-inset: var(--space-2);
+  --dt-row-radius: var(--radius-md);
+  color-scheme: inherit;
+  background: transparent;
+  font-feature-settings: "cv05", "ss01";
+  line-height: 1.5;
+  -webkit-font-smoothing: auto;
 }
 
 /* The page scrolls as a whole outside the two-pane inbox, where a sticky
    channel bar would sit under the dashboard's own header. */
 .tk-discord .dt-header {
   position: relative;
+  flex-wrap: nowrap;
+  gap: var(--space-1) var(--space-2);
+  min-height: 3rem;
+  padding: var(--space-2) var(--space-5);
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  box-shadow: none;
 }
 
 .tk-inbox .tk-discord .dt-header {
   position: sticky;
 }
 
-.tk-convo-tools {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-2) var(--space-4);
-  padding: var(--space-2) var(--space-5);
-  border-bottom: 1px solid var(--border);
+.tk-discord .dt-header-icon {
+  width: 1.125rem;
+  height: 1.125rem;
+  color: var(--text-tertiary);
+}
+
+.tk-discord .dt-header-name {
+  font-size: var(--text-base);
+  flex: 0 1 auto;
+  min-width: 3rem;
+  line-height: 1.25rem;
+  font-weight: 600;
+}
+
+.tk-discord .dt-header-divider {
+  height: 1rem;
+  margin: 0 var(--space-1);
+}
+
+.tk-discord .dt-header-topic {
+  flex: 1 1 0;
   font-size: var(--text-sm);
+  font-weight: 400;
   color: var(--text-secondary);
+}
+
+.tk-convo-tools {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-left: auto;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
 }
 
 .tk-activity-switch {
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
-  cursor: pointer;
-}
-
-.tk-activity-switch input {
-  width: 1rem;
-  height: 1rem;
-  margin: 0;
-  accent-color: var(--accent);
+  white-space: nowrap;
 }
 
 .tk-convo-tools-note {
@@ -49,13 +134,261 @@
   color: var(--text-tertiary);
 }
 
+/* A short, calm start of the conversation in place of Discord's large block. */
+.tk-discord .dt-chat {
+  padding-bottom: var(--space-4);
+}
+
+.tk-discord .dt-welcome {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  column-gap: var(--space-3);
+  align-items: center;
+  margin: 0;
+  padding: var(--space-5) var(--space-5) var(--space-2);
+}
+
+.tk-discord .dt-welcome-icon {
+  grid-row: 1 / span 2;
+  width: 2.25rem;
+  height: 2.25rem;
+  margin: 0;
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+}
+
+.tk-discord .dt-welcome-hash {
+  width: 1.125rem;
+  height: 1.125rem;
+}
+
+.tk-discord .dt-welcome-title {
+  margin: 0;
+  font-size: var(--text-md);
+  line-height: 1.25rem;
+  font-weight: 600;
+}
+
+.tk-discord .dt-welcome-text {
+  font-size: var(--text-sm);
+  line-height: 1.25rem;
+  color: var(--text-tertiary);
+}
+
+/* Date dividers read like the dashboard's section labels. */
+.tk-discord .dt-divider {
+  justify-content: flex-start;
+  gap: var(--space-3);
+  height: auto;
+  margin: var(--space-5) var(--space-5) var(--space-2);
+  border-top: 0;
+}
+
+.tk-discord .dt-divider::after {
+  content: "";
+  flex: 1 1 auto;
+  height: 1px;
+  background: var(--border);
+}
+
+.tk-discord .dt-divider-text {
+  margin: 0;
+  padding: 0;
+  background: none;
+  font-size: var(--text-xs);
+  line-height: 1.25rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+
+.tk-discord .dt-message-start {
+  margin-top: var(--space-3);
+  min-height: 2.5rem;
+}
+
+.tk-discord .dt-avatar {
+  top: var(--space-1);
+  border: 1px solid var(--border);
+}
+
+.tk-discord .dt-message {
+  padding-block: var(--space-1);
+}
+
+.tk-discord .dt-message-reply .dt-avatar {
+  top: 1.75rem;
+}
+
+.tk-discord .dt-name {
+  font-weight: 600;
+}
+
+.tk-discord .dt-tag {
+  border-radius: var(--radius-xs);
+}
+
+.tk-discord .dt-via {
+  border-radius: var(--radius-xs);
+}
+
+.tk-discord .dt-gutter-time {
+  top: var(--space-1);
+  font-size: var(--text-2xs);
+}
+
+.tk-discord .dt-content-jumbo .dt-emoji {
+  width: 2.5rem;
+  height: 2.5rem;
+  min-height: 2.5rem;
+}
+
+.tk-discord .dt-content-jumbo .dt-emoji-u {
+  font-size: 2.5rem;
+  line-height: 3rem;
+}
+
+.tk-discord .dt-codeblock,
+.tk-discord .dt-code {
+  border-radius: var(--radius-sm);
+}
+
+.tk-discord .dt-reply::before {
+  top: 0.5rem;
+}
+
+.tk-discord .dt-embed {
+  box-shadow: var(--shadow-sm);
+}
+
+.tk-discord .dt-button {
+  font-weight: 600;
+}
+
+.tk-discord .dt-activity {
+  border-radius: var(--radius-md);
+}
+
+.tk-discord .dt-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  max-width: 32rem;
+  margin: var(--space-6) auto;
+  padding: var(--space-10) var(--space-6);
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-lg);
+  background: var(--bg-raised);
+  color: var(--text-secondary);
+  font-size: var(--text-base);
+  text-align: center;
+  text-wrap: balance;
+}
+
 .tk-convo .tk-composer,
 .tk-convo > .callout {
   border-top: 1px solid var(--border);
 }
 
+.tk-convo > .tk-composer {
+  margin-inline: var(--space-5);
+}
+
 @container tk-view (max-width: 45.99rem) {
-  .tk-convo-tools {
+  .tk-discord .dt {
+    --dt-pad: var(--space-4);
+    --dt-pad-right: var(--space-4);
+  }
+
+  .tk-discord .dt-header {
+    flex-wrap: wrap;
     padding: var(--space-2) var(--space-4);
+  }
+
+  .tk-discord .dt-header-topic {
+    flex-basis: 8rem;
+  }
+
+  .tk-discord .dt-welcome {
+    padding-inline: var(--space-4);
+  }
+
+  .tk-discord .dt-divider {
+    margin-inline: var(--space-4);
+  }
+
+  .tk-convo > .tk-composer {
+    margin-inline: var(--space-4);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tk-discord .dt-spoiler-text {
+    transition: none;
+  }
+}
+
+/* The "..." on a message that opens its menu, for touch and for anyone who does
+   not right-click. It shows while the message is pointed at or focused, and all
+   the time on a screen that cannot hover. */
+.tk-discord .dt-more {
+  position: absolute;
+  top: var(--space-1);
+  right: var(--space-2);
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.625rem;
+  height: 1.625rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text-secondary);
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity var(--duration-fast) var(--ease-out),
+    background-color var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out);
+}
+
+.tk-discord .dt-more svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+.tk-discord .dt-message:hover > .dt-more,
+.tk-discord .dt-message:focus-within > .dt-more,
+.tk-discord .dt-more:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.tk-discord .dt-more:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+/* The Reply button sits beside the "..." on the same hover and focus rules. */
+.tk-discord .dt-reply-button {
+  right: calc(var(--space-2) + 1.625rem + var(--space-1));
+}
+
+.tk-discord .dt-message-deleted > .dt-more.dt-more {
+  opacity: 0;
+}
+
+.tk-discord .dt-message-deleted:hover > .dt-more.dt-more,
+.tk-discord .dt-message-deleted:focus-within > .dt-more.dt-more,
+.tk-discord .dt-message-deleted > .dt-more.dt-more:focus-visible {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  .tk-discord .dt-more,
+  .tk-discord .dt-message-deleted > .dt-more.dt-more {
+    opacity: 1;
+    pointer-events: auto;
   }
 }

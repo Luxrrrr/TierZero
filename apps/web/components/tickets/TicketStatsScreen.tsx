@@ -212,7 +212,7 @@ export function TicketStatsScreen({ guildId, days, stats }: { guildId: string; d
         </Card>
       ) : null}
 
-      <div className="stats-row stats-row--pair">
+      <div className="stats-stack">
         <Card
           title="Handlers"
           desc="Who claimed, closed and answered tickets in this range. First answer is how long the member waited for theirs."
@@ -230,7 +230,7 @@ export function TicketStatsScreen({ guildId, days, stats }: { guildId: string; d
                     <th scope="col">Handler</th>
                     <th scope="col">Claimed</th>
                     <th scope="col">Closed</th>
-                    <th scope="col">Answered first</th>
+                    <th scope="col" className="tk-col-minor">Answered first</th>
                     <th scope="col">First answer</th>
                     <th scope="col">Rating</th>
                   </tr>
@@ -243,7 +243,7 @@ export function TicketStatsScreen({ guildId, days, stats }: { guildId: string; d
                         <th scope="row">
                           {href ? (
                             <Link className="tk-stats-link" href={href} title={`Tickets ${row.user.name ?? "they"} worked`}>
-                              <UserChip user={row.user} />
+                              <UserChip user={row.user} menuButton={false} />
                             </Link>
                           ) : (
                             <UserChip user={row.user} />
@@ -251,7 +251,7 @@ export function TicketStatsScreen({ guildId, days, stats }: { guildId: string; d
                         </th>
                         <td>{row.claims}</td>
                         <td>{row.closes}</td>
-                        <td>{row.firstResponses ?? <span className="tk-muted">-</span>}</td>
+                        <td className="tk-col-minor">{row.firstResponses ?? <span className="tk-muted">-</span>}</td>
                         <td>{row.medianFirstResponseMs === undefined ? <span className="tk-muted">-</span> : durationText(row.medianFirstResponseMs)}</td>
                         <td>
                           {!row.ratingCount ? (

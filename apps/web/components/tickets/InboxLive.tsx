@@ -19,6 +19,7 @@ import {
   type LiveBaseline,
   type LiveChange,
 } from "../../lib/ticket-live";
+import { startLongPoll, type PollOutcome } from "../../lib/ticket-longpoll";
 import { ticketsClient } from "../../lib/tickets-client";
 
 interface Props {
@@ -47,8 +48,13 @@ function writeAlerts(guildId: string, on: boolean): void {
   }
 }
 
+/** Auto-refreshes of the list are at least this far apart, so a busy server does not re-render it on every message. */
+const REFRESH_GAP_MS = 3_000;
+
 /**
  * Keeps the inbox list honest while it is open. The count behind the list is
+ * asked with a request the bot holds until a ticket changes, so a new ticket
+ * or a new message shows within about a second; if that keeps failing it is
  * asked every fifteen seconds while the tab is in front. New tickets wait
  * behind a button rather than shifting the rows under the reader; other
  * activity is brought in by itself once the pointer and focus are out of the
@@ -65,7 +71,6 @@ export function InboxLive({ guildId, filters, listId }: Props) {
   const base = useRef<LiveBaseline | null>(null);
   const latest = useRef<TicketCountDto | null>(null);
   const alertsOn = useRef(false);
-  const stopped = useRef(false);
   const shown = useRef<LiveChange>(change);
   shown.current = change;
   const filterKey = JSON.stringify({ ...filters, page: 1 });
@@ -92,25 +97,35 @@ export function InboxLive({ guildId, filters, listId }: Props) {
   useEffect(() => {
     base.current = null;
     latest.current = null;
-    stopped.current = false;
     setChange({ kind: "none" });
-    const controller = new AbortController();
-    let timer: number | undefined;
+    let lastRefresh = 0;
+    let refreshTimer: number | undefined;
 
-    const poll = async () => {
-      const result = await ticketsClient.count(guildId, countFilters(filters, base.current), controller.signal).catch(() => null);
-      if (controller.signal.aborted || !result) return;
+    const refreshSoon = () => {
+      window.clearTimeout(refreshTimer);
+      const wait = Math.max(0, lastRefresh + REFRESH_GAP_MS - Date.now());
+      refreshTimer = window.setTimeout(() => {
+        lastRefresh = Date.now();
+        router.refresh();
+      }, wait);
+    };
+
+    const poll = async ({ signal, wait }: { signal: AbortSignal; wait: number }): Promise<PollOutcome> => {
+      // The first answer sets the baseline at once; after that the bot holds each request until something changes.
+      const hold = base.current ? { wait, version: latest.current?.version ?? null } : undefined;
+      const result = await ticketsClient.count(guildId, countFilters(filters, base.current), signal, hold).catch(() => null);
+      if (signal.aborted) return "aborted";
+      if (!result) return "error";
       if (!result.ok) {
         // A bot older than this dashboard has no count to ask; the list then works as before.
-        if (result.status === 404 || result.status === 403) stopped.current = true;
-        return;
+        return result.status === 404 || result.status === 403 ? "stop" : "error";
       }
       const count = result.value;
       setWaiting(count.awaitingStaff);
       if (!base.current) {
         base.current = baselineOf(count);
         latest.current = count;
-        return;
+        return "ok";
       }
       const previous = latest.current ?? count;
       latest.current = count;
@@ -128,51 +143,36 @@ export function InboxLive({ guildId, filters, listId }: Props) {
       }
       if (next.kind === "none") {
         setChange(next);
-        return;
+        return "ok";
       }
       if (next.kind === "activity" && !listBusy() && document.visibilityState === "visible") {
         base.current = baselineOf(count);
         setChange({ kind: "none" });
-        router.refresh();
-        return;
+        refreshSoon();
+        return "ok";
       }
       if (livePillText(next) !== livePillText(shown.current)) setAnnouncement(liveAnnouncement(next));
       setChange(next);
+      return "ok";
     };
 
-    const schedule = () => {
-      window.clearTimeout(timer);
-      if (stopped.current) return;
-      const visible = document.visibilityState === "visible";
-      if (!visible && !alertsOn.current) return;
-      timer = window.setTimeout(async () => {
-        await poll();
-        if (!controller.signal.aborted) schedule();
-      }, visible ? LIVE_POLL_MS : LIVE_HIDDEN_POLL_MS);
-    };
-
-    const onVisibility = () => {
-      window.clearTimeout(timer);
-      if (document.visibilityState === "visible") {
-        void poll().then(() => {
-          if (!controller.signal.aborted) schedule();
-        });
-      } else schedule();
-    };
-
-    void poll().then(() => {
-      if (!controller.signal.aborted) schedule();
+    const loop = startLongPoll({
+      poll,
+      visible: () => document.visibilityState === "visible",
+      intervalMs: LIVE_POLL_MS,
+      hiddenIntervalMs: () => (alertsOn.current ? LIVE_HIDDEN_POLL_MS : null),
     });
+    const onVisibility = () => loop.visibilityChanged();
     document.addEventListener("visibilitychange", onVisibility);
     return () => {
-      controller.abort();
-      window.clearTimeout(timer);
+      loop.stop();
+      window.clearTimeout(refreshTimer);
       document.removeEventListener("visibilitychange", onVisibility);
     };
     // The filters are compared by value, so a new object with the same filters does not restart the polling.
   }, [guildId, filterKey, listBusy, router]);
 
-  // Next sets the title on every navigation, so the badge is put back each time and on every count.
+  // Next sets the title on every navigation and refresh, so the badge is put back each time and on every count.
   useEffect(() => {
     if (waiting === null) return;
     const set = () => {
@@ -181,7 +181,13 @@ export function InboxLive({ guildId, filters, listId }: Props) {
     };
     set();
     const again = window.setTimeout(set, 300);
-    return () => window.clearTimeout(again);
+    // router.refresh() rewrites the title without a navigation, so the badge is put back whenever the title changes.
+    const observer = new MutationObserver(set);
+    observer.observe(document.head, { subtree: true, childList: true, characterData: true });
+    return () => {
+      window.clearTimeout(again);
+      observer.disconnect();
+    };
   }, [waiting, pathname]);
 
   useEffect(

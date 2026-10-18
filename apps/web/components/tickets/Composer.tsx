@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useId, useRef, useState, type ClipboardEvent, type DragEvent, type KeyboardEvent } from "react";
-import { TICKET_REPLY_MAX, type TicketDetailDto, type TicketMessageDto, type TicketReplyFile, type TicketSavedReplyDto } from "@tier0/core";
+import { TICKET_REPLY_MAX, type MessageEmbed, type TicketDetailDto, type TicketMessageDto, type TicketReplyFile, type TicketSavedReplyDto } from "@tier0/core";
 import { CharacterCount } from "../../app/guilds/[id]/mod/members/[userId]/CharacterCount";
 import { useToast } from "../Toaster";
-import { InfoIcon, LockIcon, MessagesIcon, PaperclipIcon, SendIcon, XIcon } from "../Icons";
+import { InfoIcon, LockIcon, MessagesIcon, PaperclipIcon, PlusIcon, SendIcon, UndoIcon, XIcon } from "../Icons";
 import { formatBytes } from "../../lib/ticket-format";
 import {
   base64FromDataUrl,
@@ -17,23 +17,41 @@ import {
   savedReplyText,
   type ReplyFileLimits,
 } from "../../lib/ticket-composer";
+import { EMBED_BUDGET, REPLY_EMBEDS_MAX, embedLabel, embedsUsed } from "../../lib/ticket-embeds";
+import type { ReplyTarget } from "../../lib/ticket-reply-to";
+import type { TemplateInsert } from "../../lib/ticket-templates";
 import { replyWithFiles, ticketsClient } from "../../lib/tickets-client";
+import { ReplyEmbedDialog } from "./ReplyEmbedDialog";
 import { useUnsavedGuard } from "../../lib/unsaved-guard";
 
 interface Props {
   guildId: string;
-  ticket: Pick<TicketDetailDto, "id" | "number" | "typeName" | "channelId" | "opener">;
+  ticket: Pick<TicketDetailDto, "id" | "number" | "typeName" | "channelId" | "channelName" | "opener">;
   viewerId: string;
   openerName: string;
   /** The bot posts replies under the staff member's name; otherwise it posts them itself, naming them. */
   webhooks: boolean;
+  /** The team name replies go out under, or null for the staff member's own. */
+  replyAs: string | null;
   /** Why the viewer cannot reply here, or null when they can. */
   blocked: string | null;
   /** The server's saved replies, to insert. */
   savedReplies: readonly TicketSavedReplyDto[];
   /** What a reply may attach, or null for a bot that takes no files from the dashboard. */
   replyFiles: ReplyFileLimits | null;
+  /** The message the reply answers, if one was picked in the conversation. */
+  replyTo?: ReplyTarget | null;
+  onClearReplyTo?(): void;
   onSent(message: TicketMessageDto): void;
+  /**
+   * A plain-text reply is about to be sent: show it in the conversation now.
+   * Returns what `onSettled` and `onFailed` name it by.
+   */
+  onSending?(draft: { content: string; replyTo: string | null }): string;
+  /** The reply was stored; this is the message that replaces the one shown ahead of time. */
+  onSettled?(token: string, message: TicketMessageDto): void;
+  /** The reply did not go through, so the one shown ahead of time goes away. */
+  onFailed?(token: string): void;
 }
 
 interface Attached {
@@ -63,10 +81,13 @@ function readBase64(file: File): Promise<string> {
  * with their names filled in. A failed send keeps the text and the files, and
  * leaving with a draft asks first, so nothing written is lost.
  */
-export function Composer({ guildId, ticket, viewerId, openerName, webhooks, blocked, savedReplies, replyFiles, onSent }: Props) {
+export function Composer({ guildId, ticket, viewerId, openerName, webhooks, replyAs, blocked, savedReplies, replyFiles, replyTo = null, onClearReplyTo, onSent, onSending, onSettled, onFailed }: Props) {
   const toast = useToast();
   const [text, setText] = useState("");
   const [files, setFiles] = useState<Attached[]>([]);
+  const [embeds, setEmbeds] = useState<MessageEmbed[]>([]);
+  /** The embed dialog: which embed it edits, or null for a new one. Absent while it is closed. */
+  const [editing, setEditing] = useState<{ index: number | null } | null>(null);
   const [fileProblems, setFileProblems] = useState<string[]>([]);
   const [sending, setSending] = useState(false);
   const [progress, setProgress] = useState<number | null>(null);
@@ -92,9 +113,10 @@ export function Composer({ guildId, ticket, viewerId, openerName, webhooks, bloc
   };
 
   const guard = useUnsavedGuard({
-    dirty: !blocked && (text.trim() !== "" || files.length > 0),
+    dirty: !blocked && (text.trim() !== "" || files.length > 0 || embeds.length > 0),
     onDiscard: () => {
       setText("");
+      setEmbeds([]);
       clearFiles();
     },
   });
@@ -173,8 +195,8 @@ export function Composer({ guildId, ticket, viewerId, openerName, webhooks, bloc
 
   async function send() {
     if (sendingRef.current) return;
-    if (trimmed === "" && files.length === 0) {
-      setError("Write a reply or attach a file before sending.");
+    if (trimmed === "" && files.length === 0 && embeds.length === 0) {
+      setError("Write a reply, attach a file or add an embed before sending.");
       field.current?.focus();
       return;
     }
@@ -185,6 +207,9 @@ export function Composer({ guildId, ticket, viewerId, openerName, webhooks, bloc
     sendingRef.current = true;
     setSending(true);
     setError(null);
+    // Only plain text is shown ahead of time; files and embeds look different once Discord has them.
+    const token = onSending && files.length === 0 && embeds.length === 0 ? onSending({ content: trimmed, replyTo: replyTo?.messageId ?? null }) : null;
+    let settled = false;
     try {
       let result;
       if (files.length > 0) {
@@ -198,17 +223,21 @@ export function Composer({ guildId, ticket, viewerId, openerName, webhooks, bloc
           setError("One of the files could not be read from this device. Remove it and attach it again.");
           return;
         }
-        result = await replyWithFiles(guildId, ticket.id, { content: trimmed, files: encoded }, setProgress);
+        result = await replyWithFiles(guildId, ticket.id, { content: trimmed, files: encoded, ...(embeds.length > 0 ? { embeds } : {}), ...(replyTo ? { replyToMessageId: replyTo.messageId } : {}) }, setProgress);
       } else {
-        result = await ticketsClient.reply(guildId, ticket.id, { content: trimmed });
+        result = await ticketsClient.reply(guildId, ticket.id, { content: trimmed, ...(embeds.length > 0 ? { embeds } : {}), ...(replyTo ? { replyToMessageId: replyTo.messageId } : {}) });
       }
       if (!result.ok) {
         setError(result.error);
         return;
       }
       setText("");
+      setEmbeds([]);
       clearFiles();
-      onSent(result.value.message);
+      onClearReplyTo?.();
+      settled = true;
+      if (token !== null && onSettled) onSettled(token, result.value.message);
+      else onSent(result.value.message);
       if (result.value.delivery === "bot" && webhooks) {
         toast.push({
           kind: "success",
@@ -218,13 +247,56 @@ export function Composer({ guildId, ticket, viewerId, openerName, webhooks, bloc
       }
       field.current?.focus();
     } finally {
+      if (token !== null && !settled) onFailed?.(token);
       sendingRef.current = false;
       setSending(false);
       setProgress(null);
     }
   }
 
+  const saveEmbed = (embed: MessageEmbed) => {
+    const at = editing?.index ?? null;
+    setEmbeds((current) => (at === null ? [...current, embed] : current.map((entry, index) => (index === at ? embed : entry))));
+    setEditing(null);
+    setError(null);
+    field.current?.focus();
+  };
+
+  /** A saved message chosen in the embed dialog: its embeds join the draft and its text goes in at the cursor. */
+  function addTemplate(insert: TemplateInsert) {
+    setEmbeds((current) => [...current, ...insert.embeds]);
+    if (insert.text !== "") {
+      const el = field.current;
+      const next = insertText(text, el?.selectionStart ?? text.length, el?.selectionEnd ?? text.length, insert.text);
+      caret.current = next.caret;
+      setText(next.text);
+    }
+    setEditing(null);
+    setError(null);
+    if (insert.notes.length > 0) toast.push({ kind: "success", title: "Saved message added", detail: insert.notes.join(" ") });
+    field.current?.focus();
+  }
+
+  const jumpToReplied = () => {
+    const target = replyTo ? document.getElementById(`dt-${replyTo.messageId}`) : null;
+    target?.scrollIntoView({ block: "center", behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+  };
+
   const hasFiles = (event: DragEvent) => [...event.dataTransfer.types].includes("Files");
+
+  const hintText = `${
+    webhooks
+      ? replyAs
+        ? `Sent to Discord as ${replyAs}.`
+        : "Sent to Discord under your name."
+      : replyAs
+        ? `Sent by the bot, with ${replyAs} on the first line.`
+        : "Sent by the bot, with your name on the first line."
+  } ${MENTION_HINT}${
+    replyFiles
+      ? ` Drop or paste files to attach them, up to ${replyFiles.maxFiles} and ${formatBytes(replyFiles.maxBytes)} in all.`
+      : " Files can only be attached in Discord."
+  }`;
 
   return (
     <form
@@ -257,6 +329,17 @@ export function Composer({ guildId, ticket, viewerId, openerName, webhooks, bloc
       }}
     >
       {guard.host}
+      {replyTo ? (
+        <div className="tk-replying">
+          <UndoIcon />
+          <button type="button" className="tk-replying-text" onClick={jumpToReplied} title="Show the message in the conversation">
+            Replying to <strong>{replyTo.name}</strong>: <span>{replyTo.snippet}</span>
+          </button>
+          <button type="button" className="icon-btn" aria-label="Cancel replying to this message" disabled={sending} onClick={() => onClearReplyTo?.()}>
+            <XIcon />
+          </button>
+        </div>
+      ) : null}
       <label className="visually-hidden" htmlFor={id}>
         Reply to {openerName}
       </label>
@@ -285,6 +368,9 @@ export function Composer({ guildId, ticket, viewerId, openerName, webhooks, bloc
           if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
             event.preventDefault();
             void send();
+          } else if (event.key === "Escape" && replyTo && !event.defaultPrevented) {
+            event.preventDefault();
+            onClearReplyTo?.();
           }
         }}
       />
@@ -325,6 +411,33 @@ export function Composer({ guildId, ticket, viewerId, openerName, webhooks, bloc
             ))}
           </ul>
           {replyFiles ? <p className="tk-files-sum">{filesSummary(files.map((entry) => entry.file), replyFiles)}</p> : null}
+        </div>
+      ) : null}
+
+      {embeds.length > 0 ? (
+        <div className="tk-composer-files">
+          <ul className="tk-embeds" aria-label="Embeds in this reply">
+            {embeds.map((embed, index) => (
+              <li key={index} className="tk-embed-chip" style={{ borderLeftColor: /^#[0-9a-f]{6}$/i.test(embed.color) ? embed.color : undefined }}>
+                <button type="button" className="tk-embed-chip-edit" disabled={sending} onClick={() => setEditing({ index })} title="Edit this embed">
+                  <span className="tk-embed-chip-kicker">Embed {index + 1}</span>
+                  <span className="tk-embed-chip-label">{embedLabel(embed, index)}</span>
+                </button>
+                <button
+                  type="button"
+                  className="icon-btn tk-file-remove"
+                  aria-label={`Remove embed ${index + 1}`}
+                  disabled={sending}
+                  onClick={() => setEmbeds((current) => current.filter((_, at) => at !== index))}
+                >
+                  <XIcon />
+                </button>
+              </li>
+            ))}
+          </ul>
+          <p className="tk-files-sum">
+            {embeds.length} of {REPLY_EMBEDS_MAX} embeds, {embedsUsed(embeds).toLocaleString()} of {EMBED_BUDGET.toLocaleString()} characters
+          </p>
         </div>
       ) : null}
 
@@ -375,6 +488,10 @@ export function Composer({ guildId, ticket, viewerId, openerName, webhooks, bloc
               </button>
             </>
           ) : null}
+          <button type="button" className="btn btn-ghost btn-sm" disabled={sending || embeds.length >= REPLY_EMBEDS_MAX} onClick={() => setEditing({ index: null })}>
+            <PlusIcon />
+            Add embed
+          </button>
           {savedReplies.length > 0 ? <SavedReplies replies={savedReplies} disabled={sending} onPick={insertSaved} onDone={() => field.current?.focus()} /> : null}
         </div>
         <div className="tk-composer-send">
@@ -389,14 +506,22 @@ export function Composer({ guildId, ticket, viewerId, openerName, webhooks, bloc
           </button>
         </div>
       </div>
-      <p className="tk-composer-hint" id={hintId}>
+      {editing ? (
+        <ReplyEmbedDialog
+          guildId={guildId}
+          embed={editing.index === null ? null : (embeds[editing.index] ?? null)}
+          others={embeds.filter((_, index) => index !== editing.index)}
+          onSave={saveEmbed}
+          saved={editing.index === null ? { ticket, viewerId, onUse: addTemplate } : undefined}
+          onClose={() => {
+            setEditing(null);
+            field.current?.focus();
+          }}
+        />
+      ) : null}
+      <p className="tk-composer-hint" id={hintId} title={hintText}>
         <InfoIcon />
-        <span>
-          {webhooks ? "Sent to Discord under your name." : "Sent by the bot, with your name on the first line."} {MENTION_HINT}
-          {replyFiles
-            ? ` Drop or paste files to attach them, up to ${replyFiles.maxFiles} and ${formatBytes(replyFiles.maxBytes)} in all.`
-            : " Files can only be attached in Discord."}
-        </span>
+        <span>{hintText}</span>
       </p>
     </form>
   );

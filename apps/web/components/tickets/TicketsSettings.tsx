@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import type { FieldDescriptor, MessageBody, TicketContextDto, TicketPanelStatusDto } from "@tier0/core";
+import type { TicketContextDto, TicketPanelStatusDto } from "@tier0/core";
 import { ModulePage } from "../ModulePage";
 import { AlertIcon } from "../Icons";
 import type { ModuleView } from "../../lib/module-view";
@@ -9,7 +9,7 @@ import { healthHeadline, needsFirstRun, shownIssues } from "../../lib/ticket-hea
 import { BlockedMembers } from "./BlockedMembers";
 import { FirstRun } from "./FirstRun";
 import { HealthCard } from "./HealthCard";
-import { PanelStrip } from "./PanelStrip";
+import { PanelFooter, PanelStatus, usePanelPosting } from "./PanelPosting";
 import { followSettingsAddress, openSettingsTarget } from "./settings-target";
 
 interface Props {
@@ -21,26 +21,19 @@ interface Props {
   panels: TicketPanelStatusDto[] | { error: string };
 }
 
-/** The message a new panel starts with, read from the schema so the preview matches the bot's default. */
-function panelStarting(schema: FieldDescriptor): MessageBody | undefined {
-  const panels = (schema.fields as Record<string, FieldDescriptor> | undefined)?.panels;
-  const row = (panels?.of as FieldDescriptor | undefined)?.fields as Record<string, FieldDescriptor> | undefined;
-  return row?.message?.starting as MessageBody | undefined;
-}
-
 /**
  * The Settings tab of Tickets: the ordinary schema form, split into its
  * sections, with what the bot knows about the live server around it: what
- * is broken, whether each panel is up, and what the commands do.
+ * is broken, whether each panel is up (in the header and at the foot of each
+ * panel), and what the commands do.
  *
  * The full health card sits with Panels, where nearly every fix is. Other
  * parts carry a one-line note while something stops tickets opening, rather
  * than the whole card above every part.
  */
 export function TicketsSettings({ guildId, serverName, module, context, panels }: Props) {
-  const schema = module.schema as unknown as FieldDescriptor;
-  const starting = panelStarting(schema);
   const contextPanels = context?.panels ?? [];
+  const posting = usePanelPosting(guildId, panels);
 
   // A link from the inbox or the health card names the panel or type to open.
   useEffect(() => {
@@ -86,23 +79,21 @@ export function TicketsSettings({ guildId, serverName, module, context, panels }
       eyebrow="Tickets"
       module={module}
       lead={lead}
-      sectionIntro={({ settings, dirty, enabled, update }) => ({
+      rowSlots={({ settings, dirty, enabled }) => {
+        const draft = { settings, dirty, enabled, typeProblems: context?.panels ?? [], issues: context?.health ?? [] };
+        return {
+          panels: {
+            status: (index) => <PanelStatus posting={posting} index={index} draft={draft} />,
+            footer: (index) => <PanelFooter posting={posting} index={index} draft={draft} />,
+          },
+        };
+      }}
+      sectionIntro={({ settings, update }) => ({
         panels: (
           <>
             {context && !(firstRun && shown.length === 0) ? (
               <HealthCard guildId={guildId} issues={shown} panels={context.panels} summary={context.healthSummary} samePage />
             ) : null}
-            <PanelStrip
-              guildId={guildId}
-              serverName={serverName}
-              settings={settings}
-              dirty={dirty}
-              enabled={enabled}
-              initial={panels}
-              starting={starting}
-              typeProblems={context?.panels ?? []}
-              issues={context?.health ?? []}
-            />
           </>
         ),
         general: <BlockedMembers guildId={guildId} settings={settings} disabled={false} onChange={update} />,

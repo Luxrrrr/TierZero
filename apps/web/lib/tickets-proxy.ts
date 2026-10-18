@@ -11,13 +11,13 @@
  * Manage Server.
  */
 
-import { TICKET_REPLY_FILES_BYTES_MAX } from "@tier0/core";
+import { TICKET_REPLY_FILES_BYTES_MAX, TICKET_WAIT_MAX_SECONDS } from "@tier0/core";
 
 /** Top-level paths the browser may reach. Anything else is a 404 here and never forwarded. */
-export const TICKET_PROXY_ROOTS: readonly string[] = ["access", "context", "list", "count", "members", "stats", "panels", "items"];
+export const TICKET_PROXY_ROOTS: readonly string[] = ["access", "context", "list", "count", "members", "stats", "templates", "panels", "create", "items"];
 
 /** The reads at the top level, each one path long and open to anyone the bot lets into the workspace. */
-const WORKSPACE_READS: readonly string[] = ["access", "context", "list", "count", "members", "stats"];
+const WORKSPACE_READS: readonly string[] = ["access", "context", "list", "count", "members", "stats", "templates"];
 
 export const TICKET_PROXY_MAX_BODY_BYTES = 32 * 1024;
 
@@ -36,9 +36,30 @@ export function ticketProxyBodyLimit(method: string, path: readonly string[]): n
   return isReplyWrite(method, path) ? TICKET_PROXY_MAX_REPLY_BODY_BYTES : TICKET_PROXY_MAX_BODY_BYTES;
 }
 
-/** How long the bot may take. A reply with files waits for Discord to take the upload, which a slow link stretches. */
-export function ticketProxyTimeoutMs(method: string, path: readonly string[]): number | undefined {
-  return isReplyWrite(method, path) ? 60_000 : undefined;
+/** A read held with `wait` gets this long on top of the wait itself before the proxy gives up on the bot. */
+const WAIT_GRACE_MS = 10_000;
+
+/**
+ * How long the bot may take. A reply with files waits for Discord to take the
+ * upload, which a slow link stretches. The two reads that can be held with
+ * `wait` get the longest wait they may ask for, and a little more, and no
+ * other route does.
+ */
+export function ticketProxyTimeoutMs(method: string, path: readonly string[], search?: URLSearchParams): number | undefined {
+  if (isReplyWrite(method, path)) return 60_000;
+  if (search && isRead(method) && waitedSeconds(path, search) > 0) return TICKET_WAIT_MAX_SECONDS * 1000 + WAIT_GRACE_MS;
+  return undefined;
+}
+
+/** Whether a path is one of the two reads that may be held. */
+function mayWait(path: readonly string[]): boolean {
+  return (path.length === 1 && path[0] === "count") || (path.length === 3 && path[0] === "items" && path[2] === "messages");
+}
+
+/** The seconds a request asks to be held, 0 for a route that cannot be held or a `wait` that is not a whole number. */
+function waitedSeconds(path: readonly string[], search: URLSearchParams): number {
+  const wait = search.get("wait");
+  return mayWait(path) && wait !== null && WHOLE_NUMBER.test(wait) ? Math.min(Number(wait), TICKET_WAIT_MAX_SECONDS) : 0;
 }
 
 /**
@@ -62,6 +83,7 @@ export const TICKET_WRITE_ACTIONS: readonly string[] = [
 ];
 
 const TICKET_ID = /^[1-9]\d{0,8}$/;
+const WHOLE_NUMBER = /^[0-9]{1,6}$/;
 const PANEL_ID = /^[A-Za-z0-9_-]{1,32}$/;
 const isRead = (method: string) => method === "GET" || method === "HEAD";
 
@@ -78,6 +100,9 @@ export function ticketProxyClass(method: string, path: readonly string[]): Ticke
   if (WORKSPACE_READS.includes(first)) {
     return path.length === 1 && isRead(method) ? "workspace" : null;
   }
+
+  // Opening a ticket as staff: the bot checks the viewer handles the type.
+  if (first === "create") return path.length === 1 && method === "POST" ? "workspace" : null;
 
   if (first === "panels") {
     if (path.length === 1) return isRead(method) ? "manager" : null;
@@ -98,12 +123,21 @@ export function ticketProxyClass(method: string, path: readonly string[]): Ticke
 /** Query keys the browser may pass through, per read. `viewer` is never among them: the proxy sets it. */
 const LIST_QUERY = ["status", "type", "priority", "claimed", "opener", "q", "sort", "page", "rating", "handler", "from", "to", "after"];
 
+/** The keys that name a number of seconds or a version, passed on only when they are whole numbers. */
+const NUMBER_KEYS: readonly string[] = ["wait", "version", "detailVersion"];
+const VERSION_NUMBER = /^[0-9]{1,16}$/;
+
+function passable(key: string, value: string): boolean {
+  if (!NUMBER_KEYS.includes(key)) return true;
+  return key === "wait" ? WHOLE_NUMBER.test(value) : VERSION_NUMBER.test(value);
+}
+
 const PASSED_QUERY: Record<string, readonly string[]> = {
   list: LIST_QUERY,
-  count: LIST_QUERY,
+  count: [...LIST_QUERY, "wait", "version"],
   members: ["q", "ids"],
   stats: ["days"],
-  messages: ["after", "updatedSince"],
+  messages: ["after", "updatedSince", "wait", "detailVersion"],
 };
 
 /**
@@ -114,7 +148,9 @@ export function ticketTarget(path: readonly string[], search: URLSearchParams, v
   const route = path[0] === "items" ? (path[2] === "messages" ? "messages" : "") : (path[0] ?? "");
   const query = new URLSearchParams();
   if (isRead(method)) {
-    for (const key of PASSED_QUERY[route] ?? []) for (const value of search.getAll(key)) query.append(key, value);
+    for (const key of PASSED_QUERY[route] ?? []) {
+      for (const value of search.getAll(key)) if (passable(key, value)) query.append(key, value);
+    }
     query.set("viewer", viewerId);
   }
   const text = query.toString();

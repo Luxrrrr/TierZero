@@ -156,7 +156,7 @@ export function MemberSearch({
               onClick={() => pick(user)}
               onMouseEnter={() => setActive(index)}
             >
-              <Avatar user={user} size="sm" />
+              <Avatar user={user} size="sm" menu={false} />
               <span className="tk-member-name">{displayName(user)}</span>
               {!user.inServer ? <span className="tk-muted tk-small">Not in the server</span> : null}
             </li>

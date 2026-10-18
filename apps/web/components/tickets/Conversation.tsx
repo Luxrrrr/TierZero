@@ -1,12 +1,14 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { TicketDetailDto, TicketMessageDto } from "@tier0/core";
 import { ArrowDownIcon } from "../Icons";
 import { knownNames, ticketNumber, ticketTopic, transcriptActivity } from "../../lib/ticket-format";
+import { Switch } from "../form/Switch";
 import { DiscordTranscript } from "./DiscordTranscript";
 
 const OPEN_LABELS = { empty: "No messages yet." };
+const CLOSED_LABELS = { empty: "No messages were saved for this ticket. Tickets closed before transcripts were stored have no conversation here." };
 
 interface Props {
   ticket: TicketDetailDto;
@@ -17,10 +19,14 @@ interface Props {
   /** Messages the last poll brought, so the view can follow them down or offer to. */
   arrived: TicketMessageDto[];
   viewerId: string;
+  /** Name who really sent a reply that went out under the team's name. A transcript shows what Discord showed instead. */
+  showSender: boolean;
   /** The composer, or the reason there is none. */
   footer: ReactNode;
   /** The pane scrolls on its own, as in the two-pane inbox, rather than with the page. */
   contained: boolean;
+  /** Answer one message. Left out where the conversation is only read. */
+  onReply?: (message: TicketMessageDto) => void;
 }
 
 /**
@@ -29,7 +35,8 @@ interface Props {
  * channel, so it stays out unless the reader asks for it, and then reads
  * plainly as the dashboard's own lines rather than as messages.
  */
-export function Conversation({ ticket, messages, catchingUp, failed, announcement, arrived, viewerId, footer, contained }: Props) {
+export function Conversation({ ticket, messages, catchingUp, failed, announcement, arrived, viewerId, showSender, footer, contained, onReply }: Props) {
+  const activityLabelId = useId();
   const scrollRef = useRef<HTMLDivElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
   const [unseen, setUnseen] = useState(0);
@@ -87,6 +94,17 @@ export function Conversation({ ticket, messages, catchingUp, failed, announcemen
     else setUnseen((count) => count + arrived.filter((message) => message.author.userId !== viewerId).length);
   }, [arrived]);
 
+  // Only messages that arrive after the first render fade up; the ones that
+  // were there on load are already in place.
+  useLayoutEffect(() => {
+    for (const message of arrived) {
+      const item = document.getElementById(`dt-${message.messageId}`);
+      if (!item) continue;
+      item.classList.add("tk-msg-new");
+      item.addEventListener("animationend", () => item.classList.remove("tk-msg-new"), { once: true });
+    }
+  }, [arrived]);
+
   const toggleActivity = (next: boolean) => {
     const el = scrollRef.current;
     if (el) {
@@ -140,27 +158,32 @@ export function Conversation({ ticket, messages, catchingUp, failed, announcemen
 
   return (
     <section className="tk-convo" aria-label="Conversation">
-      <div className="tk-convo-tools">
-        <label className="tk-activity-switch">
-          <input type="checkbox" checked={showActivity} onChange={(event) => toggleActivity(event.target.checked)} />
-          <span>Show ticket activity</span>
-        </label>
-        {catchingUp ? (
-          <span className="tk-convo-tools-note" role="status">
-            <span className="spinner" aria-hidden="true" /> Loading the rest of the conversation
-          </span>
-        ) : null}
-      </div>
       <div className="tk-convo-scroll tk-discord" ref={scrollRef}>
         <div ref={listRef}>
           <DiscordTranscript
             messages={messages}
             channelName={ticket.channelName || `ticket-${ticketNumber(ticket)}`}
+            channelId={ticket.channelId}
             topic={topic}
             activity={activity}
             names={names}
-            labels={ticket.status === "open" ? OPEN_LABELS : undefined}
+            labels={ticket.status === "open" ? OPEN_LABELS : CLOSED_LABELS}
             thread={ticket.mode === "thread"}
+            showSender={showSender}
+            onReply={onReply}
+            headerSlot={
+              <div className="tk-convo-tools" key="tools">
+                {catchingUp ? (
+                  <span className="tk-convo-tools-note" role="status">
+                    <span className="spinner" aria-hidden="true" /> Loading the rest of the conversation
+                  </span>
+                ) : null}
+                <span className="tk-activity-switch">
+                  <Switch checked={showActivity} onChange={toggleActivity} aria-labelledby={activityLabelId} />
+                  <span id={activityLabelId}>Show ticket activity</span>
+                </span>
+              </div>
+            }
           />
         </div>
         <div ref={endRef} className="tk-convo-end" />

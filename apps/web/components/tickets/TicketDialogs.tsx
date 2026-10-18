@@ -237,6 +237,12 @@ export function TransferDialog({
               You do not handle {chosen.name}, so the ticket leaves your inbox once it is moved.
             </p>
           ) : null}
+          {chosen?.noHandlers ? (
+            <p className="callout callout-attention tk-dialog-warn" role="status">
+              Nobody handles {chosen.name} yet, so only server managers will be able to answer this ticket. Add handlers to it in
+              Settings.
+            </p>
+          ) : null}
           {problem ? (
             <p className="pf-field-error" role="alert">
               {problem}

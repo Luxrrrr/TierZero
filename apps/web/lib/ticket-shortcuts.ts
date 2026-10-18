@@ -3,18 +3,21 @@
  * can check them without a browser.
  */
 
-export type TicketShortcut = "next" | "previous" | "claim" | "reply" | "search" | "help";
+export type TicketShortcut = "next" | "previous" | "claim" | "reply" | "replyLatest" | "new" | "search" | "help";
 
-export const TICKET_SHORTCUTS: readonly { keys: string[]; action: TicketShortcut; does: string }[] = [
+/** `keys` is what the list shows; `trigger` is the `KeyboardEvent.key` it answers to when that differs from the keys shown. */
+export const TICKET_SHORTCUTS: readonly { keys: string[]; action: TicketShortcut; does: string; trigger?: string }[] = [
   { keys: ["j"], action: "next", does: "Open the next ticket in the list" },
   { keys: ["k"], action: "previous", does: "Open the previous ticket" },
   { keys: ["c"], action: "claim", does: "Claim the open ticket" },
   { keys: ["r"], action: "reply", does: "Write a reply" },
+  { keys: ["Shift", "R"], action: "replyLatest", trigger: "R", does: "Reply to the member's latest message" },
+  { keys: ["n"], action: "new", does: "Open a new ticket" },
   { keys: ["/"], action: "search", does: "Search tickets" },
   { keys: ["?"], action: "help", does: "Show or hide this list" },
 ];
 
-const BY_KEY = new Map<string, TicketShortcut>(TICKET_SHORTCUTS.flatMap((entry) => entry.keys.map((key) => [key, entry.action] as const)));
+const BY_KEY = new Map<string, TicketShortcut>(TICKET_SHORTCUTS.flatMap((entry) => (entry.trigger ? [entry.trigger] : entry.keys).map((key) => [key, entry.action] as const)));
 
 export interface KeyLike {
   key: string;

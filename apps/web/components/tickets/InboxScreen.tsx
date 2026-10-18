@@ -8,6 +8,7 @@ import { FirstRun } from "./FirstRun";
 import { InboxList } from "./InboxList";
 import { InboxLive } from "./InboxLive";
 import { InboxShortcuts } from "./InboxShortcuts";
+import { NewTicket } from "./NewTicket";
 import { TicketFilters } from "./TicketFilters";
 import { TicketView } from "./TicketView";
 
@@ -85,7 +86,10 @@ export function InboxScreen({ guildId, viewerId, filters, context, list, selecte
             <TicketFilters guildId={guildId} filters={filters} panels={ctx.panels} variant="inbox" ticketId={selected?.id} viewerId={viewerId} />
             <div className="tk-list-tools">
               {list.ok ? <InboxLive guildId={guildId} filters={filters} listId={LIST_ID} /> : <span />}
-              <InboxShortcuts listId={LIST_ID} />
+              <div className="tk-list-actions">
+                <NewTicket guildId={guildId} panels={ctx.panels} viewerId={viewerId} enabled={ctx.moduleEnabled} />
+                <InboxShortcuts listId={LIST_ID} />
+              </div>
             </div>
             {list.ok ? (
               <InboxList
@@ -112,6 +116,7 @@ export function InboxScreen({ guildId, viewerId, filters, context, list, selecte
                   viewerId={viewerId}
                   panels={ctx.panels}
                   webhooks={ctx.canUseWebhooks}
+                  replyAs={ctx.replyAs ?? null}
                   moduleEnabled={ctx.moduleEnabled}
                   canModerate={canModerate}
                   mode="inbox"

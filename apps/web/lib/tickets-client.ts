@@ -5,6 +5,8 @@ import {
   type TicketCloseRequest,
   type TicketContextDto,
   type TicketCountDto,
+  type TicketCreateRequest,
+  type TicketCreateResult,
   type TicketDetailDto,
   type TicketListFilters,
   type TicketMembersRequest,
@@ -18,6 +20,7 @@ import {
   type TicketReplyRequest,
   type TicketReplyResult,
   type TicketRequestCloseRequest,
+  type TicketTemplatesDto,
   type TicketTransferRequest,
   type TicketTranscriptDeleteResult,
 } from "@tier0/core";
@@ -78,11 +81,25 @@ export async function ticketCall<T>(
 
 const item = (ticketId: number, action: string) => `items/${ticketId}/${action}`;
 
-/** New messages after `after`, and older ones edited or deleted since `updatedSince`. */
-export function messagesPath(ticketId: number, after: string | null, updatedSince: string | null = null): string {
+/** A read the bot may hold: for how many seconds, and the version the page already has, so a change since is answered at once. */
+export interface Hold {
+  wait: number;
+  version?: number | null;
+}
+
+/**
+ * New messages after `after`, and older ones edited or deleted since
+ * `updatedSince`. With a hold, the bot keeps the request until something
+ * changes or the wait is up; `version` is the detail version last seen.
+ */
+export function messagesPath(ticketId: number, after: string | null, updatedSince: string | null = null, hold?: Hold): string {
   const query = new URLSearchParams();
   if (after) query.set("after", after);
   if (updatedSince) query.set("updatedSince", updatedSince);
+  if (hold && hold.wait > 0) {
+    query.set("wait", String(Math.floor(hold.wait)));
+    if (hold.version !== undefined && hold.version !== null) query.set("detailVersion", String(hold.version));
+  }
   const text = query.toString();
   return text ? `items/${ticketId}/messages?${text}` : `items/${ticketId}/messages`;
 }
@@ -92,9 +109,14 @@ export function transcriptHref(guildId: string, ticketId: number, format: "html"
 }
 
 /** The list and its count with the filters a page shows, plus `after` to ask only about tickets newer than the one named. */
-export function listPath(root: "list" | "count", filters: Partial<TicketListFilters>): string {
-  const query = ticketListQuery(filters);
-  return query ? `${root}?${query}` : root;
+export function listPath(root: "list" | "count", filters: Partial<TicketListFilters>, hold?: Hold): string {
+  const query = new URLSearchParams(ticketListQuery(filters));
+  if (root === "count" && hold && hold.wait > 0) {
+    query.set("wait", String(Math.floor(hold.wait)));
+    if (hold.version !== undefined && hold.version !== null) query.set("version", String(hold.version));
+  }
+  const text = query.toString();
+  return text ? `${root}?${text}` : root;
 }
 
 /** A member search by name, or the names of members already known by id. */
@@ -109,8 +131,8 @@ export const ticketsClient = {
   context: (guildId: string, signal?: AbortSignal) => ticketCall<TicketContextDto>(guildId, "GET", "context", undefined, signal),
   list: (guildId: string, filters: Partial<TicketListFilters>, signal?: AbortSignal) =>
     ticketCall<TicketPage>(guildId, "GET", listPath("list", filters), undefined, signal),
-  count: (guildId: string, filters: Partial<TicketListFilters>, signal?: AbortSignal) =>
-    ticketCall<TicketCountDto>(guildId, "GET", listPath("count", filters), undefined, signal),
+  count: (guildId: string, filters: Partial<TicketListFilters>, signal?: AbortSignal, hold?: Hold) =>
+    ticketCall<TicketCountDto>(guildId, "GET", listPath("count", filters, hold), undefined, signal),
   findMembers: (guildId: string, q: string, signal?: AbortSignal) =>
     ticketCall<MemberSearchHit[]>(guildId, "GET", membersPath({ q }), undefined, signal),
   memberNames: (guildId: string, ids: readonly string[], signal?: AbortSignal) =>
@@ -119,8 +141,8 @@ export const ticketsClient = {
     ticketCall<TicketActionResult>(guildId, "POST", `items/${ticketId}/rename`, body),
   requestClose: (guildId: string, ticketId: number, body: TicketRequestCloseRequest) =>
     ticketCall<TicketActionResult>(guildId, "POST", `items/${ticketId}/request-close`, body),
-  messages: (guildId: string, ticketId: number, after: string | null, updatedSince: string | null, signal?: AbortSignal) =>
-    ticketCall<TicketMessagesPage>(guildId, "GET", messagesPath(ticketId, after, updatedSince), undefined, signal),
+  messages: (guildId: string, ticketId: number, after: string | null, updatedSince: string | null, signal?: AbortSignal, hold?: Hold) =>
+    ticketCall<TicketMessagesPage>(guildId, "GET", messagesPath(ticketId, after, updatedSince, hold), undefined, signal),
   detail: (guildId: string, ticketId: number, signal?: AbortSignal) =>
     ticketCall<TicketDetailDto>(guildId, "GET", `items/${ticketId}`, undefined, signal),
   reply: (guildId: string, ticketId: number, body: TicketReplyRequest) =>
@@ -140,6 +162,9 @@ export const ticketsClient = {
   reopen: (guildId: string, ticketId: number) => ticketCall<TicketActionResult>(guildId, "POST", item(ticketId, "reopen"), {}),
   deleteTranscript: (guildId: string, ticketId: number) =>
     ticketCall<TicketTranscriptDeleteResult>(guildId, "DELETE", `items/${ticketId}/transcript`, {}),
+  templates: (guildId: string, signal?: AbortSignal) => ticketCall<TicketTemplatesDto>(guildId, "GET", "templates", undefined, signal),
+  create: (guildId: string, body: Omit<TicketCreateRequest, "subject" | "firstMessage"> & { subject?: string | null; firstMessage?: string | null }) =>
+    ticketCall<TicketCreateResult>(guildId, "POST", "create", body),
   panels: (guildId: string) => ticketCall<TicketPanelStatusDto[]>(guildId, "GET", "panels"),
   postPanel: (guildId: string, panelId: string) =>
     ticketCall<TicketPanelPostResult>(guildId, "POST", `panels/${encodeURIComponent(panelId)}/post`, {}),

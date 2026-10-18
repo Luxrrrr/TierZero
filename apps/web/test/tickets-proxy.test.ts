@@ -25,11 +25,19 @@ describe("ticketProxyClass", () => {
   });
 
   test("the workspace reads are open to anyone signed in, for the bot to decide", () => {
-    for (const root of ["access", "context", "list", "count", "members", "stats"]) {
+    for (const root of ["access", "context", "list", "count", "members", "stats", "templates"]) {
       assert.equal(ticketProxyClass("GET", [root]), "workspace", root);
       assert.equal(ticketProxyClass("POST", [root]), null, root);
       assert.equal(ticketProxyClass("GET", [root, "extra"]), null, root);
     }
+  });
+
+  test("the saved messages are a plain read with no query, and nothing under or beside them is served", () => {
+    assert.equal(ticketProxyClass("GET", ["templates"]), "workspace");
+    assert.equal(ticketProxyClass("POST", ["templates"]), null);
+    assert.equal(ticketProxyClass("DELETE", ["templates"]), null);
+    assert.equal(ticketProxyClass("GET", ["templates", "1"]), null);
+    assert.equal(ticketTarget(["templates"], new URLSearchParams("viewer=1&id=2"), "500000000000000001", "GET"), "templates?viewer=500000000000000001");
   });
 
   test("a ticket, its messages and its transcripts are workspace reads", () => {

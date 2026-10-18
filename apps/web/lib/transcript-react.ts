@@ -1,4 +1,4 @@
-import { createElement, type CSSProperties, type ReactNode } from "react";
+import { createElement, Fragment, type CSSProperties, type ReactNode } from "react";
 import { TRANSCRIPT_URL_ATTRS, TRANSCRIPT_VOID_TAGS, webUrl, type TranscriptNode } from "@tier0/core";
 
 /**
@@ -24,7 +24,14 @@ const camel = (prop: string) => (prop.startsWith("--") ? prop : prop.replace(/-(
 /** Times are drawn in the reader's zone once the page runs, after the server drew them in UTC. */
 const TIME_TAGS = new Set(["time"]);
 
-export function renderTranscriptNode(node: TranscriptNode, key?: number): ReactNode {
+/** Dashboard controls that sit inside the channel header, which the downloaded file has no use for. */
+export interface TranscriptSlots {
+  header?: ReactNode;
+  /** Controls placed at the end of each message, given the message's Discord id. */
+  message?(messageId: string): ReactNode;
+}
+
+export function renderTranscriptNode(node: TranscriptNode, key?: number, slots?: TranscriptSlots): ReactNode {
   if (typeof node === "string") return node;
   const props: Record<string, unknown> = { key };
   for (const [name, raw] of Object.entries(node.attrs)) {
@@ -49,5 +56,12 @@ export function renderTranscriptNode(node: TranscriptNode, key?: number): ReactN
   }
   if (TIME_TAGS.has(node.tag)) props.suppressHydrationWarning = true;
   if (TRANSCRIPT_VOID_TAGS.has(node.tag)) return createElement(node.tag, props);
-  return createElement(node.tag, props, ...node.children.map((child, index) => renderTranscriptNode(child, index)));
+  const children = node.children.map((child, index) => renderTranscriptNode(child, index, slots));
+  if (slots?.header && node.attrs.class === "dt-header") children.push(slots.header);
+  const id = node.attrs.id;
+  if (slots?.message && node.tag === "li" && typeof id === "string" && id.startsWith("dt-")) {
+    const extra = slots.message(id.slice(3));
+    if (extra) children.push(createElement(Fragment, { key: "message-slot" }, extra));
+  }
+  return createElement(node.tag, props, ...children);
 }

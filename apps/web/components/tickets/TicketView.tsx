@@ -1,10 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type {
   TicketDetailDto,
+  TicketMessageDto,
   TicketMessagesPage,
   TicketPanelOption,
   TicketPermission,
@@ -39,6 +40,7 @@ import {
   transcriptPageHref,
 } from "../../lib/ticket-format";
 import type { ReplyFileLimits } from "../../lib/ticket-composer";
+import { canReplyTo, latestToReplyTo, replyTargetOf, type ReplyTarget } from "../../lib/ticket-reply-to";
 import { ticketsClient, transcriptHref } from "../../lib/tickets-client";
 import { Composer } from "./Composer";
 import { Conversation } from "./Conversation";
@@ -57,6 +59,8 @@ export interface TicketViewProps {
   panels: TicketPanelOption[];
   /** The bot can post replies under the staff member's own name. */
   webhooks: boolean;
+  /** The team name replies go out under, or null for the staff member's own. */
+  replyAs?: string | null;
   /** The Tickets feature is on; the bot refuses every change while it is off. */
   moduleEnabled: boolean;
   canModerate: boolean;
@@ -88,6 +92,8 @@ export function TicketView(props: TicketViewProps) {
   const [dialog, setDialog] = useState<Dialog>(null);
   const [pane, setPane] = useState<"conversation" | "details">("conversation");
   const [priority, setPriority] = useState<TicketPriority>(props.ticket.priority);
+  /** The message the reply box is answering, if staff picked one. */
+  const [replyTo, setReplyTo] = useState<ReplyTarget | null>(null);
 
   useEffect(() => {
     setTicket(props.ticket);
@@ -96,16 +102,18 @@ export function TicketView(props: TicketViewProps) {
 
   const readOnly = mode === "transcript";
   const live = !readOnly && ticket.status === "open";
-  const feed = useTicketMessages({ guildId, ticketId: ticket.id, initial: props.messages, viewerId, live });
+  const refreshDetail = useRef<() => void>(() => undefined);
+  const feed = useTicketMessages({ guildId, ticketId: ticket.id, initial: props.messages, viewerId, live, onDetailChanged: () => refreshDetail.current() });
   const { run, pending } = useTicketAction((result) => {
     setTicket(result.ticket);
     setPriority(result.ticket.priority);
   });
   const toast = useToast();
-  useTicketRefresh({
+  refreshDetail.current = useTicketRefresh({
     guildId,
     ticketId: ticket.id,
     live,
+    polling: feed.polling,
     busy: pending !== null || dialog !== null,
     onTicket: (next) => {
       setTicket(next);
@@ -136,6 +144,30 @@ export function TicketView(props: TicketViewProps) {
     }
     return "You cannot reply to this ticket.";
   })();
+
+  const canAnswer = !readOnly && replyBlocked === null;
+  const answer = (message: TicketMessageDto) => {
+    if (!canAnswer || !canReplyTo(message)) return;
+    setReplyTo(replyTargetOf(message));
+    document.querySelector<HTMLTextAreaElement>("[data-shortcut='reply']")?.focus();
+  };
+  const messagesRef = useRef(feed.messages);
+  messagesRef.current = feed.messages;
+  const answerRef = useRef(answer);
+  answerRef.current = answer;
+
+  // A different ticket starts with no message picked.
+  useEffect(() => setReplyTo(null), [ticket.id]);
+
+  // The R shortcut answers the latest message from the member; the inbox announces it as an event because the reply box lives here.
+  useEffect(() => {
+    const onShortcut = () => {
+      const target = latestToReplyTo(messagesRef.current);
+      if (target) answerRef.current(target);
+    };
+    window.addEventListener("tk-reply-latest", onShortcut);
+    return () => window.removeEventListener("tk-reply-latest", onShortcut);
+  }, []);
 
   const changePriority = async (next: TicketPriority) => {
     const before = priority;
@@ -363,7 +395,9 @@ export function TicketView(props: TicketViewProps) {
           announcement={feed.announcement}
           arrived={feed.arrived}
           viewerId={viewerId}
+          showSender={!readOnly}
           contained={split}
+          onReply={canAnswer ? answer : undefined}
           footer={
             readOnly ? null : (
               <Composer
@@ -373,10 +407,16 @@ export function TicketView(props: TicketViewProps) {
                 viewerId={viewerId}
                 openerName={displayName(ticket.opener)}
                 webhooks={webhooks}
+                replyAs={props.replyAs ?? null}
                 blocked={replyBlocked}
                 savedReplies={props.savedReplies ?? []}
                 replyFiles={props.replyFiles ?? null}
+                replyTo={replyTo}
+                onClearReplyTo={() => setReplyTo(null)}
                 onSent={feed.add}
+                onSending={feed.send}
+                onSettled={feed.settle}
+                onFailed={feed.discard}
               />
             )
           }

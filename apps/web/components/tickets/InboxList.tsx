@@ -1,3 +1,4 @@
+import type { CSSProperties } from "react";
 import Link from "next/link";
 import type { TicketListFilters, TicketPage, TicketSummaryDto, TicketTypeOption } from "@tier0/core";
 import { Avatar, EmptyState, Pager, RelativeTime, displayName } from "../mod/ModUi";
@@ -85,8 +86,8 @@ export function InboxList({ guildId, page, filters, selectedId, types, myQueue =
         ) : null}
       </p>
       <ul className="tk-rows">
-        {page.items.map((ticket) => (
-          <li key={ticket.id}>
+        {page.items.map((ticket, index) => (
+          <li key={ticket.id} className="tk-row-item" style={{ "--i": index } as CSSProperties}>
             <InboxRow
               ticket={ticket}
               href={href(filters, ticket.id)}

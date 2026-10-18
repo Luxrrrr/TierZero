@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useId, useState, type ReactNode } from "react";
 import { TICKET_NOTE_MAX, type TicketDetailDto, type TicketMemberAccess, type TicketPermission } from "@tier0/core";
 import { Avatar, LocalTime, RelativeTime, UserChip, displayName } from "../mod/ModUi";
+import { PersonMenuArea, PersonMenuButton } from "../mod/PersonMenuArea";
 import { CharacterCount } from "../../app/guilds/[id]/mod/members/[userId]/CharacterCount";
 import { ExternalLinkIcon, LockIcon, NoteIcon, PencilIcon, PlusIcon, ShieldIcon, ThreadIcon } from "../Icons";
 import { durationText, eventLine, inboxHref, PRIORITY_LABEL } from "../../lib/ticket-format";
@@ -299,11 +300,14 @@ function Members({
       <ul className="tk-members">
         {ticket.members.map((member) => (
           <li key={`${member.access}-${member.user.userId}`}>
-            <Avatar user={member.user} size="sm" />
-            <span className="tk-member-name">{displayName(member.user)}</span>
-            <span className="tk-tag" data-tone={member.access === "handler" ? "staff" : undefined}>
-              {ACCESS_LABEL[member.access]}
-            </span>
+            <PersonMenuArea user={member.user}>
+              <Avatar user={member.user} size="sm" menu={false} />
+              <span className="tk-member-name">{displayName(member.user)}</span>
+              <span className="tk-tag" data-tone={member.access === "handler" ? "staff" : undefined}>
+                {ACCESS_LABEL[member.access]}
+              </span>
+            </PersonMenuArea>
+            <PersonMenuButton user={member.user} />
             {canChange && member.access === "added" ? (
               <button
                 type="button"

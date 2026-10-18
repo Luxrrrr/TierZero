@@ -121,7 +121,7 @@ export function TranscriptsScreen({
                             href={transcriptsHref(guildId, { ...filters, handlerId: ticket.claimedBy.userId, page: 1 })}
                             title={`Only tickets ${displayName(ticket.claimedBy)} handled`}
                           >
-                            <UserChip user={ticket.claimedBy} size="sm" />
+                            <UserChip user={ticket.claimedBy} size="sm" menuButton={false} />
                           </Link>
                         ) : (
                           <span className="tk-muted">Nobody</span>

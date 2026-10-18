@@ -224,7 +224,7 @@
     display: grid;
     grid-template-columns: minmax(18rem, 21rem) minmax(0, 1fr);
     align-items: stretch;
-    height: max(34rem, calc(100dvh - 13rem));
+    height: max(38rem, calc(100dvh - 12rem));
   }
 
   .tk-inbox[data-has-ticket="true"] .tk-inbox-list,
@@ -277,6 +277,34 @@
   .tk-inbox .tk-composer {
     position: static;
     box-shadow: none;
+  }
+
+  /* The pane is short on a laptop, so the chrome around the conversation is
+     kept tight: a slimmer header and a one-line composer hint (the full text
+     is its tooltip). */
+  .tk-inbox .tk-head {
+    padding-block: var(--space-2);
+  }
+
+  .tk-inbox .tk-head-title {
+    font-size: var(--text-lg);
+  }
+
+  .tk-inbox .tk-head-actions {
+    margin-top: var(--space-1);
+    padding-top: var(--space-2);
+    gap: var(--space-1) var(--space-2);
+  }
+
+  .tk-inbox .tk-composer {
+    margin-bottom: var(--space-2);
+  }
+
+  .tk-inbox .tk-composer > .tk-composer-hint span {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 1;
   }
 
   .tk-inbox .tk-jump {
@@ -661,7 +689,10 @@
 }
 
 .tk-pruned {
-  margin: var(--space-4) var(--space-5) 0;
+  display: block;
+  flex: none;
+  margin: var(--space-4) var(--space-5);
+  padding: var(--space-3) var(--space-4);
 }
 
 .tk-body {
@@ -1234,7 +1265,7 @@
 .tk-composer {
   position: sticky;
   bottom: var(--space-3);
-  z-index: 1;
+  z-index: 3;
   box-shadow: var(--shadow-md);
 }
 
@@ -1453,6 +1484,21 @@
   gap: var(--space-2);
   min-width: 0;
   font-size: var(--text-sm);
+}
+
+/* The "..." for a person's menu shows when the row is pointed at or focused, and always on a screen that cannot hover. */
+.tk-members li:hover .pm-more,
+.tk-members li:focus-within .pm-more {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.tk-members li > .pm-more--inline {
+  margin-left: auto;
+}
+
+.tk-members li > .pm-more--inline + .tk-member-remove {
+  margin-left: 0;
 }
 
 .tk-member-name {
@@ -1889,105 +1935,6 @@
   align-self: center;
 }
 
-.tk-strip-error {
-  padding: var(--space-3) var(--space-5);
-  color: var(--mod-warn-text);
-  font-size: var(--text-sm);
-}
-
-.tk-strip-list {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.tk-strip-row {
-  border-top: 1px solid var(--border);
-}
-
-.tk-strip-row:first-child {
-  border-top: 0;
-}
-
-.tk-strip-main {
-  display: grid;
-  grid-template-columns: 2rem minmax(0, 1fr) auto;
-  align-items: center;
-  gap: var(--space-2) var(--space-3);
-  padding: var(--space-3) var(--space-5);
-}
-
-.tk-strip-icon {
-  display: grid;
-  place-items: center;
-  flex: none;
-  width: 2rem;
-  height: 2rem;
-  border-radius: var(--radius-md);
-  background: var(--surface-3);
-  color: var(--text-secondary);
-}
-
-.tk-strip-text {
-  min-width: 0;
-}
-
-.tk-strip-name {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-  font-weight: 600;
-}
-
-.tk-strip-meta {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 0.3rem;
-  margin-top: 0.1rem;
-  color: var(--text-secondary);
-  font-size: var(--text-sm);
-}
-
-.tk-strip-meta svg {
-  width: 13px;
-  height: 13px;
-  color: var(--text-tertiary);
-}
-
-.tk-strip-actions {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-}
-
-.tk-strip-chevron {
-  transition: transform var(--mod-motion) var(--ease-out);
-}
-
-.tk-strip-row[data-open="true"] .tk-strip-chevron {
-  transform: rotate(180deg);
-}
-
-.tk-strip-why {
-  margin: calc(var(--space-2) * -1) var(--space-5) var(--space-3) calc(var(--space-5) + 2rem + var(--space-3));
-  text-align: right;
-  color: var(--text-tertiary);
-  font-size: var(--text-xs);
-}
-
-.tk-strip-preview {
-  padding: 0 var(--space-5) var(--space-4);
-}
-
-.tk-strip-preview-label {
-  margin-bottom: var(--space-2);
-  color: var(--text-tertiary);
-  font-size: var(--text-xs);
-}
-
 /* Transcripts --------------------------------------------------------------- */
 
 .tk-archive {
@@ -2081,6 +2028,28 @@
 .tk-archive-actions {
   white-space: nowrap;
   text-align: right;
+}
+
+/* Between a stacked table and a full-width one the columns do not all fit, so
+   the table scrolls sideways. Read and Download stay pinned to the right edge
+   and a narrower title column leaves more of the rest in view. */
+@container (min-width: 641px) and (max-width: 1100px) {
+  .tk-archive-table td:first-child {
+    min-width: 12rem;
+  }
+
+  .tk-archive-table th:last-child,
+  .tk-archive-table td.tk-archive-actions {
+    position: sticky;
+    right: 0;
+    z-index: 2;
+    background: var(--surface);
+    box-shadow: -1px 0 0 var(--border);
+  }
+
+  .tk-archive-row:hover td.tk-archive-actions {
+    background: var(--surface-2);
+  }
 }
 
 .tk-archive-pager .mod-pager {
@@ -2203,29 +2172,29 @@
   color: var(--text-tertiary);
 }
 
-.tk-handlers {
-  table-layout: fixed;
-}
-
 .tk-handlers th:first-child {
+  min-width: 10rem;
   text-align: left;
   font-weight: inherit;
 }
 
 .tk-handlers th:not(:first-child),
 .tk-handlers td {
-  width: 6.5rem;
+  white-space: nowrap;
 }
 
 @media (max-width: 640px) {
   .tk-handlers th,
   .tk-handlers td {
-    padding-inline: var(--space-3);
+    padding-inline: var(--space-2);
   }
 
-  .tk-handlers th:not(:first-child),
-  .tk-handlers td {
-    width: 4.75rem;
+  .tk-handlers th:first-child {
+    min-width: 0;
+  }
+
+  .tk-handlers .tk-col-minor {
+    display: none;
   }
 }
 
@@ -2368,15 +2337,6 @@
     padding-inline: var(--space-4);
   }
 
-  .tk-strip-main {
-    grid-template-columns: 2rem minmax(0, 1fr);
-    padding-inline: var(--space-4);
-  }
-
-  .tk-strip-actions {
-    grid-column: 2;
-  }
-
   .tk-health-item {
     grid-template-columns: 1.75rem minmax(0, 1fr);
     padding-inline: var(--space-4);
@@ -2385,15 +2345,6 @@
   .tk-health-item .btn {
     grid-column: 2;
     justify-self: start;
-  }
-
-  .tk-strip-why {
-    margin-left: calc(var(--space-4) + 2rem + var(--space-3));
-    text-align: left;
-  }
-
-  .tk-strip-preview {
-    padding-inline: var(--space-4);
   }
 
   .tk-view {
@@ -2406,8 +2357,7 @@
   .tk-msg,
   .tk-composer,
   .tk-choice,
-  .tk-more-chevron,
-  .tk-strip-chevron {
+  .tk-more-chevron {
     transition: none;
   }
 }
@@ -2844,26 +2794,6 @@
   margin: 0 0 var(--space-4);
 }
 
-.tk-strip-warn {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--space-2);
-  margin: 0 var(--space-5) var(--space-3) calc(var(--space-5) + 2rem + var(--space-3));
-  padding: var(--space-2) var(--space-3);
-  border-radius: var(--radius-sm);
-  background: var(--attention-soft);
-  color: var(--mod-warn-text);
-  font-size: var(--text-xs);
-  line-height: 1.45;
-}
-
-.tk-strip-warn svg {
-  flex: none;
-  width: 13px;
-  height: 13px;
-  margin-top: 0.1rem;
-}
-
 .tk-dl {
   position: relative;
   display: inline-block;
@@ -2915,11 +2845,6 @@
 }
 
 @media (max-width: 640px) {
-  .tk-strip-warn {
-    margin-left: var(--space-4);
-    margin-right: var(--space-4);
-  }
-
   .tk-keys-panel {
     right: auto;
     left: 0;
@@ -2980,4 +2905,204 @@
   flex: none;
   margin-top: 0.15rem;
   color: var(--mod-ok-text);
+}
+
+.tk-embeds {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tk-embed-chip {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  max-width: 100%;
+  padding: var(--space-1) var(--space-1) var(--space-1) var(--space-3);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--bg-raised);
+}
+
+.tk-embed-chip-edit {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.tk-embed-chip-edit:hover .tk-embed-chip-label {
+  text-decoration: underline;
+}
+
+.tk-embed-chip-kicker {
+  font-size: var(--text-2xs);
+  color: var(--text-muted);
+}
+
+.tk-embed-chip-label {
+  max-width: 16rem;
+  overflow: hidden;
+  font-size: var(--text-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Replying to one message -------------------------------------------------- */
+
+.tk-replying {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  padding: var(--space-1) var(--space-1) var(--space-1) var(--space-3);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius-md);
+  background: var(--bg-raised);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+}
+
+.tk-replying > svg {
+  flex: none;
+  width: 1rem;
+  height: 1rem;
+  color: var(--text-tertiary);
+}
+
+.tk-replying-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tk-replying-text strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.tk-replying-text span {
+  color: var(--text-tertiary);
+}
+
+.tk-replying-text:hover span {
+  text-decoration: underline;
+}
+
+/* Saved messages in the embed dialog --------------------------------------- */
+
+.tk-embed-tabs {
+  padding: var(--space-3) var(--space-6) 0;
+}
+
+.tk-tpl-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.tk-tpl-groups {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  max-height: 22rem;
+  overflow-y: auto;
+}
+
+.tk-tpl-folder {
+  margin: 0 0 var(--space-1);
+  color: var(--text-tertiary);
+  font-size: var(--text-2xs);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.tk-tpl-items {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tk-tpl-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  text-align: left;
+}
+
+.tk-tpl-item:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+.tk-tpl-item[aria-pressed="true"] {
+  background: var(--accent-soft);
+  color: var(--text);
+}
+
+.tk-tpl-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tk-tpl-meta {
+  flex: none;
+  color: var(--text-tertiary);
+  font-size: var(--text-2xs);
+}
+
+.tk-tpl-text {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+  font-size: var(--text-sm);
+}
+
+/* New ticket ---------------------------------------------------------------- */
+
+.tk-list-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex: none;
+}
+
+.tk-new-ticket[aria-disabled="true"] {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
