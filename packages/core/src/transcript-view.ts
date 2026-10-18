@@ -11,6 +11,7 @@
 
 import { isEmojiOnly, markdownPlainText, parseDiscordMarkdown, type MarkdownContext, type MarkdownNode } from "./transcript-markdown.js";
 import {
+  ticketStaffLine,
   webUrl,
   type TicketAttachmentDto,
   type TicketComponentRowDto,
@@ -163,6 +164,10 @@ export interface TranscriptLabels {
   replyMissing: string;
   app: string;
   viaDashboard: string;
+  /** The visible pill on a message sent from the dashboard. */
+  viaDashboardTag: string;
+  /** `{name}` is the team member who sent a reply under the team's name. */
+  sentBy: string;
   spoiler: string;
   messages: string;
   selectPlaceholder: string;
@@ -180,6 +185,8 @@ export const DEFAULT_TRANSCRIPT_LABELS: TranscriptLabels = {
   replyMissing: "Original message was deleted",
   app: "APP",
   viaDashboard: "Sent from the dashboard",
+  viaDashboardTag: "via dashboard",
+  sentBy: "sent by {name}",
   spoiler: "Spoiler, select to show",
   messages: "Messages in #{channel}",
   selectPlaceholder: "Make a selection",
@@ -197,6 +204,11 @@ export interface TranscriptTreeInput {
   labels?: Partial<TranscriptLabels>;
   /** Names known besides the ones stored with each message, such as the opener's. */
   names?: MarkdownContext;
+  /**
+   * Name who really sent a reply that went out under the team's name. The
+   * dashboard turns it on; a transcript shows what Discord showed instead.
+   */
+  showSender?: boolean;
   /** The ticket is a private thread, which Discord heads with a thread icon instead of a #. */
   thread?: boolean;
 }
@@ -271,6 +283,7 @@ function emojiNode(emoji: TicketEmojiDto, className = "dt-emoji"): TranscriptEle
 interface Ctx {
   clock: TranscriptClock;
   labels: TranscriptLabels;
+  showSender?: boolean;
 }
 
 function markdown(nodes: readonly MarkdownNode[], ctx: Ctx, inLink = false): TranscriptNode[] {
@@ -506,7 +519,13 @@ function layered(base: Record<string, TicketMentionName>, own: Readonly<Record<s
 }
 
 const GROUP_GAP_MS = 7 * 60_000;
-const authorKey = (message: TicketMessageDto) => `${message.author.userId}:${message.author.name}`;
+/**
+ * Who a run of messages belongs to. A reply sent from the dashboard is a
+ * webhook's post in Discord and a message the same person typed there is
+ * theirs, so the two never share a header even though the author id is one.
+ */
+const authorKey = (message: TicketMessageDto) =>
+  `${message.author.userId}:${message.author.name}:${message.source}:${message.author.bot === true ? "app" : "user"}`;
 
 function messageNode(prepared: Prepared, start: boolean, byId: ReadonlyMap<string, Prepared>, ctx: Ctx): TranscriptElement {
   const { message, context, nodes } = prepared;
@@ -528,7 +547,11 @@ function messageNode(prepared: Prepared, start: boolean, byId: ReadonlyMap<strin
         h("img", { class: "dt-avatar", src: avatar, alt: "", width: 40, height: 40, loading: "lazy", referrerpolicy: "no-referrer" }),
         h("h3", { class: "dt-message-head" }, [
           h("span", { class: "dt-name" }, [author.name], nameColor ? { color: nameColor } : undefined),
-          author.bot ? h("span", { class: "dt-tag", title: message.source === "dashboard" ? ctx.labels.viaDashboard : undefined }, [ctx.labels.app]) : null,
+          author.bot ? h("span", { class: "dt-tag" }, [ctx.labels.app]) : null,
+          message.source === "dashboard"
+            ? h("span", { class: "dt-via", title: ctx.showSender && message.sentBy ? `${ctx.labels.viaDashboard}: ${message.sentBy.name}` : ctx.labels.viaDashboard }, [ctx.labels.viaDashboardTag])
+            : null,
+          ctx.showSender && message.sentBy ? h("span", { class: "dt-sender" }, [ctx.labels.sentBy.split("{name}").join(message.sentBy.name)]) : null,
           h("time", { class: "dt-time", datetime: message.createdAt, title: transcriptFullTime(created, ctx.clock.timeZone) }, [transcriptMessageTime(created, ctx.clock)]),
         ]),
       ]
@@ -602,7 +625,7 @@ function replyPreview(prepared: Prepared): string {
  */
 export function transcriptTree(input: TranscriptTreeInput): TranscriptElement {
   const labels = { ...DEFAULT_TRANSCRIPT_LABELS, ...input.labels };
-  const ctx: Ctx = { clock: input.clock, labels };
+  const ctx: Ctx = { clock: input.clock, labels, showSender: input.showSender === true };
   const channel = input.channelName || "ticket";
 
   // Everyone who wrote, and every name a message stored, so a mention in an
@@ -625,7 +648,12 @@ export function transcriptTree(input: TranscriptTreeInput): TranscriptElement {
       roles: layered(roles, message.mentions?.roles),
       channels: layered(channels, message.mentions?.channels),
     };
-    return { message, context, nodes: message.content ? parseDiscordMarkdown(message.content, context) : [] };
+    // Discord showed the line naming the sender; the dashboard's own view names them in the header instead.
+    const shown =
+      message.staffLine && message.sentBy && !ctx.showSender
+        ? [message.content, ticketStaffLine(message.sentBy.name)].filter((part) => part !== "").join("\n")
+        : message.content;
+    return { message, context, nodes: shown ? parseDiscordMarkdown(shown, context) : [] };
   });
   const byId = new Map(prepared.map((entry) => [entry.message.messageId, entry]));
 

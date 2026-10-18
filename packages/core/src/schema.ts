@@ -39,6 +39,55 @@ export interface FieldCondition {
   equals?: unknown;
   /** The sibling is a list, and the condition is met while it contains this value. */
   includes?: unknown;
+  /**
+   * Dashboard-only. While the condition is not met the setting is left out of
+   * the form instead of being drawn greyed out. Use it where the control would
+   * only be a puzzle until its sibling is set, such as a menu's placeholder
+   * while buttons are chosen. The value stays stored either way.
+   */
+  hide?: boolean;
+}
+
+/** One numbered part of a group drawn with `steps`. */
+export interface FormStep {
+  id: string;
+  title: string;
+  /** One plain line under the title saying what the step is for. */
+  help?: string;
+}
+
+/**
+ * Dashboard-only, on a list of rows that are the questions of a form: draws a
+ * preview of the form as Discord shows it, under the list. Paths are read in
+ * each row, except `title`, which is a text setting beside the list.
+ */
+export interface ListPreview {
+  kind: "modal";
+  /** A text setting beside the list holding the form's title. Without one the title is "Form". */
+  title?: string;
+  /** The row's text setting holding the question. */
+  label: string;
+  placeholder?: string;
+  /** A choice that says `paragraph` for a long answer box. */
+  style?: string;
+  /** A switch that is on while the question must be answered. */
+  required?: string;
+}
+
+/**
+ * Dashboard-only, on a list of rows drawn with `layout: "sheet"`. Says what a
+ * row's summary card shows, as paths from the row. Anything omitted is left
+ * off the card.
+ */
+export interface RowCard {
+  /** An emoji setting, drawn before the row's name. */
+  emoji?: string;
+  /** A choice whose options carry a `swatch`, drawn as a colour dot. */
+  swatch?: string;
+  /** A list of roles, drawn as chips. */
+  chips?: string;
+  /** Settings read out as short facts: a choice as its label, a list of rows as a count. */
+  facts?: string[];
 }
 
 export interface FieldMeta {
@@ -84,6 +133,24 @@ export interface FieldMeta {
    * Settings that share a value are drawn together, in schema order.
    */
   section?: string;
+  /**
+   * Dashboard-only. On a setting inside a group that declares `steps`: the id
+   * of the step it is drawn in. A setting naming none goes in the first step.
+   */
+  step?: string;
+  /**
+   * Dashboard-only. A short plain note, such as "No handlers yet", shown on a
+   * row's summary card and as a marker on its tab while the setting is empty.
+   * It asks for nothing: nothing is refused and the feature's status is left
+   * alone, unlike `essential`.
+   */
+  nudge?: string;
+  /**
+   * Dashboard-only, on a choice. `segmented` draws the options as a row of
+   * toggle buttons instead of a drop-down, for two or three short options.
+   * `swatches` draws them as colour dots and needs a `swatch` on each option.
+   */
+  control?: "segmented" | "swatches";
   /**
    * Dashboard-only. The id of the heading this setting is listed under in a
    * group with a `layout`, one of that group's `topics`. On a nested group it is
@@ -299,7 +366,7 @@ const UNIT_MS: Record<string, number> = {
 
 const UNIT_NAME: Record<string, string> = { s: "second", m: "minute", h: "hour", d: "day" };
 
-function durationToMs(text: string): number | null {
+export function durationToMs(text: string): number | null {
   const match = DURATION.exec(text.trim());
   if (!match) return null;
   const [, amount, unit] = match;
@@ -406,6 +473,8 @@ interface Choice {
   description?: string;
   /** Flagged as the suggested pick. Display only; it does not select anything. */
   recommended?: boolean;
+  /** A CSS colour, such as `#5865f2`, for a choice drawn with `control: "swatches"` or shown as a dot on a card. */
+  swatch?: string;
 }
 
 function choice(options: FieldMeta & { options: Choice[]; default?: string }): Field<string> {
@@ -557,6 +626,11 @@ export interface MessageAttachList {
   placeholder?: AttachRef;
   /** What one row is, for "Add a ticket type": singular and lower case. */
   noun: string;
+  /**
+   * Whether the preview offers a button to add a row. Off where the list is
+   * edited, with its own add button, on the same screen. Defaults to on.
+   */
+  add?: boolean;
 }
 
 /** A button the feature always adds under the message, its text and colour kept in other settings. */
@@ -674,12 +748,16 @@ interface ArrayOptions<T> extends FieldMeta {
    * one tall row per option with its description beside it. Without this, four
    * options or fewer are chips and more are rows.
    */
-  layout?: "chips" | "rows";
+  layout?: "chips" | "rows" | "sheet";
   /**
    * Dashboard-only. What one entry of a list of rows is called, singular and
    * lower case, as in "Add a game". Without it the list's label is guessed at.
    */
   item?: string;
+  /** Dashboard-only, with `layout: "sheet"`: what each row's card shows. */
+  card?: RowCard;
+  /** Dashboard-only: a preview of the list as a form, under it. */
+  formPreview?: ListPreview;
 }
 
 function entries(count: number): string {
@@ -764,6 +842,18 @@ interface ObjectOptions extends FieldMeta {
   layout?: "messages" | "fields";
   /** The headings of a `layout` group, in the order they are drawn. */
   topics?: FieldTopic[];
+  /**
+   * Dashboard-only. Draws the group's settings as numbered steps, each with a
+   * title and a line saying what it is for, in this order. Settings name their
+   * step with `step`. Only a row of a list is drawn this way.
+   */
+  steps?: FormStep[];
+  /**
+   * Dashboard-only. For a group inside a `layout: "sheet"` row whose settings
+   * are spread over several tabs with `section`: the heading the group carries
+   * in each tab, by tab id. A tab not listed uses the group's own label.
+   */
+  tabLabels?: Record<string, string>;
 }
 
 function object<S extends Shape>(shape: S, options: ObjectOptions = {}): ObjectField<S> {

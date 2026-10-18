@@ -1,6 +1,6 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { GENERATED_ID, generatedId, layoutProblems, messageAttachProblems, plainReply, s } from "../dist/index.js";
+import { GENERATED_ID, formLayoutProblems, generatedId, layoutProblems, messageAttachProblems, plainReply, s } from "../dist/index.js";
 import type { FieldDescriptor } from "../dist/index.js";
 
 const CHANNEL = "123456789012345678";
@@ -762,5 +762,135 @@ describe("layout metadata", () => {
     assert.match(problems, /messages.count is not a message/);
     assert.match(problems, /labels\.msg is a message in a fields list/);
     assert.match(problems, /loose\.name names a topic but is neither in a layout group nor a message/);
+  });
+});
+
+describe("form metadata for rows", () => {
+  const colours = [
+    { value: "red", label: "Red", swatch: "#f00" },
+    { value: "blue", label: "Blue", swatch: "#00f" },
+  ];
+  const row = (extra: Record<string, ReturnType<typeof s.string>> = {}) =>
+    s.object(
+      {
+        name: s.string({ label: "Name", section: "basics" }),
+        colour: s.choice({ options: colours, control: "swatches", section: "basics" }),
+        roles: s.array(s.role(), { nudge: "No roles yet", section: "people" }),
+        ...extra,
+      },
+      {},
+    );
+  const schema = (list: ReturnType<typeof s.array>) => s.object({ items: list }).describe();
+
+  test("passes a sheet, its card, a nudge, a control and a swatch through to the dashboard", () => {
+    const list = s.array(row(), { layout: "sheet", card: { swatch: "colour", chips: "roles" }, item: "thing" }).describe();
+    assert.equal(list.layout, "sheet");
+    assert.deepEqual(list.card, { swatch: "colour", chips: "roles" });
+    const fields = (list.of as { fields: Record<string, Record<string, unknown>> }).fields;
+    assert.equal(fields.roles?.nudge, "No roles yet");
+    assert.equal(fields.colour?.control, "swatches");
+    assert.equal((fields.colour?.options as { swatch: string }[])[0]?.swatch, "#f00");
+  });
+
+  test("a hidden condition and a list of steps are passed through and change nothing stored", () => {
+    const group = s.object(
+      {
+        mode: s.choice({ options: [{ value: "a", label: "A" }, { value: "b", label: "B" }], default: "a", step: "one" }),
+        extra: s.string({ optional: true, when: { field: "mode", equals: "b", hide: true }, step: "two" }),
+      },
+      { steps: [{ id: "one", title: "One" }, { id: "two", title: "Two", help: "Second." }] },
+    );
+    const described = group.describe();
+    assert.equal((described.steps as { id: string }[]).length, 2);
+    assert.equal(((described.fields as Record<string, { when: { hide: boolean } }>).extra as { when: { hide: boolean } }).when.hide, true);
+    const parsed = group.parse({ mode: "a", extra: "kept" });
+    assert.deepEqual(parsed.ok && parsed.value, { mode: "a", extra: "kept" });
+  });
+
+  test("finds nothing wrong with a sheet that reads its own settings", () => {
+    const list = s.array(row(), { layout: "sheet", card: { emoji: undefined, swatch: "colour", chips: "roles" } });
+    assert.deepEqual(formLayoutProblems(schema(list)), []);
+  });
+
+  test("refuses a sheet that is not a list of rows, and a card on a plain list", () => {
+    assert.equal(formLayoutProblems(schema(s.array(s.string(), { layout: "sheet" }))).length, 1);
+    const plain = s.object({ name: s.string(), roles: s.array(s.role()) });
+    assert.equal(formLayoutProblems(schema(s.array(plain, { card: { chips: "roles" } }))).length, 1);
+  });
+
+  test("refuses a card that names a setting the row does not have, or one of the wrong kind", () => {
+    const missing = formLayoutProblems(schema(s.array(row(), { layout: "sheet", card: { chips: "nobody" } })));
+    assert.match(missing.join(), /nobody/);
+    const wrong = formLayoutProblems(schema(s.array(row(), { layout: "sheet", card: { swatch: "name" } })));
+    assert.match(wrong.join(), /string/);
+  });
+
+  test("refuses a section outside a top-level setting or a sheet row", () => {
+    const plain = s.object({ group: s.object({ inner: s.string({ section: "x" }) }) }).describe();
+    assert.equal(formLayoutProblems(plain).length, 1);
+    const inSheet = schema(s.array(row(), { layout: "sheet" }));
+    assert.deepEqual(formLayoutProblems(inSheet), []);
+  });
+
+  test("refuses a step the group did not declare, and steps with nothing in them", () => {
+    const wrap = (group: ReturnType<typeof s.object>) => s.object({ group }).describe();
+    assert.equal(formLayoutProblems(wrap(s.object({ a: s.string({ step: "one" }) }))).length, 1);
+    const unknown = s.object({ a: s.string({ step: "nine" }) }, { steps: [{ id: "one", title: "One" }] });
+    assert.match(formLayoutProblems(wrap(unknown)).join(), /nine/);
+    const twice = s.object({ a: s.string() }, { steps: [{ id: "one", title: "One" }, { id: "one", title: "Again" }] });
+    assert.match(formLayoutProblems(wrap(twice)).join(), /twice/);
+  });
+
+  test("refuses tab headings for tabs nothing is in, a segmented control of one option and swatches without colours", () => {
+    const labelled = schema(
+      s.array(
+        s.object(
+          { group: s.object({ a: s.string({ section: "basics" }) }, { tabLabels: { basics: "Here", rules: "There" } }), name: s.string({ section: "basics" }) },
+          {},
+        ),
+        { layout: "sheet" },
+      ),
+    );
+    assert.match(formLayoutProblems(labelled).join(), /rules/);
+    const one = s.object({ c: s.choice({ options: [{ value: "a", label: "A" }], control: "segmented" }) }).describe();
+    assert.equal(formLayoutProblems(one).length, 1);
+    const bare = s.object({ c: s.choice({ options: [{ value: "a", label: "A" }, { value: "b", label: "B" }], control: "swatches" }) }).describe();
+    assert.equal(formLayoutProblems(bare).length, 1);
+  });
+});
+
+describe("a list drawn as a form preview", () => {
+  const question = s.object({
+    label: s.string({ label: "Question" }),
+    placeholder: s.string({ optional: true }),
+    style: s.choice({ options: [{ value: "short", label: "One line" }, { value: "paragraph", label: "Several lines" }], default: "short" }),
+    required: s.boolean({ default: true }),
+  });
+  const group = (preview: Record<string, string>) =>
+    s.object({
+      group: s.object({
+        name: s.string({ label: "Name" }),
+        form: s.array(question, { formPreview: { kind: "modal", ...preview } as never }),
+      }),
+    }).describe();
+
+  test("is passed through to the dashboard", () => {
+    const described = s.array(question, { formPreview: { kind: "modal", label: "label" } }).describe();
+    assert.deepEqual(described.formPreview, { kind: "modal", label: "label" });
+  });
+
+  test("finds nothing wrong when every path names a setting of the right kind", () => {
+    assert.deepEqual(formLayoutProblems(group({ title: "name", label: "label", placeholder: "placeholder", style: "style", required: "required" })), []);
+  });
+
+  test("refuses a path that names nothing, or the wrong kind of setting, and a title that is not beside the list", () => {
+    assert.match(formLayoutProblems(group({ label: "nothing" })).join(), /nothing/);
+    assert.match(formLayoutProblems(group({ label: "label", style: "label" })).join(), /style/);
+    assert.match(formLayoutProblems(group({ label: "label", title: "form" })).join(), /title/);
+  });
+
+  test("refuses a form preview on a list that is not of rows", () => {
+    const plain = s.object({ list: s.array(s.string(), { formPreview: { kind: "modal", label: "label" } }) }).describe();
+    assert.equal(formLayoutProblems(plain).length, 1);
   });
 });

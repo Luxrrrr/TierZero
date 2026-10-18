@@ -5,6 +5,7 @@
  * touches a database.
  */
 
+import { isHttpUrl, parseMessage, type MessageEmbed } from "./message.js";
 import type { UserRef } from "./mod.js";
 
 export const TICKET_PRIORITIES = ["low", "normal", "high", "urgent"] as const;
@@ -43,7 +44,8 @@ export function isTicketEventKind(value: unknown): value is TicketEventKind {
 
 /** What `TicketEvent.detail` holds for each kind. Every field is optional on read, since an old row may lack it. */
 export interface TicketEventDetails {
-  opened: { typeName?: string };
+  /** `staff` when a member of staff opened it from the dashboard rather than the member it is about. */
+  opened: { typeName?: string; staff?: boolean };
   claimed: Record<string, never>;
   unclaimed: Record<string, never>;
   priority: { from?: TicketPriority; to?: TicketPriority };
@@ -75,6 +77,10 @@ export const TICKET_REPLY_FILES_MAX = 10;
  * request around the files fits too.
  */
 export const TICKET_REPLY_FILES_BYTES_MAX = 8 * 1024 * 1024;
+/** Embeds one dashboard reply may carry. Discord allows ten; three keeps a ticket readable. */
+export const TICKET_REPLY_EMBEDS_MAX = 3;
+/** What the team name of a reply may be, which is Discord's limit for a webhook's name. */
+export const TICKET_TEAM_NAME_MAX = 80;
 export const TICKET_NOTE_MAX = 2000;
 export const TICKET_CLOSE_REASON_MAX = 500;
 /** A channel name staff type for `/ticket rename` or the dashboard. */
@@ -168,6 +174,7 @@ export const TICKET_PERMISSIONS = [
   "settings",
   "rename",
   "requestClose",
+  "create",
 ] as const;
 export type TicketPermission = (typeof TICKET_PERMISSIONS)[number];
 
@@ -199,7 +206,8 @@ export function canTicket(access: TicketAccess, permission: TicketPermission, ti
   if (permission === "settings") return level === "manager";
   if (!ticket) {
     if (permission === "deleteTranscript") return level === "manager";
-    return permission === "view" || permission === "stats";
+    // Opening a ticket is checked per type: a handler may open the types they handle.
+    return permission === "view" || permission === "stats" || permission === "create";
   }
 
   const typeId = ticket.typeId ?? LEGACY_TYPE_ID;
@@ -528,6 +536,8 @@ export interface TicketMessageRow {
   stickers?: string;
   reactions?: string;
   mentions?: string;
+  /** JSON of `TicketSentAs`, on a reply that went out under the support team's name. */
+  sentAs?: string | null;
   createdAt: Date;
   editedAt: Date | null;
   deletedAt: Date | null;
@@ -535,19 +545,56 @@ export interface TicketMessageRow {
   source: string;
 }
 
+/**
+ * What Discord showed as the sender of a dashboard reply sent under the team's
+ * name. The row keeps the real sender in its author columns.
+ */
+export interface TicketSentAs {
+  name: string;
+  avatarUrl: string | null;
+  /** The reply ended with a line saying who sent it, which Discord showed. */
+  staffLine: boolean;
+}
+
+/** Reads `TicketMessage.sentAs`. Anything that is not a name reads as none. */
+export function readTicketSentAs(stored: string | null | undefined): TicketSentAs | null {
+  if (!stored) return null;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(stored);
+  } catch {
+    return null;
+  }
+  if (!isRecord(parsed) || text(parsed.name).trim() === "") return null;
+  return { name: short(parsed.name, TICKET_TEAM_NAME_MAX), avatarUrl: webUrl(parsed.avatarUrl), staffLine: parsed.staffLine === true };
+}
+
+/** A person's name as it can sit in a line of Discord text without formatting or pinging. */
+export function plainName(name: string): string {
+  const cleaned = name.replace(/[*_~`|<>@\\\r\n]+/g, "").replace(/\s+/g, " ").trim();
+  return (cleaned || "staff").slice(0, TICKET_TEAM_NAME_MAX);
+}
+
+/** The small line a team reply ends with when the setting names who replied. */
+export function ticketStaffLine(name: string): string {
+  return `-# Replied by ${plainName(name)}`;
+}
+
 /** A stored message as the dashboard and the transcript files read it. */
 export function ticketMessageFromRow(row: TicketMessageRow): TicketMessageDto {
+  const sentAs = readTicketSentAs(row.sentAs);
   return {
     id: row.id,
     messageId: row.messageId,
     author: {
       userId: row.authorId,
-      name: row.authorName,
-      avatarUrl: webUrl(row.authorAvatar),
+      name: sentAs?.name ?? row.authorName,
+      avatarUrl: webUrl(sentAs ? sentAs.avatarUrl : row.authorAvatar),
       isStaff: row.authorIsStaff,
       bot: row.authorBot === true,
       color: hexColor(row.authorColor),
     },
+    ...(sentAs ? { sentBy: { userId: row.authorId, name: row.authorName }, staffLine: sentAs.staffLine } : {}),
     content: row.content,
     attachments: readTicketAttachments(row.attachments),
     embeds: readTicketEmbeds(row.embeds),
@@ -650,6 +697,14 @@ export interface TicketMessageDto {
     /** The colour of their top coloured role, as `#rrggbb`, or null for none. */
     color?: string | null;
   };
+  /**
+   * Set on a reply sent under the support team's name, in which case `author`
+   * holds that name and avatar, as Discord showed them, and this holds who in
+   * the team really sent it. Missing from an older bot.
+   */
+  sentBy?: { userId: string; name: string };
+  /** The reply ended with a line naming `sentBy`, which Discord showed. */
+  staffLine?: boolean;
   content: string;
   attachments: TicketAttachmentDto[];
   embeds: TicketEmbedDto[];
@@ -686,6 +741,30 @@ export interface TicketMessagesPage {
   changed: TicketMessageDto[];
   /** The moment this page was read, to pass as `updatedSince` next time. ISO 8601. */
   updatedSince: string;
+  /**
+   * Moves whenever something the ticket's side panel shows changes: a claim, a
+   * priority, a note, a member, a move, a rename, a close or a reopen. Pass it
+   * back as `detailVersion` and read the ticket again when it differs from the
+   * one held. Missing from an older bot.
+   */
+  detailVersion?: number;
+}
+
+/** The longest a read may ask the bot to hold it with `wait`, in seconds. */
+export const TICKET_WAIT_MAX_SECONDS = 25;
+
+/** The `wait` of a read in seconds, 0 when absent, or null when it is not a whole number of seconds. Longer than the limit reads as the limit. */
+export function readWaitSeconds(value: string | null | undefined): number | null {
+  if (value === null || value === undefined || value === "") return 0;
+  if (!/^[0-9]{1,6}$/.test(value)) return null;
+  return Math.min(Number(value), TICKET_WAIT_MAX_SECONDS);
+}
+
+/** A version a long poll hands back, or null when it is absent or not a version. */
+export function readVersion(value: string | null | undefined): number | null | undefined {
+  if (value === null || value === undefined || value === "") return undefined;
+  if (!/^[0-9]{1,16}$/.test(value)) return null;
+  return Number(value);
 }
 
 /**
@@ -760,6 +839,17 @@ export interface TicketTypeOption {
    * Missing from an older bot.
    */
   problem?: TicketHealthCode | null;
+  /** No role or member handles this type, so a ticket moved to it is seen by managers only. Missing from an older bot. */
+  noHandlers?: boolean;
+  /** The questions of the type's form, for staff opening a ticket of it. Missing from an older bot. */
+  questions?: TicketTypeQuestion[];
+}
+
+export interface TicketTypeQuestion {
+  label: string;
+  style: "short" | "paragraph";
+  required: boolean;
+  maxLength?: number;
 }
 
 export interface TicketPanelOption {
@@ -980,6 +1070,8 @@ export interface TicketContextDto {
   priorities: readonly TicketPriority[];
   /** The bot can post dashboard replies under the staff member's name. */
   canUseWebhooks: boolean;
+  /** The team name dashboard replies go out under, or null when they go out as the staff member. Missing from an older bot. */
+  replyAs?: string | null;
   health: TicketHealthIssue[];
   /** The dashboard's address is known, so the bot's posts can link back to it. */
   dashboardUrlKnown: boolean;
@@ -997,6 +1089,24 @@ export interface TicketContextDto {
 export interface TicketSavedReplyDto {
   name: string;
   content: string;
+}
+
+/** A Message creator template marked available in tickets, as the reply box lists it. Only what a reply can use. */
+export interface TicketTemplateDto {
+  id: number;
+  name: string;
+  /** The name of the folder it sits in, or null outside every folder. */
+  folder: string | null;
+  content: string;
+  embeds: MessageEmbed[];
+  /** What the template has that a reply cannot carry, so the box can say it was left out. */
+  leftOut: ("buttons" | "menus" | "reactions")[];
+}
+
+/** `GET tickets/templates`. `variables` are the server facts the reply box fills into a template's text. */
+export interface TicketTemplatesDto {
+  templates: TicketTemplateDto[];
+  variables: { server: string; members: string; bot: string; "server.icon": string };
 }
 
 export interface TicketStatsGroup {
@@ -1160,6 +1270,8 @@ export interface TicketCountDto {
   latestActivityAt: string | null;
   /** Of those, how many are open with the opener's message last. */
   awaitingStaff: number;
+  /** Moves whenever any ticket of the server changes. Pass it back as `version` with `wait` to be answered when it moves. Missing from an older bot. */
+  version?: number;
 }
 
 const SNOWFLAKE = /^\d{17,20}$/;
@@ -1261,10 +1373,14 @@ export interface TicketActor {
 export type TicketWrite<T> = T & { actor: TicketActor };
 
 export interface TicketReplyRequest {
-  /** May be empty when files are attached. */
+  /** May be empty when files or embeds are attached. */
   content: string;
   /** Files to attach, at most TICKET_REPLY_FILES_MAX adding up to TICKET_REPLY_FILES_BYTES_MAX. */
   files?: TicketReplyFile[];
+  /** Embeds to attach, as the message builder makes them, at most TICKET_REPLY_EMBEDS_MAX. */
+  embeds?: MessageEmbed[];
+  /** The Discord id of a stored message of this ticket the reply answers. The bot checks it is one. */
+  replyToMessageId?: string;
 }
 
 /** A file sent with a dashboard reply. `data` is the file as base64, without a `data:` prefix. */
@@ -1362,11 +1478,110 @@ export function readTicketReply(input: unknown): TicketRead<TicketReplyRequest> 
   const content = isRecord(input) && typeof input.content === "string" ? lines(input.content) : "";
   const files = readTicketReplyFiles(isRecord(input) ? input.files : undefined);
   if (!files.ok) return files;
-  if (content === "" && files.value.length === 0) return { ok: false, error: "Write a reply before sending it." };
+  const embeds = readTicketReplyEmbeds(isRecord(input) ? input : {});
+  if (!embeds.ok) return embeds;
+  const replyTo = isRecord(input) ? input.replyToMessageId : undefined;
+  if (replyTo !== undefined && replyTo !== null && (typeof replyTo !== "string" || !SNOWFLAKE_ID.test(replyTo))) {
+    return { ok: false, error: "The message you are replying to could not be read. Pick it again." };
+  }
+  if (content === "" && files.value.length === 0 && embeds.value.length === 0) return { ok: false, error: "Write a reply before sending it." };
   if (content.length > TICKET_REPLY_MAX) {
     return { ok: false, error: `A reply can be at most ${TICKET_REPLY_MAX} characters. This one is ${content.length}.` };
   }
-  return { ok: true, value: files.value.length > 0 ? { content, files: files.value } : { content } };
+  return {
+    ok: true,
+    value: {
+      content,
+      ...(files.value.length > 0 ? { files: files.value } : {}),
+      ...(embeds.value.length > 0 ? { embeds: embeds.value } : {}),
+      ...(typeof replyTo === "string" ? { replyToMessageId: replyTo } : {}),
+    },
+  };
+}
+
+/** Characters of the message quoted above a reply, and shown in the reply bar. */
+export const TICKET_REPLY_QUOTE_MAX = 80;
+
+/**
+ * What a message says, cut down to one plain line for a quote: mentions read as
+ * words so they can never ping, formatting marks are dropped, and a message
+ * with no text reads as what it carries.
+ */
+export function ticketReplySnippet(
+  message: { content: string; attachments?: readonly unknown[]; embeds?: readonly { title?: string }[] },
+  max = TICKET_REPLY_QUOTE_MAX,
+): string {
+  const plain = message.content
+    .replace(/<@&\d+>/g, "@role")
+    .replace(/<@!?\d+>/g, "@user")
+    .replace(/<#\d+>/g, "#channel")
+    .replace(/<a?:(\w+):\d+>/g, ":$1:")
+    .replace(/https?:\/\/\S+/g, "link")
+    .replace(/[*_~`|>[\]\\]/g, "")
+    .replace(/^-#\s*/gm, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  const text =
+    plain !== ""
+      ? plain
+      : (message.attachments?.length ?? 0) > 0
+        ? "an attachment"
+        : (message.embeds?.[0]?.title ?? "").replace(/[*_~`|>[\]\\]/g, "").trim() || ((message.embeds?.length ?? 0) > 0 ? "an embed" : "a message");
+  return text.length > max ? `${text.slice(0, max - 1).trimEnd()}…` : text;
+}
+
+/** The small line that opens a webhook reply, linking the message it answers. */
+export function ticketReplyQuoteLine(name: string, snippet: string, link: string): string {
+  return `-# ↩ [replying to @${plainName(name)}: ${snippet}](<${link}>)`;
+}
+
+/** The parts of a message a reply cannot carry, whatever their value. */
+const REPLY_REFUSED_PARTS = ["buttons", "selects", "components", "reactions"] as const;
+
+const EMBED_ADDRESSES = ["url", "authorIconUrl", "authorUrl", "footerIconUrl", "imageUrl", "thumbnailUrl"] as const;
+
+/**
+ * The embeds of a dashboard reply, checked with the message builder's own
+ * rules and held to a stricter few: at most three, nothing but web addresses
+ * for links and pictures, a time that is real or "now", and no buttons, menus
+ * or reactions beside them. Variables are not filled in on a reply, so a
+ * `{name}` is sent as typed rather than accepted as an address.
+ */
+export function readTicketReplyEmbeds(input: Record<string, unknown>): TicketRead<MessageEmbed[]> {
+  for (const part of REPLY_REFUSED_PARTS) {
+    const value = input[part];
+    if (Array.isArray(value) ? value.length > 0 : value !== undefined && value !== null) {
+      return { ok: false, error: "A reply can carry embeds, but not buttons, menus or reactions." };
+    }
+  }
+  const raw = input.embeds;
+  if (raw === undefined || raw === null) return { ok: true, value: [] };
+  if (!Array.isArray(raw)) return { ok: false, error: "The embeds could not be read. Add them again." };
+  if (raw.length > TICKET_REPLY_EMBEDS_MAX) {
+    return { ok: false, error: `A reply can carry at most ${TICKET_REPLY_EMBEDS_MAX} embeds. Remove ${raw.length - TICKET_REPLY_EMBEDS_MAX} and send again.` };
+  }
+  if (raw.length === 0) return { ok: true, value: [] };
+  const parsed = parseMessage({ content: "", embeds: raw });
+  if (!parsed.ok) {
+    const first = parsed.errors[0];
+    const number = /^embeds\[(\d+)\]/.exec(first?.path ?? "")?.[1];
+    return { ok: false, error: `${number === undefined ? "" : `Embed ${Number(number) + 1}: `}${first?.message ?? "The embeds could not be read."}` };
+  }
+  const embeds: MessageEmbed[] = [];
+  for (const [index, embed] of parsed.value.embeds.entries()) {
+    for (const key of EMBED_ADDRESSES) {
+      const address = embed[key];
+      if (address !== "" && !isHttpUrl(address)) {
+        return { ok: false, error: `Embed ${index + 1}: a link or picture must be a web address starting with http:// or https://.` };
+      }
+    }
+    if (embed.timestamp !== "" && embed.timestamp !== "now" && Number.isNaN(Date.parse(embed.timestamp))) {
+      return { ok: false, error: `Embed ${index + 1}: the time must be a real date and time.` };
+    }
+    // The name is for telling embeds apart in the editor and never leaves it.
+    embeds.push({ ...embed, name: "" });
+  }
+  return { ok: true, value: embeds };
 }
 
 const BASE64 = /^[A-Za-z0-9+/]*={0,2}$/;
@@ -1481,6 +1696,74 @@ export function readTicketMembers(input: unknown): TicketRead<TicketMembersReque
   }
   if (!SNOWFLAKE.test(userId)) return { ok: false, error: "That is not a valid Discord member." };
   return { ok: true, value: { action, userId } };
+}
+
+/** Most people staff can put in a ticket when they open it, besides themselves. */
+export const TICKET_CREATE_MEMBERS_MAX = 10;
+export const TICKET_CREATE_SUBJECT_MAX = 200;
+export const TICKET_CREATE_MESSAGE_MAX = TICKET_REPLY_MAX;
+/** Questions in a type's form, which is as many as Discord's form allows. */
+export const TICKET_FORM_QUESTIONS_MAX = 5;
+const TICKET_ANSWER_MAX = 4000;
+
+export interface TicketCreateRequest {
+  typeId: string;
+  subject: string | null;
+  answers: TicketAnswer[];
+  memberIds: string[];
+  firstMessage: string | null;
+}
+
+/** What `POST create` returns: where the new ticket is. */
+export interface TicketCreateResult {
+  id: number;
+  number: number;
+  channelId: string;
+  channelUrl: string;
+  /** Plain-language side notes, such as a member who could not be added. */
+  notes: string[];
+}
+
+export function readTicketCreate(input: unknown): TicketRead<TicketCreateRequest> {
+  const body = isRecord(input) ? input : {};
+  const typeId = typeof body.typeId === "string" ? body.typeId : "";
+  if (!ROW_ID.test(typeId)) return { ok: false, error: "Pick the type of ticket to open." };
+
+  const subject = typeof body.subject === "string" ? body.subject.replace(/\s+/g, " ").trim() : "";
+  if (subject.length > TICKET_CREATE_SUBJECT_MAX) {
+    return { ok: false, error: `A subject can be at most ${TICKET_CREATE_SUBJECT_MAX} characters.` };
+  }
+
+  const rawAnswers = body.answers ?? [];
+  if (!Array.isArray(rawAnswers)) return { ok: false, error: "The form answers were not sent in a form the bot understands. Reload the page and try again." };
+  if (rawAnswers.length > TICKET_FORM_QUESTIONS_MAX) {
+    return { ok: false, error: `A form has at most ${TICKET_FORM_QUESTIONS_MAX} questions.` };
+  }
+  const answers: TicketAnswer[] = [];
+  for (const entry of rawAnswers) {
+    if (!isRecord(entry) || typeof entry.label !== "string" || typeof entry.value !== "string") {
+      return { ok: false, error: "The form answers were not sent in a form the bot understands. Reload the page and try again." };
+    }
+    const value = lines(entry.value);
+    if (value.length > TICKET_ANSWER_MAX) return { ok: false, error: `An answer can be at most ${TICKET_ANSWER_MAX} characters.` };
+    answers.push({ label: entry.label.trim().slice(0, 45), value });
+  }
+
+  const rawMembers = body.memberIds ?? [];
+  if (!Array.isArray(rawMembers) || rawMembers.some((id) => typeof id !== "string" || !SNOWFLAKE.test(id))) {
+    return { ok: false, error: "One of the members is not a valid Discord member." };
+  }
+  const memberIds = [...new Set(rawMembers as string[])];
+  if (memberIds.length === 0) return { ok: false, error: "Pick at least one member to add to the ticket." };
+  if (memberIds.length > TICKET_CREATE_MEMBERS_MAX) {
+    return { ok: false, error: `A ticket can start with at most ${TICKET_CREATE_MEMBERS_MAX} members besides you.` };
+  }
+
+  const firstMessage = typeof body.firstMessage === "string" ? lines(body.firstMessage) : "";
+  if (firstMessage.length > TICKET_CREATE_MESSAGE_MAX) {
+    return { ok: false, error: `The first message can be at most ${TICKET_CREATE_MESSAGE_MAX} characters.` };
+  }
+  return { ok: true, value: { typeId, subject: subject === "" ? null : subject, answers, memberIds, firstMessage: firstMessage === "" ? null : firstMessage } };
 }
 
 export function readTicketTransfer(input: unknown): TicketRead<TicketTransferRequest> {

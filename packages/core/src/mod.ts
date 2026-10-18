@@ -549,6 +549,14 @@ export interface InfractionDto {
   warnExpiresAt?: string | null;
 }
 
+/** What happened in Discord when a removed case was still in force: taken off, left on, could not be, or there was nothing to take off. */
+export type LiftResult = "lifted" | "kept" | "failed" | "nothing";
+
+/** The reply to removing a case. `lift` is absent when the case held nothing in Discord. */
+export interface VoidReply extends InfractionDto {
+  lift?: { kind: "ban" | "timeout"; result: LiftResult } | null;
+}
+
 /** Why the bot took a case by itself: which escalation rule fired, on how many warnings. */
 export interface AutomaticCase {
   ruleId: string;
@@ -872,6 +880,8 @@ export interface LockableChannelDto {
   locked: boolean;
   /** Left out of "all channels" by the server's settings. */
   exempt: boolean;
+  /** A voice or stage channel. Absent from an older bot. */
+  voice?: boolean;
 }
 
 export interface RaidStatusDto {

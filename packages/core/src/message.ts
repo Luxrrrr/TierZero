@@ -180,6 +180,8 @@ export interface MessageTemplateDto extends MessageBody {
   /** Null for a template that sits outside every folder. */
   folderId: number | null;
   name: string;
+  /** Staff can pick it from the ticket reply box. Missing from an older bot, which reads as no. */
+  inTickets?: boolean;
   updatedAt: string;
   lastSentAt: string | null;
 }

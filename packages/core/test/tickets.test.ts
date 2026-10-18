@@ -17,6 +17,9 @@ import {
   readTicketNote,
   readTicketPriority,
   readTicketReply,
+  readTicketSentAs,
+  ticketMessageFromRow,
+  ticketStaffLine,
   readTicketTransfer,
   ticketAccess,
   ticketDashboardUrl,
@@ -449,5 +452,104 @@ describe("helpers", () => {
   test("a dashboard link is empty until the address is known", () => {
     assert.equal(ticketDashboardUrl("", "1", 42), "");
     assert.equal(ticketDashboardUrl("https://bot.example.com", "1", 42), "https://bot.example.com/guilds/1/tickets/42");
+  });
+});
+
+describe("embeds on a reply", () => {
+  const embed = (over: Record<string, unknown> = {}) => ({ title: "Refund steps", description: "Open Billing, then Refunds.", ...over });
+
+  test("a reply may be only an embed", () => {
+    const read = readTicketReply({ content: "", embeds: [embed({ name: "internal", color: "#5865f2" })] });
+    assert.ok(read.ok);
+    assert.equal(read.value.content, "");
+    assert.equal(read.value.embeds?.length, 1);
+    assert.equal(read.value.embeds?.[0]?.name, "", "the editor's own name never travels");
+    assert.equal(read.value.embeds?.[0]?.color, "#5865f2");
+  });
+
+  test("a reply without embeds keeps its old shape", () => {
+    assert.deepEqual(readTicketReply({ content: "hi" }), { ok: true, value: { content: "hi" } });
+    assert.deepEqual(readTicketReply({ content: "hi", embeds: [] }), { ok: true, value: { content: "hi" } });
+  });
+
+  test("at most three, and the fourth is named", () => {
+    const read = readTicketReply({ content: "x", embeds: [embed(), embed(), embed(), embed()] });
+    assert.ok(!read.ok);
+    assert.match(read.error, /at most 3 embeds\. Remove 1/);
+  });
+
+  test("buttons, menus and reactions are refused", () => {
+    for (const part of [{ buttons: [{ label: "x" }] }, { selects: [{}] }, { reactions: ["👍"] }, { components: [{}] }]) {
+      const read = readTicketReply({ content: "x", embeds: [embed()], ...part });
+      assert.ok(!read.ok, JSON.stringify(part));
+      assert.match(read.error, /not buttons, menus or reactions/);
+    }
+    assert.ok(readTicketReply({ content: "x", embeds: [embed()], buttons: [], reactions: [] }).ok);
+  });
+
+  test("links and pictures must be web addresses, and a variable is not one", () => {
+    for (const bad of [{ url: "javascript:alert(1)" }, { imageUrl: "data:image/png;base64,AA" }, { thumbnailUrl: "{server.icon}" }, { authorIconUrl: "{user}/x.png" }, { footerIconUrl: "ftp://x/y.png" }]) {
+      const read = readTicketReply({ content: "", embeds: [embed(bad)] });
+      assert.ok(!read.ok, JSON.stringify(bad));
+    }
+    assert.ok(readTicketReply({ content: "", embeds: [embed({ imageUrl: "https://cdn.example/a.png", url: "http://example.com" })] }).ok);
+  });
+
+  test("Discord's limits hold, per part and across the embeds, and an empty embed is refused", () => {
+    const long = readTicketReply({ content: "", embeds: [embed({ title: "x".repeat(257) })] });
+    assert.ok(!long.ok);
+    assert.match(long.error, /^Embed 1: /);
+    const total = readTicketReply({ content: "", embeds: [embed({ description: "a".repeat(3500) }), embed({ description: "b".repeat(3500) })] });
+    assert.ok(!total.ok);
+    assert.match(total.error, /6000/);
+    assert.ok(!readTicketReply({ content: "", embeds: [{}] }).ok);
+    assert.ok(!readTicketReply({ content: "", embeds: "nope" }).ok);
+    assert.ok(!readTicketReply({ content: "", embeds: [embed({ timestamp: "{now}" })] }).ok);
+    assert.ok(readTicketReply({ content: "", embeds: [embed({ timestamp: "now" })] }).ok);
+  });
+});
+
+describe("a reply sent under the team's name", () => {
+  const row = (over: Record<string, unknown> = {}) => ({
+    id: 1,
+    messageId: "1800000000000000001",
+    authorId: "130000000000000002",
+    authorName: "Kairo",
+    authorAvatar: "https://cdn.example/kairo.png",
+    authorIsStaff: true,
+    authorBot: true,
+    content: "On it",
+    attachments: "[]",
+    embeds: "[]",
+    createdAt: new Date(0),
+    editedAt: null,
+    deletedAt: null,
+    edits: 0,
+    source: "dashboard",
+    ...over,
+  });
+
+  test("shows the team as the author and keeps the real sender beside it", () => {
+    const dto = ticketMessageFromRow(row({ sentAs: JSON.stringify({ name: "Support Team", avatarUrl: "https://cdn.example/team.png", staffLine: true }) }));
+    assert.equal(dto.author.name, "Support Team");
+    assert.equal(dto.author.avatarUrl, "https://cdn.example/team.png");
+    assert.equal(dto.author.userId, "130000000000000002");
+    assert.deepEqual(dto.sentBy, { userId: "130000000000000002", name: "Kairo" });
+    assert.equal(dto.staffLine, true);
+  });
+
+  test("a row without it, or with a damaged one, reads as the staff member", () => {
+    for (const sentAs of [undefined, null, "", "not json", "[]", JSON.stringify({ name: "" })]) {
+      const dto = ticketMessageFromRow(row({ sentAs }));
+      assert.equal(dto.author.name, "Kairo");
+      assert.equal(dto.sentBy, undefined);
+    }
+  });
+
+  test("the line naming the sender cannot ping or format", () => {
+    assert.equal(ticketStaffLine("Kairo"), "-# Replied by Kairo");
+    assert.equal(ticketStaffLine("**@everyone** <@123>"), "-# Replied by everyone 123");
+    assert.equal(ticketStaffLine("***"), "-# Replied by staff");
+    assert.equal(readTicketSentAs(JSON.stringify({ name: "T", avatarUrl: "javascript:x" }))?.avatarUrl, null);
   });
 });
