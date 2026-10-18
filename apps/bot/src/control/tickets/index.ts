@@ -1,13 +1,14 @@
 import type { Client, Guild } from "discord.js";
 import { prisma } from "@tier0/db";
-import { canTicket, parseTicketListFilters, readUpdatedSince } from "@tier0/core";
+import { canTicket, parseTicketListFilters, readUpdatedSince, readVersion, readWaitSeconds } from "@tier0/core";
 import { accessFor, actorOf, SNOWFLAKE, viewerFacts } from "./access.js";
-import { messagesPage, ticketDetail } from "./detail.js";
+import { ticketDetail } from "./detail.js";
+import { countAfterWait, messagesAfterWait } from "./hold.js";
 import { accessTarget, ticketIdOf } from "./dto.js";
-import { countTickets, findMembers, listTickets, panelList, statsDaysOf, ticketsAccess, ticketsContext, ticketStats, transcript } from "./reads.js";
+import { findMembers, listTickets, panelList, statsDaysOf, ticketsAccess, ticketsContext, ticketStats, ticketTemplates, transcript } from "./reads.js";
 import { moduleServices, type TicketCtx, type TicketServices } from "./runtime.js";
 import { fail, MODULE_OFF, NO_ACCESS, ok, OTHER_TYPE, SETTINGS_UNREADABLE, type Reply, type TicketEnv } from "./types.js";
-import { deleteTranscript, isTicketAction, postPanelFor, refusedText, writeTicket } from "./writes.js";
+import { createTicket, deleteTranscript, isTicketAction, postPanelFor, refusedText, writeTicket } from "./writes.js";
 
 /** The parts of the guild state the ticket routes use, so a test can hand in a plain object. */
 export interface TicketState {
@@ -26,6 +27,8 @@ export interface TicketsRequest {
   body: unknown;
   /** The module's functions; tests replace them. */
   services?: TicketServices;
+  /** Aborts when the caller goes away, which ends a read held with `wait`. */
+  signal?: AbortSignal;
 }
 
 const MODULE_ID = "tickets";
@@ -58,21 +61,28 @@ export async function handleTickets(request: TicketsRequest): Promise<Reply | nu
   const enabled = await state.isEnabled(guild.id, MODULE_ID);
   if (!isRead && !enabled) return fail(409, MODULE_OFF);
 
-  const env: TicketEnv = { client, guild, ctx, services: request.services ?? moduleServices, viewer, access, enabled };
+  const env: TicketEnv = { client, guild, ctx, services: request.services ?? moduleServices, viewer, access, enabled, signal: request.signal };
   const actor = isRead ? null : actorOf(body, viewer);
 
   if (isRead && area === "access") return ticketsAccess(env);
   if (isRead && area === "context") return ticketsContext(env);
   if (isRead && area === "list") return listTickets(env, parseTicketListFilters(query));
-  if (isRead && area === "count") return countTickets(env, parseTicketListFilters(query));
+  if (isRead && area === "count") {
+    const waiting = waitOf(query);
+    if (!waiting.ok) return waiting.reply;
+    return countAfterWait(env, parseTicketListFilters(query), { seconds: waiting.seconds, knownVersion: waiting.version });
+  }
   if (isRead && area === "members") return findMembers(env, query);
   if (isRead && area === "stats") return ticketStats(env, statsDaysOf(query.get("days")));
+  if (isRead && area === "templates") return ticketTemplates(env);
 
   if (area === "panels") {
     if (!canTicket(access, "settings")) return fail(403, refusedText("settings"));
     if (isRead) return panelList(env);
     return postPanelFor(env, a!, actor!);
   }
+
+  if (area === "create") return createTicket(env, actor!, body);
 
   const ticketId = ticketIdOf(a);
   if (ticketId === null) return fail(400, "That is not a ticket number.");
@@ -88,7 +98,10 @@ export async function handleTickets(request: TicketsRequest): Promise<Reply | nu
       if (after !== null && after !== "" && cursor === null) return fail(400, "The message cursor is not valid. Reload the ticket.");
       const since = readUpdatedSince(query.get("updatedSince"));
       if (!since.ok) return fail(400, "The change cursor is not valid. Reload the ticket.");
-      return ok(await messagesPage(row, cursor, since.value, ctx.settings.transcripts));
+      const waiting = waitOf(query, "detailVersion");
+      if (!waiting.ok) return waiting.reply;
+      const page = await messagesAfterWait(env, row, { cursor, since: since.value, transcripts: ctx.settings.transcripts }, { seconds: waiting.seconds, knownDetail: waiting.version });
+      return "status" in page ? page : ok(page);
     }
     return transcript(env, row, b === "transcript.html" ? "html" : "txt");
   }
@@ -97,10 +110,19 @@ export async function handleTickets(request: TicketsRequest): Promise<Reply | nu
   return writeTicket(env, row, b as Parameters<typeof writeTicket>[2], actor!, body);
 }
 
+/** `wait` and the version that goes with it, read from a query, or the refusal to send. */
+function waitOf(query: URLSearchParams, versionKey = "version"): { ok: true; seconds: number; version: number | undefined } | { ok: false; reply: Reply } {
+  const seconds = readWaitSeconds(query.get("wait"));
+  if (seconds === null) return { ok: false, reply: fail(400, "The wait is not a number of seconds.") };
+  const version = readVersion(query.get(versionKey));
+  if (version === null) return { ok: false, reply: fail(400, "The version is not valid. Reload the page.") };
+  return { ok: true, seconds, version };
+}
+
 /** The route table, checked before anything is looked up so an unknown path is a plain 404. */
 export function isKnownRoute(method: string, area: string | undefined, a: string | undefined, b: string | undefined): boolean {
   if (method === "GET") {
-    if (area === "access" || area === "context" || area === "list" || area === "count" || area === "members" || area === "stats" || area === "panels") {
+    if (area === "access" || area === "context" || area === "list" || area === "count" || area === "members" || area === "stats" || area === "panels" || area === "templates") {
       return a === undefined && b === undefined;
     }
     if (area === "items" && a !== undefined) {
@@ -110,6 +132,7 @@ export function isKnownRoute(method: string, area: string | undefined, a: string
   }
   if (method === "POST") {
     if (area === "panels") return a !== undefined && a !== "" && b === "post";
+    if (area === "create") return a === undefined && b === undefined;
     return area === "items" && a !== undefined && isTicketAction(b);
   }
   if (method === "DELETE") return area === "items" && a !== undefined && b === "transcript";

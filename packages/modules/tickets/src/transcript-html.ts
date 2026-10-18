@@ -3,10 +3,13 @@ import {
   readTicketAttachments,
   readTicketEmbeds,
   readTicketMentions,
+  readTicketSentAs,
   ticketMessageFromRow,
+  ticketStaffLine,
   TRANSCRIPT_CSS,
   TRANSCRIPT_URL_ATTRS,
   TRANSCRIPT_VOID_TAGS,
+  transcriptTimestamp,
   transcriptTopic,
   transcriptTree,
   type TicketAnswer,
@@ -176,29 +179,44 @@ function headerLines(ticket: StoredTranscriptTicket, texts: TranscriptTexts, ope
 }
 
 const MENTION = /<(@!?|@&|#)(\d{17,20})>/g;
+const STAMP = /<t:(-?\d{1,13})(?::([tTdDfFR]))?>/g;
 
-/** Mentions written as the names they had when the message was stored, the way the transcript view shows them. */
-export function plainMentions(content: string, stored: string | null | undefined): string {
+/**
+ * Mentions written as the names they had when the message was stored, the way
+ * the transcript view shows them, and timestamps as the date and time they
+ * stand for. A person who was never stored falls back to the name they posted
+ * under in this ticket, and anything still unknown reads as a plain word
+ * rather than a bare id.
+ */
+export function plainMentions(content: string, stored: string | null | undefined, posters: Readonly<Record<string, string>> = {}): string {
   const names = readTicketMentions(stored);
-  return content.replace(MENTION, (whole, kind: string, id: string) => {
-    const table = kind === "@&" ? names.roles : kind === "#" ? names.channels : names.users;
-    const found = table[id];
-    return found ? `${kind === "#" ? "#" : "@"}${found.name}` : whole;
-  });
+  return content
+    .replace(MENTION, (_whole, kind: string, id: string) => {
+      const table = kind === "@&" ? names.roles : kind === "#" ? names.channels : names.users;
+      const name = table[id]?.name ?? (kind === "@&" || kind === "#" ? undefined : posters[id]);
+      if (name) return `${kind === "#" ? "#" : "@"}${name}`;
+      return kind === "@&" ? "@unknown role" : kind === "#" ? "#unknown channel" : "@unknown user";
+    })
+    .replace(STAMP, (whole, unix: string, style: string | undefined) => {
+      const seconds = Number(unix);
+      if (!Number.isFinite(seconds) || Math.abs(seconds) > 8.64e12) return whole;
+      const written = transcriptTimestamp(seconds, style === "R" ? "f" : (style ?? "f"), { now: null, timeZone: "UTC" });
+      return `${written} UTC`;
+    });
 }
 
 /** Everything a download adds below the conversation, kept out of the conversation so the page above reads as Discord. */
 const PAGE_CSS = `
 html,body{margin:0;background:#313338}
 .dt-after{padding-bottom:32px}
-.dt .dt-details{margin:24px 16px 0 72px;max-width:520px;padding:8px 16px 16px 12px;border-left:4px solid #5865f2;border-radius:4px;background:#2b2d31;font-size:14px;line-height:18px;color:#dbdee1}
-.dt-details h2{margin:8px 0 4px;font-size:16px;line-height:22px;font-weight:600;color:#f2f3f5}
+.dt .dt-details{margin:24px var(--dt-pad) 0 calc(var(--dt-pad) + var(--dt-avatar) + var(--dt-gap));max-width:520px;padding:8px 16px 16px 12px;border-left:4px solid var(--dt-blurple);border-radius:4px;background:var(--dt-bg-alt);font-size:var(--dt-small);line-height:18px;color:var(--dt-text)}
+.dt-details h2{margin:8px 0 4px;font-size:16px;line-height:22px;font-weight:600;color:var(--dt-strong)}
 .dt-details p{margin:2px 0}
 .dt-details dl{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:8px 0 0}
-.dt-details dt{font-weight:600;color:#f2f3f5}
+.dt-details dt{font-weight:600;color:var(--dt-strong)}
 .dt-details dd{margin:0;white-space:pre-wrap;overflow-wrap:anywhere}
 .dt-details-answers dl{grid-template-columns:minmax(0,1fr)}
-.dt .dt-export{margin:16px 16px 0 72px;font-size:12px;color:#949ba4}
+.dt .dt-export{margin:16px var(--dt-pad) 0 calc(var(--dt-pad) + var(--dt-avatar) + var(--dt-gap));font-size:12px;color:var(--dt-muted)}
 @media (max-width:600px){.dt .dt-details,.dt .dt-export{margin-left:16px}.dt-details dl{grid-template-columns:minmax(0,1fr)}}
 `.trim();
 
@@ -289,18 +307,25 @@ export function renderStoredTranscriptText(
     lines.push(texts.empty);
     return lines.join("\n") + "\n";
   }
+  const posters: Record<string, string> = {};
+  // What Discord showed: a reply sent under the team's name reads as the team.
+  const shownName = (message: StoredTranscriptMessage) => readTicketSentAs(message.sentAs)?.name ?? message.authorName;
+  for (const message of messages) if (message.authorName) posters[message.authorId] = message.authorName;
   for (const message of messages) {
     const flags = [message.editedAt || message.edits > 0 ? marks.edited : "", message.deletedAt ? marks.deleted : ""].filter(Boolean);
     const line = applyVariables(texts.line, {
       time: timestamp(message.createdAt),
-      author: message.authorName,
+      author: shownName(message),
       authorId: message.authorId,
     });
     lines.push(flags.length > 0 ? `${line} ${flags.join(" ")}` : line);
     const embeds = readTicketEmbeds(message.embeds);
     const attachments = readTicketAttachments(message.attachments);
-    if (message.content) lines.push(plainMentions(message.content, message.mentions));
-    else if (embeds.length === 0 && attachments.length === 0) lines.push(texts.unavailable);
+    const sentAs = readTicketSentAs(message.sentAs);
+    const staffLine = sentAs?.staffLine ? ticketStaffLine(message.authorName) : null;
+    if (message.content) lines.push(plainMentions(message.content, message.mentions, posters));
+    else if (embeds.length === 0 && attachments.length === 0 && !staffLine) lines.push(texts.unavailable);
+    if (staffLine) lines.push(staffLine);
     for (const embed of embeds) {
       for (const part of [embed.author?.name, embed.title, embed.description]) if (part) lines.push(`  | ${part}`);
       for (const field of embed.fields) lines.push(`  | ${field.name}: ${field.value}`);

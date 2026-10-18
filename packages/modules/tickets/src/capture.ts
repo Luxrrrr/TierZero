@@ -1,6 +1,8 @@
 import { MessageType, type Collection, type Guild, type Message, type PartialMessage } from "discord.js";
 import { prisma, type Ticket } from "@tier0/db";
 import { openTicketIn, type OpenTicketEntry } from "./cache.js";
+import { notifyTicketOf } from "./controls.js";
+import { notifyTicket } from "./live.js";
 import { channelOf, memberRoleIds, type TicketChannel, type TicketCtx } from "./context.js";
 import { attachmentsJson, componentsJson, embedsJson, isResponse, mentionsJson, reactionsJson, stickersJson, type ComponentLike, type MentionLookup } from "./records.js";
 import { staffRolesOf, typeOfTicket } from "./resolve.js";
@@ -106,6 +108,7 @@ export async function storeMessage(
   try {
     const data = rowOf(ctx, message, ticket, source);
     await prisma.ticketMessage.upsert({ where: { ticketId_messageId: { ticketId: ticket.id, messageId: message.id } }, create: data, update: {} });
+    notifyTicket(ctx.guild.id, ticket.id, "message");
   } catch (error) {
     console.error(`[tickets] could not store message ${message.id} of ticket ${ticket.id}:`, error);
   }
@@ -122,6 +125,7 @@ export async function noteActivity(ticketId: number, openerId: string, author: {
   if (isResponse(author, openerId)) {
     await prisma.ticket.updateMany({ where: { id: ticketId, firstResponseAt: null }, data: { firstResponseAt: at, firstResponderId: author.id } });
   }
+  notifyTicketOf(ticketId, "activity");
 }
 
 /** A new message in a server. Resolves to the open ticket it was in, or undefined when it was in none. */
@@ -146,17 +150,19 @@ export async function captureUpdate(ctx: TicketCtx, after: Stored): Promise<void
       ...(edited ? { editedAt: after.editedAt, edits: { increment: 1 } } : {}),
     },
   });
-  if (changed.count === 0 && !after.author.bot) await storeMessage(ctx, ticket, after);
+  if (changed.count > 0) notifyTicket(ctx.guild.id, ticket.id, "message");
+  else if (!after.author.bot) await storeMessage(ctx, ticket, after);
 }
 
 export async function captureDelete(ctx: TicketCtx, channelId: string, messageIds: string[]): Promise<void> {
   if (!ctx.settings.transcripts.store || messageIds.length === 0) return;
   const ticket = await openTicketIn(ctx.guild.id, channelId);
   if (!ticket) return;
-  await prisma.ticketMessage.updateMany({
+  const removed = await prisma.ticketMessage.updateMany({
     where: { ticketId: ticket.id, messageId: { in: messageIds }, deletedAt: null },
     data: { deletedAt: new Date() },
   });
+  if (removed.count > 0) notifyTicket(ctx.guild.id, ticket.id, "message");
 }
 
 /** Up to the last 500 messages in a channel, oldest first. */

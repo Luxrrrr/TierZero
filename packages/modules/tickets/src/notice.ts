@@ -3,7 +3,7 @@ import type { MessageBody, ReplyValues, TicketActor } from "@tier0/core";
 import { prisma, type Ticket } from "@tier0/db";
 import { storeMessage } from "./capture.js";
 import { channelOf, type Answerable, type TicketCtx } from "./context.js";
-import { ticketRows } from "./controls.js";
+import { addedMemberIds, ticketRows } from "./controls.js";
 import { isSnowflake, ticketNumber } from "./records.js";
 import { effectiveAutoClose, typeOfTicket } from "./resolve.js";
 import { welcomeBody, welcomeFallback, welcomeValuesOf } from "./welcome.js";
@@ -70,7 +70,7 @@ export async function refreshControls(ctx: TicketCtx, ticket: Ticket): Promise<v
     await message.edit({ components: ticketRows(ctx.settings, ticket, undefined) }).catch(() => undefined);
     return;
   }
-  const values = welcomeValuesOf(ctx.settings, type, ticket);
+  const values = welcomeValuesOf(ctx.settings, type, ticket, await addedMemberIds(ticket.id));
   await ctx.edit(message, welcomeBody(type, ticket, values), values, {
     fallback: welcomeFallback(type, ticket, values),
     rows: ticketRows(ctx.settings, ticket, type),

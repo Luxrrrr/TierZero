@@ -223,12 +223,14 @@ export interface FakeMember {
   displayName: string;
   joinedAt: Date;
   roles: { cache: Map<string, { id: string }> };
+  /** Only set for a member the test gives server permissions. */
+  permissions?: { has(flag: unknown): boolean };
 }
 
-export function member(u: FakeUser, roleIds: string[] = []): FakeMember {
+export function member(u: FakeUser, roleIds: string[] = [], permissions?: FakeMember["permissions"]): FakeMember {
   const cache = new Map(roleIds.map((id) => [id, { id }]));
   const roles = Object.assign(cache, { some: (fn: (role: { id: string }) => boolean) => [...cache.values()].some(fn) });
-  return { id: u.id, user: u, displayName: u.username, joinedAt: new Date(0), roles: { cache: roles } };
+  return { id: u.id, user: u, displayName: u.username, joinedAt: new Date(0), roles: { cache: roles }, ...(permissions ? { permissions } : {}) };
 }
 
 export interface Sent {
@@ -268,7 +270,10 @@ const mapWith = <V>(map: Map<string, V>) =>
   });
 
 /** A server with a context the module can run in. `settings` is the parsed ticket settings. */
-export function world(settings: unknown, options: { dashboardUrl?: string; botPermissions?: (flag: unknown) => boolean } = {}): World {
+export function world(
+  settings: unknown,
+  options: { dashboardUrl?: string; botPermissions?: (flag: unknown) => boolean; refuseCreates?: number; dmClosed?: string[] } = {},
+): World {
   const channels = mapWith(new Map<string, FakeChannel>());
   const members = mapWith(new Map<string, FakeMember>());
   const users = new Map<string, FakeUser>();
@@ -277,6 +282,7 @@ export function world(settings: unknown, options: { dashboardUrl?: string; botPe
   const scheduled: World["scheduled"] = [];
   const cancelled: World["cancelled"] = [];
   const created: Record<string, unknown>[] = [];
+  let refusals = options.refuseCreates ?? 0;
   const dms = new Map<string, Sent[]>();
   const botUser = user(BOT, "TierZero", true);
 
@@ -293,6 +299,10 @@ export function world(settings: unknown, options: { dashboardUrl?: string; botPe
       fetch: async (id: string) => channels.get(id) ?? known.get(id) ?? null,
       create: async (opts: Record<string, unknown>) => {
         created.push(opts);
+        if (refusals > 0) {
+          refusals -= 1;
+          throw Object.assign(new Error("Missing Permissions"), { code: 50013 });
+        }
         const made = channel(snowflake(), { name: String(opts.name), parentId: (opts.parent as string) ?? null });
         made.topic = opts.topic as string;
         for (const o of (opts.permissionOverwrites as { id: string; type?: number; allow?: unknown; deny?: unknown }[]) ?? []) {
@@ -328,7 +338,12 @@ export function world(settings: unknown, options: { dashboardUrl?: string; botPe
       msg.options = opts;
       t.sent.push(msg);
     } else if (t.username !== undefined && t.id) {
+      // A member with direct messages closed: Discord refuses, and the module is told nothing was sent.
+      if (options.dmClosed?.includes(t.id)) return null;
       msg = message(snowflake(), botUser, "");
+      for (const file of (opts.files as { name: string }[] | undefined) ?? []) {
+        msg.attachments.set(file.name, { name: file.name, url: "", contentType: null, size: 0 });
+      }
       msg.body = body;
       msg.values = values;
       msg.options = opts;
@@ -371,7 +386,8 @@ export function world(settings: unknown, options: { dashboardUrl?: string; botPe
     edit: async (msg: FakeMessage, body: MessageBody, values: Record<string, string | number> = {}, opts: Record<string, unknown> = {}) => {
       msg.body = body;
       msg.values = values;
-      msg.options = { ...(msg.options ?? {}), ...opts };
+      // Like Discord, an edit keeps only the buttons it is given.
+      msg.options = { ...(msg.options ?? {}), ...opts, rows: opts.rows };
       return msg;
     },
     reply: async (interaction: unknown, body: MessageBody, values: Record<string, string | number> = {}, opts: Record<string, unknown> = {}) => {
@@ -421,7 +437,7 @@ export interface FakeInteraction {
   lastReply?: FakeMessage;
   modals: unknown[];
   values: string[];
-  message: { edit(payload: unknown): Promise<unknown>; components: { toJSON(): unknown }[] } | null;
+  message: FakeMessage | null;
   options: {
     getSubcommand(): string;
     getString(name: string, required?: boolean): string | null;
@@ -450,6 +466,8 @@ export function interaction(
     fields?: Record<string, string>;
     values?: string[];
     component?: boolean;
+    /** The message a button was pressed on, such as a direct message the module sent. */
+    message?: FakeMessage;
   } = {},
 ): FakeInteraction {
   const self: FakeInteraction = {
@@ -461,7 +479,7 @@ export function interaction(
     deferred: false,
     modals: [],
     values: options.values ?? [],
-    message: { edit: async () => undefined, components: [] },
+    message: options.message ?? message("0", user(BOT, "TierZero", true), ""),
     options: {
       getSubcommand: () => options.sub ?? "",
       getString: (name) => options.strings?.[name] ?? null,

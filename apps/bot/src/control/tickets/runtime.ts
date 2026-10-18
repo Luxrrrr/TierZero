@@ -1,7 +1,9 @@
 import type {
+  MessageEmbed,
   ModuleContext,
   TicketActionResult,
   TicketActor,
+  TicketCreateResult,
   TicketHealthFacts,
   TicketPanelPostResult,
   TicketPanelStatusDto,
@@ -10,12 +12,15 @@ import type {
   TicketReplyResult,
 } from "@tier0/core";
 import {
+  acquireWait,
   accessSettingsOf,
   addTicketNote,
   allTypes,
   changeTicketMember,
   claimTicket,
   closeTicketAs,
+  openTicketAs,
+  inboxVersion,
   panelStatuses,
   postPanel,
   priorityLabel,
@@ -27,13 +32,18 @@ import {
   requestTicketClose,
   setTicketPriority,
   staffRolesOf,
+  ticketDetailVersion,
   ticketHealthFacts,
   ticketNumber,
+  ticketVersion,
   transcriptRemovalOf,
   transcriptTexts,
   transferTicket,
   typeOfTicket,
   unclaimTicket,
+  waitForInbox,
+  waitForTicket,
+  type StaffTicketRequest,
   type TicketSettings,
 } from "@tier0/module-tickets";
 
@@ -61,10 +71,19 @@ export interface TicketServices {
   transferTicket(ctx: TicketCtx, ticketId: number, target: { typeId: string }, actor: TicketActor): Promise<TicketActionResult>;
   closeTicketAs(ctx: TicketCtx, ticketId: number, close: { reason?: string }, actor: TicketActor): Promise<TicketActionResult>;
   reopenTicket(ctx: TicketCtx, ticketId: number, actor: TicketActor): Promise<TicketActionResult>;
-  replyToTicket(ctx: TicketCtx, ticketId: number, content: string, actor: TicketActor, files?: readonly TicketReplyFile[]): Promise<TicketReplyResult>;
+  replyToTicket(
+    ctx: TicketCtx,
+    ticketId: number,
+    content: string,
+    actor: TicketActor,
+    files?: readonly TicketReplyFile[],
+    embeds?: readonly MessageEmbed[],
+    replyToMessageId?: string,
+  ): Promise<TicketReplyResult>;
   renameTicket(ctx: TicketCtx, ticketId: number, name: string, actor: TicketActor): Promise<TicketActionResult>;
   requestTicketClose(ctx: TicketCtx, ticketId: number, request: { reason: string | null }, actor: TicketActor): Promise<TicketActionResult>;
   postPanel(ctx: TicketCtx, panelId: string, actor: TicketActor): Promise<TicketPanelPostResult>;
+  openTicketAs(ctx: TicketCtx, request: StaffTicketRequest, actor: TicketActor): Promise<TicketCreateResult>;
   panelStatuses(ctx: TicketCtx, options?: { fresh?: boolean }): Promise<TicketPanelStatusDto[]>;
   ticketHealthFacts(ctx: TicketCtx): Promise<TicketHealthFacts>;
 }
@@ -82,19 +101,26 @@ export const moduleServices: TicketServices = {
   renameTicket,
   requestTicketClose,
   postPanel,
+  openTicketAs,
   panelStatuses,
   ticketHealthFacts,
 };
 
 export {
+  acquireWait,
   accessSettingsOf,
   allTypes,
+  inboxVersion,
   priorityLabel,
   renderStoredTranscriptText,
   renderTranscriptHtml,
   staffRolesOf,
+  ticketDetailVersion,
   ticketNumber,
+  ticketVersion,
   transcriptRemovalOf,
   transcriptTexts,
   typeOfTicket,
+  waitForInbox,
+  waitForTicket,
 };

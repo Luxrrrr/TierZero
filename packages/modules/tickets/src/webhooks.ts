@@ -1,12 +1,13 @@
 import { AttachmentBuilder, ChannelType, RESTJSONErrorCodes, type Message, type TextChannel, type Webhook } from "discord.js";
-import type { TicketActor, TicketReplyFile } from "@tier0/core";
+import { ticketReplyQuoteLine, type MessageEmbed, type TicketActor, type TicketReplyFile } from "@tier0/core";
 import { prisma, type Ticket } from "@tier0/db";
 import { noteActivity } from "./capture.js";
 import { memberIdsIn } from "./channels.js";
 import { channelOf, isThread, type TicketCtx } from "./context.js";
+import { notifyTicket } from "./live.js";
 import { resetAutoClose } from "./notice.js";
 import { done, refused, type Outcome } from "./outcome.js";
-import { attachmentsJson, attributedReply, replyMentions } from "./records.js";
+import { attachmentsJson, attributedReply, replyEmbedPayloads, replyEmbedsJson, replyIdentity, replyMentions, splitReply } from "./records.js";
 import { staffRolesOf, typeOfTicket } from "./resolve.js";
 
 /**
@@ -50,6 +51,16 @@ export function forgetWebhook(channelId?: string): void {
   else hooks.delete(channelId);
 }
 
+/** The message a reply answers, as the quote above it needs it. */
+export interface ReplyReference {
+  messageId: string;
+  /** Who wrote it, as the conversation shows them. */
+  name: string;
+  /** What it says, already cut to one plain line. */
+  snippet: string;
+  link: string;
+}
+
 export interface SentReply {
   ticket: Ticket;
   message: Message;
@@ -59,7 +70,9 @@ export interface SentReply {
 /**
  * Posts a reply from the dashboard into the ticket and stores it as a
  * dashboard message. It can ping the people in the ticket and the type's staff
- * roles, and nobody else whatever the text says.
+ * roles, and nobody else whatever the text says. Sent as the staff member, or
+ * under the team's name when the settings say so; either way the stored row
+ * keeps who really sent it.
  */
 export async function sendReply(
   ctx: TicketCtx,
@@ -67,6 +80,8 @@ export async function sendReply(
   content: string,
   actor: TicketActor,
   files: readonly TicketReplyFile[] = [],
+  embeds: readonly MessageEmbed[] = [],
+  replyTo?: ReplyReference,
 ): Promise<Outcome<SentReply>> {
   if (ticket.status !== "open") return refused("alreadyClosed");
   const channel = await channelOf(ctx, ticket.channelId);
@@ -75,39 +90,54 @@ export async function sendReply(
   const type = typeOfTicket(ctx.settings, ticket)?.type;
   const people = [ticket.openerId, ...(ticket.claimedById ? [ticket.claimedById] : []), ...memberIdsIn(ctx, channel)];
   const allowedMentions = replyMentions(people, staffRolesOf(ctx.settings, type));
+  const who = replyIdentity(ctx.settings.general?.replies, actor, ctx.client.user?.displayAvatarURL?.() ?? null);
+  const now = new Date();
+  const embedPayloads = replyEmbedPayloads(embeds, now);
 
   // A fresh set for each attempt, so the bot can still post the files itself when the webhook fails.
   const attachments = () => files.map((file) => new AttachmentBuilder(Buffer.from(file.data, "base64"), { name: file.name }));
   const parent = isThread(channel) ? channel.parent : channel;
   const hook = parent?.type === ChannelType.GuildText ? await webhookFor(ctx, parent) : null;
-  let message: Message | null = null;
   let delivery: "webhook" | "bot" = "webhook";
-  /** Each message posted and the part of the reply it holds. */
+  /** Each message posted and the part of the reply it holds, with the files and embeds on the first. */
   const posted: { message: Message; content: string }[] = [];
   if (hook) {
-    message = await hook
-      .send({
-        content,
-        ...(files.length > 0 ? { files: attachments() } : {}),
-        username: actor.name.slice(0, 80) || "Staff",
-        ...(actor.avatarUrl ? { avatarURL: actor.avatarUrl } : {}),
-        allowedMentions,
-        ...(isThread(channel) ? { threadId: channel.id } : {}),
-      })
-      .catch((error: unknown) => {
-        if (errorCode(error) === RESTJSONErrorCodes.UnknownWebhook && parent) hooks.delete(parent.id);
-        console.warn(`[tickets] webhook reply in ${channel.id} failed, sending as the bot:`, error);
-        return null;
-      });
+    // A webhook cannot make a real reply, so the first message opens with a small quote that links the one answered.
+    const quote = replyTo ? ticketReplyQuoteLine(replyTo.name, replyTo.snippet, replyTo.link) : null;
+    const room = quote === null ? REPLY_ROOM : REPLY_ROOM - quote.length - 1;
+    for (const [index, part] of splitReply(content, room, who.staffLine).entries()) {
+      const sent = await hook
+        .send({
+          content: index === 0 && quote !== null ? (part === "" ? quote : `${quote}\n${part}`) : part,
+          ...(index === 0 && files.length > 0 ? { files: attachments() } : {}),
+          ...(index === 0 && embedPayloads.length > 0 ? { embeds: embedPayloads } : {}),
+          username: who.name,
+          ...(who.avatarUrl ? { avatarURL: who.avatarUrl } : {}),
+          allowedMentions,
+          ...(isThread(channel) ? { threadId: channel.id } : {}),
+        })
+        .catch((error: unknown) => {
+          if (errorCode(error) === RESTJSONErrorCodes.UnknownWebhook && parent) hooks.delete(parent.id);
+          console.warn(`[tickets] webhook reply in ${channel.id} failed, sending as the bot:`, error);
+          return null;
+        });
+      if (!sent) break;
+      posted.push({ message: sent, content: part });
+    }
   }
-  if (message) {
-    posted.push({ message, content });
-  } else {
+  if (posted.length === 0) {
     delivery = "bot";
-    const { head, parts } = attributedReply(actor.name, content);
+    const { head, parts } = attributedReply(who.name, content, REPLY_ROOM, who.staffLine);
     for (const [index, part] of parts.entries()) {
       const sent = await channel
-        .send({ content: index === 0 ? head + part : part, allowedMentions, ...(index === 0 && files.length > 0 ? { files: attachments() } : {}) })
+        .send({
+          content: index === 0 ? head + part : part,
+          allowedMentions: index === 0 && replyTo ? { ...allowedMentions, repliedUser: false } : allowedMentions,
+          // The bot can make a real reply, which reads better than a quote and pings no one.
+          ...(index === 0 && replyTo ? { reply: { messageReference: replyTo.messageId, failIfNotExists: false } } : {}),
+          ...(index === 0 && files.length > 0 ? { files: attachments() } : {}),
+          ...(index === 0 && embedPayloads.length > 0 ? { embeds: embedPayloads } : {}),
+        })
         .catch((error: unknown) => {
           console.error(`[tickets] could not post a dashboard reply in ${channel.id}:`, error);
           return null;
@@ -115,40 +145,71 @@ export async function sendReply(
       if (!sent) break;
       posted.push({ message: sent, content: part });
     }
-    message = posted[0]?.message ?? null;
   }
+  const message = posted[0]?.message;
   if (!message) return refused("channelMissing");
 
   const at = message.createdAt ?? new Date();
   if (ctx.settings.transcripts.store) {
-    for (const part of posted) await storeReply(ticket, part.message, part.content, actor, part.message.createdAt ?? at, delivery === "webhook");
+    for (const [index, part] of posted.entries()) {
+      const tail = who.staffLine !== null && endsWithLine(part.content, who.staffLine);
+      await storeReply(ticket, part.message, {
+        // The closing line is what Discord showed; the row keeps the text and says it was there.
+        content: tail ? part.content.slice(0, part.content.length - who.staffLine!.length).replace(/\n$/, "") : part.content,
+        actor,
+        at: part.message.createdAt ?? at,
+        // A webhook's message and the bot's own both carry Discord's APP tag.
+        bot: true,
+        sentAs: who.team ? JSON.stringify({ name: who.name, avatarUrl: who.avatarUrl, staffLine: tail }) : null,
+        embeds: index === 0 && embeds.length > 0 ? replyEmbedsJson(embeds, now) : "[]",
+        replyToId: index === 0 && replyTo ? replyTo.messageId : null,
+      });
+    }
   }
   await noteActivity(ticket.id, ticket.openerId, { id: actor.userId, bot: false }, at);
   await resetAutoClose(ctx, ticket);
   return done({ ticket, message, delivery });
 }
 
-/** `viaWebhook`: Discord shows a webhook's message with an APP tag, so the transcript does too. */
-async function storeReply(ticket: Ticket, message: Message, content: string, actor: TicketActor, at: Date, viaWebhook: boolean): Promise<void> {
+/** The most one message of a reply holds. */
+const REPLY_ROOM = 2000;
+
+const endsWithLine = (content: string, line: string) => content === line || content.endsWith(`\n${line}`);
+
+interface StoredReply {
+  content: string;
+  actor: TicketActor;
+  at: Date;
+  bot: boolean;
+  /** JSON of what Discord showed as the sender, or null for the staff member themselves. */
+  sentAs: string | null;
+  embeds: string;
+  /** The message this one answers, kept so the conversation and transcripts draw the quote as for a native reply. */
+  replyToId: string | null;
+}
+
+async function storeReply(ticket: Ticket, message: Message, reply: StoredReply): Promise<void> {
   const messageId = message.id;
   // The files' addresses are Discord's, from the message as posted, like any other attachment in a ticket.
   const attachments = attachmentsJson(message.attachments?.values() ?? []);
+  const { actor } = reply;
+  const author = { authorId: actor.userId, authorName: actor.name, authorAvatar: actor.avatarUrl, authorIsStaff: true, authorBot: reply.bot };
   await prisma.ticketMessage.upsert({
     where: { ticketId_messageId: { ticketId: ticket.id, messageId } },
     create: {
       ticketId: ticket.id,
       messageId,
-      authorId: actor.userId,
-      authorName: actor.name,
-      authorAvatar: actor.avatarUrl,
-      authorIsStaff: true,
-      authorBot: viaWebhook,
-      content,
+      ...author,
+      content: reply.content,
       attachments,
-      embeds: "[]",
-      createdAt: at,
+      embeds: reply.embeds,
+      sentAs: reply.sentAs,
+      replyToId: reply.replyToId,
+      createdAt: reply.at,
       source: "dashboard",
     },
-    update: { source: "dashboard", authorId: actor.userId, authorName: actor.name, authorAvatar: actor.avatarUrl, authorIsStaff: true, authorBot: viaWebhook, attachments },
+    // The gateway may have stored the message first, as the webhook or the bot; this puts the real sender on it.
+    update: { source: "dashboard", ...author, content: reply.content, attachments, embeds: reply.embeds, sentAs: reply.sentAs, replyToId: reply.replyToId },
   });
+  notifyTicket(ticket.guildId, ticket.id, "message");
 }

@@ -4,7 +4,7 @@ import { forgetOpenTicket } from "./cache.js";
 import { captureCreate, captureDelete, captureUpdate, pruneMessages } from "./capture.js";
 import { closeTicket, deleteKept } from "./close.js";
 import { channelOf, type TicketCtx } from "./context.js";
-import { recordEvent } from "./controls.js";
+import { openedByStaff, recordEvent } from "./controls.js";
 import { CLOSING_MESSAGE, OPENER_LEFT_MESSAGE, REMINDER_MESSAGE, closingValues } from "./messages.js";
 import { autoCloseDue, inChannel, rescheduleAutoClose } from "./notice.js";
 import { spokenDuration, ticketNumber } from "./records.js";
@@ -55,6 +55,8 @@ export async function openerLeft(ctx: TicketCtx, userId: string, name: string | 
   if (mode === "nothing") return;
   const open = await prisma.ticket.findMany({ where: { guildId: ctx.guild.id, openerId: userId, status: "open" } });
   for (const ticket of open) {
+    // Staff who opened a ticket to talk to someone are not a member who needs help, so their leaving changes nothing.
+    if (await openedByStaff(ticket.id)) continue;
     const marked = await prisma.ticket.updateMany({ where: { id: ticket.id, status: "open", openerLeftAt: null }, data: { openerLeftAt: new Date() } });
     if (marked.count === 0) continue;
     const closing = mode === "close";

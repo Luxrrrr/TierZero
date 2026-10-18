@@ -147,7 +147,7 @@ describe("settings saved before ticket types", () => {
     assert.equal(settings.general.closeBehaviour, "delete");
     assert.deepEqual(settings.general.adminRoles, []);
     assert.equal(settings.general.claimLock, false);
-    assert.equal(settings.transcripts.dmOpener, false);
+    assert.equal(settings.transcripts.sendTo, "nobody");
     assert.equal(settings.transcripts.summary, false);
     assert.equal(settings.ratings.enabled, false);
     assert.equal(settings.automation.reminder.enabled, false);
@@ -247,5 +247,29 @@ describe("the upgrade", () => {
   test("leaves a value it cannot read for validation to refuse", () => {
     assert.equal(registry.resolveSettings("tickets", { panels: "nope" }).ok, false);
     assert.equal(registry.resolveSettings("tickets", { panels: [{ name: "No types", types: [] }] }).ok, false);
+  });
+});
+
+describe("the transcript recipients setting", () => {
+  const panels = [{ id: "main", name: "Main", types: [{ id: "support", name: "Support" }] }];
+
+  test("reads the old switch on as the opener and off as nobody", () => {
+    assert.equal(parse({ panels, transcripts: { dmOpener: true } }).transcripts.sendTo, "opener");
+    assert.equal(parse({ panels, transcripts: { dmOpener: false } }).transcripts.sendTo, "nobody");
+  });
+
+  test("reads the old switch from settings saved before ticket types too", () => {
+    assert.equal(parse({ ...SAVED_BEFORE_TYPES, transcripts: { dmOpener: true } }).transcripts.sendTo, "opener");
+  });
+
+  test("defaults to nobody and to the web page", () => {
+    const settings = parse({ panels });
+    assert.equal(settings.transcripts.sendTo, "nobody");
+    assert.equal(settings.transcripts.format, "html");
+  });
+
+  test("keeps a saved choice over a stale switch", () => {
+    assert.equal(parse({ panels, transcripts: { dmOpener: true, sendTo: "everyone" } }).transcripts.sendTo, "everyone");
+    assert.equal(parse({ panels, transcripts: { dmOpener: true, sendTo: "nobody" } }).transcripts.sendTo, "nobody");
   });
 });

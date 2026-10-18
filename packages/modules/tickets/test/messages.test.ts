@@ -252,7 +252,7 @@ describe("every message the module can send", () => {
   const shared = MESSAGE_VARIABLES.map((variable) => variable.name as string);
 
   test("is found by walking the schema, as the Bot messages page does", () => {
-    for (const path of ["panels[].message", "panels[].types[].welcome", "messages.closeRequest", "messages.claimed", "ratings.message", "ratings.thanks", "automation.reminder.message", "transcripts.summaryMessage", "transcripts.dmMessage", "general.blocklist.message", "messages.opening.cooldown"]) {
+    for (const path of ["panels[].message", "panels[].types[].welcome", "messages.closeRequest", "messages.claimed", "ratings.message", "ratings.thanks", "ratings.rated", "automation.reminder.message", "transcripts.summaryMessage", "transcripts.dmMessage", "general.blocklist.message", "messages.opening.cooldown"]) {
       assert.ok(found.some((entry) => entry.path === path), path);
     }
   });

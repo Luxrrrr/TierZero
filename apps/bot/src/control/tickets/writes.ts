@@ -2,6 +2,7 @@ import { prisma, type Ticket } from "@tier0/db";
 import {
   canTicket,
   readTicketClose,
+  readTicketCreate,
   readTicketMembers,
   readTicketNote,
   readTicketPriority,
@@ -78,6 +79,7 @@ const REFUSED: Record<TicketPermission, string> = {
   settings: "Only a member with Manage Server can do that.",
   rename: "Only an open ticket can be renamed.",
   requestClose: "Only an open ticket can be asked to close.",
+  create: "You do not handle this type of ticket, so you cannot open one of it.",
 };
 
 export function refusedText(permission: TicketPermission): string {
@@ -127,11 +129,19 @@ export async function writeTicket(env: TicketEnv, row: Ticket, action: TicketAct
       case "reply": {
         const read = readTicketReply(payload);
         if (!read.ok) return fail(400, read.error);
+        if (read.value.replyToMessageId !== undefined) {
+          const target = await prisma.ticketMessage.findUnique({
+            where: { ticketId_messageId: { ticketId: row.id, messageId: read.value.replyToMessageId } },
+            select: { deletedAt: true },
+          });
+          if (!target) return fail(400, "That message is not in this ticket any more. Reload the conversation and pick another.");
+          if (target.deletedAt) return fail(400, "That message was deleted in Discord, so it cannot be replied to.");
+        }
         const taken = replies.take(`${env.guild.id}:${actor.userId}`);
         if (!taken.ok) {
           return fail(429, `You are sending replies too quickly. Try again in ${Math.ceil(taken.retryAfterMs / 1000)} seconds.`);
         }
-        return ok(await services.replyToTicket(ctx, row.id, read.value.content, actor, read.value.files ?? []));
+        return ok(await services.replyToTicket(ctx, row.id, read.value.content, actor, read.value.files ?? [], read.value.embeds ?? [], read.value.replyToMessageId));
       }
       case "claim":
         return afterWrite(env, row.id, (await services.claimTicket(ctx, row.id, actor)).notes);
@@ -216,6 +226,28 @@ export async function deleteTranscript(env: TicketEnv, row: Ticket, actor: Ticke
     return deleted.count;
   });
   return ok({ deleted: removed });
+}
+
+/**
+ * `POST create`: staff open a ticket of a type they handle and put members in
+ * it. Admin roles and managers may open any type. The ticket is the opener's
+ * on record, and the answer says where it is.
+ */
+export async function createTicket(env: TicketEnv, actor: TicketActor, payload: unknown): Promise<Reply> {
+  const read = readTicketCreate(payload);
+  if (!read.ok) return fail(400, read.error);
+  const { ctx, services } = env;
+  if (!allTypes(ctx.settings).some(({ type }) => type.id === read.value.typeId)) {
+    return fail(400, "That ticket type no longer exists. Reload the page and pick another.");
+  }
+  if (!canTicket(env.access, "create", { typeId: read.value.typeId, status: "open" })) return fail(403, refusedText("create"));
+  try {
+    return ok(await services.openTicketAs(ctx, read.value, actor));
+  } catch (error) {
+    const refusal = moduleRefusal(error);
+    if (refusal) return refusal;
+    throw error;
+  }
 }
 
 export async function postPanelFor(env: TicketEnv, panelId: string, actor: TicketActor): Promise<Reply> {

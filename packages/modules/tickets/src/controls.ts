@@ -8,8 +8,9 @@ import {
   TextInputStyle,
   type MessageActionRowComponentBuilder,
 } from "discord.js";
-import { customId, type TicketEventKind } from "@tier0/core";
+import { customId, readTicketDetail, type TicketEventKind } from "@tier0/core";
 import { prisma, type Ticket } from "@tier0/db";
+import { guildOfTicket, notifyTicket, type TicketChangeKind } from "./live.js";
 import type { TicketPanel, TicketType } from "./panels.js";
 import { openTargetRest, questionBounds, typeLabel, type PanelType } from "./resolve.js";
 import type { TicketSettings } from "./settings.js";
@@ -198,4 +199,44 @@ export async function recordEvent(
   await prisma.ticketEvent
     .create({ data: { ticketId, kind, actorId: actor?.userId ?? null, actorName: actor?.name ?? null, detail: JSON.stringify(detail) } })
     .catch((error: unknown) => console.error(`[tickets] could not record ${kind} on ticket ${ticketId}:`, error));
+  notifyTicketOf(ticketId, kind === "opened" ? "opened" : kind === "reminder" ? "activity" : "detail");
+}
+
+/**
+ * Tells the dashboard's open pages a ticket changed, for the callers that know
+ * the ticket's id but not its server. The server is the one the notifier has
+ * seen the ticket in, or is read from the row, which no caller waits for.
+ */
+export function notifyTicketOf(ticketId: number, kind: TicketChangeKind): void {
+  const known = guildOfTicket(ticketId);
+  if (known !== undefined) {
+    notifyTicket(known, ticketId, kind);
+    return;
+  }
+  void prisma.ticket
+    .findUnique({ where: { id: ticketId }, select: { guildId: true } })
+    .then((found) => (found ? notifyTicket(found.guildId, ticketId, kind) : undefined))
+    .catch(() => undefined);
+}
+
+/** Whether staff opened this ticket from the dashboard, which the `opened` event records. */
+export async function openedByStaff(ticketId: number): Promise<boolean> {
+  const event = await prisma.ticketEvent.findFirst({ where: { ticketId, kind: "opened" }, orderBy: { id: "asc" } });
+  return event !== null && readTicketDetail(event.detail).staff === true;
+}
+
+/** The members added to a ticket and not removed since, in the order they were added. */
+export async function addedMemberIds(ticketId: number): Promise<string[]> {
+  const events = await prisma.ticketEvent.findMany({
+    where: { ticketId, kind: { in: ["member_added", "member_removed"] } },
+    orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+  });
+  const added = new Set<string>();
+  for (const event of events) {
+    const id = readTicketDetail(event.detail).userId;
+    if (typeof id !== "string") continue;
+    if (event.kind === "member_added") added.add(id);
+    else added.delete(id);
+  }
+  return [...added];
 }

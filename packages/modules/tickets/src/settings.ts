@@ -32,6 +32,8 @@ import {
   PRIORITY_MESSAGE,
   PRIORITY_VARIABLES,
   RATING_MESSAGE,
+  RATING_RATED_MESSAGE,
+  RATING_RATED_VARIABLES,
   RATING_THANKS_MESSAGE,
   RATING_THANKS_VARIABLES,
   RATING_VARIABLES,
@@ -187,6 +189,38 @@ export const settingsSchema = s.object(
           ],
           default: "flag",
         }),
+        replies: s.object(
+          {
+            identity: s.choice({
+              label: "Replies are sent as",
+              options: [
+                { value: "staff", label: "The staff member", description: "Under their own server name and picture." },
+                { value: "team", label: "A team name", description: "Under one name and picture for everyone, so members see the team and not who answered." },
+              ],
+              default: "staff",
+            }),
+            teamName: s.string({
+              label: "Team name",
+              default: "Support Team",
+              max: 80,
+              when: { field: "identity", equals: "team", hide: true },
+            }),
+            teamAvatar: s.string({
+              label: "Team picture",
+              help: "A link to an image. Left empty, replies use the bot's picture.",
+              url: true,
+              optional: true,
+              when: { field: "identity", equals: "team", hide: true },
+            }),
+            showStaffName: s.boolean({
+              label: "Add who replied as a small line",
+              help: "Adds a small line such as Replied by Kairo at the end of each reply. The dashboard shows who sent every reply either way.",
+              default: false,
+              when: { field: "identity", equals: "team", hide: true },
+            }),
+          },
+          { label: "Replies from the dashboard", help: "How a reply sent from a ticket in the dashboard looks in Discord." },
+        ),
         blocklist: s.object(
           {
             members: s.array(s.string({ min: 17, max: 20 }), {
@@ -240,18 +274,36 @@ export const settingsSchema = s.object(
           components: false,
           when: { field: "postFile", equals: true },
         }),
-        dmOpener: s.boolean({ label: "Send the transcript to the opener", default: false }),
+        sendTo: s.choice({
+          label: "Send the transcript to",
+          help: "Sent by direct message when the ticket closes. Anyone who has direct messages closed is skipped. Handlers, observers, admins and anyone who can manage channels or the server never receive it this way.",
+          options: [
+            { value: "nobody", label: "Nobody" },
+            { value: "opener", label: "Only the opener" },
+            { value: "everyone", label: "Everyone in the ticket who is not staff", description: "The opener and the members added to the ticket." },
+          ],
+          default: "nobody",
+        }),
+        format: s.choice({
+          label: "Format of the file sent",
+          help: "The web page looks like the conversation did in Discord and opens in any browser. It needs Keep transcripts in the dashboard to be on; without that a text file is sent instead.",
+          options: [
+            { value: "html", label: "Web page" },
+            { value: "text", label: "Text file" },
+            { value: "both", label: "Both" },
+          ],
+          default: "html",
+        }),
         dmMessage: s.message({
-          label: "Transcript sent to the opener",
-          help: "Sent to the opener by direct message when the ticket closes.",
+          label: "Transcript sent to members",
+          help: "Sent by direct message to whoever Send the transcript to chooses. When the opener is also asked for a rating, the rating buttons are in this same message.",
           topic: "closes",
           audience: "dm",
-          note: "The transcript is attached as a text file.",
+          note: "The transcript is attached as a file.",
           starting: TRANSCRIPT_DM_MESSAGE,
           variables: TRANSCRIPT_DM_VARIABLES,
           delivery: "dm",
           components: false,
-          when: { field: "dmOpener", equals: true },
         }),
         summary: s.boolean({ label: "Post a summary of each closed ticket to the log channel", default: false }),
         summaryMessage: s.message({
@@ -272,7 +324,7 @@ export const settingsSchema = s.object(
         enabled: s.boolean({ label: "Ask the opener to rate a closed ticket", default: false }),
         message: s.message({
           label: "Rating request",
-          help: "Sent to the opener by direct message after the ticket closes.",
+          help: "Sent to the opener by direct message after the ticket closes. When the transcript is sent to the opener too, this goes in the same message.",
           topic: "ratings",
           audience: "dm",
           note: "Sent to the opener by direct message. The 1 to 5 buttons are added under it for you.",
@@ -296,6 +348,16 @@ export const settingsSchema = s.object(
           audience: "dm",
           starting: RATING_THANKS_MESSAGE,
           variables: RATING_THANKS_VARIABLES,
+          delivery: "dm",
+          components: false,
+        }),
+        rated: s.message({
+          label: "Rating DM after a rating",
+          help: "Shown under the rating request in the same direct message once a rating is picked. The 1 to 5 buttons are taken off, so it can't be rated twice.",
+          topic: "ratings",
+          audience: "dm",
+          starting: RATING_RATED_MESSAGE,
+          variables: RATING_RATED_VARIABLES,
           delivery: "dm",
           components: false,
         }),

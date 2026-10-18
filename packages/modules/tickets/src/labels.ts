@@ -238,3 +238,14 @@ export function transcriptFileName(labels: TicketLabels, number: number): string
   const name = printable.replace(UNSAFE_FILE_CHARS, "-").trim();
   return (name || DEFAULT_LABELS.fileName.replace("{number}", String(number))).slice(0, 100);
 }
+
+/**
+ * The names of the web page and the text file for a ticket, from the one
+ * file name setting. The page takes the name with its extension swapped for
+ * .html, and the text file keeps the name unless that would collide with it.
+ */
+export function transcriptFileNames(labels: TicketLabels, number: number): { html: string; text: string } {
+  const name = transcriptFileName(labels, number);
+  const base = name.replace(/\.[A-Za-z0-9]{1,5}$/, "") || name;
+  return { html: `${base}.html`, text: name.toLowerCase().endsWith(".html") ? `${base}.txt` : name };
+}

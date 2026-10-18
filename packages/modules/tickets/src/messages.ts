@@ -187,6 +187,7 @@ export const WELCOME_VARIABLES: MessageVariable[] = [
   { name: "claimedBy", description: "Who is handling the ticket, as a mention, empty until someone claims it", sample: "@Grace" },
   HANDLERS,
   { name: "pingRoles", description: "The roles chosen to be pinged when a ticket opens, as mentions, so they are notified", sample: "@Support" },
+  { name: "members", description: "The members added to the ticket, as mentions, including those staff picked when they opened it from the dashboard", sample: "@Ada @Linus" },
 ];
 
 /** Posted in a ticket whose opener left the server, while it is open. */
@@ -302,6 +303,34 @@ export const RATING_THANKS_VARIABLES: MessageVariable[] = [
   NUMBER,
 ];
 
+/**
+ * Added under the rating request, whose buttons it replaces, once a rating is
+ * picked. The request's own text stays above it.
+ */
+export const RATING_RATED_MESSAGE: MessageBody = embedReply("You rated this {rating} out of 5\n{stars}", "success");
+export const RATING_RATED_VARIABLES: MessageVariable[] = [
+  { name: "rating", description: "The rating they gave, from 1 to 5", sample: "4" },
+  { name: "stars", description: "The rating as filled and empty stars", sample: "★★★★☆" },
+  ...RATING_VARIABLES,
+];
+
+/** The rating as five stars, filled up to the rating. */
+export function starsOf(rating: number): string {
+  const filled = Math.max(0, Math.min(5, Math.round(rating)));
+  return "★".repeat(filled) + "☆".repeat(5 - filled);
+}
+
+/** Two messages as one: the second's text and embeds after the first's. Buttons are left to the caller. */
+export function appended(first: MessageBody, second: MessageBody): MessageBody {
+  return {
+    content: [first.content, second.content].filter((part) => part !== "").join("\n"),
+    embeds: [...first.embeds, ...second.embeds],
+    buttons: [],
+    selects: [],
+    reactions: [],
+  };
+}
+
 /** Pings the handlers once when only the opener has spoken for a while. */
 export const REMINDER_MESSAGE: MessageBody = embedReply("{user} has been waiting {waited} for a reply.", "warning", { ping: "{handlers}" });
 export const REMINDER_VARIABLES: MessageVariable[] = [
@@ -313,8 +342,8 @@ export const REMINDER_VARIABLES: MessageVariable[] = [
   { ...TICKET, description: "The ticket's channel, as a link" },
 ];
 
-/** Direct message to the opener with the transcript file attached. */
-export const TRANSCRIPT_DM_MESSAGE: MessageBody = embedReply("Here is the transcript of your ticket #{number} on {server}.", "info");
+/** Direct message to the people in the ticket with the transcript attached. */
+export const TRANSCRIPT_DM_MESSAGE: MessageBody = embedReply("Here is the transcript of ticket #{number} on {server}.", "info");
 export const TRANSCRIPT_DM_VARIABLES: MessageVariable[] = [NUMBER, TYPE, SUBJECT];
 
 /** The post-close summary in the log channel. The button drops out while the dashboard's address is not known. */
@@ -384,6 +413,8 @@ export function welcomeValues(input: {
   handlerRoleIds: readonly string[];
   pingRoleIds: readonly string[];
   claimedById: string | null;
+  /** Members added to the ticket, for `{members}`. */
+  memberIds?: readonly string[];
 }): Record<string, string | number> {
   const mention = (ids: readonly string[]) => ids.map((roleId) => `<@&${roleId}>`).join(" ");
   const values: Record<string, string | number> = {
@@ -394,6 +425,7 @@ export function welcomeValues(input: {
     claimedBy: input.claimedById ? `<@${input.claimedById}>` : "",
     handlers: mention(input.handlerRoleIds),
     pingRoles: mention(input.pingRoleIds),
+    members: (input.memberIds ?? []).map((userId) => `<@${userId}>`).join(" "),
   };
   for (let n = 1; n <= 5; n++) values[`answer${n}`] = shortened(input.answers[n - 1]?.value ?? "", ANSWERS_TEXT_MAX);
   return values;

@@ -54,6 +54,20 @@ export { ticketNumber, transcriptRemovalOf } from "./records.js";
 export type { TicketActionOptions, TicketCtx } from "./actions.js";
 export { TicketActionError } from "./outcome.js";
 export { forgetOpenTickets } from "./cache.js";
+export {
+  acquireWait,
+  heldWaits,
+  inboxVersion,
+  notifyTicket,
+  pendingWaits,
+  ticketDetailVersion,
+  ticketVersion,
+  waitForInbox,
+  waitForTicket,
+  WAITS_PER_GUILD,
+  WAITS_PER_VIEWER,
+  type TicketChangeKind,
+} from "./live.js";
 export { messageDto } from "./detail.js";
 export { accessSettingsOf, allTypes, findPanel, findType, staffRolesOf, typeOfTicket } from "./resolve.js";
 export { transcriptTexts } from "./labels.js";
@@ -62,3 +76,4 @@ export { renderStoredTranscriptText, renderTranscriptHtml } from "./transcript-h
 export type { StoredTranscriptMessage, StoredTranscriptTicket } from "./transcript-html.js";
 export type { TicketSettings } from "./settings.js";
 export type { TicketPanel, TicketType } from "./panels.js";
+export { openTicketAs, type StaffTicketRequest } from "./staff-open.js";

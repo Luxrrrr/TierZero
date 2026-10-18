@@ -61,6 +61,25 @@ describe("opening a ticket", () => {
     assert.equal(w.replies.at(-1)?.values.number, row.id);
   });
 
+  test("a channel Discord refuses is created again with fewer permissions", async () => {
+    const w = setup({}, {}, { refuseCreates: 1 });
+    const { row, channel: created } = await open(w);
+
+    assert.equal(w.created.length, 2, "the second attempt succeeded");
+    assert.ok(row.channelId === created.id);
+    const bits = (attempt: number) =>
+      (w.created[attempt]?.permissionOverwrites as { id: string; allow?: bigint | bigint[] }[]).find((o) => o.id === HANDLER)?.allow;
+    assert.notDeepEqual(bits(0), bits(1), "the retry asks for less than the first try");
+  });
+
+  test("a member is told when even the smallest set of permissions is refused", async () => {
+    const w = setup({}, {}, { refuseCreates: 3 });
+    await open(w).catch(() => undefined);
+
+    assert.equal(w.created.length, 3);
+    assert.equal(await prisma.ticket.count({ where: { channelId: { startsWith: "pending" } } }), 0);
+  });
+
   test("a blocked member is told so before anything else", async () => {
     const w = setup();
     await tickets.components!.open!(interaction(mallory) as never, { rest: "main:support", ctx: w.ctx });

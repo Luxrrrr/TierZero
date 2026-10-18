@@ -83,8 +83,9 @@ export function welcomeFallback(type: TicketType, ticket: Pick<Ticket, "answers"
   return withAnswers(OPENED_MESSAGE, readTicketAnswers(ticket.answers), type.showAnswers, values);
 }
 
-export function welcomeValuesOf(settings: TicketSettings, type: TicketType, ticket: WelcomeTicket): ReplyValues {
+export function welcomeValuesOf(settings: TicketSettings, type: TicketType, ticket: WelcomeTicket, memberIds: readonly string[] = []): ReplyValues {
   return welcomeValues({
+    memberIds,
     opener: { id: ticket.openerId, username: ticket.openerName || ticket.openerId },
     ticket,
     channelId: ticket.channelId,

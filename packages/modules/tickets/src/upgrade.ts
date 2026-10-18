@@ -22,9 +22,20 @@ export const LEGACY_TYPE_NAME = "Support";
 export const LEGACY_BUTTON_LABEL = "Open a ticket";
 
 export function upgradeSettings(stored: Stored): Stored {
-  const current = stored.panels === undefined ? fromSingleButton(stored) : stored;
+  const current = withTranscriptRecipients(stored.panels === undefined ? fromSingleButton(stored) : stored);
   if (!Array.isArray(current.panels)) return withShortestWaits(current);
   return withShortestWaits({ ...current, panels: withIds(current.panels) });
+}
+
+/**
+ * The transcript used to go to the opener or nobody, as a switch. It became a
+ * choice of who receives it, so an old switch is read as the matching choice,
+ * unless the choice was saved as well.
+ */
+function withTranscriptRecipients(settings: Stored): Stored {
+  const transcripts = record(settings.transcripts);
+  if (typeof transcripts.dmOpener !== "boolean" || transcripts.sendTo !== undefined) return settings;
+  return { ...settings, transcripts: { ...transcripts, sendTo: transcripts.dmOpener ? "opener" : "nobody" } };
 }
 
 /** The shortest wait the timed settings take, which they gained after some servers had saved less. */

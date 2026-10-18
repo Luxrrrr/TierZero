@@ -1,7 +1,7 @@
 import { MessageFlags, type MessageComponentInteraction, type ModalSubmitInteraction } from "discord.js";
 import { readTicketDetail, type ComponentHandler, type ModalHandler } from "@tier0/core";
 import { prisma, type Ticket } from "@tier0/db";
-import { deleteKept } from "./close.js";
+import { deleteKept, showRated } from "./close.js";
 import { actorOf, isStaffOf, may, refuse, type TicketCtx } from "./context.js";
 import { formOf, ratingCommentForm } from "./controls.js";
 import { RATING_THANKS_MESSAGE } from "./messages.js";
@@ -143,8 +143,15 @@ export const components: Components = {
     const ticket = await ticketById(ctx, ticketId ?? "");
     if (!ticket) return refuse(ctx, interaction, "notATicket");
     if (interaction.user.id !== ticket.openerId) return refuse(ctx, interaction, "notOpener");
-    if (!(await answer(ctx, interaction, await rate(ticket, Number(value), interaction.user.id)))) return;
-    await interaction.showModal(ratingCommentForm(ctx.settings, ctx.guild.id, ticket.id));
+    const outcome = await rate(ticket, Number(value), interaction.user.id);
+    if (!(await answer(ctx, interaction, outcome)) || !outcome.ok) return;
+    // The rating is saved by now. The message is edited alongside the form, and showRated never throws, so a message that is gone cannot stop the form.
+    const shown = showRated(ctx, interaction.message, outcome.value, Number(value));
+    try {
+      await interaction.showModal(ratingCommentForm(ctx.settings, ctx.guild.id, ticket.id));
+    } finally {
+      await shown;
+    }
   },
 };
 

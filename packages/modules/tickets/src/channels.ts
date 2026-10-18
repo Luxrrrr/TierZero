@@ -1,4 +1,13 @@
-import { ChannelType, OverwriteType, PermissionFlagsBits, type OverwriteResolvable, type PrivateThreadChannel, type PublicThreadChannel, type TextChannel } from "discord.js";
+import {
+  ChannelType,
+  OverwriteType,
+  PermissionFlagsBits,
+  PermissionsBitField,
+  type OverwriteResolvable,
+  type PrivateThreadChannel,
+  type PublicThreadChannel,
+  type TextChannel,
+} from "discord.js";
 import type { Ticket } from "@tier0/db";
 import { isThread, type TicketChannel, type TicketCtx } from "./context.js";
 import { priorityLabel, topicOf } from "./labels.js";
@@ -94,6 +103,32 @@ export function overwritesFor(ctx: TicketCtx, type: TicketType, openerId: string
     overwrites.push({ id: me.id, type: OverwriteType.Member, allow });
   }
   return overwrites;
+}
+
+const MANAGE_PERMISSIONS =
+  PermissionFlagsBits.ManageMessages |
+  PermissionFlagsBits.ManageChannels |
+  PermissionFlagsBits.ManageRoles |
+  PermissionFlagsBits.ManageWebhooks;
+const EXTRA_PERMISSIONS = PermissionFlagsBits.AttachFiles | PermissionFlagsBits.EmbedLinks;
+
+function stripped(overwrites: OverwriteResolvable[], bits: bigint): OverwriteResolvable[] {
+  return overwrites.map((entry) =>
+    entry.allow === undefined ? entry : { ...entry, allow: new PermissionsBitField(entry.allow).remove(bits).bitfield },
+  );
+}
+
+/**
+ * The overwrites to try when creating a ticket channel, most generous first.
+ * Discord answers Missing Permissions when an overwrite grants something it
+ * will not let the bot hand out, and which permission trips it depends on the
+ * server, so a refusal is retried with the management permissions left out and
+ * then with only what is needed to see and write in the channel.
+ */
+export function overwriteSteps(ctx: TicketCtx, type: TicketType, openerId: string): OverwriteResolvable[][] {
+  const full = overwritesFor(ctx, type, openerId);
+  const withoutManage = stripped(full, MANAGE_PERMISSIONS);
+  return [full, withoutManage, stripped(withoutManage, EXTRA_PERMISSIONS)];
 }
 
 function categoryFacts(ctx: TicketCtx, id: string | undefined): CategoryFacts | null {

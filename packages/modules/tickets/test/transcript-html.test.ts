@@ -2,6 +2,7 @@ import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 import {
   escapeHtml,
+  plainMentions,
   renderStoredTranscriptText,
   renderTranscriptHtml,
   safeUrl,
@@ -184,7 +185,53 @@ describe("renderTranscriptHtml", () => {
     assert.ok(html.includes("(edited)"));
     assert.ok(html.includes("dt-message-deleted"));
     assert.ok(html.includes("Deleted in Discord. Only staff can still see it here."));
-    assert.ok(html.includes('<span class="dt-tag" title="Sent from the dashboard">APP</span>'));
+    assert.ok(html.includes('<span class="dt-tag">APP</span>'));
+    assert.ok(html.includes('<span class="dt-via" title="Sent from the dashboard">via dashboard</span>'));
+  });
+
+  test("a dashboard reply and a message the same person typed never share a header, and only the reply is marked", () => {
+    const at = (minute: number) => new Date(`2026-10-01T10:0${minute}:00.000Z`);
+    const html = renderTranscriptHtml(
+      TICKET,
+      [
+        message({ authorId: STAFF, authorName: "Grace", authorIsStaff: true, content: "typed in Discord", createdAt: at(1) }),
+        message({ authorId: STAFF, authorName: "Grace", authorIsStaff: true, authorBot: true, source: "dashboard", content: "sent from the dashboard", createdAt: at(2) }),
+        message({ authorId: STAFF, authorName: "Grace", authorIsStaff: true, content: "typed again", createdAt: at(3) }),
+        message({ authorId: STAFF, authorName: "Grace", authorIsStaff: true, content: "and again", createdAt: at(4) }),
+      ],
+      NOW,
+    );
+    const body = bodyOf(html);
+    assert.equal(body.split("dt-message-start").length - 1, 3);
+    assert.equal(body.split("dt-via").length - 1, 1);
+    assert.equal(body.split('class="dt-tag"').length - 1, 1);
+    const native = body.slice(body.indexOf("typed in Discord") - 600, body.indexOf("typed in Discord"));
+    assert.ok(!native.includes("dt-via") && !native.includes("dt-tag"));
+  });
+
+  test("a reply under the team's name shows the team, and names the sender only when the line was shown", () => {
+    const team = JSON.stringify({ name: "Support Team", avatarUrl: null, staffLine: false });
+    const named = JSON.stringify({ name: "Support Team", avatarUrl: null, staffLine: true });
+    const hidden = renderTranscriptHtml(
+      TICKET,
+      [message({ authorId: STAFF, authorName: "Grace", authorBot: true, source: "dashboard", sentAs: team, content: "On it" })],
+      NOW,
+    );
+    assert.ok(hidden.includes(">Support Team</span>"));
+    assert.ok(!bodyOf(hidden).split("dt-after")[0]!.includes("Grace"));
+    assert.ok(hidden.includes("via dashboard"));
+    const shown = renderTranscriptHtml(
+      TICKET,
+      [message({ authorId: STAFF, authorName: "Grace", authorBot: true, source: "dashboard", sentAs: named, content: "On it" })],
+      NOW,
+    );
+    assert.ok(bodyOf(shown).includes("Replied by Grace"));
+
+    const txt = renderStoredTranscriptText(TICKET, [message({ authorId: STAFF, authorName: "Grace", source: "dashboard", sentAs: named, content: "On it" })]);
+    assert.ok(txt.includes("Support Team"));
+    assert.ok(txt.includes("-# Replied by Grace"));
+    const quiet = renderStoredTranscriptText(TICKET, [message({ authorId: STAFF, authorName: "Grace", source: "dashboard", sentAs: team, content: "On it" })]);
+    assert.ok(!quiet.includes("Replied by"));
   });
 
   test("the details carry the ticket's facts and the server's own wording", () => {
@@ -311,5 +358,42 @@ describe("renderStoredTranscriptText", () => {
   test("a message with nothing stored says so", () => {
     const text = renderStoredTranscriptText(TICKET, [message({ content: "" })]);
     assert.ok(text.includes(DEFAULT_TRANSCRIPT_TEXTS.unavailable));
+  });
+});
+
+describe("plainMentions", () => {
+  const USER = "231000000001885878";
+  const ROLE = "120000000000000001";
+  const NOBODY = "999000000000000001";
+
+  test("writes a timestamp as the date and time it stands for", () => {
+    const text = plainMentions("starts <t:1791792000:F> or <t:1791792000:R>", null);
+    assert.ok(!text.includes("<t:"));
+    assert.match(text, /2026/);
+    assert.match(text, /UTC/);
+  });
+
+  test("falls back to the name a person posted under in the ticket", () => {
+    assert.equal(plainMentions(`hi <@${USER}>`, null, { [USER]: "Ada" }), "hi @Ada");
+  });
+
+  test("never leaves a bare id for someone who cannot be named", () => {
+    assert.equal(plainMentions(`<@${NOBODY}> <@&${ROLE}> <#${ROLE}>`, null), "@unknown user @unknown role #unknown channel");
+  });
+
+  test("keeps the stored name over the poster's", () => {
+    const stored = JSON.stringify({ users: { [USER]: { name: "Stored" } }, roles: {}, channels: {} });
+    assert.equal(plainMentions(`<@${USER}>`, stored, { [USER]: "Poster" }), "@Stored");
+  });
+});
+
+describe("closeRequestEnding", () => {
+  test("adds a full stop only when the reason has no punctuation of its own", async () => {
+    const { closeRequestEnding } = await import("../dist/working.js");
+    assert.equal(closeRequestEnding(null), ".");
+    assert.equal(closeRequestEnding("  "), ".");
+    assert.equal(closeRequestEnding("all sorted"), ": all sorted.");
+    assert.equal(closeRequestEnding("Looks sorted, ok to close?"), ": Looks sorted, ok to close?");
+    assert.equal(closeRequestEnding("Done."), ": Done.");
   });
 });

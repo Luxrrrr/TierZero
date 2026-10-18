@@ -3,8 +3,9 @@ import { ChannelType, ThreadAutoArchiveDuration, type MessageComponentInteractio
 import { LEGACY_TYPE_ID, type TicketAnswer } from "@tier0/core";
 import { prisma, type Ticket } from "@tier0/db";
 import { rememberOpenTicket } from "./cache.js";
+import { notifyTicket } from "./live.js";
 import { storeMessage } from "./capture.js";
-import { addThreadStaff, categoryFor, overwritesFor, topicFor } from "./channels.js";
+import { addThreadStaff, categoryFor, overwriteSteps, topicFor } from "./channels.js";
 import { actorOf, memberRoleIds, refuse, type DiscordPerson, type TicketChannel, type TicketCtx } from "./context.js";
 import { recordEvent, ticketRows } from "./controls.js";
 import { nextOpening, withinHours } from "./hours.js";
@@ -102,7 +103,7 @@ async function claimSlot(
 
 type Opener = (MessageComponentInteraction | ModalSubmitInteraction) & DiscordPerson;
 
-async function createChannel(ctx: TicketCtx, { panel, type }: PanelType, opener: Opener, name: string, topic: string): Promise<TicketChannel | null> {
+export async function createChannel(ctx: TicketCtx, { panel, type }: PanelType, opener: { user: { id: string } }, name: string, topic: string): Promise<TicketChannel | null> {
   if (type.opening.mode === "thread") {
     const parent = panel.channel ? ctx.guild.channels.cache.get(panel.channel) : undefined;
     if (parent?.type !== ChannelType.GuildText) return null;
@@ -118,13 +119,22 @@ async function createChannel(ctx: TicketCtx, { panel, type }: PanelType, opener:
   }
   const category = categoryFor(ctx, type);
   if (!category.ok) return null;
-  return ctx.guild.channels.create({
-    name,
-    type: ChannelType.GuildText,
-    parent: category.id,
-    permissionOverwrites: overwritesFor(ctx, type, opener.user.id),
-    topic,
-  });
+  const steps = overwriteSteps(ctx, type, opener.user.id);
+  for (const [index, permissionOverwrites] of steps.entries()) {
+    try {
+      const channel = await ctx.guild.channels.create({ name, type: ChannelType.GuildText, parent: category.id, permissionOverwrites, topic });
+      if (index > 0) {
+        console.warn(
+          `[tickets] guild ${ctx.guild.id}: Discord refused the full permissions for a ticket channel, so it was created with fewer. Give the bot's role Manage Roles, Manage Channels and Manage Messages, and check the category's own permissions.`,
+        );
+      }
+      return channel;
+    } catch (error) {
+      const refused = typeof error === "object" && error !== null && (error as { code?: unknown }).code === 50013;
+      if (!refused || index === steps.length - 1) throw error;
+    }
+  }
+  return null;
 }
 
 /**
@@ -184,6 +194,7 @@ async function openNow(ctx: TicketCtx, interaction: Opener, target: PanelType, a
     return refuse(ctx, interaction, category && !category.ok ? category.code : "createFailed");
   }
   rememberOpenTicket(ctx.guild.id, channel.id, { id: ticket.id, openerId: ticket.openerId, typeId: ticket.typeId, panelId: ticket.panelId });
+  notifyTicket(ctx.guild.id, ticket.id, "opened");
 
   // A private thread only lets in the roles its first message mentions, so the handlers are always pinged there.
   const pings = type.opening.mode === "thread" ? [...new Set([...pingRolesOf(type), ...type.handlers])] : pingRolesOf(type);

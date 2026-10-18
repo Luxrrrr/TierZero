@@ -1,5 +1,5 @@
-import type { TicketAttachmentDto, TicketMentionName, TicketTranscriptRemoval } from "@tier0/core";
-import { CATEGORY_CHANNEL_LIMIT } from "@tier0/core";
+import type { MessageEmbed, TicketAttachmentDto, TicketMentionName, TicketTranscriptRemoval } from "@tier0/core";
+import { CATEGORY_CHANNEL_LIMIT, colorToInt, ticketStaffLine } from "@tier0/core";
 
 /**
  * The parts of keeping a ticket that need no Discord connection: what a stored
@@ -233,20 +233,128 @@ export function replyMentions(people: readonly string[], roles: readonly string[
 }
 
 /**
- * A dashboard reply sent as the bot because it could not use a webhook: the
- * staff member's name in bold on the first line. A reply that no longer fits
- * Discord's limit with the name on top goes out as two messages, split at a
- * line break or a space near the end of the first, so nothing is cut off.
- * Each part is what that message says after the name.
+ * Cuts a reply into messages of at most `room` characters, at a line break or
+ * a space near the end of the first where there is one, so nothing is cut off.
+ * `tail` is a closing line that goes after the text, on the last message, or
+ * on one of its own when it would not fit.
  */
-export function attributedReply(name: string, content: string, max = 2000): { head: string; parts: string[] } {
+export function splitReply(content: string, room: number, tail: string | null = null): string[] {
+  let parts: string[];
+  if (content.length <= room) {
+    parts = [content];
+  } else {
+    const window = content.slice(0, room);
+    const breakAt = Math.max(window.lastIndexOf("\n"), window.lastIndexOf(" "));
+    const cut = breakAt > room - 200 ? breakAt : room;
+    parts = [content.slice(0, cut), content.slice(cut).replace(/^[ \n]/, "")].filter((part) => part !== "");
+  }
+  if (tail === null) return parts;
+  const last = parts[parts.length - 1] ?? "";
+  const joined = last === "" ? tail : `${last}\n${tail}`;
+  if (joined.length <= room) return [...parts.slice(0, -1), joined];
+  return [...parts, tail];
+}
+
+/**
+ * A dashboard reply sent as the bot because it could not use a webhook: the
+ * name in bold on the first line. A reply that no longer fits Discord's limit
+ * with the name on top goes out as two messages, split by `splitReply`. Each
+ * part is what that message says after the name.
+ */
+export function attributedReply(name: string, content: string, max = 2000, tail: string | null = null): { head: string; parts: string[] } {
   const head = `**${name.replace(/[*_~`|]/g, "").slice(0, 80)}**\n`;
-  const room = max - head.length;
-  if (content.length <= room) return { head, parts: [content] };
-  const window = content.slice(0, room);
-  const breakAt = Math.max(window.lastIndexOf("\n"), window.lastIndexOf(" "));
-  const cut = breakAt > room - 200 ? breakAt : room;
-  return { head, parts: [content.slice(0, cut), content.slice(cut).replace(/^[ \n]/, "")].filter((part) => part !== "") };
+  return { head, parts: splitReply(content, max - head.length, tail) };
+}
+
+export interface ReplySettings {
+  identity?: string;
+  teamName?: string;
+  teamAvatar?: string;
+  showStaffName?: boolean;
+}
+
+export interface ReplyIdentity {
+  name: string;
+  avatarUrl: string | null;
+  /** Sent under the team's name rather than the staff member's. */
+  team: boolean;
+  /** The line the reply ends with naming who sent it, or null. */
+  staffLine: string | null;
+}
+
+export const DEFAULT_TEAM_NAME = "Support Team";
+
+/**
+ * Who a dashboard reply is sent as. The team's picture falls back to the bot's
+ * when none is set, and the line naming the sender is only ever added to a
+ * team reply, since a staff member's own name is already on top.
+ */
+export function replyIdentity(
+  replies: ReplySettings | undefined,
+  actor: { name: string; avatarUrl: string | null },
+  botAvatar: string | null,
+): ReplyIdentity {
+  if (replies?.identity !== "team") return { name: actor.name.slice(0, 80) || "Staff", avatarUrl: actor.avatarUrl, team: false, staffLine: null };
+  return {
+    name: replies.teamName?.trim().slice(0, 80) || DEFAULT_TEAM_NAME,
+    avatarUrl: replies.teamAvatar?.trim() || botAvatar,
+    team: true,
+    staffLine: replies.showStaffName === true ? ticketStaffLine(actor.name) : null,
+  };
+}
+
+/** An embed of a reply as Discord's API takes it. A time of "now" becomes the moment of sending. */
+export interface ReplyEmbedPayload {
+  title?: string;
+  url?: string;
+  description?: string;
+  color?: number;
+  timestamp?: string;
+  author?: { name: string; url?: string; icon_url?: string };
+  footer?: { text: string; icon_url?: string };
+  image?: { url: string };
+  thumbnail?: { url: string };
+  fields?: { name: string; value: string; inline: boolean }[];
+}
+
+export function replyEmbedPayloads(embeds: readonly MessageEmbed[], now = new Date()): ReplyEmbedPayload[] {
+  return embeds.map((embed) => {
+    const color = colorToInt(embed.color);
+    const stamp = embed.timestamp === "now" ? now.toISOString() : embed.timestamp;
+    return {
+      ...(embed.title ? { title: embed.title } : {}),
+      ...(embed.url ? { url: embed.url } : {}),
+      ...(embed.description ? { description: embed.description } : {}),
+      ...(color !== undefined ? { color } : {}),
+      ...(stamp ? { timestamp: new Date(stamp).toISOString() } : {}),
+      ...(embed.authorName
+        ? { author: { name: embed.authorName, ...(embed.authorUrl ? { url: embed.authorUrl } : {}), ...(embed.authorIconUrl ? { icon_url: embed.authorIconUrl } : {}) } }
+        : {}),
+      ...(embed.footerText ? { footer: { text: embed.footerText, ...(embed.footerIconUrl ? { icon_url: embed.footerIconUrl } : {}) } } : {}),
+      ...(embed.imageUrl ? { image: { url: embed.imageUrl } } : {}),
+      ...(embed.thumbnailUrl ? { thumbnail: { url: embed.thumbnailUrl } } : {}),
+      ...(embed.fields.length > 0 ? { fields: embed.fields.map((field) => ({ name: field.name, value: field.value, inline: field.inline })) } : {}),
+    };
+  });
+}
+
+/** What `TicketMessage.embeds` stores for the embeds of a reply, in the shape the transcript reads. */
+export function replyEmbedsJson(embeds: readonly MessageEmbed[], now = new Date()): string {
+  return embedsJson(
+    replyEmbedPayloads(embeds, now).map((embed) => ({
+      type: "rich",
+      title: embed.title ?? null,
+      description: embed.description ?? null,
+      url: embed.url ?? null,
+      color: embed.color ?? null,
+      author: embed.author ? { name: embed.author.name, url: embed.author.url ?? null, iconURL: embed.author.icon_url ?? null } : null,
+      fields: embed.fields ?? [],
+      thumbnail: embed.thumbnail ?? null,
+      image: embed.image ?? null,
+      footer: embed.footer ? { text: embed.footer.text, iconURL: embed.footer.icon_url ?? null } : null,
+      timestamp: embed.timestamp ?? null,
+    })),
+  );
 }
 
 /** A channel name typed by staff, through the same rules as a pattern. */

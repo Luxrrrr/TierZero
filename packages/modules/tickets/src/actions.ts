@@ -1,5 +1,8 @@
 import {
   readTicketReply,
+  ticketMessageFromRow,
+  ticketReplySnippet,
+  type MessageEmbed,
   type ModuleContext,
   type TicketAccess,
   type TicketActionResult,
@@ -11,6 +14,7 @@ import {
   type TicketReplyFile,
   type TicketReplyResult,
   readTicketAttachments,
+  readTicketEmbeds,
 } from "@tier0/core";
 import { prisma, type Ticket } from "@tier0/db";
 import { closeTicket, reopenTicketIn } from "./close.js";
@@ -19,10 +23,10 @@ import { healthFacts, panelStatusList, postPanelMessage } from "./panel-post.js"
 import { CLOSING_MESSAGE, closingValues } from "./messages.js";
 import { inChannel } from "./notice.js";
 import { TicketActionError, actionError, type Outcome } from "./outcome.js";
-import { attachmentsJson } from "./records.js";
+import { attachmentsJson, replyEmbedsJson } from "./records.js";
 import { findPanel, typeOfTicket } from "./resolve.js";
 import type { TicketSettings } from "./settings.js";
-import { sendReply } from "./webhooks.js";
+import { sendReply, type ReplyReference } from "./webhooks.js";
 import { addNote, changeMember, claim, rename, requestClose, setPriority, transfer, unclaim } from "./working.js";
 
 /**
@@ -165,8 +169,9 @@ export async function reopenTicket(ctx: TicketCtx, ticketId: number, actor: Tick
 }
 
 /**
- * Posts a dashboard reply. The text is checked again here, so a caller that
- * skipped `readTicketReply` still cannot send an empty or oversized message.
+ * Posts a dashboard reply. The text and embeds are checked again here, so a
+ * caller that skipped `readTicketReply` still cannot send an empty or
+ * oversized message, or an embed Discord would refuse.
  */
 export async function replyToTicket(
   ctx: TicketCtx,
@@ -174,10 +179,14 @@ export async function replyToTicket(
   content: string,
   actor: TicketActor,
   files: readonly TicketReplyFile[] = [],
+  embeds: readonly MessageEmbed[] = [],
+  replyToMessageId?: string,
 ): Promise<TicketReplyResult> {
-  const read = readTicketReply({ content, files });
+  const read = readTicketReply({ content, files, embeds, replyToMessageId });
   if (!read.ok) throw new TicketActionError(read.error, "invalid");
-  const outcome = await sendReply(ctx, await ticketIn(ctx, ticketId), read.value.content, actor, read.value.files ?? []);
+  const target = await ticketIn(ctx, ticketId);
+  const replyTo = read.value.replyToMessageId === undefined ? undefined : await replyReference(ctx, target, read.value.replyToMessageId);
+  const outcome = await sendReply(ctx, target, read.value.content, actor, read.value.files ?? [], read.value.embeds ?? [], replyTo);
   if (!outcome.ok) throw actionError(outcome.refusal);
   const { ticket, message, delivery } = outcome.value;
   const row = await prisma.ticketMessage.findUnique({ where: { ticketId_messageId: { ticketId: ticket.id, messageId: message.id } } });
@@ -191,13 +200,32 @@ export async function replyToTicket(
           author: { userId: actor.userId, name: actor.name, avatarUrl: actor.avatarUrl, isStaff: true },
           content: read.value.content,
           attachments: readTicketAttachments(attachmentsJson(message.attachments?.values() ?? [])),
-          embeds: [],
+          embeds: readTicketEmbeds(replyEmbedsJson(read.value.embeds ?? [])),
+          replyTo: replyTo?.messageId ?? null,
           createdAt: (message.createdAt ?? new Date()).toISOString(),
           editedAt: null,
           deletedAt: null,
           edits: 0,
           source: "dashboard",
         },
+  };
+}
+
+/**
+ * The message a reply answers, read from the stored copy so the quote says what
+ * the conversation shows. Only a message of this ticket that is still there can
+ * be answered; a deleted one has nothing to link to.
+ */
+async function replyReference(ctx: TicketCtx, ticket: Ticket, messageId: string): Promise<ReplyReference> {
+  const row = await prisma.ticketMessage.findUnique({ where: { ticketId_messageId: { ticketId: ticket.id, messageId } } });
+  if (!row) throw new TicketActionError("That message is not in this ticket any more. Reload the conversation and pick another.", "invalid");
+  if (row.deletedAt) throw new TicketActionError("That message was deleted in Discord, so it cannot be replied to.", "invalid");
+  const message = ticketMessageFromRow(row);
+  return {
+    messageId,
+    name: message.author.name,
+    snippet: ticketReplySnippet(message),
+    link: `https://discord.com/channels/${ctx.guild.id}/${ticket.channelId}/${messageId}`,
   };
 }
 

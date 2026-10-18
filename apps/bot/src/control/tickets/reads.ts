@@ -18,7 +18,10 @@ import {
   type TicketPage,
   type TicketPanelOption,
   type TicketStatsDto,
+  type TicketTemplateDto,
+  type TicketTemplatesDto,
 } from "@tier0/core";
+import { storedBody } from "../messages.js";
 import { searchGuildMembers } from "../mod/members.js";
 import { refOf, resolveUsers } from "../mod/names.js";
 import { awaitingStaffFor } from "./detail.js";
@@ -60,7 +63,7 @@ export async function listTickets(env: TicketEnv, filters: TicketListFilters): P
  * opened after `after`, and the newest id and activity among them. Three
  * small queries and no names, so a list can ask every few seconds.
  */
-export async function countTickets(env: TicketEnv, filters: TicketListFilters): Promise<Reply> {
+export async function countTickets(env: TicketEnv, filters: TicketListFilters, version?: number): Promise<Reply> {
   const all = listWhere(env.guild.id, { ...filters, afterId: null }, env.access);
   if (all === null) return fail(403, "You cannot see this server's tickets.");
   const after = filters.afterId ? { AND: [all, { id: { gt: filters.afterId } }] } : all;
@@ -77,6 +80,7 @@ export async function countTickets(env: TicketEnv, filters: TicketListFilters): 
     latestId: latest._max.id ?? null,
     latestActivityAt: latest._max.lastActivityAt?.toISOString() ?? null,
     awaitingStaff: awaiting.size,
+    ...(version !== undefined ? { version } : {}),
   };
   return ok(body);
 }
@@ -143,6 +147,13 @@ export async function ticketsContext(env: TicketEnv): Promise<Reply> {
       handled: handled.has(type.id),
       requireReason: type.rules.requireReason,
       problem: typeProblem(panel.id, type.id),
+      questions: type.form.map((question) => ({
+        label: question.label,
+        style: question.style === "short" ? ("short" as const) : ("paragraph" as const),
+        required: question.required,
+        ...(question.maxLength ? { maxLength: question.maxLength } : {}),
+      })),
+      noHandlers: health.some((issue) => issue.code === "typeNoHandlers" && issue.typeId === type.id),
     })),
   }));
 
@@ -155,6 +166,7 @@ export async function ticketsContext(env: TicketEnv): Promise<Reply> {
     panels,
     priorities: TICKET_PRIORITIES,
     canUseWebhooks: guild.members.me?.permissions.has(PermissionFlagsBits.ManageWebhooks) ?? false,
+    replyAs: ctx.settings.general.replies.identity === "team" ? ctx.settings.general.replies.teamName.trim() || "Support Team" : null,
     health,
     dashboardUrlKnown: (await ctx.dashboardUrl()) !== "",
     closeBehaviour: ctx.settings.general.closeBehaviour === "archive" ? "archive" : "delete",
@@ -264,4 +276,37 @@ export async function transcript(env: TicketEnv, row: Ticket, format: "html" | "
     body: null,
     raw: { contentType: "text/plain; charset=utf-8", text: renderStoredTranscriptText(ticket, messages, texts), filename: `ticket-${ticketNumber(row)}.txt` },
   };
+}
+
+/**
+ * The Message creator templates marked available in tickets, for the reply
+ * box. Only what a reply can use is sent: buttons, menus and reactions stay
+ * behind, and so does everything about when it was sent. The server's facts
+ * come along so the box can fill `{server}` and the like the way a send does.
+ */
+export async function ticketTemplates(env: TicketEnv): Promise<Reply> {
+  const { guild } = env;
+  const rows = await prisma.messageTemplate.findMany({
+    where: { guildId: guild.id, inTickets: true },
+    include: { folder: { select: { name: true } } },
+    orderBy: { name: "asc" },
+  });
+  const body: TicketTemplatesDto = {
+    templates: rows.map((row) => {
+      const { content, embeds, buttons, selects, reactions } = storedBody(row);
+      const leftOut: TicketTemplateDto["leftOut"] = [
+        ...(buttons.length > 0 ? ["buttons" as const] : []),
+        ...(selects.length > 0 ? ["menus" as const] : []),
+        ...(reactions.length > 0 ? ["reactions" as const] : []),
+      ];
+      return { id: row.id, name: row.name, folder: row.folder?.name ?? null, content, embeds, leftOut };
+    }),
+    variables: {
+      server: guild.name,
+      members: guild.memberCount.toLocaleString("en-US"),
+      bot: guild.members.me?.displayName ?? guild.client.user.username,
+      "server.icon": guild.iconURL({ size: 256 }) ?? "",
+    },
+  };
+  return ok(body);
 }

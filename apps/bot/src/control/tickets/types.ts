@@ -16,6 +16,8 @@ export interface TicketEnv {
   access: TicketAccess;
   /** The Tickets feature is switched on in this server. */
   enabled: boolean;
+  /** Aborts when the caller goes away, so a held read lets go of its place. */
+  signal?: AbortSignal;
 }
 
 type Status = 400 | 403 | 404 | 409 | 429 | 503;

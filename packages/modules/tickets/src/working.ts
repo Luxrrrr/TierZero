@@ -23,6 +23,7 @@ import { done, refused, type Outcome } from "./outcome.js";
 import { atLeastAMinute, relativeTime, ticketNumber } from "./records.js";
 import { findType, pingRolesOf, typeOfTicket } from "./resolve.js";
 import { storeMessage } from "./capture.js";
+import { notifyTicketOf } from "./controls.js";
 
 /**
  * Changes staff make to an open ticket. None of these check who is asking:
@@ -106,6 +107,7 @@ export async function addNote(ticket: Ticket, body: string, actor: TicketActor):
   const text = body.replace(/\r\n?/g, "\n").trim().slice(0, TICKET_NOTE_MAX);
   if (text === "") return done(ticket);
   await prisma.ticketNote.create({ data: { ticketId: ticket.id, authorId: actor.userId, authorName: actor.name, body: text } });
+  notifyTicketOf(ticket.id, "detail");
   return done(ticket);
 }
 
@@ -249,6 +251,13 @@ async function recordRename(ctx: TicketCtx, ticket: Ticket, previous: string, na
   return done(changed);
 }
 
+/** The reason closes the sentence, so it only gets a full stop when it has no punctuation of its own. */
+export function closeRequestEnding(reason: string | null): string {
+  const text = reason?.trim();
+  if (!text) return ".";
+  return /[.!?]$/.test(text) ? `: ${text}` : `: ${text}.`;
+}
+
 /**
  * Asks the opener whether the ticket can close. They answer with the buttons
  * under the request; if they do not, it closes once the timeout passes.
@@ -271,7 +280,7 @@ export async function requestClose(ctx: TicketCtx, ticket: Ticket, reason: strin
     {
       ...ticketValues(requested, actor),
       reason: reason ?? "",
-      ending: reason ? `: ${reason}.` : ".",
+      ending: closeRequestEnding(reason),
       deadline: relativeTime(deadline),
     },
     { fallback: CLOSE_REQUEST_MESSAGE, rows: closeRequestRows(ctx.settings, ticket.id), mentions: { users: [ticket.openerId], roles: [] } },
@@ -286,6 +295,7 @@ export async function keepOpen(ctx: TicketCtx, ticket: Ticket, actor: TicketActo
   const written = await prisma.ticket.updateMany({ where: { id: ticket.id, status: "open" }, data: { closeRequestedAt: null } });
   if (written.count === 0) return refused("alreadyClosed");
   await ctx.tasks.cancel("closeRequest", { ticketId: ticket.id });
+  notifyTicketOf(ticket.id, "detail");
   const kept = (await reload(ticket.id)) ?? ticket;
   await announceOf(ctx, kept, announce)(ctx.settings.messages.keptOpen, ticketValues(kept, actor), KEPT_OPEN_MESSAGE);
   return done(kept);
@@ -304,4 +314,5 @@ export async function rateComment(ticket: Ticket, comment: string, userId: strin
   const text = comment.trim().slice(0, 1000);
   if (text === "" || ticket.openerId !== userId) return;
   await prisma.ticket.updateMany({ where: { id: ticket.id, openerId: userId, ratingComment: null }, data: { ratingComment: text } });
+  notifyTicketOf(ticket.id, "detail");
 }

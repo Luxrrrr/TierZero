@@ -69,9 +69,11 @@ const guild = {
     },
     search: async ({ query }: { query: string }) =>
       new Map([...members].filter(([, found]) => found.displayName.toLowerCase().startsWith(query.toLowerCase()))),
-    me: { permissions: { has: () => true } },
+    me: { permissions: { has: () => true }, displayName: "TierZero" },
   },
   channels: { cache: new Map() },
+  memberCount: 2431,
+  iconURL: () => "https://cdn.discordapp.com/icons/1/i.png",
 };
 
 const client = {
@@ -112,6 +114,10 @@ function fakeServices(): Services {
     panelStatuses: async (...args: unknown[]) => {
       calls.push({ name: "panelStatuses", args });
       return [];
+    },
+    openTicketAs: async (...args: unknown[]) => {
+      calls.push({ name: "openTicketAs", args });
+      return { id: 77, number: 12, channelId: "800000000000000001", channelUrl: `https://discord.com/channels/${GUILD}/800000000000000001`, notes: [] };
     },
     renameTicket: record("renameTicket"),
     requestTicketClose: record("requestTicketClose"),
@@ -450,6 +456,9 @@ describe("writes", () => {
     const cases: [string, Record<string, unknown>][] = [
       ["reply", { content: "   " }],
       ["reply", { content: "x".repeat(2001) }],
+      ["reply", { content: "", embeds: [{ title: "x", imageUrl: "javascript:alert(1)" }] }],
+      ["reply", { content: "x", embeds: [{ title: "a" }, { title: "b" }, { title: "c" }, { title: "d" }] }],
+      ["reply", { content: "x", embeds: [{ title: "a" }], buttons: [{ label: "x", style: "link", url: "https://example.com" }] }],
       ["priority", { priority: "huge" }],
       ["notes", { body: "" }],
       ["members", { action: "add", userId: "nope" }],
@@ -463,6 +472,15 @@ describe("writes", () => {
       assert.equal(reply?.status, 400, `${action} ${JSON.stringify(body).slice(0, 40)}`);
     }
     assert.equal(calls.length, 0);
+  });
+
+  test("a reply that is only an embed reaches the module with the embed", async () => {
+    const reply = await call("POST", `items/${ids.tech}/reply`, { actor: MANAGER, body: { content: "", embeds: [{ title: "Steps", color: "#5865f2" }] } });
+    assert.equal(reply?.status, 200);
+    const args = calls[0]!.args as [unknown, number, string, unknown, unknown[], { title: string; color: string }[]];
+    assert.equal(args[2], "");
+    assert.equal(args[5][0]?.title, "Steps");
+    assert.equal(args[5][0]?.color, "#5865f2");
   });
 
   test("valid bodies reach the module in the agreed shapes", async () => {
@@ -604,5 +622,175 @@ describe("routes for the workspace's next screens", () => {
     assert.deepEqual(context?.body.savedReplies, []);
     assert.equal(context?.body.replyFiles.maxFiles, 10);
     assert.equal(context?.body.healthSummary.state, "allBlocked");
+  });
+});
+
+describe("opening a ticket as staff", () => {
+  const body = { typeId: "tech", memberIds: [OPENER], subject: "About Friday" };
+
+  test("the answer says where the new ticket is, and the module is called as the actor", async () => {
+    const reply = await call("POST", "create", { actor: TECH, body });
+    assert.equal(reply?.status, 200);
+    assert.deepEqual(reply?.body, {
+      id: 77,
+      number: 12,
+      channelId: "800000000000000001",
+      channelUrl: `https://discord.com/channels/${GUILD}/800000000000000001`,
+      notes: [],
+    });
+    const [ctxArg, request, actor] = calls[0]!.args as [unknown, any, any];
+    assert.ok(ctxArg);
+    assert.deepEqual(request, { typeId: "tech", subject: "About Friday", answers: [], memberIds: [OPENER], firstMessage: null });
+    assert.equal(actor.userId, TECH);
+  });
+
+  test("who may open which type", async () => {
+    const may = async (who: string, typeId: string) => (await call("POST", "create", { actor: who, body: { ...body, typeId } }))?.status;
+    // Handlers: their own types only.
+    assert.equal(await may(TECH, "tech"), 200);
+    assert.equal(await may(TECH, "billing"), 403);
+    assert.equal(await may(BILLING, "billing"), 200);
+    assert.equal(await may(BILLING, "tech"), 403);
+    // Admin roles and managers: every type, and the owner of the install too.
+    for (const who of [ADMIN, MANAGER, OWNER]) {
+      assert.equal(await may(who, "tech"), 200, who);
+      assert.equal(await may(who, "billing"), 200, who);
+    }
+    // Someone who handles nothing is refused before anything else.
+    assert.equal(await may(NOBODY, "tech"), 403);
+    assert.equal(calls.length, 8);
+  });
+
+  test("a refusal says why in plain words, and nothing reaches the module", async () => {
+    const reply = await call("POST", "create", { actor: BILLING, body });
+    assert.equal(reply?.status, 403);
+    assert.match(reply?.body.error, /do not handle this type/);
+    assert.equal(calls.length, 0);
+  });
+
+  test("a type that is gone is a 400 with a sentence", async () => {
+    const reply = await call("POST", "create", { actor: ADMIN, body: { ...body, typeId: "gone" } });
+    assert.equal(reply?.status, 400);
+    assert.match(reply?.body.error, /no longer exists/);
+    assert.equal(calls.length, 0);
+  });
+
+  test("the body is checked before the module is called", async () => {
+    const bad: Record<string, unknown>[] = [
+      { ...body, memberIds: [] },
+      { ...body, memberIds: ["not-an-id"] },
+      { ...body, memberIds: Array.from({ length: 11 }, (_, n) => String(300000000000000000n + BigInt(n))) },
+      { ...body, subject: "x".repeat(201) },
+      { ...body, firstMessage: "x".repeat(2001) },
+      { ...body, answers: "no" },
+      { memberIds: [OPENER] },
+    ];
+    for (const sent of bad) assert.equal((await call("POST", "create", { actor: ADMIN, body: sent }))?.status, 400, JSON.stringify(sent).slice(0, 60));
+    assert.equal(calls.length, 0);
+  });
+
+  test("it needs an actor, a switched-on module, and no extra path", async () => {
+    assert.equal((await call("POST", "create", { body }))?.status, 400);
+    enabled = false;
+    assert.equal((await call("POST", "create", { actor: ADMIN, body }))?.status, 409);
+    enabled = true;
+    assert.equal(await call("GET", "create", { viewer: ADMIN }), null);
+    assert.equal(await call("POST", "create/extra", { actor: ADMIN, body }), null);
+  });
+
+  test("the module's refusals come through with their status", async () => {
+    services.openTicketAs = async () => {
+      throw Object.assign(new Error("This ticket type's category is full."), { code: "unavailable" });
+    };
+    const reply = await call("POST", "create", { actor: ADMIN, body });
+    assert.equal(reply?.status, 503);
+    assert.match(reply?.body.error, /category is full/);
+  });
+
+  test("the context lists each type's questions", async () => {
+    const reply = await call("GET", "context", { viewer: ADMIN });
+    const types = reply?.body.panels.flatMap((panel: any) => panel.types);
+    assert.ok(types.every((type: any) => Array.isArray(type.questions)));
+    assert.ok(reply?.body.permissions.includes("create"));
+  });
+});
+
+describe("replying to one message", () => {
+  test("the message's id reaches the module when it is a stored message of the ticket", async () => {
+    const reply = await call("POST", `items/${ids.tech}/reply`, { actor: TECH, body: { content: "On it", replyToMessageId: "700000000000000001" } });
+    assert.equal(reply?.status, 200);
+    assert.equal(calls[0]?.args[6], "700000000000000001");
+  });
+
+  test("a message that is not in the ticket, is another ticket's, was deleted or is not an id is refused before the module is called", async () => {
+    await prisma.ticketMessage.create({
+      data: { ticketId: ids.tech, messageId: "700000000000000009", authorId: OPENER, authorName: "Opener", content: "gone", deletedAt: new Date() },
+    });
+    const cases: [string, RegExp][] = [
+      ["700000000000000077", /not in this ticket/],
+      ["700000000000000002", /not in this ticket/],
+      ["700000000000000009", /deleted/],
+      ["abc", /could not be read/],
+    ];
+    for (const [id, message] of cases) {
+      const reply = await call("POST", `items/${ids.tech}/reply`, { actor: TECH, body: { content: "On it", replyToMessageId: id } });
+      assert.equal(reply?.status, 400, id);
+      assert.match(reply?.body.error, message, id);
+    }
+    assert.equal(calls.length, 0);
+  });
+
+  test("a reply without one passes none", async () => {
+    await call("POST", `items/${ids.tech}/reply`, { actor: TECH, body: { content: "On it" } });
+    assert.equal(calls[0]?.args[6], undefined);
+  });
+});
+
+describe("saved messages for the reply box", () => {
+  const embeds = JSON.stringify([{ title: "Refund steps", description: "Open Billing.", color: "#5865f2" }]);
+
+  test("lists only the templates marked for tickets, with what a reply can use and what is left out", async () => {
+    const folder = await prisma.messageFolder.create({ data: { guildId: GUILD, name: "Billing" } });
+    await prisma.messageTemplate.createMany({
+      data: [
+        { guildId: GUILD, name: "Hidden", content: "not offered" },
+        { guildId: GUILD, name: "Refund", folderId: folder.id, content: "Hi {user}", embeds, inTickets: true, buttons: JSON.stringify([{ label: "Docs", url: "https://example.com" }]) },
+        { guildId: GUILD, name: "Apology", content: "Sorry about that", inTickets: true },
+      ],
+    });
+    const reply = await call("GET", "templates", { viewer: TECH });
+    assert.equal(reply?.status, 200);
+    assert.deepEqual(reply?.body.templates.map((t: { name: string }) => t.name), ["Apology", "Refund"]);
+    const refund = reply?.body.templates.find((t: { name: string }) => t.name === "Refund");
+    assert.deepEqual(Object.keys(refund).sort(), ["content", "embeds", "folder", "id", "leftOut", "name"]);
+    assert.equal(refund.folder, "Billing");
+    assert.equal(refund.content, "Hi {user}");
+    assert.equal(refund.embeds[0].title, "Refund steps");
+    assert.deepEqual(refund.leftOut, ["buttons"]);
+    assert.equal(reply?.body.templates[0].folder, null);
+    assert.deepEqual(reply?.body.variables, {
+      server: "Test guild",
+      members: "2,431",
+      bot: "TierZero",
+      "server.icon": "https://cdn.discordapp.com/icons/1/i.png",
+    });
+  });
+
+  test("nothing is offered when no template is marked", async () => {
+    await prisma.messageTemplate.deleteMany({ where: { guildId: GUILD } });
+    assert.deepEqual((await call("GET", "templates", { viewer: TECH }))?.body.templates, []);
+  });
+
+  test("anyone who works tickets can read it, and anyone else cannot", async () => {
+    assert.equal((await call("GET", "templates", { viewer: BILLING }))?.status, 200);
+    assert.equal((await call("GET", "templates", { viewer: NOBODY }))?.status, 403);
+    assert.equal((await call("GET", "templates", { viewer: "500000000000000099" }))?.status, 403);
+    assert.equal((await call("GET", "templates"))?.status, 400);
+  });
+
+  test("it is a read: nothing else is routed there", async () => {
+    assert.equal(await call("POST", "templates", { actor: MANAGER }), null);
+    assert.equal(await call("GET", "templates/1", { viewer: MANAGER }), null);
+    assert.equal(await call("DELETE", "templates", { actor: MANAGER }), null);
   });
 });
