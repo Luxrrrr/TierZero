@@ -56,6 +56,7 @@ interface TemplateRow {
   buttons: string;
   selects: string;
   reactions: string;
+  inTickets: boolean;
   updatedAt: Date;
   lastSentAt: Date | null;
 }
@@ -74,7 +75,7 @@ const parseJson = (text: string): unknown => {
  * placeholder text only lets an embed-only message through the "something to
  * send" check, and is never kept.
  */
-function storedBody(row: TemplateRow): MessageBody {
+export function storedBody(row: Pick<TemplateRow, "content" | "embeds" | "buttons" | "selects" | "reactions">): MessageBody {
   const parsed = parseMessage({
     content: row.content === "" ? "-" : row.content,
     embeds: parseJson(row.embeds),
@@ -91,6 +92,7 @@ const templateDto = (row: TemplateRow) => ({
   folderId: row.folderId,
   name: row.name,
   ...storedBody(row),
+  inTickets: row.inTickets,
   updatedAt: row.updatedAt.toISOString(),
   lastSentAt: row.lastSentAt?.toISOString() ?? null,
 });
@@ -224,6 +226,14 @@ async function resolveFolder(guildId: string, value: unknown): Promise<{ ok: tru
 
 const isReply = (value: { ok: true; id: number | null } | Reply): value is Reply => "status" in value;
 
+/** The "available in tickets" flag of a save. Left out it is undefined, so an update keeps what the template has. */
+function readInTickets(payload: Record<string, unknown>): { ok: true; value: boolean | undefined } | { ok: false; error: string } {
+  const value = payload.inTickets;
+  if (value === undefined) return { ok: true, value: undefined };
+  if (typeof value !== "boolean") return { ok: false, error: "Available in tickets must be on or off." };
+  return { ok: true, value };
+}
+
 function messageErrors(errors: { path: string; message: string }[]): Reply {
   return { status: 400, body: { error: errors[0]?.message ?? "The message is not valid.", errors } };
 }
@@ -234,6 +244,9 @@ async function createTemplate(guildId: string, payload: Record<string, unknown>)
 
   const message = parseMessage(payload);
   if (!message.ok) return messageErrors(message.errors);
+
+  const flag = readInTickets(payload);
+  if (!flag.ok) return refuse(400, flag.error);
 
   const folder = await resolveFolder(guildId, payload.folderId);
   if (isReply(folder)) return folder;
@@ -255,6 +268,7 @@ async function createTemplate(guildId: string, payload: Record<string, unknown>)
       buttons: JSON.stringify(message.value.buttons),
       selects: JSON.stringify(message.value.selects),
       reactions: JSON.stringify(message.value.reactions),
+      inTickets: flag.value ?? false,
     },
   });
   return ok(templateDto(row));
@@ -270,6 +284,9 @@ async function updateTemplate(guildId: string, id: number, payload: Record<strin
     if (!cleaned.ok) return refuse(400, cleaned.error);
     name = cleaned.value;
   }
+
+  const flag = readInTickets(payload);
+  if (!flag.ok) return refuse(400, flag.error);
 
   let folderId = row.folderId;
   if ("folderId" in payload) {
@@ -306,7 +323,7 @@ async function updateTemplate(guildId: string, id: number, payload: Record<strin
 
   const updated = await prisma.messageTemplate.update({
     where: { id },
-    data: { name, folderId, content, embeds, buttons, selects, reactions },
+    data: { name, folderId, content, embeds, buttons, selects, reactions, inTickets: flag.value ?? row.inTickets },
   });
   return ok(templateDto(updated));
 }

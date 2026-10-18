@@ -11,6 +11,13 @@ interface Deps {
 }
 
 /**
+ * Modules that hear message events before the others. A ticket's conversation
+ * is shown live in the dashboard, so storing a message must not wait behind
+ * another module's slower work on the same message.
+ */
+const MESSAGE_FIRST = new Set(["tickets"]);
+
+/**
  * Delivers one event to every enabled module that declares a handler for it.
  *
  * Each module is called inside its own try/catch, so one module's bug cannot
@@ -22,7 +29,9 @@ async function deliver(
   event: keyof EventHandlers,
   run: (handler: never, ctx: ModuleContext) => Promise<void>,
 ): Promise<void> {
-  for (const module of await state.enabledModules(guild.id)) {
+  const enabled = await state.enabledModules(guild.id);
+  const modules = event.startsWith("message") ? [...enabled].sort((a, b) => Number(MESSAGE_FIRST.has(b.id)) - Number(MESSAGE_FIRST.has(a.id))) : enabled;
+  for (const module of modules) {
     const handler = module.events?.[event];
     if (!handler) continue;
 

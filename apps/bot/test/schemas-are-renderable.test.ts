@@ -1,7 +1,7 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 import type { FieldDescriptor } from "@tier0/core";
-import { ModuleRegistry, layoutProblems, messageAttachProblems, type FieldTopic, type MessageAttach } from "@tier0/core";
+import { ModuleRegistry, formLayoutProblems, layoutProblems, messageAttachProblems, type FieldTopic, type MessageAttach } from "@tier0/core";
 import utility from "@tier0/module-utility";
 import welcome from "@tier0/module-welcome";
 import roles from "@tier0/module-roles";
@@ -171,7 +171,8 @@ describe("every registered module", () => {
           }
         }
         if (field.section !== undefined) {
-          assert.ok(top[path] === field, `${where} has a section but is not a top-level setting, so the dashboard ignores it`);
+          // Inside a sheet row a section names a tab; formLayoutProblems checks those.
+          assert.ok(top[path] === field || path.includes("[]."), `${where} has a section but is not a top-level setting, so the dashboard ignores it`);
           assert.equal(typeof field.section, "string", `${where} names its section with something other than text`);
         }
         if (field.generated !== undefined) {
@@ -183,14 +184,22 @@ describe("every registered module", () => {
         }
         if (field.layout !== undefined && field.kind !== "object") {
           const item = field.kind === "array" ? (field.of as FieldDescriptor) : undefined;
-          assert.equal(item?.kind, "choice", `${where} sets a layout but is not a list of choices or a group`);
-          assert.ok(["chips", "rows"].includes(String(field.layout)), `${where} has an unknown layout`);
+          if (field.layout === "sheet") {
+            assert.equal(item?.kind, "object", `${where} is a sheet but is not a list of rows`);
+          } else {
+            assert.equal(item?.kind, "choice", `${where} sets a layout but is not a list of choices, a list of rows or a group`);
+            assert.ok(["chips", "rows"].includes(String(field.layout)), `${where} has an unknown layout`);
+          }
         }
       });
     });
 
     test(`${module.id} files settings only under headings its message and field lists declare`, () => {
       assert.deepEqual(layoutProblems(module.schema), []);
+    });
+
+    test(`${module.id} uses the sheet, step, tab, nudge and control metadata only where the dashboard reads it`, () => {
+      assert.deepEqual(formLayoutProblems(module.schema), []);
     });
 
     test(`${module.id} settings resolve from an empty stored value`, () => {
@@ -354,6 +363,41 @@ describe("the ticket settings", () => {
     for (const field of Object.values((labels.fields ?? {}) as Record<string, FieldDescriptor>)) {
       assert.equal(typeof field.topic, "string", `${String(field.label)} is under no heading`);
     }
+  });
+
+  test("edit a panel in three steps and its ticket types in a sheet with five tabs", () => {
+    const panel = top.panels?.of as FieldDescriptor;
+    const fields = panel.fields as Record<string, FieldDescriptor>;
+    const steps = (panel.steps as { id: string }[]).map((step) => step.id);
+    assert.deepEqual(steps, ["where", "see", "types"]);
+    for (const key of ["name", "channel", "style", "placeholder", "message", "types"]) {
+      assert.ok(steps.includes(String(fields[key]?.step)), `tickets.panels.${key} is in no step`);
+    }
+    const types = fields.types as FieldDescriptor;
+    assert.equal(types.layout, "sheet");
+    const type = (types.of as FieldDescriptor).fields as Record<string, FieldDescriptor>;
+    const tabs = new Set<string>();
+    const gather = (fieldMap: Record<string, FieldDescriptor>, inherited: string | undefined) => {
+      for (const [key, field] of Object.entries(fieldMap)) {
+        if (field.generated === true) continue;
+        const section = typeof field.section === "string" ? field.section : inherited;
+        if (field.kind === "object") gather((field.fields ?? {}) as Record<string, FieldDescriptor>, section);
+        else {
+          assert.ok(section !== undefined, `tickets.panels.types.${key} is in no tab`);
+          tabs.add(String(section));
+        }
+      }
+    };
+    gather(type, undefined);
+    assert.deepEqual([...tabs].sort(), ["basics", "form", "messages", "people", "rules"]);
+  });
+
+  test("hide the menu placeholder and the category rather than grey them", () => {
+    const panel = (top.panels?.of as FieldDescriptor).fields as Record<string, FieldDescriptor>;
+    const type = (panel.types?.of as FieldDescriptor).fields as Record<string, FieldDescriptor>;
+    const opening = (type.opening as FieldDescriptor).fields as Record<string, FieldDescriptor>;
+    assert.equal((panel.placeholder?.when as { hide?: boolean }).hide, true);
+    assert.equal((opening.category?.when as { hide?: boolean }).hide, true);
   });
 
   test("give panels and types an id the dashboard fills in", () => {

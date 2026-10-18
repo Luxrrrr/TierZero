@@ -148,6 +148,9 @@ export function startControlApi({ client, registry, state, commands }: Deps): vo
       }
       const segments = decodeSegments(rest);
       if (!segments) return send(400, { error: "the path is not valid" });
+      // A read held with `wait` ends when the caller hangs up, which frees the place it was holding.
+      const gone = new AbortController();
+      res.once("close", () => gone.abort());
       const reply = await handleTickets({
         client,
         guild,
@@ -156,6 +159,7 @@ export function startControlApi({ client, registry, state, commands }: Deps): vo
         segments,
         query: url.searchParams,
         body: parsed,
+        signal: gone.signal,
       });
       return reply ? sendReply(reply) : send(404, { error: "not found" });
     }

@@ -7,10 +7,12 @@ import type {
   ModuleDefinition,
   ModuleRegistry,
   ModuleSummary,
+  RaisedDuration,
   ScheduledWork,
   Shape,
   ShapeValues,
 } from "@tier0/core";
+import { raisedDurations } from "@tier0/core";
 import { prisma } from "@tier0/db";
 import { LABEL_DEFAULTS, SYSTEM_MODULE_ID, type SystemSettings } from "@tier0/module-system";
 import { matchesPayload, namespaceKind } from "./task-payload.js";
@@ -54,6 +56,8 @@ export interface CommandState extends Omit<CommandSummary, "subcommands"> {
 export interface GuildModuleState extends Omit<ModuleSummary, "commands"> {
   enabled: boolean;
   settings: unknown;
+  /** Stored durations below their schema minimum, which every read raises to it. */
+  raised: RaisedDuration[];
   commands: CommandState[];
 }
 
@@ -261,7 +265,8 @@ export class GuildState {
             }),
           };
         });
-        return { ...summary, enabled: summary.alwaysOn || (row?.enabled ?? false), settings, commands };
+        const raised = row ? raisedDurations(summary.schema, safeParse(row.settings)) : [];
+        return { ...summary, enabled: summary.alwaysOn || (row?.enabled ?? false), settings, raised, commands };
       }),
     );
   }
