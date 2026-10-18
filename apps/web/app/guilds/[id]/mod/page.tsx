@@ -7,7 +7,7 @@ import { modInfractions, modStats } from "../../../../lib/mod-api";
 import "../../../mod.css";
 import "./stats.css";
 import { ModStatsView, StatsToolbar, StatsUnavailable } from "./StatsView";
-import { parseRangeSpec, rangeParams } from "./stats-logic";
+import { parseRangeSpec, rangeParams, rangeWasRejected } from "./stats-logic";
 
 export const metadata = { title: "Overview · Moderation" };
 
@@ -22,7 +22,9 @@ export default async function ModOverviewPage({
 }) {
   const { id } = await params;
   const today = new Date().toISOString().slice(0, 10);
-  const spec = parseRangeSpec(await searchParams, today);
+  const query = await searchParams;
+  const spec = parseRangeSpec(query, today);
+  const rejected = rangeWasRejected(query, spec);
 
   const access = await requireStaff(id, "stats.view");
   if (!access.ok) {
@@ -46,7 +48,7 @@ export default async function ModOverviewPage({
         : error.message;
     return (
       <div className="mod-page stats-page">
-        <StatsToolbar guildId={id} spec={spec} today={today} />
+        <StatsToolbar guildId={id} spec={spec} today={today} rejected={rejected} />
         <StatsUnavailable message={message} />
       </div>
     );
@@ -59,6 +61,6 @@ export default async function ModOverviewPage({
   );
 
   return (
-    <ModStatsView guildId={id} spec={spec} today={today} stats={stats} recent={await feed} canConfigure={canConfigure} />
+    <ModStatsView guildId={id} spec={spec} today={today} stats={stats} recent={await feed} canConfigure={canConfigure} rejected={rejected} />
   );
 }

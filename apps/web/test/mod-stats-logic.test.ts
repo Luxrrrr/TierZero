@@ -48,6 +48,7 @@ import {
   rangeHref,
   rangeParams,
   rangePhrase,
+  rangeWasRejected,
   rangeQuery,
   statsExportHref,
 } from "../app/guilds/[id]/mod/stats-logic.ts";
@@ -490,6 +491,15 @@ describe("automodView", () => {
 
 describe("parseRangeSpec", () => {
   const TODAY = "2026-10-17";
+
+  test("says when dates in the address could not be used", () => {
+    const rejected = (params: { from?: string; to?: string; range?: string }) => rangeWasRejected(params, parseRangeSpec(params, TODAY));
+    assert.equal(rejected({ from: "2026-10-10", to: "2026-10-01" }), true);
+    assert.equal(rejected({ from: "2026-12-01", to: "2027-01-01" }), true);
+    assert.equal(rejected({ from: "2026-09-01", to: "2026-09-30" }), false);
+    assert.equal(rejected({}), false);
+    assert.equal(rejected({ range: "all", from: "junk" }), false);
+  });
 
   test("keeps the preset days and defaults to 30", () => {
     assert.deepEqual(parseRangeSpec({ days: "7" }, TODAY), { kind: "days", days: 7 });

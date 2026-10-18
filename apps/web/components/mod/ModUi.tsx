@@ -15,6 +15,7 @@ import {
   UndoIcon,
   WarnTriangleIcon,
 } from "../Icons";
+import { PersonMenuArea } from "./PersonMenuArea";
 import { RelativeTime } from "./RelativeTime";
 import { automodActionLabel, automodDetailText, isAutomodAction, parseAutomodReason, ruleLabel } from "./automod";
 import {
@@ -174,16 +175,19 @@ const SIZE_CLASS: Record<AvatarSize, string> = {
  * Automod has neither: it shows a shield, the same one everywhere.
  * `size` takes a named size or, for older callers, a pixel width.
  */
-export function Avatar({ user, size = "md" }: { user: UserRef; size?: AvatarSize | number }) {
+export function Avatar({ user, size = "md", menu = true }: { user: UserRef; size?: AvatarSize | number; menu?: boolean }) {
   const hue = hueFor(user.userId);
   const style: CSSProperties & Record<string, string | number> = { "--mod-hue": hue };
   if (typeof size === "number") style["--mod-avatar-size"] = `${size}px`;
   const className = `mod-avatar${typeof size === "number" ? "" : SIZE_CLASS[size]}`;
-  return (
+  const face = (
     <span className={className} data-hue={hue} data-automod={user.automod ? "true" : undefined} style={style} aria-hidden="true">
       {user.automod ? <ShieldIcon /> : user.avatarUrl ? <img src={user.avatarUrl} alt="" loading="lazy" decoding="async" /> : initialsFor(user)}
     </span>
   );
+  // Right-click opens the person menu wherever an avatar is shown. A picker or a search result
+  // passes menu={false}, because a right-click there belongs to the browser.
+  return menu ? <PersonMenuArea user={user}>{face}</PersonMenuArea> : face;
 }
 
 export function UserChip({
@@ -192,6 +196,8 @@ export function UserChip({
   muted = false,
   sub,
   size,
+  menu = true,
+  menuButton = true,
 }: {
   user: UserRef;
   href?: string;
@@ -199,11 +205,15 @@ export function UserChip({
   /** A second line under the name, such as the id or a role. */
   sub?: ReactNode;
   size?: AvatarSize;
+  /** Right-click, the context menu key and a "..." button open the person menu. */
+  menu?: boolean;
+  /** False where the chip sits inside a link, which cannot hold a button. Right-click and the keyboard still work. */
+  menuButton?: boolean;
 }) {
   const left = !user.inServer && user.name !== null ? <span className="mod-user-left">left</span> : null;
   const inner = (
     <>
-      <Avatar user={user} size={size ?? (sub ? "lg" : "md")} />
+      <Avatar user={user} size={size ?? (sub ? "lg" : "md")} menu={false} />
       {sub ? (
         <span className="mod-user-text">
           <span className="mod-user-name">{displayName(user)}</span>
@@ -215,7 +225,7 @@ export function UserChip({
       {left}
     </>
   );
-  return href ? (
+  const chip = href ? (
     <Link className="mod-user" data-muted={muted ? "true" : undefined} href={href}>
       {inner}
     </Link>
@@ -223,6 +233,13 @@ export function UserChip({
     <span className="mod-user" data-muted={muted ? "true" : undefined}>
       {inner}
     </span>
+  );
+  return menu ? (
+    <PersonMenuArea user={user} button={menuButton} buttonTabbable={!href}>
+      {chip}
+    </PersonMenuArea>
+  ) : (
+    chip
   );
 }
 

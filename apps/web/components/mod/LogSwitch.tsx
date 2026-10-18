@@ -13,7 +13,7 @@ export function LogSwitch({ guildId, current, canSeeStaffActivity }: { guildId: 
     { id: "audit", label: "Staff activity", hint: "What staff changed in the dashboard", href: `${base}/audit` },
   ] as const;
   return (
-    <nav className="log-switch" aria-label="Logs">
+    <nav className="log-switch" suppressHydrationWarning aria-label="Logs">
       {items.map((item) => (
         <Link key={item.id} href={item.href} title={item.hint} aria-current={current === item.id ? "page" : undefined}>
           {item.label}

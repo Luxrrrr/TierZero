@@ -564,6 +564,16 @@ describe("diffSnapshots", () => {
     );
   });
 
+  test("leaves out the ids of who removed or edited a case", () => {
+    const diff = diffSnapshots(
+      { caseNumber: 58, voidedAt: null, voidedBy: null, editedBy: null },
+      { caseNumber: 58, voidedAt: "2026-10-10T04:54:32.605Z", voidedBy: "210000000000000001", editedBy: "210000000000000001" },
+    );
+    assert.equal(diff.kind, "fields");
+    if (diff.kind !== "fields") return;
+    assert.deepEqual(diff.rows.map((row) => row.field), ["voidedAt"]);
+  });
+
   test("a partial after-snapshot does not read as fields being cleared", () => {
     const diff = diffSnapshots(
       { caseNumber: 28, action: "warn", reason: "spam", voided: false },

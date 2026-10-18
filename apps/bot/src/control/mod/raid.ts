@@ -130,12 +130,12 @@ export const unlockFromDashboard = (ctx: ModCtx, state: GuildState, actor: Actor
 
 /* Mass actions ----------------------------------------------------------------------- */
 
-export type ReadMass = { ok: true; request: MassActionRequest & { window: { after: Date; before: Date } | null } } | { ok: false; error: string };
+export type ReadMass = { ok: true; request: MassActionRequest & { window: { after: Date; before: Date; open: boolean } | null } } | { ok: false; error: string };
 
 const WINDOW_MAX_MS = 7 * 86_400_000;
 
 /** Reads a mass action request: the action, and either pasted ids or a join window, never both. */
-export function readMassRequest(payload: Record<string, unknown>): ReadMass {
+export function readMassRequest(payload: Record<string, unknown>, now: Date = new Date()): ReadMass {
   const action = payload.action;
   if (action !== "ban" && action !== "kick") return { ok: false, error: "Choose ban or kick." };
   if (payload.reason !== undefined && payload.reason !== null && typeof payload.reason !== "string") return { ok: false, error: "The reason must be text." };
@@ -147,7 +147,7 @@ export function readMassRequest(payload: Record<string, unknown>): ReadMass {
   }
 
   const hasIds = Array.isArray(payload.ids) && payload.ids.length > 0;
-  const hasWindow = payload.joinedAfter !== undefined || payload.joinedBefore !== undefined;
+  const hasWindow = (payload.joinedAfter !== undefined && payload.joinedAfter !== null) || (payload.joinedBefore !== undefined && payload.joinedBefore !== null && payload.joinedBefore !== "");
   if (hasIds === hasWindow) return { ok: false, error: "Paste a list of user IDs, or choose a time window people joined in." };
 
   if (hasIds) {
@@ -159,13 +159,22 @@ export function readMassRequest(payload: Record<string, unknown>): ReadMass {
   }
 
   const after = typeof payload.joinedAfter === "string" ? new Date(payload.joinedAfter) : null;
-  const before = typeof payload.joinedBefore === "string" ? new Date(payload.joinedBefore) : null;
-  if (!after || !before || Number.isNaN(after.getTime()) || Number.isNaN(before.getTime())) return { ok: false, error: "Choose both ends of the time window." };
+  // No end means "until now", read when the request arrives so a preview and the run that follows see the same people.
+  const open = payload.joinedBefore === undefined || payload.joinedBefore === null || payload.joinedBefore === "";
+  const before = open ? now : typeof payload.joinedBefore === "string" ? new Date(payload.joinedBefore) : null;
+  if (!after || !before || Number.isNaN(after.getTime()) || Number.isNaN(before.getTime())) return { ok: false, error: "Choose when the window starts, and when it ends if it did not run until now." };
   if (after.getTime() >= before.getTime()) return { ok: false, error: "The start of the window must be before its end." };
   if (before.getTime() - after.getTime() > WINDOW_MAX_MS) return { ok: false, error: "The window can be at most seven days long." };
   return {
     ok: true,
-    request: { action, joinedAfter: after.toISOString(), joinedBefore: before.toISOString(), reason, deleteDays: action === "ban" ? (deleteDays as number) : null, window: { after, before } },
+    request: {
+      action,
+      joinedAfter: after.toISOString(),
+      joinedBefore: before.toISOString(),
+      reason,
+      deleteDays: action === "ban" ? (deleteDays as number) : null,
+      window: { after, before, open },
+    },
   };
 }
 
@@ -269,7 +278,7 @@ async function preview(ctx: ModCtx, actor: Actor, request: ReadMass & { ok: true
     };
   });
   const go = targets.filter((target) => target.skip === null).map((target) => target.user.userId);
-  return { dto: { action: request.request.action, targets, count: go.length, skipped: targets.length - go.length, token: massToken(request.request.action, go, request.request.joinedAfter, request.request.joinedBefore) }, go };
+  return { dto: { action: request.request.action, targets, count: go.length, skipped: targets.length - go.length, token: massToken(request.request.action, go, request.request.joinedAfter, request.request.window?.open ? null : request.request.joinedBefore) }, go };
 }
 
 /** Identifies the set a preview showed, so a confirmation of a different set with the same size is refused. */
@@ -343,13 +352,23 @@ export async function massRun(ctx: ModCtx, state: GuildState, actor: Actor, payl
   } finally {
     starting.delete(ctx.guild.id);
   }
-  void runJob(ctx, moduleCtx, actor, request.request, result, job).catch((error: unknown) => {
-    console.error(`mod: mass ${job.action} in guild ${ctx.guild.id} failed:`, error);
-    job.failures.push("The rest could not be done because of an error. Check the bot's logs.");
-    job.status = "done";
-    job.finishedAt = Date.now();
-  });
+  const running = runJob(ctx, moduleCtx, actor, request.request, result, job)
+    .catch((error: unknown) => {
+      console.error(`mod: mass ${job.action} in guild ${ctx.guild.id} failed:`, error);
+      job.failures.push("The rest could not be done because of an error. Check the bot's logs.");
+      job.status = "done";
+      job.finishedAt = Date.now();
+    })
+    .finally(() => settled.delete(running));
+  settled.add(running);
   return ok(publicJob(job));
+}
+
+const settled = new Set<Promise<void>>();
+
+/** Resolves once every mass job started so far has finished, so a test need not guess how long one takes. */
+export async function massIdle(): Promise<void> {
+  while (settled.size > 0) await Promise.all([...settled]);
 }
 
 /** GET /mod/raid/mass/:id -> MassJobDto */

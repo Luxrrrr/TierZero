@@ -411,9 +411,11 @@ const FIELD_LABEL: Record<string, string> = {
 
 /**
  * Identity fields never change and repeat what the row already says, so a
- * history entry that listed them would bury the one line that matters.
+ * history entry that listed them would bury the one line that matters. Who
+ * removed or edited a case is stored as an id, and the case already names that
+ * person above, so an id here would only be a number to puzzle over.
  */
-const HIDDEN_FIELDS = new Set(["userId", "moderatorId", "guildId", "id"]);
+const HIDDEN_FIELDS = new Set(["userId", "moderatorId", "guildId", "id", "voidedBy", "editedBy"]);
 
 const ISO_TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/;
 

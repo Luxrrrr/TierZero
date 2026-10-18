@@ -159,7 +159,7 @@ export function MemberSearch({ guildId, existing, labelId, onPick }: MemberSearc
                   }}
                   onMouseMove={() => setActive(index)}
                 >
-                  <Avatar user={hit.user} />
+                  <Avatar user={hit.user} menu={false} />
                   <span className="access-result-text">
                     <span className="access-result-name">{displayName(hit.user)}</span>
                     <span className="mod-id">{hit.user.userId}</span>

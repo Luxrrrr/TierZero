@@ -62,9 +62,12 @@ export function StatsToolbar({
   bucket = "day",
   compare = false,
   exportable = false,
+  rejected = false,
 }: {
   guildId: string;
   spec: RangeSpec;
+  /** The address asked for dates that could not be used, so the usual range is shown instead. */
+  rejected?: boolean;
   /** Today in UTC, `YYYY-MM-DD`, the latest day the date pickers allow. */
   today: string;
   period?: string | null;
@@ -84,6 +87,7 @@ export function StatsToolbar({
           <strong>{period ?? fallbackPeriod(spec)}</strong>
           <span className="stats-period-note">
             {" · UTC"}
+            {rejected ? ` · Those dates could not be used, so this shows the last ${spec.kind === "days" ? spec.days : 30} days` : ""}
             {bucket !== "day" ? ` · one point per ${bucket}` : ""}
             {compare && days ? ` · changes compare with the ${plural(days, "day")} before` : ""}
           </span>
@@ -365,10 +369,12 @@ export function ModStatsView({
   stats,
   recent,
   canConfigure = false,
+  rejected = false,
 }: {
   guildId: string;
   /** The range the page asked for, which the toolbar marks as selected. */
   spec: RangeSpec;
+  rejected?: boolean;
   today: string;
   stats: StatsDto;
   recent: InfractionDto[] | null;
@@ -392,6 +398,7 @@ export function ModStatsView({
         bucket={bucket}
         compare={stats.previous !== null}
         exportable
+        rejected={rejected}
       />
 
       {quiet ? (

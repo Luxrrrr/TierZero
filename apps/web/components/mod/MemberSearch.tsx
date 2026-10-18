@@ -259,7 +259,7 @@ export function MemberSearch({ guildId }: { guildId: string }) {
                     onMouseMove={() => setActive(index)}
                     onClick={() => go(result)}
                   >
-                    <Avatar user={result.user} />
+                    <Avatar user={result.user} menu={false} />
                     <span className="mod-palette-option-text">
                       <span className="mod-palette-option-name">{displayName(result.user)}</span>
                       <span className="mod-palette-option-sub">

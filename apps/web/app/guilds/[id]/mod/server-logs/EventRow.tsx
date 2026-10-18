@@ -16,6 +16,7 @@ import {
   UserIcon,
 } from "../../../../../components/Icons";
 import { Avatar, RelativeTime } from "../../../../../components/mod/ModUi";
+import { Collapse } from "../../../../../components/Collapse";
 
 const CATEGORY_ICON = {
   members: UserIcon,
@@ -94,43 +95,45 @@ export function EventRow({ guildId, entry }: { guildId: string; entry: ServerLog
       </div>
 
       {expandable ? (
-        <div id={panelId} className="sl-detail" hidden={!open}>
-          {changes.length > 0 ? (
-            <table className="sl-changes">
-              <tbody>
-                {changes.map((change, index) => (
-                  <tr key={index}>
-                    <th scope="row">{change.label}</th>
-                    <td>
-                      {change.before !== null ? <span className="sl-before">{change.before}</span> : null}
-                      {change.before !== null && change.after !== null ? <span className="sl-arrow" aria-label="became"> → </span> : null}
-                      {change.after !== null ? <span className="sl-after">{change.after}</span> : null}
-                    </td>
-                  </tr>
+        <Collapse open={open} keep>
+          <div id={panelId} className="sl-detail">
+            {changes.length > 0 ? (
+              <table className="sl-changes">
+                <tbody>
+                  {changes.map((change, index) => (
+                    <tr key={index}>
+                      <th scope="row">{change.label}</th>
+                      <td>
+                        {change.before !== null ? <span className="sl-before">{change.before}</span> : null}
+                        {change.before !== null && change.after !== null ? <span className="sl-arrow" aria-label="became"> → </span> : null}
+                        {change.after !== null ? <span className="sl-after">{change.after}</span> : null}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : null}
+            {notes.length > 0 ? (
+              <ul className="sl-notes">
+                {notes.map((note, index) => (
+                  <li key={index}>{note}</li>
                 ))}
-              </tbody>
-            </table>
-          ) : null}
-          {notes.length > 0 ? (
-            <ul className="sl-notes">
-              {notes.map((note, index) => (
-                <li key={index}>{note}</li>
-              ))}
-            </ul>
-          ) : null}
-          {hasVersions ? (
-            <div className="sl-history">
-              <Link
-                className="btn btn-secondary btn-sm"
-                href={`/guilds/${guildId}/mod/server-logs?view=messages&message=${entry.details.messageId}`}
-                title="Opens the saved message with the text of every edit"
-              >
-                <HistoryIcon />
-                View message history
-              </Link>
-            </div>
-          ) : null}
-        </div>
+              </ul>
+            ) : null}
+            {hasVersions ? (
+              <div className="sl-history">
+                <Link
+                  className="btn btn-secondary btn-sm"
+                  href={`/guilds/${guildId}/mod/server-logs?view=messages&message=${entry.details.messageId}`}
+                  title="Opens the saved message with the text of every edit"
+                >
+                  <HistoryIcon />
+                  View message history
+                </Link>
+              </div>
+            ) : null}
+          </div>
+        </Collapse>
       ) : null}
     </li>
   );

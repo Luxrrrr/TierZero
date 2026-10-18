@@ -58,6 +58,12 @@ export function parseRangeSpec(
   return { kind: "days", days: parseRange(params.days) };
 }
 
+/** Whether the address asked for a date range that was not used, so the page can say it fell back instead of doing so silently. */
+export function rangeWasRejected(params: { range?: SearchValue; from?: SearchValue; to?: SearchValue }, spec: RangeSpec): boolean {
+  if (first(params.range) === "all" || spec.kind === "custom") return false;
+  return first(params.from) !== undefined || first(params.to) !== undefined;
+}
+
 /** The query the bot and the page both read for a range. */
 export function rangeParams(spec: RangeSpec): { days?: number; range?: "all"; from?: string; to?: string } {
   if (spec.kind === "all") return { range: "all" };

@@ -1,5 +1,5 @@
 import { prisma } from "@tier0/db";
-import { can, canVoidAction, type Actor, type InfractionDto, type Page } from "@tier0/core";
+import { can, canVoidAction, type Actor, type InfractionDto, type LiftResult, type Page, type VoidReply } from "@tier0/core";
 import { writeAudit } from "./audit.js";
 import { buildExport, EXPORT_MAX_ROWS, exportFilename } from "./csv.js";
 import {
@@ -107,9 +107,17 @@ export async function exportInfractions(ctx: ModCtx, query: URLSearchParams): Pr
  * effort: the removal itself must stand even when Discord says no, so the
  * outcome is returned as words for the audit entry instead of thrown.
  */
-async function liftTimeout(ctx: ModCtx, row: InfractionRow, actor: Actor): Promise<string> {
+export interface LiftOutcome {
+  result: LiftResult;
+  /** For the audit entry. */
+  text: string;
+}
+
+const outcome = (result: LiftResult, text: string): LiftOutcome => ({ result, text });
+
+async function liftTimeout(ctx: ModCtx, row: InfractionRow, actor: Actor): Promise<LiftOutcome> {
   const now = new Date();
-  if (row.expiresAt !== null && row.expiresAt.getTime() <= now.getTime()) return "The timeout had already run out.";
+  if (row.expiresAt !== null && row.expiresAt.getTime() <= now.getTime()) return outcome("nothing", "The timeout had already run out.");
 
   const newer = await prisma.infraction.findFirst({
     where: {
@@ -122,18 +130,18 @@ async function liftTimeout(ctx: ModCtx, row: InfractionRow, actor: Actor): Promi
       OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
     },
   });
-  if (newer) return `Left the Discord timeout in place because case #${newer.caseNumber} is still in force.`;
+  if (newer) return outcome("kept", `Left the Discord timeout in place because case #${newer.caseNumber} is still in force.`);
 
   const member = await ctx.guild.members.fetch(row.userId).catch(() => null);
-  if (!member) return "The member is not in the server, so there was no timeout to lift.";
+  if (!member) return outcome("nothing", "The member is not in the server, so there was no timeout to lift.");
   if (!member.communicationDisabledUntil || member.communicationDisabledUntil.getTime() <= now.getTime()) {
-    return "The member was not timed out on Discord.";
+    return outcome("nothing", "The member was not timed out on Discord.");
   }
   try {
     await member.timeout(null, timeoutRemovalReason(ctx.labels?.timeoutRemovalReason, row.caseNumber, actor.name));
-    return "Lifted the Discord timeout.";
+    return outcome("lifted", "Lifted the Discord timeout.");
   } catch {
-    return "Could not lift the Discord timeout; the bot may lack permission or rank.";
+    return outcome("failed", "Could not lift the Discord timeout; the bot may lack permission or rank.");
   }
 }
 
@@ -142,7 +150,7 @@ async function liftTimeout(ctx: ModCtx, row: InfractionRow, actor: Actor): Promi
  * Discord agree. Best effort, like lifting a timeout: the removal stands
  * either way, and the outcome is returned as words for the audit entry.
  */
-async function liftBan(ctx: ModCtx, state: GuildState | undefined, row: InfractionRow, actor: Actor): Promise<string> {
+async function liftBan(ctx: ModCtx, state: GuildState | undefined, row: InfractionRow, actor: Actor): Promise<LiftOutcome> {
   const now = new Date();
   const newer = await prisma.infraction.findFirst({
     where: {
@@ -155,24 +163,24 @@ async function liftBan(ctx: ModCtx, state: GuildState | undefined, row: Infracti
       OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
     },
   });
-  if (newer) return `Left the Discord ban in place because case #${newer.caseNumber} is still in force.`;
+  if (newer) return outcome("kept", `Left the Discord ban in place because case #${newer.caseNumber} is still in force.`);
 
   let banned: boolean;
   try {
     banned = (await fetchBanOrNull(ctx.guild, row.userId)) !== null;
   } catch {
-    return "Could not check the ban in Discord, so it was left as it is. Unban them from their record if they should be let back in.";
+    return outcome("failed", "Could not check the ban in Discord, so it was left as it is. Unban them from their record if they should be let back in.");
   }
-  if (!banned) return "The member was not banned in Discord.";
+  if (!banned) return outcome("nothing", "The member was not banned in Discord.");
   try {
     await ctx.guild.members.unban(row.userId, banRemovalReason(ctx.labels?.banRemovalReason, row.caseNumber, actor.name));
   } catch {
-    return "Could not lift the Discord ban; the bot may lack the Ban Members permission. Unban them from their record.";
+    return outcome("failed", "Could not lift the Discord ban; the bot may lack the Ban Members permission. Unban them from their record.");
   }
   // A temporary ban scheduled its own reversal, which has nothing left to do.
   const moduleCtx = state ? await state.context(ctx.guild, "moderation").catch(() => null) : null;
   await moduleCtx?.tasks.cancel("unban", { userId: row.userId }).catch(() => undefined);
-  return "Lifted the Discord ban.";
+  return outcome("lifted", "Lifted the Discord ban.");
 }
 
 /**
@@ -235,23 +243,23 @@ export async function voidInfraction(
   });
   if (!done) return lostRace(ctx, id, "That case has already been removed.");
 
-  const lift = TIMEOUT_ACTIONS.includes(done.row.action) && done.row.active
-    ? () => liftTimeout(ctx, done.row, actor)
-    : liftsBan(done.row, new Date())
-      ? () => liftBan(ctx, options.state, done.row, actor)
-      : null;
-  if (lift) {
+  const kind: "ban" | "timeout" | null = TIMEOUT_ACTIONS.includes(done.row.action) && done.row.active ? "timeout" : liftsBan(done.row, new Date()) ? "ban" : null;
+  let lift: VoidReply["lift"] = null;
+  if (kind) {
+    lift = { kind, result: "failed" };
     try {
-      const outcome = await lift();
+      const lifted = kind === "timeout" ? await liftTimeout(ctx, done.row, actor) : await liftBan(ctx, options.state, done.row, actor);
+      lift = { kind, result: lifted.result };
       await prisma.modAudit.updateMany({
         where: { id: done.auditId },
-        data: { summary: [...summary, outcome].join(". ") },
+        data: { summary: [...summary, lifted.text].join(". ") },
       });
     } catch (error) {
       console.error("Could not finish lifting the restriction for a removed case:", error);
     }
   }
-  return ok(await present(ctx, done.updated));
+  const reply: VoidReply = { ...(await present(ctx, done.updated)), lift };
+  return ok(reply);
 }
 
 function wasActiveBefore(snapshot: string): boolean {

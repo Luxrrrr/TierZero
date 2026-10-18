@@ -217,7 +217,8 @@ function Lockdown({
               </thead>
               <tbody>
                 {status.locked.map((entry) => {
-                  const name = entry.name ? `#${entry.name}` : "Deleted channel";
+                  const voice = status.channels.find((channel) => channel.id === entry.channelId)?.voice === true;
+                  const name = entry.name ? (voice ? entry.name : `#${entry.name}`) : "Deleted channel";
                   return (
                     <tr key={entry.channelId}>
                       <td data-label="Channel" className="raid-channel">
@@ -348,7 +349,7 @@ function Lockdown({
                               )
                             }
                           />
-                          <span>#{channel.name}</span>
+                          <span>{channel.voice ? channel.name : `#${channel.name}`}</span>
                           {channel.locked ? <Pill tone="danger">Locked</Pill> : null}
                           {channel.exempt ? (
                             <span className="raid-exempt" title="Left out of Lock all by the Moderation settings">

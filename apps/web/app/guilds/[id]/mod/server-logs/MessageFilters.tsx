@@ -102,7 +102,7 @@ export function MessageFilters({ guildId, query, channels, single }: Props) {
       </div>
 
       <div className="mod-toolbar sl-row">
-        <div className="mod-toolbar-group" role="group" aria-label="Which messages">
+        <div className="mod-toolbar-group" suppressHydrationWarning role="group" aria-label="Which messages">
           {MESSAGE_LOG_STATES.map((state) => (
             <button key={state} type="button" className="mod-chip" aria-pressed={query.state === state} onClick={() => go({ state })}>
               {STATE_LABEL[state]}

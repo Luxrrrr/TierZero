@@ -11,7 +11,8 @@ export interface ModCall {
   /** Path under `/api/guilds/:id/mod/`, with no leading slash. */
   path: string;
   body?: Record<string, unknown>;
-  success: string;
+  /** A fixed sentence, or one built from the bot's reply when the outcome varies. */
+  success: string | ((reply: unknown) => string | { title: string; detail?: string });
   failure: string;
   /**
    * The caller shows a failure itself, as a dialog does: the toaster sits
@@ -52,7 +53,12 @@ export function useModAction(guildId: string): (call: ModCall) => Promise<ModRes
           body: JSON.stringify(call.body ?? {}),
         });
         if (res.ok) {
-          toast.push({ kind: "success", title: call.success });
+          let shown: string | { title: string; detail?: string } = typeof call.success === "string" ? call.success : "Done.";
+          if (typeof call.success !== "string") {
+            const reply: unknown = await res.json().catch(() => null);
+            shown = call.success(reply);
+          }
+          toast.push({ kind: "success", ...(typeof shown === "string" ? { title: shown } : shown) });
           router.refresh();
           return true;
         }

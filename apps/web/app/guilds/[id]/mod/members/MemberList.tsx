@@ -14,6 +14,7 @@ import {
   XIcon,
 } from "../../../../../components/Icons";
 import { Avatar, Pager, PastEnd, displayName, isPastEnd } from "../../../../../components/mod/ModUi";
+import { PersonMenuArea } from "../../../../../components/mod/PersonMenuArea";
 import { RelativeTime } from "../../../../../components/mod/RelativeTime";
 import { fmtDateUtc } from "../../../../../components/mod/format";
 import { ClickableRow, MemberSearchForm, SortSelect } from "./MemberControls";
@@ -147,7 +148,7 @@ export function MemberToolbar({ guildId, query, total }: { guildId: string; quer
           {total.toLocaleString()} {total === 1 ? "member" : "members"}
         </span>
       </MemberSearchForm>
-      <nav className="mod-toolbar-group" aria-label="Filter by status">
+      <nav className="mod-toolbar-group" suppressHydrationWarning aria-label="Filter by status">
         {MEMBER_FILTERS.map((entry) => {
           const active = entry.value === query.filter;
           return (
@@ -253,18 +254,20 @@ export function MemberList({
                   return (
                     <ClickableRow key={member.user.userId} href={href}>
                       <td role="cell" data-label="">
-                        <Link className="mod-user members-user" href={href}>
-                          <Avatar user={member.user} size="lg" />
-                          <span className="mod-user-text">
-                            <span className="mod-user-name">
-                              {displayName(member.user)}
-                              {!member.user.inServer && member.user.name !== null ? (
-                                <span className="mod-user-left members-left">left</span>
-                              ) : null}
+                        <PersonMenuArea user={member.user}>
+                          <Link className="mod-user members-user" href={href}>
+                            <Avatar user={member.user} size="lg" menu={false} />
+                            <span className="mod-user-text">
+                              <span className="mod-user-name">
+                                {displayName(member.user)}
+                                {!member.user.inServer && member.user.name !== null ? (
+                                  <span className="mod-user-left members-left">left</span>
+                                ) : null}
+                              </span>
+                              <span className="mod-user-sub mod-id">ID …{member.user.userId.slice(-6)}</span>
                             </span>
-                            <span className="mod-user-sub mod-id">ID …{member.user.userId.slice(-6)}</span>
-                          </span>
-                        </Link>
+                          </Link>
+                        </PersonMenuArea>
                       </td>
                       <td role="cell" data-label="Actions">
                         <CountPills member={member} />

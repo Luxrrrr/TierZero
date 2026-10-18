@@ -1,4 +1,4 @@
-import type { Client, Guild } from "discord.js";
+import { Events, type Client, type Guild } from "discord.js";
 import { automodRef, type UserRef } from "@tier0/core";
 
 /**
@@ -44,6 +44,22 @@ export function rememberBounded<V>(map: Map<string, V>, key: string, value: V, m
 const inFlight = new Map<string, Promise<UserRef>>();
 
 const keyOf = (guildId: string, id: string) => `${guildId}:${id}`;
+
+const watched = new WeakSet<Client>();
+
+/**
+ * A remembered answer says whether the member is in the server, which a ban,
+ * a kick or someone leaving makes untrue at once. Those events drop the answer,
+ * so the badge on a profile does not outlive the membership by ten minutes.
+ */
+function watchMembership(client: Client): void {
+  if (watched.has(client) || typeof client.on !== "function") return;
+  watched.add(client);
+  const forget = (guildId: string, userId: string) => void remembered.delete(keyOf(guildId, userId));
+  client.on(Events.GuildMemberAdd, (member) => forget(member.guild.id, member.id));
+  client.on(Events.GuildMemberRemove, (member) => forget(member.guild.id, member.id));
+  client.on(Events.GuildBanAdd, (ban) => forget(ban.guild.id, ban.user.id));
+}
 
 async function lookup(client: Client, guild: Guild, id: string): Promise<UserRef> {
   const member = guild.members.cache.get(id) ?? (await guild.members.fetch(id).catch(() => null));
@@ -108,6 +124,7 @@ export async function resolveUsers(
   ids: Iterable<string>,
   options: ResolveOptions = {},
 ): Promise<Map<string, UserRef>> {
+  watchMembership(client);
   const unique = [...new Set(ids)].filter((id) => /^\d{17,20}$/.test(id));
   const refs = new Map<string, UserRef>();
   let fetchesLeft = options.maxFetches ?? Infinity;

@@ -40,6 +40,22 @@ describe("readMassRequest", () => {
     }
   });
 
+  test("a window with no end runs to now, however it is left empty", () => {
+    const now = new Date("2026-10-17T12:00:30Z");
+    for (const empty of [undefined, null, ""]) {
+      const read = readMassRequest({ action: "kick", joinedAfter: "2026-10-17T11:00:00Z", joinedBefore: empty }, now);
+      assert.equal(read.ok, true);
+      if (read.ok) {
+        assert.equal(read.request.window?.open, true);
+        assert.equal(read.request.window?.before.toISOString(), "2026-10-17T12:00:30.000Z");
+      }
+    }
+    const closed = readMassRequest({ action: "kick", joinedAfter: "2026-10-17T10:00:00Z", joinedBefore: "2026-10-17T11:00:00Z" }, now);
+    assert.equal(closed.ok && closed.request.window?.open, false);
+    assert.equal(readMassRequest({ action: "kick", joinedAfter: "2026-10-17T13:00:00Z" }, now).ok, false);
+    assert.equal(readMassRequest({ action: "kick", joinedAfter: "2026-10-01T00:00:00Z" }, now).ok, false);
+  });
+
   test("ids and a window together, or neither, are refused", () => {
     assert.equal(readMassRequest({ action: "ban", ids: [ID_A], joinedAfter: "2026-10-17T10:00:00Z", joinedBefore: "2026-10-17T11:00:00Z" }).ok, false);
     assert.equal(readMassRequest({ action: "ban" }).ok, false);
@@ -62,8 +78,8 @@ describe("readMassRequest", () => {
   test("a window must be ordered, whole, and at most seven days", () => {
     const window = (after: unknown, before: unknown) => readMassRequest({ action: "ban", joinedAfter: after, joinedBefore: before }).ok;
     assert.equal(window("2026-10-17T11:00:00Z", "2026-10-17T10:00:00Z"), false);
-    assert.equal(window("2026-10-17T10:00:00Z", undefined), false);
     assert.equal(window("nonsense", "2026-10-17T10:00:00Z"), false);
+    assert.equal(window(undefined, "2026-10-17T10:00:00Z"), false);
     assert.equal(window("2026-10-01T00:00:00Z", "2026-10-17T00:00:00Z"), false);
     assert.equal(window("2026-10-10T00:00:00Z", "2026-10-17T00:00:00Z"), true);
   });

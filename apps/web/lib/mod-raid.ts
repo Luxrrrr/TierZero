@@ -146,8 +146,9 @@ export const QUICK_WINDOWS: { label: string; ms: number }[] = [
   { label: "Last hour", ms: HOUR },
 ];
 
+/** The end stays empty, which the bot reads as "now" when it runs, so someone who joined seconds ago is included. */
 export function quickWindow(ms: number, now: Date): { after: string; before: string } {
-  return { after: toLocalInput(new Date(now.getTime() - ms)), before: toLocalInput(now) };
+  return { after: toLocalInput(new Date(now.getTime() - ms)), before: "" };
 }
 
 /* Mass action request ---------------------------------------------------------------- */

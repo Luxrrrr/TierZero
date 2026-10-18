@@ -10,7 +10,7 @@ const OTHER = "100000000000000134";
 
 const db = createTestDatabase();
 const { prisma } = await import("@tier0/db");
-const { massPreview, massRun, massToken } = await import("../dist/control/mod/raid.js");
+const { massIdle, massPreview, massRun, massToken } = await import("../dist/control/mod/raid.js");
 
 function member(id: string) {
   return {
@@ -65,7 +65,7 @@ describe("mass action confirmation and concurrency", () => {
     await prisma.guild.create({ data: { id: GUILD, name: "Mass action test guild" } });
   });
   after(async () => {
-    await new Promise((resolve) => setTimeout(resolve, 300));
+    await massIdle();
     await prisma.$disconnect();
     db.cleanup();
   });
@@ -78,11 +78,12 @@ describe("mass action confirmation and concurrency", () => {
     const payload = { ...body(TARGETS), confirm: shown.count, token: shown.token };
     const [first, second] = await Promise.all([massRun(ctx, state, actor, payload), massRun(ctx, state, actor, payload)]);
     assert.deepEqual([first.status, second.status].sort(), [200, 409]);
-    await new Promise((resolve) => setTimeout(resolve, 100));
+    await massIdle();
     assert.equal(bulkCalls, 1);
   });
 
   test("a different set of the same size is refused and releases the slot", async () => {
+    await massIdle();
     fetchDelay = 0;
     const preview = await massPreview(ctx, state, actor, body(TARGETS));
     const shown = preview.body as { count: number; token: string };
@@ -93,6 +94,8 @@ describe("mass action confirmation and concurrency", () => {
     assert.equal(missing.status, 409);
     const accepted = await massRun(ctx, state, actor, { ...body(TARGETS), confirm: shown.count, token: shown.token });
     assert.equal(accepted.status, 200);
+    await massIdle();
+    assert.equal(bulkCalls, 2);
   });
 });
 

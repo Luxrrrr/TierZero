@@ -54,6 +54,7 @@ import { EvidencePicker } from "./EvidencePicker";
 import { clearAttach, readAttach } from "../../../../../../lib/attach-handoff";
 import { formatDateTime } from "./timeline";
 import { useUnsavedGuard } from "../../../../../../lib/unsaved-guard";
+import { reasonWithMessageLink } from "../../../../../../lib/person-menu";
 import type { ContextState } from "./useActionContext";
 
 interface DialogProps {
@@ -69,6 +70,10 @@ interface DialogProps {
   fallbackFocus: FocusFallback;
   onClose(): void;
   onDone(result: { caseNumber: number | null; notes: string[] }): void;
+  /** Messages to attach when the form opens, such as the one a right-click started from. */
+  evidence?: EvidenceRef[];
+  /** A link to that message. If the bot cannot copy the message into the case, the link goes in the reason instead. */
+  messageLink?: string;
 }
 
 /**
@@ -242,6 +247,8 @@ function ActionForm({
   onBusy,
   onClose,
   onDone,
+  evidence: startEvidence,
+  messageLink: originLink,
 }: FormProps) {
   const banCeiling = banMax(context);
   const ceiling = kind === "timeout" ? timeoutMax(context) : banCeiling;
@@ -253,7 +260,13 @@ function ActionForm({
   const [reason, setReason] = useState("");
   // Messages picked in the message log wait in session storage until this form opens.
   const [seed] = useState(() => readAttach(guildId, userId));
-  const [evidence, setEvidence] = useState<EvidenceRef[]>(() => seed.map((m) => ({ channelId: m.channelId, messageId: m.id })));
+  const [evidence, setEvidence] = useState<EvidenceRef[]>(() => {
+    const picked = seed.map((m) => ({ channelId: m.channelId, messageId: m.id }));
+    return [...picked, ...(startEvidence ?? []).filter((ref) => !picked.some((entry) => entry.messageId === ref.messageId))];
+  });
+  // What the form opened with is not an edit, so only a change from it counts as unsaved.
+  const [startCount] = useState(evidence.length);
+  const originId = startEvidence?.[0]?.messageId ?? null;
   const [duration, setDuration] = useState<DurationDraft>(() =>
     changing
       ? unchosenDuration()
@@ -308,7 +321,7 @@ function ActionForm({
   const deleteId = useId();
 
   // A typed reason or picked messages are lost by leaving the page, so leaving asks first.
-  const guard = useUnsavedGuard({ dirty: !busy && (reason.trim() !== "" || evidence.length !== seed.length), onDiscard: () => setReason("") });
+  const guard = useUnsavedGuard({ dirty: !busy && (reason.trim() !== "" || evidence.length !== startCount), onDiscard: () => setReason("") });
 
   const heavy = isHeavy(kind);
   const timed = usesDuration({ kind, banLength });
@@ -589,6 +602,20 @@ function ActionForm({
           <p className="pf-dialog-error" role="alert" id={errorId}>
             {serverError}
           </p>
+        ) : null}
+
+        {serverError && originLink && originId && /message/i.test(serverError) && evidence.some((ref) => ref.messageId === originId) ? (
+          <button
+            type="button"
+            className="link-button"
+            onClick={() => {
+              setEvidence((current) => current.filter((ref) => ref.messageId !== originId));
+              setReason((current) => reasonWithMessageLink(current, originLink, ACTION_REASON_LIMIT));
+              setServerError(null);
+            }}
+          >
+            Put the message link in the reason instead of a copy
+          </button>
         ) : null}
       </div>
 

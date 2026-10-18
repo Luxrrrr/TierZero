@@ -141,7 +141,7 @@ export function AppealDetail({ guildId, detail, closeHref, status }: Props) {
           <div className="callout callout-info appeal-callout" role="status">
             <CheckIcon />
             <div>
-              <strong>{after.decision === "accept" ? "Appeal accepted and the ban lifted." : "Appeal denied."}</strong>
+              <strong>{after.decision === "accept" ? "Appeal accepted." : "Appeal denied."}</strong>
               {after.notes.length > 0 ? (
                 <ul className="appeal-notes">
                   {after.notes.map((note) => (

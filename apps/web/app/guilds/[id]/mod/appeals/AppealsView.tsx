@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { AppealDetailDto, AppealDto, AppealListDto } from "@tier0/core";
 import { AlertIcon, InboxIcon } from "../../../../../components/Icons";
 import { Avatar, EmptyState, Pager, PastEnd, Pill, RelativeTime, displayName, isPastEnd } from "../../../../../components/mod/ModUi";
+import { PersonMenuArea } from "../../../../../components/mod/PersonMenuArea";
 import {
   APPEAL_FILTERS,
   APPEAL_STATUS_LABEL,
@@ -46,7 +47,7 @@ export function AppealsView({ guildId, query, list, detail, canConfigure }: Prop
         </div>
 
         <div className="mod-toolbar">
-          <div className="mod-toolbar-group" role="group" aria-label="Status">
+          <div className="mod-toolbar-group" suppressHydrationWarning role="group" aria-label="Status">
             {APPEAL_FILTERS.map((chip) => (
               <Link
                 key={chip.value}
@@ -127,7 +128,7 @@ function AppealList({
         <EmptyState icon={<InboxIcon />} title={emptyAppealsTitle(query.status)}>
           {waiting ? (
             <>
-              Members can appeal a ban once appeals are turned on in the Moderation settings, under{" "}
+              To let banned members appeal, turn appeals on in the Moderation settings, under{" "}
               {canConfigure ? <Link href={`/guilds/${guildId}/mod/settings#section-appeals`}>Ban appeals</Link> : "Ban appeals"}.
             </>
           ) : (
@@ -156,23 +157,25 @@ function AppealRow({ guildId, query, appeal }: { guildId: string; query: Appeals
   const open = query.appeal === appeal.id;
   return (
     <li>
-      <Link
-        className="appeals-row"
-        href={appealsHref(guildId, { status: query.status, page: query.page, appeal: appeal.id })}
-        aria-current={open ? "true" : undefined}
-        scroll={false}
-      >
-        <Avatar user={appeal.user} />
-        <span className="appeals-row-main">
-          <span className="appeals-row-line">
-            <span className="appeals-row-name">{displayName(appeal.user)}</span>
-            <span className="appeals-row-case">Case #{appeal.caseNumber}</span>
-            <Pill tone={APPEAL_STATUS_TONE[appeal.status]}>{APPEAL_STATUS_LABEL[appeal.status]}</Pill>
-            <RelativeTime className="appeals-row-when" iso={appeal.createdAt} />
+      <PersonMenuArea user={appeal.user}>
+        <Link
+          className="appeals-row"
+          href={appealsHref(guildId, { status: query.status, page: query.page, appeal: appeal.id })}
+          aria-current={open ? "true" : undefined}
+          scroll={false}
+        >
+          <Avatar user={appeal.user} menu={false} />
+          <span className="appeals-row-main">
+            <span className="appeals-row-line">
+              <span className="appeals-row-name">{displayName(appeal.user)}</span>
+              <span className="appeals-row-case">Case #{appeal.caseNumber}</span>
+              <Pill tone={APPEAL_STATUS_TONE[appeal.status]}>{APPEAL_STATUS_LABEL[appeal.status]}</Pill>
+              <RelativeTime className="appeals-row-when" iso={appeal.createdAt} />
+            </span>
+            <span className="appeals-row-text">{appealPreview(appeal.text)}</span>
           </span>
-          <span className="appeals-row-text">{appealPreview(appeal.text)}</span>
-        </span>
-      </Link>
+        </Link>
+      </PersonMenuArea>
     </li>
   );
 }

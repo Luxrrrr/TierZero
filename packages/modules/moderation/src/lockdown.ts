@@ -88,6 +88,8 @@ export interface LockableChannel {
   name: string;
   parent: string | null;
   exempt: boolean;
+  /** A voice or stage channel, which a name is not written with a # for. */
+  voice?: boolean;
 }
 
 /** Whether a channel is one a lockdown covers: a place members can see and talk in. */
@@ -106,6 +108,7 @@ export function lockableChannels(guild: Guild, exempt: readonly string[]): Locka
       name: channel.name,
       parent: channel.parent?.name ?? null,
       exempt: exempt.includes(channel.id) || (channel.parentId !== null && exempt.includes(channel.parentId)),
+      voice: channel.type === ChannelType.GuildVoice || channel.type === ChannelType.GuildStageVoice,
     }));
 }
 

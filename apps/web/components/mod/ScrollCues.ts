@@ -7,6 +7,11 @@ import { useEffect } from "react";
  * give no sign that more is hidden past the edge. This marks each one with
  * whether it can scroll further either way, and mod.css fades that edge, so a
  * cut-off tab reads as "keep going" rather than as the end of the list.
+ *
+ * The hook lives in the layout, so it can mark a row in the page below before
+ * React has hydrated that row. Every element the selector matches carries
+ * `suppressHydrationWarning`, because the data attributes are added behind
+ * React's back on purpose. A new row matching the selector needs it too.
  */
 
 export const SCROLL_CUE_SELECTOR = ".mod-tabs, .mod-toolbar-group, .log-switch, .settings-switch";

@@ -115,7 +115,7 @@ export function ActionLog({ guildId, query, data, staff, canExport }: Props) {
         </form>
 
         <div className="mod-toolbar actions-chips">
-          <div className="mod-toolbar-group" role="group" aria-label="State">
+          <div className="mod-toolbar-group" suppressHydrationWarning role="group" aria-label="State">
             {STATE_CHIPS.map((chip) => (
               <Link
                 key={chip.value}
@@ -130,7 +130,7 @@ export function ActionLog({ guildId, query, data, staff, canExport }: Props) {
 
           <span className="actions-divider" aria-hidden="true" />
 
-          <div className="mod-toolbar-group" role="group" aria-label="Source">
+          <div className="mod-toolbar-group" suppressHydrationWarning role="group" aria-label="Source">
             {SOURCE_CHIPS.map((chip) => (
               <Link
                 key={chip.value}
@@ -145,7 +145,7 @@ export function ActionLog({ guildId, query, data, staff, canExport }: Props) {
 
           <span className="actions-divider" aria-hidden="true" />
 
-          <div className="mod-toolbar-group" role="group" aria-label="Action type">
+          <div className="mod-toolbar-group" suppressHydrationWarning role="group" aria-label="Action type">
             {ACTION_CHIPS.map((action) => {
               const on = query.action === action;
               return (

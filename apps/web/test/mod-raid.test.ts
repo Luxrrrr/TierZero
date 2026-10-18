@@ -72,9 +72,9 @@ describe("local times", () => {
     assert.equal(fromLocalInput("2026-13-45T99:99"), null);
   });
 
-  test("a quick pick ends now and starts that long before", () => {
-    const now = new Date(2026, 9, 17, 12, 0);
-    assert.deepEqual(quickWindow(10 * 60_000, now), { after: "2026-10-17T11:50", before: "2026-10-17T12:00" });
+  test("a quick pick starts that long before and leaves the end empty", () => {
+    const now = new Date(2026, 9, 17, 12, 0, 40);
+    assert.deepEqual(quickWindow(10 * 60_000, now), { after: "2026-10-17T11:50", before: "" });
   });
 });
 

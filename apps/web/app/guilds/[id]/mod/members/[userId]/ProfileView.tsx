@@ -382,7 +382,7 @@ export function ProfileView({ guildId, profile, role, viewerId, viewerName, rend
             {spotlight ? `${focusLabel(spotlight.request)} is open in the timeline.` : ""}
           </p>
           <div className="pf-toolbar">
-            <div className="mod-toolbar-group pf-filters" role="group" aria-label="Show in the timeline">
+            <div className="mod-toolbar-group pf-filters" suppressHydrationWarning role="group" aria-label="Show in the timeline">
               {filters.map((entry) => (
                 <button
                   key={entry.id}
@@ -517,7 +517,7 @@ function ProfileHeader({
   return (
     <header className="mod-card pf-head">
       <div className="pf-identity">
-        <Avatar user={user} size="xl" />
+        <Avatar user={user} size="xl" menu={false} />
         <div className="pf-identity-text">
           <div className="pf-name-row">
             <h2 className="pf-name">{displayName(user)}</h2>

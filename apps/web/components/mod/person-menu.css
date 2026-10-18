@@ -1,0 +1,75 @@
+/* The person menu's hooks into the places people are drawn. */
+
+/* Wraps content without a box, so it can sit around a flex or grid child. */
+.pm-area {
+  display: contents;
+}
+
+.pm-host {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  max-width: 100%;
+  vertical-align: middle;
+}
+
+/* On top of the end of the chip while it is pointed at or focused, so rows keep
+   their layout. A pointer that cannot hover gets the button all the time, with
+   room set aside for it. */
+.pm-more {
+  position: absolute;
+  top: 50%;
+  right: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  translate: 0 -50%;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text-secondary);
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity var(--duration-fast) var(--ease-out),
+    background-color var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out);
+}
+
+.pm-more svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+.pm-host:hover .pm-more,
+.pm-host:focus-within .pm-more,
+.pm-more:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.pm-more:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+@media (hover: none) {
+  .pm-host {
+    padding-right: 1.875rem;
+  }
+
+  .pm-more {
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
+
+/* In a row that lays its own content out, the button sits in the flow. */
+.pm-more--inline {
+  position: static;
+  flex: none;
+  translate: none;
+}

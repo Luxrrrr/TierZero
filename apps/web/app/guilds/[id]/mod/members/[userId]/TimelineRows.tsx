@@ -12,6 +12,7 @@ import { changeSubject, controlName, infractionSubject, noteSubject, toggleName 
 import { CharacterCount } from "./CharacterCount";
 import { ActionDialog } from "./Dialog";
 import { EditCaseDialog } from "./EditCaseDialog";
+import { removalToast } from "../../../../../../lib/mod-removal";
 import { canRestoreOwnRemoval, infractionControls, noteControls } from "./permissions";
 import {
   automaticFromHref,
@@ -467,7 +468,7 @@ export function InfractionRow({
                 path: `${base}/void`,
                 // The bot refuses to lift a ban unless the request says the person was told it would.
                 body: removalLift === "ban" ? { reason, liftBan: true } : { reason },
-                success: removalLift === "ban" ? `Removed ${label} from the record and lifted the ban.` : `Removed ${label} from the record.`,
+                success: (reply) => removalToast(label, reply),
                 failure: "Could not remove the entry",
                 inline: true,
               },

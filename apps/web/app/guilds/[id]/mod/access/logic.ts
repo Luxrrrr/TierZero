@@ -22,7 +22,7 @@ export const LISTED_ROLES: ListedRole[] = ["mod", "admin"];
 /** One line per level, shown where the owner picks one and above the matrix. */
 export const ROLE_SUMMARY: Record<StaffRole, string> = {
   mod: "Reads member records, writes notes, warns and times out members, and can take back a warn or timeout.",
-  admin: "Everything a moderator can, plus kicking, banning and unbanning, managing other staff’s notes, restoring removed actions and reading the audit trail.",
+  admin: "Everything a moderator can, plus kicking, banning and unbanning, managing other staff’s notes, restoring removed actions, reading the audit trail, deciding ban appeals and using the Raid tools.",
   owner: "Runs this TierZero install. Full access on every server, including purging records.",
 };
 
@@ -52,7 +52,7 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
       { permission: "view", label: "Open the mod dashboard and read member records" },
       { permission: "stats.view", label: "See moderation statistics" },
       { permission: "audit.view", label: "Read staff activity" },
-      { permission: "messages.view", label: "Open the server logs, if the owner has allowed it for moderators" },
+      { permission: "messages.view", label: "Open the server logs (moderators need “Let moderators open the server logs” switched on in the Server logs settings)" },
       { permission: "messages.purge", label: "Delete the server logs" },
     ],
   },

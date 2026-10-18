@@ -59,7 +59,7 @@ export function ServerLogs({ guildId, role, view, events, messages, refused }: P
           </div>
         </div>
 
-        <nav className="log-switch" aria-label="Views">
+        <nav className="log-switch" suppressHydrationWarning aria-label="Views">
           <Link href={base} aria-current={view === "events" ? "page" : undefined} title="Everything that happened">
             Events
           </Link>

@@ -2,6 +2,7 @@
 
 import { useId, useState, type ReactNode } from "react";
 import { ChevronDownIcon } from "../../../../../components/Icons";
+import { Collapse } from "../../../../../components/Collapse";
 
 /**
  * One audit entry with a detail panel that opens beneath it. The summary and
@@ -37,9 +38,11 @@ export function ExpandableRow({
           <ChevronDownIcon className="audit-chevron" />
         </button>
       </div>
-      <div id={panelId} className="audit-detail" hidden={!open}>
-        {detail}
-      </div>
+      <Collapse open={open} keep>
+        <div id={panelId} className="audit-detail">
+          {detail}
+        </div>
+      </Collapse>
     </li>
   );
 }

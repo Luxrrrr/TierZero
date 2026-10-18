@@ -130,7 +130,7 @@ export function AuditLog({ guildId, query, data, actors: known, narrowedHere }: 
         </form>
 
         <div className="mod-toolbar audit-chips">
-          <div className="mod-toolbar-group" role="group" aria-label="Event type">
+          <div className="mod-toolbar-group" suppressHydrationWarning role="group" aria-label="Event type">
             <Link
               className="mod-chip"
               href={auditHref(guildId, { ...query, kind: "", page: 1 })}
