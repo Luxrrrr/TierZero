@@ -311,6 +311,8 @@ model TicketMessage {
   reactions     String    @default("[]")
   /// JSON `{ users, roles, channels }`, each mapping an id to `{ name, color }` as it was when stored.
   mentions      String    @default("{}")
+  /// JSON `{ name, avatarUrl, staffLine }`, set on a dashboard reply sent under the support team's name. The author columns keep the real sender.
+  sentAs        String?
   createdAt     DateTime  @default(now())
   editedAt      DateTime?
   deletedAt     DateTime?
@@ -567,6 +569,8 @@ model MessageTemplate {
   /// Select menus, as JSON.
   selects    String    @default("[]")
   reactions  String    @default("[]")
+  /// Staff can pick this message from the ticket reply box.
+  inTickets  Boolean   @default(false)
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
   lastSentAt DateTime?
