@@ -185,8 +185,8 @@ export default async function HelpPage() {
           <article className="help-card">
             <h3>A whole area at once</h3>
             <p>
-              {FLOWS.map((flow) => flow.title).join(" and ")} each cover the
-              features that are worth deciding together.
+              {FLOWS.filter((flow) => flow.modules.length > 1).map((flow) => flow.title).join(" and ")} covers
+              the features that are worth deciding together.
             </p>
           </article>
           <article className="help-card">
@@ -358,6 +358,16 @@ export default async function HelpPage() {
                 <kbd>Esc</kbd>
               </dt>
               <dd>Closes the panel or dialog that is open.</dd>
+            </div>
+            <div>
+              <dt>
+                <kbd>Menu</kbd>, <kbd>Shift</kbd> + <kbd>F10</kbd>
+              </dt>
+              <dd>
+                On a name, avatar or ticket message, opens the same menu as a right-click: warn, time out, kick or ban, copy an ID, or
+                open the profile. Arrow keys move through it and Esc closes it. Hold Shift while right-clicking to get the
+                browser&apos;s own menu.
+              </dd>
             </div>
           </dl>
         </div>

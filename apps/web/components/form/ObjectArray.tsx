@@ -1,12 +1,14 @@
 "use client";
 
 import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
-import type { FieldDescriptor, RowDescription } from "@tier0/core";
+import type { FieldDescriptor, RowCard, RowDescription } from "@tier0/core";
 import { describeDuration } from "../../lib/duration";
 import { arrayItemPath } from "../../lib/schema-paths";
+import { rowCard, sheetTabs, tabMarks, tabOfPath, type SheetTab } from "../../lib/row-sheet";
 import { stripIndices, summarizeRow, type RowLabels } from "../../lib/row-summary";
 import { useChannels } from "./ChannelPicker";
 import { ObjectList } from "./ObjectList";
+import { SheetList } from "./SheetList";
 import { useRoles } from "./RolePicker";
 import { RowActionPanel, RowStatusLine, useRowActionRunner, useRowStatuses } from "./rowRuntime";
 
@@ -22,6 +24,16 @@ export interface RowsContext {
   /** The draft differs from what is saved, so row positions may not match the bot's. */
   dirty: boolean;
   revision: number;
+}
+
+/**
+ * What a page can draw into the rows of one of its lists without the form
+ * knowing what the rows are: a status in the row's header and a block at the
+ * foot of its open body. Keyed by the list's schema path.
+ */
+export interface RowSlots {
+  status?(index: number): ReactNode;
+  footer?(index: number): ReactNode;
 }
 
 type Fields = Record<string, FieldDescriptor>;
@@ -41,6 +53,19 @@ interface Props {
   rows: RowsContext | undefined;
   /** Every row starts open, as the quick setup wants. */
   openRows?: boolean;
+  /** The rows are edited as numbered steps, which gives them the stepped chrome. */
+  stepped?: boolean;
+  slots?: RowSlots;
+  /**
+   * Draws the rows as cards that open in a sheet, per the schema's `layout: "sheet"`.
+   * `renderTab` draws one tab of a row; `rowErrors` are the refused settings
+   * of a row, as paths from the row.
+   */
+  sheet?: {
+    card: RowCard;
+    renderTab(item: unknown, index: number, tab: string): ReactNode;
+    rowErrors(index: number): string[];
+  };
   newItem(): unknown;
   /** A copy of a row for Duplicate, with fresh ids where the row carries any. */
   copyItem?(item: unknown): unknown;
@@ -63,11 +88,45 @@ interface Props {
 }
 
 export function ObjectArray(props: Props) {
+  if (props.sheet && !props.openRows) return <SheetView {...props} sheet={props.sheet} />;
   const description = props.rows?.descriptions[stripIndices(props.path)];
   if (props.rows && description && (description.status || description.actions.length > 0)) {
     return <LiveList {...props} rows={props.rows} description={description} />;
   }
   return <ListView {...props} />;
+}
+
+interface SheetViewProps extends Props {
+  sheet: NonNullable<Props["sheet"]>;
+}
+
+function SheetView({ guildId, path, items, itemFields, itemLabel, min, max, disabled, "aria-labelledby": labelledBy, newItem, copyItem, invalidAt, onChange, sheet }: SheetViewProps) {
+  const labels = useRowLabels(guildId, itemFields);
+  const tabs: SheetTab[] = useMemo(() => sheetTabs(itemFields), [itemFields]);
+  const first = tabs[0]?.id ?? "";
+  return (
+    <SheetList
+      items={items}
+      min={min}
+      max={max}
+      itemLabel={itemLabel}
+      disabled={disabled}
+      aria-labelledby={labelledBy}
+      listPath={path}
+      tabs={tabs}
+      newItem={newItem}
+      copyItem={copyItem}
+      invalidAt={invalidAt}
+      errorTab={(index) => {
+        const [failing] = sheet.rowErrors(index);
+        return failing === undefined ? undefined : tabOfPath(itemFields, failing, first);
+      }}
+      card={(item) => rowCard(asRecord(item), itemFields, sheet.card, labels, first)}
+      marks={(item, index) => tabMarks(itemFields, asRecord(item), sheet.rowErrors(index), first)}
+      renderTab={sheet.renderTab}
+      onChange={onChange}
+    />
+  );
 }
 
 interface ViewProps extends Props {
@@ -97,6 +156,8 @@ function ListView({
   panel,
   onRowRemoved,
   openRows = false,
+  stepped = false,
+  slots,
 }: ViewProps) {
   const labels = useRowLabels(guildId, itemFields);
   return (
@@ -113,7 +174,9 @@ function ListView({
       copyItem={copyItem}
       describe={(entry) => summarizeRow(asRecord(entry), itemFields, labels)}
       invalidAt={invalidAt}
-      headerStatus={headerStatus}
+      stepped={stepped}
+      footer={slots?.footer}
+      headerStatus={slots?.status ?? headerStatus}
       headerActions={headerActions}
       panel={panel}
       onRowRemoved={onRowRemoved}

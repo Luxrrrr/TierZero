@@ -118,6 +118,7 @@ function ListComponents(props: Shared & { attach: MessageAttachList }) {
     />
   );
 
+  const canAdd = attach.add !== false;
   const addLabel = view.full
     ? `${view.max} of ${view.max}, the most Discord allows`
     : `Add a ${noun}`;
@@ -173,7 +174,7 @@ function ListComponents(props: Shared & { attach: MessageAttachList }) {
             </li>
           ))}
         </ul>
-        <AddButton label={addLabel} full={view.full} disabled={disabled || !props.newItem} onAdd={add} />
+        {canAdd ? <AddButton label={addLabel} full={view.full} disabled={disabled || !props.newItem} onAdd={add} /> : null}
       </>
     );
   }
@@ -199,12 +200,12 @@ function ListComponents(props: Shared & { attach: MessageAttachList }) {
                 <span className="visually-hidden">, edit this button</span>
               </button>
             ))}
-            {at === view.rows.length - 1 && !view.full ? (
+            {canAdd && at === view.rows.length - 1 && !view.full ? (
               <AddButton label={addLabel} full={false} disabled={disabled || !props.newItem} onAdd={add} inline />
             ) : null}
           </div>
         ))}
-        {view.rows.length === 0 || view.full ? (
+        {canAdd && (view.rows.length === 0 || view.full) ? (
           <div className="msg-buttons">
             <AddButton label={addLabel} full={view.full} disabled={disabled || !props.newItem} onAdd={add} inline />
           </div>

@@ -43,7 +43,11 @@ export function Switch({
       disabled={disabled}
       onClick={() => onChange(!checked)}
     >
-      <span className="switch-thumb" />
+      <span className="switch-thumb">
+        <svg className="switch-check" viewBox="0 0 12 12" aria-hidden="true">
+          <path d="M2.5 6.4 5 8.8 9.6 3.6" pathLength={1} />
+        </svg>
+      </span>
     </button>
   );
 }

@@ -12,6 +12,7 @@ import { captureDashboardUrl } from "../../../lib/dashboard-url-sync";
 import { signOutAction } from "../actions";
 import { PreviewServerProvider } from "../../../components/messages/PreviewServer";
 import { guildIconUrl } from "../../../lib/discord-cdn";
+import { ModMenuProvider } from "../../../components/mod/ModMenuProvider";
 
 /**
  * The shell for one server. Managers get the full navigation, built from the
@@ -74,7 +75,9 @@ export default async function GuildLayout({
         <PreviewServerProvider
           server={guild ? { name: guild.name, memberCount: guild.memberCount, iconUrl: guildIconUrl(guild.id, guild.icon, 256) ?? "" } : null}
         >
-          {children}
+          <ModMenuProvider guildId={id} role={access.staffRole} canConfigure={access.manager}>
+            {children}
+          </ModMenuProvider>
         </PreviewServerProvider>
       </AppShell>
     );

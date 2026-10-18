@@ -4,6 +4,7 @@ import { AuthCard } from "../components/AuthCard";
 import { AlertIcon } from "../components/Icons";
 import { guildAccess } from "../lib/guild-access";
 import { PATH_HEADER } from "../lib/login-redirect";
+import { isTicketWorkspacePath } from "../lib/ticket-path";
 
 /** Where someone refused this page can still go on the same server, if anywhere. */
 async function elsewhere(): Promise<{ href: string; label: string } | null> {
@@ -23,11 +24,19 @@ async function elsewhere(): Promise<{ href: string; label: string } | null> {
 
 export default async function Forbidden() {
   const other = await elsewhere();
+  const path = (await headers()).get(PATH_HEADER) ?? "";
+  const ticketPage = isTicketWorkspacePath(path);
 
   return (
     <AuthCard mark={<AlertIcon />} alert>
       <h1 className="auth-title">You do not have access to this page</h1>
-      {other ? (
+      {ticketPage ? (
+        <p className="auth-text">
+          Tickets are open to the roles chosen as handlers for a ticket type in this server. None of
+          your roles is one, so there is no ticket here for you to see. A member with Manage Server can
+          add one of your roles as handlers in the Tickets settings.
+        </p>
+      ) : other ? (
         <p className="auth-text">
           This page changes the server&apos;s settings, which needs the Manage Server permission
           in Discord. You can still use the part of the dashboard you were given here.

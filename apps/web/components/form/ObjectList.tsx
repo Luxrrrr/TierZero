@@ -8,7 +8,11 @@ import {
   type RowSummary,
 } from "../../lib/row-summary";
 import { duplicated, moved, setAfterInsert, setAfterMove } from "../../lib/list-order";
-import { ArrowDownIcon, ArrowUpIcon, PlusIcon } from "../Icons";
+import { ArrowDownIcon, ArrowUpIcon, ChevronDownIcon, PlusIcon } from "../Icons";
+import { Collapse } from "../Collapse";
+import { useConfirm } from "../ConfirmDialog";
+import { RowMenu } from "./RowMenu";
+import { useFlip } from "../../lib/use-flip";
 
 interface Props {
   items: unknown[];
@@ -38,17 +42,19 @@ interface Props {
   listPath?: string;
   /** Rows loaded from saved settings start open rather than closed. */
   startOpen?: boolean;
+  /**
+   * The chrome for a row edited as numbered steps: its header says Edit or
+   * Collapse, copying and removing sit in a menu behind three dots (removing
+   * asks first), and the row ends with a quiet Collapse instead of Done.
+   */
+  stepped?: boolean;
+  /** Drawn at the foot of an open row, beside Collapse. Only with `stepped`. */
+  footer?(index: number): ReactNode;
   children(item: unknown, index: number): ReactNode;
 }
 
 const INTERACTIVE = "button, a, input, select, textarea, [role='button']";
 const CONTROLS = "input, textarea, select, button";
-
-let keySeed = 0;
-function newKey(): string {
-  keySeed += 1;
-  return `row-${keySeed}`;
-}
 
 export function ObjectList({
   items,
@@ -68,9 +74,12 @@ export function ObjectList({
   "aria-labelledby": labelledBy,
   listPath,
   startOpen = false,
+  stepped = false,
+  footer,
   children,
 }: Props) {
   const baseId = useId();
+  const confirm = useConfirm();
   const atCapacity = max !== undefined && items.length >= max;
   const short = min !== undefined && items.length < min;
 
@@ -86,9 +95,17 @@ export function ObjectList({
   // row's controls, such as a duration's unit, moves with its row instead of
   // staying at the old position. A change made elsewhere, such as discarding
   // the draft, only has the lengths to go on.
+  // The counter is per list, so the server and the browser count the same way.
   const keys = useRef<string[]>([]);
+  const seed = useRef(0);
+  const newKey = () => {
+    seed.current += 1;
+    return `row-${seed.current}`;
+  };
   if (keys.current.length > items.length) keys.current = keys.current.slice(0, items.length);
   while (keys.current.length < items.length) keys.current.push(newKey());
+  const listRef = useRef<HTMLDivElement>(null);
+  const flip = useFlip(listRef, keys.current.join(","));
 
   const invalid = items.map((_, index) => index).filter((index) => invalidAt?.(index) === true);
   const invalidKey = invalid.join(",");
@@ -146,6 +163,7 @@ export function ObjectList({
   function move(from: number, to: number, button?: "up" | "down") {
     if (disabled || to < 0 || to >= items.length || from === to) return;
     const name = describe(items[from], from).title ?? `${itemLabel} ${from + 1}`;
+    flip();
     const key = keys.current[from];
     keys.current = moved(keys.current, from, to);
     setExpanded(setAfterMove(expanded, from, to));
@@ -171,6 +189,18 @@ export function ObjectList({
     onRowRemoved?.(index);
     keys.current = keys.current.filter((_, i) => i !== index);
     onChange(items.filter((_, i) => i !== index));
+  }
+
+  async function confirmRemove(index: number) {
+    if (disabled) return;
+    const name = describe(items[index], index).title ?? `${itemLabel} ${index + 1}`;
+    const yes = await confirm.ask({
+      title: `Remove ${name}?`,
+      text: `This takes the ${itemLabel.toLowerCase()} out of your draft. Nothing changes until you save, and Discard brings it back.`,
+      confirmLabel: `Remove ${itemLabel.toLowerCase()}`,
+      danger: true,
+    });
+    if (yes) remove(index);
   }
 
   function onHeadKeyDown(index: number) {
@@ -218,7 +248,7 @@ export function ObjectList({
   }
 
   return (
-    <div className="list" role="group" aria-labelledby={labelledBy} data-list-path={listPath}>
+    <div className="list" role="group" aria-labelledby={labelledBy} data-list-path={listPath} ref={listRef}>
       {items.map((item, index) => {
         const open = expanded.has(index);
         const summary = describe(item, index);
@@ -297,50 +327,80 @@ export function ObjectList({
                   aria-controls={open ? bodyId(baseId, index) : undefined}
                   onClick={() => toggle(index)}
                 >
-                  {open ? "Done" : "Edit"}
+                  {open ? (stepped ? "Collapse" : "Done") : "Edit"}
                   <span className="visually-hidden"> {name}</span>
                 </button>
-                <button
-                  type="button"
-                  className="btn btn-danger btn-sm"
-                  disabled={disabled}
-                  onClick={() => remove(index)}
-                >
-                  Remove
-                  <span className="visually-hidden"> {name}</span>
-                </button>
+                {stepped ? (
+                  <RowMenu
+                    label={`More actions for ${name}`}
+                    items={[
+                      ...(copyItem
+                        ? [
+                            {
+                              label: "Duplicate",
+                              disabled: disabled || atCapacity,
+                              title: atCapacity ? `This list holds at most ${max}.` : undefined,
+                              onSelect: () => duplicate(index),
+                            },
+                          ]
+                        : []),
+                      { label: "Remove", danger: true, disabled, onSelect: () => void confirmRemove(index) },
+                    ]}
+                  />
+                ) : (
+                  <button
+                    type="button"
+                    className="btn btn-danger btn-sm"
+                    disabled={disabled}
+                    onClick={() => remove(index)}
+                  >
+                    Remove
+                    <span className="visually-hidden"> {name}</span>
+                  </button>
+                )}
               </div>
             </div>
 
             {panel?.(index)}
 
-            {open ? (
-              <div className="list-item-body" id={bodyId(baseId, index)}>
-                <div className="form-grid">{children(item, index)}</div>
-                <div className="list-item-foot">
-                  {copyItem ? (
-                    <button
-                      type="button"
-                      className="btn btn-ghost btn-sm"
-                      disabled={disabled || atCapacity}
-                      title={atCapacity ? `This list holds at most ${max}.` : undefined}
-                      onClick={() => duplicate(index)}
-                    >
-                      Duplicate
-                      <span className="visually-hidden"> {name}</span>
-                    </button>
-                  ) : null}
-                  <button
-                    type="button"
-                    className="btn btn-secondary btn-sm"
-                    onClick={() => collapseFromBody(index)}
-                  >
-                    Done
-                    <span className="visually-hidden"> editing {name}</span>
-                  </button>
+            <Collapse open={open}>
+              {open ? (
+                <div className="list-item-body" id={bodyId(baseId, index)}>
+                  <div className="form-grid">{children(item, index)}</div>
+                  <div className={stepped ? "list-item-foot is-stepped" : "list-item-foot"}>
+                    {stepped ? footer?.(index) : null}
+                    {copyItem && !stepped ? (
+                      <button
+                        type="button"
+                        className="btn btn-ghost btn-sm"
+                        disabled={disabled || atCapacity}
+                        title={atCapacity ? `This list holds at most ${max}.` : undefined}
+                        onClick={() => duplicate(index)}
+                      >
+                        Duplicate
+                        <span className="visually-hidden"> {name}</span>
+                      </button>
+                    ) : null}
+                    {stepped ? (
+                      <button type="button" className="btn btn-ghost btn-sm row-collapse" onClick={() => collapseFromBody(index)}>
+                        <ChevronDownIcon />
+                        Collapse {itemLabel.toLowerCase()}
+                        <span className="visually-hidden"> {name}</span>
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-sm"
+                        onClick={() => collapseFromBody(index)}
+                      >
+                        Done
+                        <span className="visually-hidden"> editing {name}</span>
+                      </button>
+                    )}
+                  </div>
                 </div>
-              </div>
-            ) : null}
+              ) : null}
+            </Collapse>
           </div>
         );
       })}
@@ -354,6 +414,8 @@ export function ObjectList({
           At least {min} needed for this to do anything.
         </p>
       ) : null}
+
+      {confirm.host}
 
       <button
         type="button"

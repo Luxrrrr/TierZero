@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import { AlertIcon, CheckIcon, XIcon } from "./Icons";
@@ -9,6 +10,9 @@ export interface Toast {
   kind: "success" | "error";
   title: string;
   detail?: string;
+  /** A page the toast points at, such as the case an action created. */
+  href?: string;
+  hrefLabel?: string;
 }
 
 interface ToastContextValue {
@@ -17,7 +21,11 @@ interface ToastContextValue {
 
 interface LiveToast extends Toast {
   id: number;
+  /** Dismissed, and playing its exit before it is removed. */
+  leaving?: boolean;
 }
+
+const EXIT_MS = 200;
 
 const ToastContext = createContext<ToastContextValue | null>(null);
 
@@ -31,7 +39,10 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   const nextId = useRef(1);
 
   const dismiss = useCallback((id: number) => {
-    setToasts((current) => current.filter((toast) => toast.id !== id));
+    setToasts((current) => current.map((toast) => (toast.id === id ? { ...toast, leaving: true } : toast)));
+    window.setTimeout(() => {
+      setToasts((current) => current.filter((toast) => toast.id !== id));
+    }, EXIT_MS);
   }, []);
 
   const push = useCallback((toast: Toast) => {
@@ -94,33 +105,42 @@ function ToastItem({ toast, onDismiss }: { toast: LiveToast; onDismiss(id: numbe
   const paused = hovered || focused;
 
   useEffect(() => {
-    if (toast.kind !== "success" || paused) return;
+    if (toast.kind !== "success" || paused || toast.leaving) return;
     const started = Date.now();
     const timer = window.setTimeout(() => onDismiss(toast.id), remaining.current);
     return () => {
       window.clearTimeout(timer);
       remaining.current = Math.max(1000, remaining.current - (Date.now() - started));
     };
-  }, [toast.kind, toast.id, paused, onDismiss]);
+  }, [toast.kind, toast.id, toast.leaving, paused, onDismiss]);
 
   return (
-    <div
-      className={toast.kind === "success" ? "toast toast-success" : "toast toast-error"}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      onFocus={() => setFocused(true)}
-      onBlur={(event) => {
-        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setFocused(false);
-      }}
-    >
-      {toast.kind === "success" ? <CheckIcon className="toast-icon" /> : <AlertIcon className="toast-icon" />}
-      <div className="toast-text">
-        <div className="toast-title">{toast.title}</div>
-        {toast.detail ? <div className="toast-detail">{toast.detail}</div> : null}
+    <div className="toast-slot" data-leaving={toast.leaving ? "true" : undefined}>
+      <div className="toast-slot-inner">
+        <div
+          className={toast.kind === "success" ? "toast toast-success" : "toast toast-error"}
+          onMouseEnter={() => setHovered(true)}
+          onMouseLeave={() => setHovered(false)}
+          onFocus={() => setFocused(true)}
+          onBlur={(event) => {
+            if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setFocused(false);
+          }}
+        >
+          {toast.kind === "success" ? <CheckIcon className="toast-icon" /> : <AlertIcon className="toast-icon" />}
+          <div className="toast-text">
+            <div className="toast-title">{toast.title}</div>
+            {toast.detail ? <div className="toast-detail">{toast.detail}</div> : null}
+            {toast.href ? (
+              <Link className="toast-link" href={toast.href} onClick={() => onDismiss(toast.id)}>
+                {toast.hrefLabel ?? "View"}
+              </Link>
+            ) : null}
+          </div>
+          <button type="button" className="toast-close" onClick={() => onDismiss(toast.id)} aria-label="Dismiss">
+            <XIcon />
+          </button>
+        </div>
       </div>
-      <button type="button" className="toast-close" onClick={() => onDismiss(toast.id)} aria-label="Dismiss">
-        <XIcon />
-      </button>
     </div>
   );
 }

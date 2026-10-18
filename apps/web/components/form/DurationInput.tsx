@@ -3,6 +3,7 @@
 import { useState } from "react";
 import {
   DURATION_UNITS,
+  describeDuration,
   formatDuration,
   toMilliseconds,
   unitMilliseconds,
@@ -19,6 +20,11 @@ interface Props {
   max?: string;
   /** The floor the schema declares, written as "1m". */
   min?: string;
+  /**
+   * Set when the saved value was below the minimum and reads as the minimum.
+   * The note shows while the box still holds that minimum.
+   */
+  raised?: boolean;
   /** Names the unit select, which has no visible label of its own. */
   label: string;
   disabled?: boolean;
@@ -35,6 +41,7 @@ export function DurationInput({
   onChange,
   max,
   min,
+  raised = false,
   label,
   disabled = false,
   "aria-describedby": describedBy,
@@ -70,29 +77,36 @@ export function DurationInput({
     onChange(nextAmount === "" ? undefined : `${Number(nextAmount)}${nextUnit}`);
   }
 
+  const showRaised = raised && floor !== null && toMilliseconds(emitted) === floor;
+
   return (
-    <div className="input-affix">
-      <input
-        id={id}
-        type="number"
-        inputMode="numeric"
-        min={minAmount}
-        max={maxAmount}
-        step={1}
-        value={amount}
-        disabled={disabled}
-        aria-describedby={describedBy}
-        onChange={(event) => update(event.target.value.replace(/\D/g, ""), unit)}
-      />
-      <Select
-        className="select-unit"
-        aria-label={`Unit for ${label}`}
-        options={DURATION_UNITS.map((option) => ({ value: option.value, label: option.label }))}
-        value={unit}
-        disabled={disabled}
-        onChange={(next) => update(amount, next as DurationUnit)}
-      />
-    </div>
+    <>
+      <div className="input-affix">
+        <input
+          id={id}
+          type="number"
+          inputMode="numeric"
+          min={minAmount}
+          max={maxAmount}
+          step={1}
+          value={amount}
+          disabled={disabled}
+          aria-describedby={describedBy}
+          onChange={(event) => update(event.target.value.replace(/\D/g, ""), unit)}
+        />
+        <Select
+          className="select-unit"
+          aria-label={`Unit for ${label}`}
+          options={DURATION_UNITS.map((option) => ({ value: option.value, label: option.label }))}
+          value={unit}
+          disabled={disabled}
+          onChange={(next) => update(amount, next as DurationUnit)}
+        />
+      </div>
+      {showRaised ? (
+        <p className="field-hint">Raised to the minimum of {describeDuration(min)}.</p>
+      ) : null}
+    </>
   );
 }
 

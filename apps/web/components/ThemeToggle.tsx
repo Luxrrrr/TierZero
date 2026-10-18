@@ -14,8 +14,14 @@ const OPTIONS: { value: Theme; label: string; icon: ReactNode }[] = [
   { value: "dark", label: "Dark", icon: <MoonIcon /> },
 ];
 
+let settle: number | undefined;
+
 function apply(theme: Theme): void {
   const root = document.documentElement;
+  // Colours cross-fade only while the choice changes, never on ordinary renders.
+  root.setAttribute("data-theme-motion", "");
+  window.clearTimeout(settle);
+  settle = window.setTimeout(() => root.removeAttribute("data-theme-motion"), 300);
   if (theme === "system") {
     root.removeAttribute("data-theme");
   } else {

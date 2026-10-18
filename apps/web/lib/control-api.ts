@@ -137,6 +137,8 @@ export interface GuildModuleState {
   requires?: string[];
   enabled: boolean;
   settings: Record<string, unknown>;
+  /** Stored durations that read as their schema's minimum, because the saved value is below it. */
+  raised?: { path: string; min: string }[];
   schema: Record<string, unknown>;
   /** Which list settings carry a status line or actions, keyed by schema path. */
   rows: Record<string, RowDescription>;
@@ -383,13 +385,14 @@ const TICKET_FILE_TYPES = ["text/html", "text/plain"];
 export async function ticketsRequest(
   guildId: string,
   path: string,
-  init: { method?: string; body?: unknown; timeoutMs?: number } = {},
+  init: { method?: string; body?: unknown; timeoutMs?: number; signal?: AbortSignal } = {},
 ): Promise<ModReply> {
   const res = await controlFetch(`/guilds/${encodeURIComponent(guildId)}/tickets/${path}`, {
     method: init.method ?? "GET",
     headers: init.body === undefined ? undefined : { "content-type": "application/json" },
     body: init.body === undefined ? undefined : JSON.stringify(init.body),
-    signal: AbortSignal.timeout(init.timeoutMs ?? MOD_TIMEOUT_MS),
+    // The caller's own signal ends a held read when the browser goes away, which lets the bot give its place back.
+    signal: init.signal ? AbortSignal.any([AbortSignal.timeout(init.timeoutMs ?? MOD_TIMEOUT_MS), init.signal]) : AbortSignal.timeout(init.timeoutMs ?? MOD_TIMEOUT_MS),
   });
   const contentType = res.headers.get("content-type") ?? "";
   const timedOut = (error: unknown) => {

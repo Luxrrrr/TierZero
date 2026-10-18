@@ -1,9 +1,12 @@
 "use client";
 
 import { useEffect, useState, type ReactNode } from "react";
-import type { FieldDescriptor, FieldTopic, MessageAttach, MessageBody, RowDescription } from "@tier0/core";
+import type { FieldDescriptor, FieldTopic, FormStep, ListPreview, MessageAttach, MessageBody, RowCard, RowDescription } from "@tier0/core";
 import { describeDuration, shortDuration } from "../lib/duration";
-import { conditionMet, type Condition } from "../lib/field-condition";
+import { conditionHidden, conditionMet, type Condition } from "../lib/field-condition";
+import { declaredSteps, stepGroups } from "../lib/form-steps";
+import { fieldsForTab, pathInRow, sheetTabs } from "../lib/row-sheet";
+import { listFieldError } from "../lib/field-error";
 import {
   collapsibleRuns,
   groupsWithErrors,
@@ -14,7 +17,7 @@ import {
   toggleRun,
   withOpen,
 } from "../lib/group-open";
-import { humanize, summarizeGroup } from "../lib/row-summary";
+import { humanize, stripIndices, summarizeGroup } from "../lib/row-summary";
 import { getAt, groupByTopic, isChanged, listedFields, setAt, type ListedMessage } from "../lib/bot-messages";
 import { defaultsFor, isGenerated, makeRowId, withFreshIds } from "../lib/row-defaults";
 import { arrayItemPath, objectChildPath } from "../lib/schema-paths";
@@ -22,16 +25,18 @@ import { settingsSections } from "../lib/settings-sections";
 // Imported one file at a time rather than through the barrel, which re-exports
 // this module in turn.
 import { ChannelPicker, MultiChannelPicker } from "./form/ChannelPicker";
+import { ChoiceButtons } from "./form/ChoiceButtons";
 import { DurationInput } from "./form/DurationInput";
 import { EmojiInput } from "./form/EmojiInput";
 import { Field, type FieldChrome } from "./form/Field";
 import { MessageControl } from "./form/MessageControl";
+import { ModalPreview } from "./form/ModalPreview";
 import { MultiChoice } from "./form/MultiChoice";
 import { SectionedSettings, type ExtraSection } from "./form/SectionedSettings";
 import { AttachedComponents } from "./form/AttachedComponents";
 import { MessageList } from "./form/MessageList";
 import { ChevronRightIcon } from "./Icons";
-import { ObjectArray, type RowsContext } from "./form/ObjectArray";
+import { ObjectArray, type RowSlots, type RowsContext } from "./form/ObjectArray";
 import { MultiRolePicker, RolePicker } from "./form/RolePicker";
 import { Select, type SelectOption } from "./form/Select";
 import { Switch } from "./form/Switch";
@@ -85,8 +90,12 @@ interface Props {
   openRows?: boolean;
   /** Drawn at the top of a section, keyed by its id: a status line about what that part configures, say. */
   sectionIntro?: Record<string, ReactNode>;
+  /** Durations whose saved value is below their minimum and reads as it, by path. */
+  raised?: { path: string; min: string }[];
   /** Entries of the page's own after the schema's sections, such as the feature's commands. */
   extraSections?: ExtraSection[];
+  /** What the page draws into a list's rows, keyed by the list's schema path: a status and a foot. */
+  rowSlots?: Record<string, RowSlots>;
 }
 
 interface RenderContext {
@@ -96,6 +105,9 @@ interface RenderContext {
   serverName: string | undefined;
   rows: RowsContext | undefined;
   openRows: boolean;
+  /** Paths of durations that read as their minimum, not as what was saved. */
+  raised: ReadonlySet<string>;
+  rowSlots: Record<string, RowSlots> | undefined;
   /** A top-level key whose label the card title already says, so the field keeps its own for screen readers only. */
   hiddenLabel?: string;
   /** The whole draft and the module's top-level fields, for a control that edits settings elsewhere, as an attached button does. */
@@ -144,8 +156,10 @@ export function SettingsForm({
   collapse = true,
   sections = true,
   openRows = false,
+  raised,
   sectionIntro,
   extraSections = [],
+  rowSlots,
 }: Props) {
   const fields = (schema.fields ?? {}) as Fields;
   const entries = Object.entries(fields);
@@ -186,6 +200,8 @@ export function SettingsForm({
         ? { moduleId, descriptions: rows, locked: actionsLocked, dirty, revision: savedRevision }
         : undefined,
     openRows,
+    raised: new Set((raised ?? []).map((entry) => entry.path)),
+    rowSlots,
     root: value,
     rootFields: fields,
     setRoot: onChange,
@@ -593,6 +609,8 @@ function renderChild(
   const path = objectChildPath(parentPath, key);
   const condition = field.when as Condition | undefined;
   const met = conditionMet(condition, values);
+  // A setting that only matters in some cases is left out until then rather than greyed.
+  if (conditionHidden(condition, values)) return null;
   const dependency = met ? undefined : dependencySentence(condition, siblings);
   const setValue = (next: unknown) => onChange({ ...values, [key]: next });
 
@@ -662,7 +680,8 @@ function ControlField({
   // Wording can be settled before whatever it waits on, such as a greeting
   // before its channel is picked; the dependency line still says when it is used.
   const disabled = ctx.disabled || (unavailable && field.kind !== "message");
-  const error = ctx.errors[path];
+  // A list of chips is one control, but the bot refuses single entries, so those messages are gathered under it.
+  const error = field.kind === "array" ? listFieldError(ctx.errors, path, Array.isArray(value) ? value : []) : ctx.errors[path];
   const optional = field.optional === true && field.essential !== true;
 
   const shared = {
@@ -785,11 +804,26 @@ function control(chrome: FieldChrome, props: ControlProps): ReactNode {
           value={value}
           max={field.max as string | undefined}
           min={field.min as string | undefined}
+          raised={ctx.raised.has(props.path)}
           onChange={onChange}
         />
       );
 
     case "choice":
+      if (field.control === "segmented" || field.control === "swatches") {
+        return (
+          <ChoiceButtons
+            id={common.id}
+            disabled={common.disabled}
+            aria-describedby={common["aria-describedby"]}
+            aria-labelledby={chrome.labelId}
+            variant={field.control}
+            options={(field.options ?? []) as SelectOption[]}
+            value={typeof value === "string" ? value : undefined}
+            onChange={onChange}
+          />
+        );
+      }
       return (
         <Select
           id={common.id}
@@ -959,7 +993,7 @@ function arrayControl(chrome: FieldChrome, props: ControlProps): ReactNode {
       typeof field.item === "string" && field.item !== ""
         ? field.item.charAt(0).toUpperCase() + field.item.slice(1)
         : singularize(field.label ?? humanize(name));
-    return (
+    const list = (
       <ObjectArray
         guildId={ctx.guildId}
         path={path}
@@ -972,23 +1006,40 @@ function arrayControl(chrome: FieldChrome, props: ControlProps): ReactNode {
         aria-labelledby={chrome.labelId}
         rows={ctx.rows}
         openRows={ctx.openRows}
+        stepped={declaredSteps(item).length > 0}
+        slots={ctx.rowSlots?.[stripIndices(path)]}
         newItem={() => defaultsFor(itemFields, makeRowId)}
         copyItem={(entry) => withFreshIds(entry, itemFields, makeRowId)}
         invalidAt={(index) => hasErrorUnder(ctx.errors, arrayItemPath(path, index))}
         onChange={onChange}
+        sheet={
+          field.layout === "sheet"
+            ? {
+                card: (field.card ?? {}) as RowCard,
+                rowErrors: (index) => rowErrorPaths(ctx.errors, arrayItemPath(path, index)),
+                renderTab: (entry, index, tab) => {
+                  const tabs = sheetTabs(itemFields);
+                  const inTab = tab === "" ? itemFields : fieldsForTab(itemFields, tab, tabs[0]?.id ?? "");
+                  return renderFieldList(
+                    Object.entries(inTab),
+                    itemFields,
+                    asRecord(entry),
+                    arrayItemPath(path, index),
+                    ctx,
+                    (next) => onChange(items.map((old, i) => (i === index ? next : old))),
+                  );
+                },
+              }
+            : undefined
+        }
         renderRow={(entry, index) => {
           const entryPath = arrayItemPath(path, index);
           const entryValues = asRecord(entry);
+          const setEntry = (next: Record<string, unknown>) => onChange(items.map((old, i) => (i === index ? next : old)));
+          const steps = declaredSteps(item);
+          if (steps.length > 0) return renderSteps(steps, itemFields, entryValues, entryPath, ctx, setEntry);
           return Object.entries(itemFields).map(([childKey, childField]) =>
-            renderChild(
-              childKey,
-              childField,
-              itemFields,
-              entryValues,
-              entryPath,
-              ctx,
-              (next) => onChange(items.map((old, i) => (i === index ? next : old))),
-            ),
+            renderChild(childKey, childField, itemFields, entryValues, entryPath, ctx, setEntry),
           );
         }}
         actionInputs={{
@@ -1001,6 +1052,15 @@ function arrayControl(chrome: FieldChrome, props: ControlProps): ReactNode {
             }),
         }}
       />
+    );
+    const preview = field.formPreview as ListPreview | undefined;
+    if (!preview) return list;
+    const titled = preview.title !== undefined ? props.place?.siblings[preview.title] : undefined;
+    return (
+      <>
+        {list}
+        <ModalPreview preview={preview} items={items} title={typeof titled === "string" ? titled : undefined} />
+      </>
     );
   }
 
@@ -1207,6 +1267,53 @@ function actionInputFields(
       )}
     </div>
   );
+}
+
+/**
+ * A row drawn with `steps`: numbered parts, each with its title and a line
+ * saying what it is for. A part holding one setting lets the part's title stand
+ * in for that setting's label and help, so it is not said twice.
+ */
+function renderSteps(
+  steps: FormStep[],
+  fields: Fields,
+  values: Record<string, unknown>,
+  parentPath: string,
+  ctx: RenderContext,
+  onChange: (next: Record<string, unknown>) => void,
+): ReactNode[] {
+  return stepGroups(fields, steps).map((group, at) => {
+    const titleId = `${htmlId(parentPath)}-step-${group.step.id}`;
+    const lone = group.keys.length === 1 ? group.keys[0] : undefined;
+    const entries: [string, FieldDescriptor][] = group.keys.map((key) => {
+      const field = fields[key] as FieldDescriptor;
+      return [key, key === lone ? { ...field, help: undefined } : field];
+    });
+    const stepCtx = lone !== undefined ? { ...ctx, hiddenLabel: objectChildPath(parentPath, lone) } : ctx;
+    return (
+      <section className="form-step" key={group.step.id} aria-labelledby={titleId}>
+        <header className="form-step-head">
+          <span className="form-step-num" aria-hidden="true">
+            {at + 1}
+          </span>
+          <div className="form-step-text">
+            <h4 className="form-step-title" id={titleId}>
+              {group.step.title}
+            </h4>
+            {group.step.help ? <p className="form-step-help">{group.step.help}</p> : null}
+          </div>
+        </header>
+        <div className="form-step-body form-grid">{renderFieldList(entries, fields, values, parentPath, stepCtx, onChange)}</div>
+      </section>
+    );
+  });
+}
+
+/** The refused settings of one row, as paths from the row. */
+function rowErrorPaths(errors: Record<string, string>, rowPath: string): string[] {
+  return Object.keys(errors)
+    .map((key) => pathInRow(key, rowPath))
+    .filter((key): key is string => key !== null);
 }
 
 function hasErrorUnder(errors: Record<string, string>, prefix: string): boolean {

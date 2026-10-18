@@ -57,6 +57,16 @@ export function ChevronDownIcon(props: { className?: string }) {
   );
 }
 
+export function MoreIcon(props: { className?: string }) {
+  return (
+    <svg className={props.className} viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true">
+      <circle cx="5" cy="12" r="1.8" />
+      <circle cx="12" cy="12" r="1.8" />
+      <circle cx="19" cy="12" r="1.8" />
+    </svg>
+  );
+}
+
 export function MenuIcon(props: { className?: string }) {
   return (
     <svg className={props.className} viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -571,6 +581,15 @@ export function KeyboardIcon(props: { className?: string }) {
     <Stroke className={props.className}>
       <rect x="2.5" y="6" width="19" height="12" rx="2" />
       <path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10" />
+    </Stroke>
+  );
+}
+
+export function CopyIcon(props: { className?: string }) {
+  return (
+    <Stroke className={props.className}>
+      <rect x="9" y="9" width="11" height="11" rx="2" />
+      <path d="M5 15V6a2 2 0 0 1 2-2h9" />
     </Stroke>
   );
 }

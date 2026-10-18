@@ -65,6 +65,21 @@ function MessageFormBody({ guildId, value, onChange, errors, variables, showReac
     <div className="msg-form">
       <ToolBar guildId={guildId} variables={variables} />
 
+      {unknown.length > 0 ? (
+        <div className="msg-warning" role="status">
+          <p className="msg-problems-title">
+            {unknown.length === 1 ? "A variable this message does not know" : "Variables this message does not know"}
+          </p>
+          <ul>
+            {unknown.slice(0, 6).map((name) => (
+              <li key={name}>
+                <code>{`{${name}}`}</code> is sent exactly as typed. Check the spelling, or pick one from Variables.
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
       <div className="card msg-card">
         <div className="field-label-row">
           <label className="field-label" htmlFor="msg-content">
@@ -142,21 +157,6 @@ function MessageFormBody({ guildId, value, onChange, errors, variables, showReac
       ) : null}
       {showReactions ? (
         <ReactionsEditor guildId={guildId} reactions={value.reactions} errors={errors} onChange={(reactions) => onChange({ ...value, reactions })} />
-      ) : null}
-
-      {unknown.length > 0 ? (
-        <div className="msg-warning" role="status">
-          <p className="msg-problems-title">
-            {unknown.length === 1 ? "A variable this message does not know" : "Variables this message does not know"}
-          </p>
-          <ul>
-            {unknown.slice(0, 6).map((name) => (
-              <li key={name}>
-                <code>{`{${name}}`}</code> is sent exactly as typed. Check the spelling, or pick one from Variables.
-              </li>
-            ))}
-          </ul>
-        </div>
       ) : null}
 
       {shown.length > 0 ? (

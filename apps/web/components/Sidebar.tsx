@@ -9,6 +9,7 @@ import { initialsOf } from "../lib/discord-cdn";
 import { GuildSwitcher } from "./GuildSwitcher";
 import { Logo } from "./Logo";
 import { NavLink } from "./NavLink";
+import { NavMarker } from "./NavMarker";
 import { ComingSoon } from "./ComingSoon";
 import { NavMore } from "./NavMore";
 import { RoadmapList } from "./RoadmapList";
@@ -79,6 +80,7 @@ export async function Sidebar({
       </div>
 
       <nav className="sidebar-nav" aria-label="Dashboard">
+        <NavMarker />
         {currentGuild ? (
           <>
             <div className="nav-group">

@@ -28,8 +28,14 @@ function readMode(): SidebarMode {
   return parseSidebarMode(document.documentElement.getAttribute(SIDEBAR_ATTRIBUTE));
 }
 
+let settle: number | undefined;
+
 function applyMode(mode: SidebarMode): void {
   const root = document.documentElement;
+  // Lets the stylesheet fade labels in as the rail opens, for this change only.
+  root.setAttribute("data-sidebar-motion", mode);
+  window.clearTimeout(settle);
+  settle = window.setTimeout(() => root.removeAttribute("data-sidebar-motion"), 400);
   if (mode === "collapsed") root.setAttribute(SIDEBAR_ATTRIBUTE, "collapsed");
   else root.removeAttribute(SIDEBAR_ATTRIBUTE);
   for (const listener of listeners) listener();

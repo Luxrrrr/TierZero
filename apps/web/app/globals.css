@@ -88,6 +88,7 @@
 
   --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
   --ease-spring: cubic-bezier(0.34, 1.4, 0.64, 1);
+  --ease-emphasis: cubic-bezier(0.2, 0.8, 0.2, 1);
   --duration-fast: 130ms;
   --duration-base: 220ms;
   --duration-slow: 360ms;
@@ -1465,11 +1466,11 @@ html:not([data-theme="light"]):not([data-theme="dark"]) .theme-toggle [data-them
 @keyframes rail-tip-in {
   from {
     opacity: 0;
-    margin-left: -4px;
+    transform: translate(-4px, -50%);
   }
   to {
     opacity: 1;
-    margin-left: 0;
+    transform: translate(0, -50%);
   }
 }
 
@@ -3503,6 +3504,13 @@ html:not([data-theme="light"]):not([data-theme="dark"]) .theme-toggle [data-them
   margin-top: 2px;
 }
 
+.toast-link {
+  display: inline-block;
+  margin-top: var(--space-1);
+  font-weight: 500;
+  text-decoration: underline;
+}
+
 .toast-close {
   display: inline-flex;
   align-items: center;
@@ -3636,9 +3644,14 @@ html:not([data-theme="light"]):not([data-theme="dark"]) .theme-toggle [data-them
   gap: var(--space-2);
   color: var(--text-secondary);
   min-width: 0;
+  white-space: nowrap;
+}
+
+/* The dot's glow reaches past its box, so only the words are clipped. */
+.module-tile-status-text {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .module-tile-status[data-status="attention"] {
@@ -5021,7 +5034,8 @@ html:not([data-theme="light"]):not([data-theme="dark"]) .theme-toggle [data-them
     display: none;
   }
 
-  .wizard-step[data-state="current"] .wizard-step-name {
+  .wizard-step[data-state="current"] .wizard-step-name,
+  .wizard-step[data-state="saved"] .wizard-step-name {
     display: inline;
   }
 }
@@ -5854,6 +5868,81 @@ html:not([data-theme="light"]):not([data-theme="dark"]) .theme-toggle [data-them
   flex: none;
   font-size: var(--text-2xs);
   color: var(--text-tertiary);
+}
+
+/* The "available in tickets" chip: a toggle that stays visible when on and appears on hover or focus when off. */
+.msg-template-row {
+  display: flex;
+  align-items: center;
+}
+
+.msg-template-row > .msg-template {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.msg-template-chip {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-1);
+  margin-right: var(--space-3);
+  padding: 1px var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  color: var(--text-tertiary);
+  font-size: var(--text-2xs);
+  opacity: 0;
+  transition: opacity var(--duration-fast) var(--ease-out);
+}
+
+.msg-template-chip svg {
+  width: 12px;
+  height: 12px;
+}
+
+.msg-template-chip[aria-pressed="true"] {
+  border-color: var(--accent-ring);
+  background: var(--accent-soft);
+  color: var(--accent-text);
+  opacity: 1;
+}
+
+.msg-template-row:hover .msg-template-chip,
+.msg-template-row:focus-within .msg-template-chip {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  .msg-template-chip {
+    opacity: 1;
+  }
+}
+
+.msg-template-chip:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+}
+
+.msg-library-filter,
+.msg-flag {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+
+.msg-library-filter {
+  margin: 0 var(--space-4) var(--space-3);
+}
+
+.msg-bar-flag {
+  grid-column: 1 / -1;
+}
+
+.msg-bar-flag .field-hint {
+  margin: var(--space-1) 0 0 calc(13px + var(--space-2));
 }
 
 .msg-folder {
@@ -7310,7 +7399,7 @@ html:not([data-theme="light"]):not([data-theme="dark"]) .theme-toggle [data-them
 .nav-more-chevron {
   width: 12px;
   height: 12px;
-  transition: transform 0.15s;
+  transition: transform var(--duration-base) var(--ease-spring);
 }
 
 .nav-more[data-open="true"] .nav-more-chevron {
@@ -9730,4 +9819,1306 @@ html[data-sidebar="collapsed"] .nav-more-body[hidden] {
   background: var(--bg-raised);
   color: var(--text-primary);
   font-size: var(--text-sm, 0.875rem);
+}
+
+/* Motion ------------------------------------------------------------------ */
+/* Everything that moves is a transform or an opacity change, with box-shadow,
+   background-color and color on small elements. Entrances run on mount and
+   use a backwards fill, so nothing keeps a stacking context once it has
+   settled. Under reduced motion the rules at the end of this section turn
+   movement off and leave at most a short fade. */
+
+@keyframes page-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+@keyframes content-settle {
+  from {
+    opacity: 0.35;
+  }
+}
+
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+}
+
+@keyframes dialog-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.96);
+  }
+}
+
+@keyframes dialog-out {
+  to {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.96);
+  }
+}
+
+@keyframes scrim-out {
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes toast-spring {
+  from {
+    opacity: 0;
+    transform: translateX(28px) scale(0.96);
+  }
+}
+
+@keyframes toast-out {
+  to {
+    opacity: 0;
+    transform: translateX(20px) scale(0.96);
+  }
+}
+
+@keyframes savebar-in {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(18px) scale(0.98);
+  }
+}
+
+@keyframes savebar-out {
+  to {
+    opacity: 0;
+    transform: translateX(-50%) translateY(14px) scale(0.98);
+  }
+}
+
+@keyframes chip-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.88);
+  }
+}
+
+@keyframes row-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+@keyframes msg-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+@keyframes jump-in {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(8px) scale(0.9);
+  }
+}
+
+@keyframes bar-grow {
+  from {
+    transform: scaleX(0);
+  }
+}
+
+@keyframes chart-reveal {
+  from {
+    clip-path: inset(-4px 100% -4px -4px);
+  }
+  to {
+    clip-path: inset(-4px -4px -4px -4px);
+  }
+}
+
+@keyframes label-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes shimmer-x {
+  to {
+    transform: translateX(100%);
+  }
+}
+
+@keyframes focus-ring {
+  from {
+    outline-color: transparent;
+    outline-offset: 5px;
+  }
+}
+
+/* Page area. The template in each section wraps its page in this, and it runs
+   on a move between sections. Inside a section the tab strip stays put and
+   only the page below it is keyed. */
+
+.page-enter {
+  animation: page-enter 240ms var(--ease-emphasis) backwards;
+}
+
+/* A loading screen waits a beat before it shows, so a quick load never flashes
+   one, and the page that replaces it eases up from half-lit rather than
+   appearing from nothing. */
+.page-swap > [role="status"] {
+  animation: fade 180ms var(--ease-out) 90ms backwards;
+}
+
+.page-swap > :not([role="status"]) {
+  animation: content-settle var(--duration-base) var(--ease-out) backwards;
+}
+
+/* Buttons and links ------------------------------------------------------- */
+
+.btn {
+  transition:
+    background-color var(--duration-fast) var(--ease-out),
+    border-color var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out),
+    box-shadow var(--duration-base) var(--ease-out),
+    transform var(--duration-base) var(--ease-spring);
+}
+
+.btn-primary:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.25),
+    0 6px 14px -6px color-mix(in srgb, var(--accent) 70%, transparent);
+}
+
+.btn:active:not(:disabled),
+.btn-primary:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.module-tile,
+.guild-card {
+  transition:
+    border-color var(--duration-fast) var(--ease-out),
+    box-shadow var(--duration-base) var(--ease-out),
+    transform var(--duration-base) var(--ease-emphasis);
+}
+
+.module-tile:hover,
+.guild-card:hover {
+  transform: translateY(-2px);
+}
+
+.list-add:active:not(:disabled),
+.mod-chip:active:not(:disabled),
+.filter-chip:active:not(:disabled),
+.chip-add:active:not(:disabled),
+.tk-live-pill:active {
+  transform: scale(0.98);
+}
+
+/* The ring eases in from a little way out instead of appearing. Elements that
+   already run an entrance are left out: taking the ring's animation off them
+   again on blur would replay the entrance. */
+:is(a, button, input, select, textarea, [tabindex]):focus-visible:not(.rise, .tk-jump, .tk-live-pill, tr) {
+  animation: focus-ring var(--duration-fast) var(--ease-out);
+}
+
+/* Rows --------------------------------------------------------------------- */
+
+.mod-table tbody tr,
+.tk-row-item {
+  animation: row-in var(--duration-base) var(--ease-emphasis) backwards;
+}
+
+.mod-table tbody tr {
+  transition: background-color var(--duration-fast) var(--ease-out);
+}
+
+.tk-row-item {
+  animation-delay: calc(min(var(--i, 0), 8) * 30ms);
+}
+
+.mod-table tbody tr:nth-child(2) { animation-delay: 30ms; }
+.mod-table tbody tr:nth-child(3) { animation-delay: 60ms; }
+.mod-table tbody tr:nth-child(4) { animation-delay: 90ms; }
+.mod-table tbody tr:nth-child(5) { animation-delay: 120ms; }
+.mod-table tbody tr:nth-child(6) { animation-delay: 150ms; }
+.mod-table tbody tr:nth-child(7) { animation-delay: 180ms; }
+.mod-table tbody tr:nth-child(8) { animation-delay: 210ms; }
+.mod-table tbody tr:nth-child(n + 9) { animation-delay: 240ms; }
+
+.mod-kpi,
+.overview-stats > * {
+  animation: rise var(--duration-slow) var(--ease-emphasis) backwards;
+}
+
+.mod-kpis > :nth-child(2),
+.overview-stats > :nth-child(2) { animation-delay: 40ms; }
+.mod-kpis > :nth-child(3),
+.overview-stats > :nth-child(3) { animation-delay: 80ms; }
+.mod-kpis > :nth-child(4),
+.overview-stats > :nth-child(4) { animation-delay: 120ms; }
+.mod-kpis > :nth-child(n + 5),
+.overview-stats > :nth-child(n + 5) { animation-delay: 160ms; }
+
+/* Sidebar ------------------------------------------------------------------ */
+
+.nav-marker {
+  position: absolute;
+  z-index: 1;
+  top: 0;
+  left: var(--space-3);
+  width: 2px;
+  height: calc(var(--ind-h, 34) * 1px - 1rem);
+  border-radius: var(--radius-full);
+  background: var(--accent);
+  opacity: var(--ind-o, 0);
+  transform: translateY(calc(var(--ind-y, 0) * 1px + 0.5rem));
+  pointer-events: none;
+}
+
+.sidebar-nav[data-indicator="ready"] .nav-marker {
+  transition:
+    transform 320ms var(--ease-emphasis),
+    height var(--duration-base) var(--ease-emphasis),
+    opacity var(--duration-fast) var(--ease-out);
+}
+
+/* Until the marker has been placed, the link draws its own, so there is no
+   gap before the page has hydrated. */
+.sidebar-nav[data-indicator] .nav-link.is-current::before {
+  content: none;
+}
+
+html[data-sidebar-motion="expanded"] .sidebar
+  :is(.nav-link-text, .sidebar-brand-word, .sidebar-guild-text, .sidebar-user-name, .sidebar-signout-text) {
+  animation: label-in var(--duration-base) var(--ease-out) 90ms backwards;
+}
+
+/* Tabs ---------------------------------------------------------------------- */
+/* One underline for the whole strip, moved by transform to the current tab. */
+
+.mod-tabs {
+  position: relative;
+}
+
+.mod-tabs::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 1px;
+  height: 3px;
+  background: var(--focus);
+  opacity: var(--ind-o, 0);
+  transform: translateX(calc(var(--ind-x, 0) * 1px)) scaleX(var(--ind-w, 0));
+  transform-origin: 0 50%;
+  pointer-events: none;
+}
+
+.mod-tabs[data-indicator="ready"]::after {
+  transition:
+    transform 320ms var(--ease-emphasis),
+    opacity var(--duration-fast) var(--ease-out);
+}
+
+.mod-tabs[data-indicator] a[aria-current="page"]::after {
+  background: transparent;
+}
+
+/* Switches, checkboxes, chips ---------------------------------------------- */
+
+.switch-thumb {
+  display: grid;
+  place-items: center;
+}
+
+.switch-check {
+  width: 0.75rem;
+  height: 0.75rem;
+  fill: none;
+  stroke: var(--on);
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  transition: stroke-dashoffset var(--duration-base) var(--ease-out) 50ms;
+}
+
+.switch[aria-checked="true"] .switch-check {
+  stroke-dashoffset: 0;
+}
+
+.switch-lg .switch-check {
+  width: 0.875rem;
+  height: 0.875rem;
+}
+
+.switch:active:not(:disabled) .switch-thumb {
+  transform: scale(0.9);
+}
+
+.switch[aria-checked="true"]:active:not(:disabled) .switch-thumb {
+  transform: translateX(1rem) scale(0.9);
+}
+
+.switch-lg[aria-checked="true"]:active:not(:disabled) .switch-thumb {
+  transform: translateX(1.25rem) scale(0.9);
+}
+
+.multi-choice-box svg {
+  color: var(--text-inverse);
+}
+
+.multi-choice-box polyline {
+  stroke-dasharray: 24;
+  stroke-dashoffset: 24;
+  transition: stroke-dashoffset var(--duration-base) var(--ease-out) 40ms;
+}
+
+.multi-choice-row[aria-checked="true"] .multi-choice-box polyline,
+.multi-choice-chip[aria-checked="true"] .multi-choice-box polyline {
+  stroke-dashoffset: 0;
+}
+
+/* A chip added to a list pops in. Held back until the page has settled so a
+   first load is calm. */
+html[data-motion="ready"] .chip {
+  animation: chip-pop var(--duration-base) var(--ease-spring) backwards;
+}
+
+/* Dialogs, popovers, menus, toasts, the save bar ---------------------------- */
+
+.popover,
+.combobox-popover {
+  transform-origin: top left;
+  animation: pop-in var(--duration-fast) var(--ease-emphasis) both;
+}
+
+.popover-fixed {
+  transform-origin: top center;
+}
+
+.msg-dialog {
+  animation: dialog-in var(--duration-base) var(--ease-emphasis) both;
+}
+
+.sheet-layer[data-leaving="true"] {
+  pointer-events: none;
+}
+
+.sheet-layer[data-leaving="true"] .sheet-scrim {
+  animation: scrim-out var(--duration-fast) var(--ease-out) forwards;
+}
+
+.sheet-layer[data-leaving="true"] .msg-dialog {
+  animation: dialog-out var(--duration-fast) var(--ease-out) forwards;
+}
+
+/* Browsers that can start a style transition on insertion use that instead,
+   which a quick close and reopen interrupts cleanly. */
+@supports (transition-behavior: allow-discrete) {
+  .popover,
+  .combobox-popover {
+    animation: none;
+    transition:
+      opacity var(--duration-fast) var(--ease-emphasis),
+      transform var(--duration-fast) var(--ease-emphasis);
+    transition-behavior: allow-discrete;
+  }
+
+  @starting-style {
+    .popover,
+    .combobox-popover {
+      opacity: 0;
+      transform: scale(0.96);
+    }
+  }
+}
+
+.savebar {
+  animation: savebar-in 300ms var(--ease-spring) backwards;
+}
+
+.savebar[data-leaving="true"] {
+  animation: savebar-out var(--duration-base) var(--ease-out) forwards;
+  pointer-events: none;
+}
+
+/* Each toast sits in a slot that closes up as the toast leaves, so the ones
+   below it slide into place instead of jumping. The slot's padding keeps the
+   toast's shadow from being clipped while it closes. */
+.toast-slot {
+  display: grid;
+  grid-template-rows: 1fr;
+  transition: grid-template-rows var(--duration-base) var(--ease-emphasis);
+}
+
+.toast-slot-inner {
+  min-height: 0;
+  margin: -1.5rem;
+  padding: 1.5rem;
+  overflow: hidden;
+}
+
+.toast-slot[data-leaving="true"] {
+  grid-template-rows: 0fr;
+}
+
+.toast {
+  animation: toast-spring 340ms var(--ease-spring) backwards;
+}
+
+.toast-slot[data-leaving="true"] .toast {
+  animation: toast-out var(--duration-base) var(--ease-out) forwards;
+  pointer-events: none;
+}
+
+/* Accordions and collapsible groups ----------------------------------------- */
+/* The row between 0fr and 1fr takes the height from the content, so nothing is
+   measured. Overflow is only clipped while the height is moving, so a picker
+   opened inside an open row is not cut off. */
+
+.collapse {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows var(--duration-base) var(--ease-emphasis);
+}
+
+.collapse[data-open="true"] {
+  grid-template-rows: 1fr;
+}
+
+.collapse-inner {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.collapse[data-open="true"][data-settled="true"] > .collapse-inner {
+  overflow: visible;
+}
+
+.collapse[data-open="false"] > .collapse-inner {
+  visibility: hidden;
+  transition: visibility 0s linear var(--duration-base);
+}
+
+.collapse .list-item-body,
+.collapse .audit-detail {
+  animation: none;
+}
+
+/* The folded group in the sidebar is shown open in the icon rail, whatever
+   its state. */
+html[data-sidebar="collapsed"] .nav-more .collapse {
+  grid-template-rows: 1fr;
+}
+
+html[data-sidebar="collapsed"] .nav-more .collapse-inner {
+  visibility: visible;
+  overflow: visible;
+}
+
+/* Rows edited in steps, and rows edited in a sheet ----------------------------- */
+/* A row drawn with `steps` is numbered parts in place; a list drawn with
+   `layout: "sheet"` is cards, each opening in a sheet from the right with the
+   row's settings under tabs. Motion reuses the tokens above: the sheet slides
+   and fades on a transform and an opacity, the tab strip carries one indicator
+   that moves by transform, and the global reduced-motion rule makes all of it
+   instant. */
+
+.form-step {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding-top: var(--space-5);
+  border-top: 1px solid var(--border);
+}
+
+.form-step:first-child {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.form-step-head {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+}
+
+.form-step-num {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 1.625rem;
+  height: 1.625rem;
+  margin-top: 0.05rem;
+  border-radius: var(--radius-full);
+  background: var(--accent-soft);
+  color: var(--accent-text);
+  font-size: var(--text-xs);
+  font-weight: 700;
+}
+
+.form-step-title {
+  font-size: var(--text-md);
+  font-weight: 600;
+}
+
+.form-step-help {
+  margin-top: 0.1rem;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+}
+
+@media (min-width: 641px) {
+  .form-step-body {
+    margin-left: calc(1.625rem + var(--space-3));
+  }
+}
+
+.form-step-body > .message-control,
+.form-step-body > .field > .message-control {
+  max-width: 100%;
+}
+
+/* A choice drawn as buttons ---------------------------------------------------- */
+
+.choice-buttons-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.choice-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.choice-segmented {
+  gap: 2px;
+  width: fit-content;
+  max-width: 100%;
+  padding: 3px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+}
+
+.choice-button {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 2rem;
+  padding: 0 var(--space-4);
+  border-radius: calc(var(--radius-md) - 2px);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  transition:
+    background-color var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out),
+    box-shadow var(--duration-fast) var(--ease-out);
+}
+
+.choice-button:hover:not(:disabled):not([aria-checked="true"]) {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+.choice-button[aria-checked="true"] {
+  background: var(--accent-soft);
+  color: var(--text);
+  box-shadow: inset 0 0 0 1px var(--accent-ring);
+}
+
+.choice-button:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.choice-button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.choice-swatches .choice-button {
+  min-height: 2.125rem;
+  padding: 0 var(--space-3) 0 var(--space-2);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-full);
+  background: var(--surface-2);
+}
+
+.choice-swatches .choice-button[aria-checked="true"] {
+  border-color: var(--accent);
+}
+
+.choice-dot {
+  width: 1rem;
+  height: 1rem;
+  border-radius: var(--radius-full);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.25), inset 0 0 0 1px rgba(255, 255, 255, 0.18);
+}
+
+.choice-note {
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+}
+
+/* Cards ------------------------------------------------------------------------- */
+
+.sheet-card[data-flagged="true"] {
+  border-color: var(--danger);
+}
+
+.sheet-card-head {
+  align-items: center;
+  padding: var(--space-3) var(--space-3) var(--space-3) var(--space-3);
+}
+
+.sheet-card-main {
+  display: flex;
+  flex: 1 1 14rem;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.sheet-card-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  font-weight: 600;
+}
+
+.sheet-card-emoji {
+  flex: none;
+  font-size: 1.125rem;
+  line-height: 1;
+}
+
+.sheet-card-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sheet-card-name.is-placeholder {
+  color: var(--text-tertiary);
+  font-weight: 400;
+}
+
+.sheet-card-swatch {
+  flex: none;
+  width: 0.75rem;
+  height: 0.75rem;
+  border-radius: var(--radius-full);
+  box-shadow: 0 0 0 1px var(--border-strong);
+}
+
+.sheet-card-chips,
+.sheet-card-notes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.chip-static {
+  padding-right: var(--space-2);
+}
+
+.sheet-card-notes li {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.1rem var(--space-2);
+  border-radius: var(--radius-sm);
+  background: var(--attention-soft);
+  color: var(--mod-warn-text, var(--attention));
+  font-size: var(--text-xs);
+  font-weight: 500;
+}
+
+.sheet-card-notes svg {
+  width: 0.8125rem;
+  height: 0.8125rem;
+}
+
+.sheet-card-facts {
+  color: var(--text-tertiary);
+  font-size: var(--text-sm);
+}
+
+/* The sheet ----------------------------------------------------------------------- */
+
+@keyframes sheet-out {
+  to {
+    transform: translateX(2rem);
+    opacity: 0;
+  }
+}
+
+@keyframes sheet-tab-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+.row-sheet {
+  width: min(40rem, 100%);
+}
+
+.row-sheet:focus {
+  outline: none;
+}
+
+.row-sheet-layer[data-leaving="true"] .row-sheet {
+  animation: sheet-out var(--duration-base) var(--ease-out) forwards;
+}
+
+.row-sheet-head,
+.row-sheet-tabs,
+.row-sheet-foot {
+  flex: none;
+}
+
+.row-sheet-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-5) var(--space-6) var(--space-3);
+}
+
+.row-sheet-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.row-sheet-emoji {
+  flex: none;
+  font-size: 1.75rem;
+  line-height: 1;
+}
+
+.row-sheet-name {
+  font-size: var(--text-xl);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.row-sheet-sub {
+  color: var(--text-tertiary);
+  font-size: var(--text-sm);
+}
+
+.row-sheet-tabs {
+  position: relative;
+  display: flex;
+  gap: var(--space-1);
+  padding: 0 var(--space-5);
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.row-sheet-tabs::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 1px;
+  height: 3px;
+  background: var(--focus);
+  opacity: var(--ind-o, 0);
+  transform: translateX(calc(var(--ind-x, 0) * 1px)) scaleX(var(--ind-w, 0));
+  transform-origin: 0 50%;
+  pointer-events: none;
+}
+
+.row-sheet-tabs[data-indicator="ready"]::after {
+  transition:
+    transform 320ms var(--ease-emphasis),
+    opacity var(--duration-fast) var(--ease-out);
+}
+
+.row-sheet-tab {
+  position: relative;
+  flex: none;
+  padding: var(--space-3) var(--space-4) var(--space-3) var(--space-3);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  white-space: nowrap;
+  transition: color var(--duration-fast) var(--ease-out);
+}
+
+.row-sheet-tab:hover {
+  color: var(--text);
+}
+
+.row-sheet-tab[aria-selected="true"] {
+  color: var(--text);
+}
+
+.row-sheet-tab:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
+  border-radius: var(--radius-sm);
+}
+
+.row-sheet-mark {
+  position: absolute;
+  top: 0.65rem;
+  right: 0.4rem;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: var(--radius-full);
+}
+
+.row-sheet-tab[data-mark="error"] .row-sheet-mark {
+  background: var(--danger);
+}
+
+.row-sheet-tab[data-mark="needed"] .row-sheet-mark {
+  background: var(--attention);
+}
+
+.row-sheet-body {
+  padding: var(--space-5) var(--space-6) var(--space-6);
+}
+
+.row-sheet-panel:not([hidden]) {
+  animation: sheet-tab-in var(--duration-base) var(--ease-emphasis) backwards;
+}
+
+.row-sheet-panel .subgroup {
+  grid-column: 1 / -1;
+}
+
+.row-sheet-panel .subgroup .form-grid {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.row-sheet-panel .compact-list,
+.row-sheet-panel .message-control {
+  grid-column: 1 / -1;
+}
+
+.row-sheet-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-5);
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.row-sheet-foot-left,
+.row-sheet-foot-right {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.row-sheet-hint {
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+}
+
+.row-sheet-remove {
+  color: var(--danger);
+}
+
+.row-sheet-confirm {
+  display: flex;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  font-size: var(--text-sm);
+}
+
+.row-sheet-confirm-actions {
+  display: flex;
+  gap: var(--space-2);
+}
+
+@media (max-width: 640px) {
+  .row-sheet {
+    width: 100%;
+    border-left: 0;
+  }
+
+  .row-sheet-head,
+  .row-sheet-body {
+    padding-left: var(--space-4);
+    padding-right: var(--space-4);
+  }
+
+  .row-sheet-tabs {
+    padding: 0 var(--space-2);
+  }
+
+  .row-sheet-foot {
+    padding: var(--space-3) var(--space-4);
+  }
+
+  .row-sheet-hint {
+    display: none;
+  }
+}
+
+/* The menu behind a row's three dots ---------------------------------------------- */
+
+.row-menu {
+  position: relative;
+}
+
+.row-menu-list {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 25;
+  min-width: 10rem;
+  padding: var(--space-1);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  box-shadow: var(--shadow-lg);
+  transform-origin: top right;
+  animation: pop-in var(--duration-fast) var(--ease-emphasis) both;
+}
+
+.row-menu-item {
+  display: block;
+  width: 100%;
+  padding: 0.4rem var(--space-3);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+  text-align: left;
+}
+
+.row-menu-item:hover:not(:disabled),
+.row-menu-item:focus-visible {
+  background: var(--surface-hover);
+  outline: none;
+}
+
+.row-menu-item[data-danger="true"] {
+  color: var(--danger);
+}
+
+.row-menu-item:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* The foot of an open panel ---------------------------------------------------------- */
+
+.list-item-foot.is-stepped {
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-3);
+  margin-top: var(--space-5);
+}
+
+.list-item-foot.is-stepped .row-collapse {
+  align-self: flex-end;
+  color: var(--text-secondary);
+}
+
+.row-collapse svg {
+  transform: rotate(180deg);
+}
+
+.panel-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3) var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+
+.panel-foot-status {
+  flex: 1 1 16rem;
+  min-width: 0;
+}
+
+.panel-foot-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.panel-foot-when {
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+}
+
+.panel-foot-why {
+  margin-top: 0.25rem;
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+}
+
+.panel-foot-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.panel-foot .btn[aria-disabled="true"] {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.panel-foot-warn {
+  display: flex;
+  flex: 1 1 100%;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--attention-soft);
+  color: var(--mod-warn-text, var(--attention));
+  font-size: var(--text-xs);
+  line-height: 1.45;
+}
+
+.panel-foot-warn svg {
+  flex: none;
+  width: 0.8125rem;
+  height: 0.8125rem;
+  margin-top: 0.1rem;
+}
+
+/* A form as Discord shows it ------------------------------------------------------- */
+
+.modal-preview {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+}
+
+.modal-preview > .btn {
+  align-self: flex-start;
+}
+
+.modal-preview-chevron {
+  transition: transform var(--duration-base) var(--ease-out);
+}
+
+.modal-preview > .btn[aria-expanded="true"] .modal-preview-chevron {
+  transform: rotate(180deg);
+}
+
+.modal-preview-label {
+  margin-bottom: var(--space-2);
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+}
+
+.modal-preview-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  max-width: 26rem;
+  padding: var(--space-5);
+  border-radius: var(--radius-lg);
+  background: #313338;
+  color: #f2f3f5;
+  box-shadow: var(--shadow-md);
+}
+
+.modal-preview-title {
+  font-size: var(--text-lg);
+  font-weight: 700;
+}
+
+.modal-preview-question {
+  margin-bottom: 0.4rem;
+  color: #b5bac1;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.modal-preview-star {
+  color: #f23f42;
+}
+
+.modal-preview-input {
+  min-height: 2.5rem;
+  padding: 0.6rem 0.75rem;
+  border-radius: 3px;
+  background: #1e1f22;
+  color: #80848e;
+  font-size: 0.9375rem;
+  overflow-wrap: anywhere;
+}
+
+.modal-preview-input[data-long="true"] {
+  min-height: 5.5rem;
+}
+
+.modal-preview-empty {
+  color: #b5bac1;
+  font-size: 0.875rem;
+}
+
+.modal-preview-foot {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.modal-preview-submit {
+  padding: 0.5rem 1rem;
+  border-radius: 3px;
+  background: #5865f2;
+  color: #fff;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+/* Tickets ------------------------------------------------------------------- */
+
+.tk-msg-new {
+  animation: msg-in var(--duration-base) var(--ease-emphasis) backwards;
+}
+
+/* A reply on its way to Discord, until the stored message takes its place. */
+li.dt-message[id^="dt-pending:"] {
+  opacity: 0.6;
+}
+
+.tk-jump {
+  animation: jump-in 280ms var(--ease-spring) backwards;
+}
+
+.tk-live-pill {
+  animation: chip-pop 260ms var(--ease-spring) backwards;
+}
+
+.tk-composer-files .tk-file {
+  animation: chip-pop var(--duration-base) var(--ease-spring) backwards;
+}
+
+/* Stats --------------------------------------------------------------------- */
+
+.stats-type-bar > span,
+.stats-rank-bar > span,
+.tk-ratingbars-fill,
+.stats-mix-fill {
+  transform-origin: left center;
+  animation: bar-grow 520ms var(--ease-emphasis) 80ms backwards;
+}
+
+.hours .hour {
+  animation: fade 360ms var(--ease-out) backwards;
+}
+
+.dc-svg {
+  animation: chart-reveal 720ms var(--ease-emphasis) 60ms backwards;
+}
+
+.mod-kpi-value,
+.stat-value {
+  animation: rise var(--duration-slow) var(--ease-emphasis) 60ms backwards;
+}
+
+/* Loading ------------------------------------------------------------------- */
+/* The shimmer is a gradient sliding across on a transform, so it is composited
+   and does not repaint the bar every frame. */
+
+.skeleton {
+  position: relative;
+  overflow: hidden;
+  background: var(--surface-2);
+  animation: none;
+}
+
+.skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--surface-3) 85%, transparent), transparent);
+  transform: translateX(-100%);
+  animation: shimmer-x 1.5s var(--ease-out) infinite;
+}
+
+.tk-upload-fill {
+  transition: width var(--duration-base) var(--ease-out);
+}
+
+/* Theme changes --------------------------------------------------------------- */
+/* Set for a moment by the theme control, so colours cross-fade on the change
+   and are otherwise left alone. */
+
+html[data-theme-motion],
+html[data-theme-motion] *,
+html[data-theme-motion] *::before,
+html[data-theme-motion] *::after {
+  transition:
+    background-color var(--duration-base) var(--ease-out),
+    color var(--duration-base) var(--ease-out),
+    border-color var(--duration-base) var(--ease-out),
+    box-shadow var(--duration-base) var(--ease-out),
+    fill var(--duration-base) var(--ease-out),
+    stroke var(--duration-base) var(--ease-out) !important;
+}
+
+/* Reduced motion ------------------------------------------------------------ */
+/* The rule near the top already makes every transition and animation instant.
+   What is left here keeps indicators from looping at that speed and gives
+   page changes a short fade in place of the rise. */
+
+@media (prefers-reduced-motion: reduce) {
+  .page-enter {
+    animation: fade 140ms linear backwards !important;
+  }
+
+  .skeleton::after {
+    animation: none !important;
+    opacity: 0;
+  }
+
+  .spinner {
+    animation-duration: 1.6s !important;
+  }
+
+  .module-tile:hover,
+  .guild-card:hover,
+  .btn-primary:hover:not(:disabled) {
+    transform: none;
+  }
 }

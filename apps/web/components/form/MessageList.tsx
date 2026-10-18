@@ -3,6 +3,7 @@
 import { useId, useMemo, useState, type ReactNode } from "react";
 import type { FieldDescriptor, FieldTopic, MessageBody } from "@tier0/core";
 import { SettingMessageDialog } from "./MessageControl";
+import { Collapse } from "../Collapse";
 import type { EditorVariable } from "../messages/MessageEditorDialog";
 import { AlertIcon, ChevronRightIcon, SearchIcon } from "../Icons";
 import { messageSummary } from "../../lib/message-summary";
@@ -170,9 +171,11 @@ export function MessageList({ guildId, groupKey, group, root, rootFields, onSet,
             {changed > 0 ? <span className="msl-changed">{changed} customised</span> : null}
           </button>
         </h4>
-        <ul className="msl-rows" id={listId} hidden={!open}>
-          {child.items.map(row)}
-        </ul>
+        <Collapse open={open} keep>
+          <ul className="msl-rows" id={listId}>
+            {child.items.map(row)}
+          </ul>
+        </Collapse>
       </div>
     );
   };

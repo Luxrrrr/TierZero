@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { UNREACHABLE, readFailure } from "../../lib/bot-errors";
+import { useConfirm } from "../ConfirmDialog";
 import { ExternalLinkIcon, TrashIcon } from "../Icons";
 
 /** One message the Message creator sent, as the bot lists it. */
@@ -61,6 +62,7 @@ export function SentList({ guildId, templateId, revision, channelName, onReplace
   const [page, setPage] = useState<SentPage | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [all, setAll] = useState(false);
+  const confirm = useConfirm();
 
   const load = useCallback(async () => {
     const result = await fetchSends(guildId, templateId);
@@ -77,7 +79,13 @@ export function SentList({ guildId, templateId, revision, channelName, onReplace
   }, [load, revision]);
 
   async function forget(entry: SentMessage) {
-    if (!window.confirm("Take this message off the list? It stays in Discord, but can then only be replaced by pasting its link.")) return;
+    const ok = await confirm.ask({
+      title: "Take this message off the list?",
+      text: "It stays in Discord, but can then only be replaced by pasting its link.",
+      confirmLabel: "Take it off",
+      danger: true,
+    });
+    if (!ok) return;
     try {
       const res = await fetch(`/api/guilds/${guildId}/messages/sends/${entry.id}`, { method: "DELETE" });
       if (!res.ok && res.status !== 404) {
@@ -146,6 +154,7 @@ export function SentList({ guildId, templateId, revision, channelName, onReplace
           {page.total > sends.length ? <span> The newest {sends.length} of {page.total} are listed.</span> : null}
         </p>
       ) : null}
+      {confirm.host}
     </section>
   );
 }

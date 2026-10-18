@@ -43,6 +43,7 @@ import {
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { leavingTo } from "./leave-guard";
+import { usePresence } from "./use-presence";
 
 export interface UnsavedGuardOptions {
   dirty: boolean;
@@ -310,13 +311,19 @@ function UnsavedGuardHost() {
     };
   }, [id]);
 
-  if (!first || current === null) return null;
-  return <LeaveDialog canSave={dirtyGuards().every((guard) => guard.options.onSave !== undefined)} />;
+  const open = first && current !== null;
+  const presence = usePresence(open, 180);
+  // What the dialog offered stays as it was while it plays its exit.
+  const canSave = useRef(false);
+  if (open) canSave.current = dirtyGuards().every((guard) => guard.options.onSave !== undefined);
+
+  if (!first || !presence.mounted) return null;
+  return <LeaveDialog canSave={canSave.current} leaving={presence.leaving} />;
 }
 
 const FOCUSABLE = "button:not([disabled])";
 
-function LeaveDialog({ canSave }: { canSave: boolean }) {
+function LeaveDialog({ canSave, leaving }: { canSave: boolean; leaving: boolean }) {
   const titleId = useId();
   const textId = useId();
   const dialogRef = useRef<HTMLDivElement>(null);
@@ -359,7 +366,7 @@ function LeaveDialog({ canSave }: { canSave: boolean }) {
   }
 
   return createPortal(
-    <div className="sheet-layer leave-layer">
+    <div className="sheet-layer leave-layer" data-leaving={leaving ? "true" : undefined}>
       <div className="sheet-scrim" aria-hidden="true" onClick={() => !saving && void choose("stay")} />
       <div
         ref={dialogRef}

@@ -1,0 +1,76 @@
+/* The menu that opens at a point. It reuses the popover surface, item and
+   divider from globals.css, so it opens with the same motion as every other
+   menu, and adds what a menu with a second line per item needs. */
+
+.ctx-menu {
+  z-index: 70;
+  min-width: 13rem;
+  max-width: min(21rem, calc(100vw - 1rem));
+  outline: none;
+}
+
+.ctx-item {
+  align-items: flex-start;
+  min-height: 2.25rem;
+  padding-block: 0.4rem;
+  cursor: pointer;
+}
+
+.ctx-item:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
+}
+
+.ctx-icon {
+  display: inline-flex;
+  flex: none;
+  margin-top: 0.1rem;
+  color: var(--text-tertiary);
+}
+
+.ctx-icon svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+.ctx-text {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.3;
+}
+
+.ctx-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ctx-hint {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+}
+
+.ctx-item[data-danger="true"],
+.ctx-item[data-danger="true"] .ctx-icon {
+  color: var(--danger);
+}
+
+.ctx-item[aria-disabled="true"] {
+  cursor: not-allowed;
+}
+
+.ctx-item[aria-disabled="true"] .ctx-label,
+.ctx-item[aria-disabled="true"] .ctx-icon {
+  color: var(--text-tertiary);
+}
+
+.ctx-item[aria-disabled="true"]:hover,
+.ctx-item[aria-disabled="true"].is-active {
+  background: transparent;
+}
+
+.ctx-item[aria-disabled="true"]:focus-visible {
+  background: var(--surface-hover);
+}

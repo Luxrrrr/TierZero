@@ -21,6 +21,8 @@ interface Props {
   onRemove(): void;
   onMove(direction: -1 | 1): void;
   onDuplicate(): void;
+  /** The only embed being edited, in a dialog of its own: no name, no moving or removing. */
+  single?: boolean;
 }
 
 const SWATCHES = ["#e3b34a", "#5865f2", "#3ddc84", "#f87171", "#a78bfa", "#38bdf8", "#f472b6", "#9ca3af"];
@@ -30,7 +32,7 @@ const SWATCHES = ["#e3b34a", "#5865f2", "#3ddc84", "#f87171", "#a78bfa", "#38bdf
  * the embed reads from top to bottom, and each limit is shown beside the text
  * it applies to so nobody finds out at send time.
  */
-export function EmbedEditor({ path, variables, embed, index, total, errors, defaultOpen, onChange, onRemove, onMove, onDuplicate }: Props) {
+export function EmbedEditor({ path, variables, embed, index, total, errors, defaultOpen, onChange, onRemove, onMove, onDuplicate, single = false }: Props) {
   const [open, setOpen] = useState(defaultOpen);
   const base = useId();
   const L = MESSAGE_LIMITS;
@@ -56,6 +58,7 @@ export function EmbedEditor({ path, variables, embed, index, total, errors, defa
           </span>
           <ChevronDownIcon className="embed-chevron" />
         </button>
+        {single ? null : (
         <div className="embed-tools">
           <button type="button" className="icon-btn" aria-label="Move up" disabled={index === 0} onClick={() => onMove(-1)}>
             ↑
@@ -70,12 +73,14 @@ export function EmbedEditor({ path, variables, embed, index, total, errors, defa
             <TrashIcon />
           </button>
         </div>
+        )}
       </div>
 
       {open ? (
         <div className="embed-body" id={`${base}-body`}>
           {errorAt("") ? <p className="field-error">{errorAt("")}</p> : null}
 
+          {single ? null : (
           <div className="field">
             <label className="field-label" htmlFor={`${base}-name`}>
               Name
@@ -90,6 +95,7 @@ export function EmbedEditor({ path, variables, embed, index, total, errors, defa
               onChange={(event) => set("name", event.target.value)}
             />
           </div>
+          )}
 
           <div className="field">
             <span className="field-label">Color</span>

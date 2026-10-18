@@ -104,8 +104,8 @@ export default async function GuildOverviewPage({ params }: { params: Promise<{ 
               <AlertIcon />
               <div>
                 The bot is missing {lacking.length === 1 ? "a permission" : "permissions"} it asks for when it is
-                invited: {lacking.map(permissionLabel).join(", ")}. Features that need{" "}
-                {lacking.length === 1 ? "it" : "them"} say so on their tile. Give the bot&apos;s role{" "}
+                invited: {lacking.map(permissionLabel).join(", ")}. A feature that cannot work without{" "}
+                {lacking.length === 1 ? "it" : "one of them"} says so on its tile. Give the bot&apos;s role{" "}
                 {lacking.length === 1 ? "it" : "them"} under Server Settings, Roles, or add the bot again with the
                 invite link on <Link href="/guilds">Your servers</Link>. Its settings are kept.
               </div>

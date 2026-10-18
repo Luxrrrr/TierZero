@@ -1,6 +1,6 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { errorSentence, errorsStillValid, valueAt } from "../lib/field-error.ts";
+import { errorSentence, errorsStillValid, listFieldError, valueAt } from "../lib/field-error.ts";
 
 describe("errorSentence", () => {
   test("makes the bot's phrase a sentence of its own", () => {
@@ -35,5 +35,33 @@ describe("errorsStillValid", () => {
 
   test("keeps every error while nothing it is about has changed", () => {
     assert.deepEqual(errorsStillValid(errors, sent, { ...sent, other: true }), errors);
+  });
+});
+
+describe("listFieldError", () => {
+  const path = "rules.regex.patterns";
+  const items = ["fine", "(unclosed", "(a+)+$"];
+
+  test("names the entry each refusal is about", () => {
+    const errors = { [`${path}[1]`]: "is not a valid regular expression", [`${path}[2]`]: "cannot repeat a group that repeats" };
+    assert.equal(
+      listFieldError(errors, path, items),
+      '"(unclosed" is not a valid regular expression. "(a+)+$" cannot repeat a group that repeats.',
+    );
+  });
+
+  test("shows an error on the whole list as it is", () => {
+    assert.equal(listFieldError({ [path]: "must have at most 5 entries" }, path, items), "must have at most 5 entries");
+  });
+
+  test("ignores other fields, deeper paths and an empty set", () => {
+    assert.equal(listFieldError({}, path, items), undefined);
+    assert.equal(listFieldError({ "rules.regex.patterns2[0]": "x", [`${path}[0].name`]: "x", "other[0]": "x" }, path, items), undefined);
+  });
+
+  test("shortens a long entry and copes with one that is gone", () => {
+    const long = "a".repeat(60);
+    assert.equal(listFieldError({ [`${path}[0]`]: "is empty" }, path, [long]), `"${"a".repeat(40)}..." is empty.`);
+    assert.equal(listFieldError({ [`${path}[4]`]: "is empty" }, path, []), "Entry 5 is empty.");
   });
 });

@@ -32,6 +32,13 @@ export function AppShell({ sidebar, title, children }: Props) {
   const sidebarRef = useRef<HTMLElement>(null);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
 
+  // Entrance motion for things that appear later, such as a chip added to a
+  // list, is held back until the page has settled so a first load stays calm.
+  useEffect(() => {
+    const timer = window.setTimeout(() => document.documentElement.setAttribute("data-motion", "ready"), 500);
+    return () => window.clearTimeout(timer);
+  }, []);
+
   const close = useCallback(() => {
     setOpen(false);
     menuButtonRef.current?.focus();

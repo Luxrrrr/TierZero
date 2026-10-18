@@ -44,8 +44,10 @@ interface GroupMember {
  * essential set none of whose settings is filled in. A set is reported once,
  * where its first member sits, naming all of them.
  *
- * Objects are walked, arrays are not: an essential field inside a repeating row
- * would be a per-row error, which the save already reports against that row.
+ * Objects are walked. A list is walked only when it is itself `essential: true`,
+ * which says the feature runs on its rows (tickets run on panels): then each
+ * row's own essential fields count, so a row nobody finished does not read as
+ * set up. A setting whose `when` condition is not met is not asked for.
  */
 export function missingEssentials(
   schema: FieldDescriptor,
@@ -97,8 +99,11 @@ function collect(
   if (!fields) return;
 
   const source = isRecord(value) ? value : {};
+  const effective: Record<string, unknown> = {};
+  for (const [key, child] of Object.entries(fields)) effective[key] = source[key] === undefined ? child.default : source[key];
   for (const [key, child] of Object.entries(fields)) {
     const childPath = path ? `${path}.${key}` : key;
+    if (!conditionHolds(child.when, effective)) continue;
     // A stored value is what the bot runs on; a key nobody saved yet runs on the default.
     const childValue = source[key] === undefined ? child.default : source[key];
     if (child.essential === true && isBlank(childValue)) {
@@ -111,7 +116,36 @@ function collect(
       groups.set(child.essential, members);
     }
     collect(child, source[key], childPath, found, groups, labelOf(child, key));
+    if (child.kind === "array" && child.essential === true && Array.isArray(source[key])) {
+      collectRows(child, source[key] as unknown[], childPath, found);
+    }
   }
+}
+
+/** The essential settings of a list's rows, named after the list and reported once each however many rows lack them. */
+function collectRows(list: FieldDescriptor, rows: unknown[], path: string, found: MissingEssential[]): void {
+  const item = list.of as FieldDescriptor | undefined;
+  if (!item || item.kind !== "object") return;
+  const seen = new Set(found.map((entry) => entry.label));
+  rows.forEach((row, index) => {
+    const inRow: MissingEssential[] = [];
+    collect(item, row, `${path}.${index}`, inRow, new Map());
+    for (const entry of inRow) {
+      const label = `${labelOf(list, "")}: ${entry.label}`;
+      if (seen.has(label)) continue;
+      seen.add(label);
+      found.push({ ...entry, label });
+    }
+  });
+}
+
+/** The same rule as the form's own condition check, kept here so the tests can import this file alone. */
+function conditionHolds(when: unknown, values: Record<string, unknown>): boolean {
+  if (!isRecord(when) || typeof when.field !== "string") return true;
+  const actual = values[when.field];
+  if (when.includes !== undefined) return Array.isArray(actual) && actual.includes(when.includes);
+  if (when.equals !== undefined) return actual === when.equals;
+  return !isBlank(actual);
 }
 
 function labelOf(field: FieldDescriptor, key: string): string {

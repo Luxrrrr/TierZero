@@ -2,6 +2,7 @@
 
 import { useState, type ReactNode } from "react";
 import { ChevronDownIcon } from "./Icons";
+import { Collapse } from "./Collapse";
 
 /**
  * A sidebar group that starts folded, for tools most servers never touch. They stay one click away without
@@ -15,9 +16,9 @@ export function NavMore({ heading, children }: { heading: string; children: Reac
         <span>{heading}</span>
         <ChevronDownIcon className="nav-more-chevron" />
       </button>
-      <div className="nav-more-body" hidden={!open}>
-        {children}
-      </div>
+      <Collapse open={open} keep>
+        <div className="nav-more-body">{children}</div>
+      </Collapse>
     </div>
   );
 }

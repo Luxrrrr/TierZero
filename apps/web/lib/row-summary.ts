@@ -48,7 +48,7 @@ function shownEntries(row: Record<string, unknown>, fields: Fields): [string, Fi
   });
 }
 
-function conditionHolds(when: unknown, row: Record<string, unknown>): boolean {
+export function conditionHolds(when: unknown, row: Record<string, unknown>): boolean {
   if (typeof when !== "object" || when === null) return true;
   const { field, equals, includes } = when as { field?: unknown; equals?: unknown; includes?: unknown };
   if (typeof field !== "string") return true;
@@ -269,11 +269,11 @@ export function summarizeGroup(
   return parts.join(DETAIL_SEPARATOR);
 }
 
-function truncate(text: string): string {
+export function truncate(text: string): string {
   return text.length > LONGEST_TEXT_DETAIL ? `${text.slice(0, LONGEST_TEXT_DETAIL - 1)}…` : text;
 }
 
-function isFilled(value: unknown): value is string {
+export function isFilled(value: unknown): value is string {
   return typeof value === "string" && value !== "";
 }
 
@@ -306,7 +306,7 @@ export function expandedWithout(expanded: ReadonlySet<number>, index: number): S
  * "Games posted here" counted as one reads "game posted here". The plural noun
  * is the first word that looks plural, which also handles "Reward tiers".
  */
-function singularLabel(label: string): string {
+export function singularLabel(label: string): string {
   const words = label.toLowerCase().split(" ");
   const at = words.findIndex((word) => word.endsWith("s") && !word.endsWith("ss"));
   if (at === -1) return words.join(" ");

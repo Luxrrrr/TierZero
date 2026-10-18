@@ -232,6 +232,8 @@ export function ToolBar({ guildId, variables = MESSAGE_VARIABLES }: BarProps) {
   }
 
   const full = active?.reach === "full";
+  // A message with nothing to fill in, such as a reply in a ticket, has no use for the menu.
+  const noVariables = (active?.variables ?? variables).length === 0;
 
   return (
     <div className="insert-bar" ref={barRef} role="toolbar" aria-label="Add to the text">
@@ -263,7 +265,7 @@ export function ToolBar({ guildId, variables = MESSAGE_VARIABLES }: BarProps) {
           ))}
         </div>
         <div className="insert-group">
-          {menu("variables", "Variables", <VariablesPanel variables={active?.variables ?? variables} onPick={(name) => pick(`{${name}}`)} />)}
+          {noVariables ? null : menu("variables", "Variables", <VariablesPanel variables={active?.variables ?? variables} onPick={(name) => pick(`{${name}}`)} />)}
           {menu("time", "Time", <TimePanel onPick={pick} />, true)}
           {menu("mention", "Mention", <MentionPanel guildId={guildId} onPick={pick} />)}
           {menu("emoji", "Emoji", <EmojiGrid guildId={guildId} onPick={pick} />)}

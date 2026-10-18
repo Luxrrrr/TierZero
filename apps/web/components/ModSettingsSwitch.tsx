@@ -21,7 +21,7 @@ export function ModSettingsSwitch({ items }: { items: SettingsSwitchItem[] }) {
   const pathname = usePathname() ?? "";
 
   return (
-    <nav className="settings-switch" aria-label="Moderation settings">
+    <nav className="settings-switch" suppressHydrationWarning aria-label="Moderation settings">
       {items.map((item) => (
         <Link
           key={item.id}

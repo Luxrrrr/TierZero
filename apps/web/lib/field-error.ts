@@ -31,6 +31,29 @@ export function errorsStillValid(
   return kept;
 }
 
+const ITEM_TEXT_LIMIT = 40;
+
+/**
+ * The error for a list of plain values such as chips. The bot ties each
+ * refusal to one entry (`patterns[1]`), but the control is a single field, so
+ * the entries' messages are gathered under it, each naming the text it is
+ * about. An error on the whole list is shown as it is.
+ */
+export function listFieldError(errors: Readonly<Record<string, string>>, path: string, items: readonly unknown[]): string | undefined {
+  const whole = errors[path];
+  if (whole !== undefined) return whole;
+  const lines: string[] = [];
+  const prefix = `${path}[`;
+  for (const [key, message] of Object.entries(errors)) {
+    const match = key.startsWith(prefix) ? /^\[(\d+)\]$/.exec(key.slice(path.length)) : null;
+    if (!match) continue;
+    const item = items[Number(match[1])];
+    const shown = typeof item === "string" ? (item.length > ITEM_TEXT_LIMIT ? `${item.slice(0, ITEM_TEXT_LIMIT)}...` : item) : `Entry ${Number(match[1]) + 1}`;
+    lines.push(`${typeof item === "string" ? `"${shown}"` : shown} ${message.trim()}${/[.!?]$/.test(message.trim()) ? "" : "."}`);
+  }
+  return lines.length > 0 ? lines.join(" ") : undefined;
+}
+
 /** The value at a dotted, indexed path such as `rewards[2].role`. */
 export function valueAt(root: unknown, path: string): unknown {
   if (path === "") return root;

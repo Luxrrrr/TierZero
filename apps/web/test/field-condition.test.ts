@@ -1,6 +1,6 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { conditionMet } from "../lib/field-condition.ts";
+import { conditionHidden, conditionMet } from "../lib/field-condition.ts";
 
 describe("conditionMet", () => {
   test("is met when there is no condition", () => {
@@ -46,5 +46,18 @@ describe("conditionMet", () => {
   test("includes takes precedence when a condition names both", () => {
     const condition = { field: "actions", equals: "x", includes: "timeout" };
     assert.equal(conditionMet(condition, { actions: ["timeout"] }), true);
+  });
+});
+
+describe("conditionHidden", () => {
+  test("hides a setting only when its condition is unmet and says to hide", () => {
+    const hide = { field: "style", equals: "menu", hide: true };
+    assert.equal(conditionHidden(hide, { style: "buttons" }), true);
+    assert.equal(conditionHidden(hide, { style: "menu" }), false);
+  });
+
+  test("a condition without hide greys the setting out and never hides it", () => {
+    assert.equal(conditionHidden({ field: "style", equals: "menu" }, { style: "buttons" }), false);
+    assert.equal(conditionHidden(undefined, {}), false);
   });
 });

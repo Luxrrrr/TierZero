@@ -1,13 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState, type CSSProperties } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { useRouter } from "next/navigation";
 import { Switch } from "./form";
 import { AlertIcon, ChevronRightIcon } from "./Icons";
 import { useToast } from "./Toaster";
 import { UNREACHABLE, readFailure } from "../lib/bot-errors";
 import { permissionLabel } from "../lib/invite";
+import { settleToggle } from "../lib/serial-toggle";
 import { moduleStatus } from "../lib/module-status";
 import { moduleHref } from "../lib/module-href";
 import { hasSettings, sectionHeading } from "../lib/sections";
@@ -34,40 +35,47 @@ export function ModuleTile({ guildId, module, index = 0, animate = false, missin
   const [enabled, setEnabled] = useState(module.enabled);
   const [pending, setPending] = useState(false);
 
-  useEffect(() => setEnabled(module.enabled), [module.enabled]);
+  // Presses only move what is wanted; one request at a time carries it to the bot.
+  const state = useRef({ wanted: module.enabled, confirmed: module.enabled });
+  const busy = useRef(false);
+
+  useEffect(() => {
+    if (busy.current) return;
+    setEnabled(module.enabled);
+    state.current = { wanted: module.enabled, confirmed: module.enabled };
+  }, [module.enabled]);
 
   const status = moduleStatus(enabled, module.missing);
 
   async function toggle(next: boolean) {
+    state.current.wanted = next;
     setEnabled(next);
+    if (busy.current) return;
+    busy.current = true;
     setPending(true);
-    try {
-      const res = await fetch(`/api/guilds/${guildId}/modules/${module.id}`, {
-        method: "PATCH",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ enabled: next }),
-      });
-      if (!res.ok) {
-        const failure = await readFailure(res);
-        setEnabled(!next);
-        push({
-          kind: "error",
-          title: `${module.name} is still ${next ? "off" : "on"}`,
-          detail: failure.message,
+    const outcome = await settleToggle(state.current, async (target) => {
+      try {
+        const res = await fetch(`/api/guilds/${guildId}/modules/${module.id}`, {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ enabled: target }),
         });
-        return;
+        return res.ok ? { ok: true } : { ok: false, detail: (await readFailure(res)).message };
+      } catch {
+        return { ok: false, detail: UNREACHABLE };
       }
-      router.refresh();
-    } catch {
-      setEnabled(!next);
+    });
+    busy.current = false;
+    setPending(false);
+    setEnabled(state.current.confirmed);
+    if (outcome.failure) {
       push({
         kind: "error",
-        title: `${module.name} is still ${next ? "off" : "on"}`,
-        detail: UNREACHABLE,
+        title: `${module.name} is still ${outcome.failure.target ? "off" : "on"}`,
+        detail: outcome.failure.detail,
       });
-    } finally {
-      setPending(false);
     }
+    if (outcome.changed) router.refresh();
   }
 
   return (
@@ -98,7 +106,7 @@ export function ModuleTile({ guildId, module, index = 0, animate = false, missin
       <div className="module-tile-foot">
         <span className="module-tile-status" data-status={status}>
           <span className="dot" data-status={status} aria-hidden="true" />
-          {statusLine(status, module.missing)}
+          <span className="module-tile-status-text">{statusLine(status, module.missing)}</span>
         </span>
         <Link className="module-tile-link" href={hasSettings(module) ? moduleHref(guildId, module) : `/guilds/${guildId}/commands`}>
           {hasSettings(module) ? "Configure" : "Commands"}

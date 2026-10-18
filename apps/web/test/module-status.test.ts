@@ -193,3 +193,48 @@ describe("essential sets of group switches", () => {
     assert.deepEqual(missingEssentials(schema, { invites: { enabled: true } }), []);
   });
 });
+
+describe("missingEssentials in a list the feature runs on", () => {
+  const schema = {
+    kind: "object",
+    fields: {
+      panels: {
+        kind: "array",
+        label: "Panels",
+        essential: true,
+        of: {
+          kind: "object",
+          fields: {
+            channel: { kind: "channel", label: "Channel", essential: true },
+            opening: {
+              kind: "object",
+              fields: {
+                mode: { kind: "choice", default: "channel" },
+                category: { kind: "channel", label: "Category", essential: true, when: { field: "mode", equals: "channel" } },
+              },
+            },
+          },
+        },
+      },
+    },
+  } as never;
+
+  test("a row nobody finished leaves the feature needing setup, once per setting", () => {
+    const missing = missingEssentials(schema, { panels: [{}, {}] });
+    assert.deepEqual(
+      missing.map((entry) => entry.label),
+      ["Panels: Channel", "Panels: Category"],
+    );
+    assert.equal(moduleStatus(true, missing), "attention");
+  });
+
+  test("leaves out a setting whose condition is not met", () => {
+    const missing = missingEssentials(schema, { panels: [{ channel: "123456789012345678", opening: { mode: "thread" } }] });
+    assert.deepEqual(missing, []);
+  });
+
+  test("is set up once every row is filled in", () => {
+    const row = { channel: "123456789012345678", opening: { mode: "channel", category: "223456789012345678" } };
+    assert.deepEqual(missingEssentials(schema, { panels: [row] }), []);
+  });
+});

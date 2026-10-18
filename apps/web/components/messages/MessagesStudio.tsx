@@ -15,11 +15,12 @@ import {
   type MessageTemplateDto,
 } from "@tier0/core";
 import { Combobox, useChannels } from "../form";
-import { ChevronDownIcon, FolderIcon, MessagesIcon, PencilIcon, PlusIcon, SearchIcon, TrashIcon } from "../Icons";
+import { ChevronDownIcon, FolderIcon, MessagesIcon, PencilIcon, PlusIcon, SearchIcon, TicketIcon, TrashIcon } from "../Icons";
 import { useUnsavedGuard } from "../../lib/unsaved-guard";
 import { UNREACHABLE, readFailure } from "../../lib/bot-errors";
 import { MessageForm } from "./MessageForm";
 import { MessagePreview, type PreviewContext } from "./MessagePreview";
+import { useConfirm } from "../ConfirmDialog";
 import { SendDialog, type ScheduledSend } from "./SendDialog";
 import { SentList, type SentMessage } from "./SentList";
 
@@ -43,9 +44,10 @@ interface Draft {
   buttons: MessageButton[];
   selects: MessageSelect[];
   reactions: string[];
+  inTickets: boolean;
 }
 
-const BLANK: Draft = { name: "", folderId: null, content: "", embeds: [], buttons: [], selects: [], reactions: [] };
+const BLANK: Draft = { name: "", folderId: null, content: "", embeds: [], buttons: [], selects: [], reactions: [], inTickets: false };
 const NO_FOLDER = "none";
 const SAVED_LINGER_MS = 2500;
 
@@ -77,6 +79,7 @@ const draftOf = (template: MessageTemplateDto): Draft => ({
   buttons: template.buttons,
   selects: template.selects,
   reactions: template.reactions,
+  inTickets: template.inTickets === true,
 });
 
 /**
@@ -103,6 +106,7 @@ export function MessagesStudio({ guildId, guildName, memberCount, initial, sched
   const [collapsed, setCollapsed] = useState<Set<number>>(new Set());
   const [newFolder, setNewFolder] = useState<string | null>(null);
   const [renaming, setRenaming] = useState<{ id: number; name: string } | null>(null);
+  const [ticketsOnly, setTicketsOnly] = useState(false);
 
   const dirty = snapshot(draft) !== baseline;
   const parsed = useMemo(
@@ -164,6 +168,7 @@ export function MessagesStudio({ guildId, guildName, memberCount, initial, sched
   const canSave = !busy && dirty && draft.name.trim() !== "" && parsed.ok;
 
   // Leaving the page, or another template, with unsaved edits asks first, because nothing else would bring them back.
+  const confirm = useConfirm();
   const guard = useUnsavedGuard({
     dirty,
     onSave: canSave ? () => save() : undefined,
@@ -198,7 +203,7 @@ export function MessagesStudio({ guildId, guildName, memberCount, initial, sched
   async function save(): Promise<boolean> {
     if (busy) return false;
     setBusy(true);
-    const body = { name: draft.name, folderId: draft.folderId, content: draft.content, embeds: draft.embeds, buttons: draft.buttons, selects: draft.selects, reactions: draft.reactions };
+    const body = { name: draft.name, folderId: draft.folderId, content: draft.content, embeds: draft.embeds, buttons: draft.buttons, selects: draft.selects, reactions: draft.reactions, inTickets: draft.inTickets };
     const result = await call(selectedId === null ? "POST" : "PATCH", selectedId === null ? "templates" : `templates/${selectedId}`, body);
     setBusy(false);
     if (!result.ok) {
@@ -218,7 +223,13 @@ export function MessagesStudio({ guildId, guildName, memberCount, initial, sched
   }
 
   async function cancelSchedule(entry: ScheduledSend) {
-    if (!window.confirm(`Cancel "${entry.label}"? It will not be sent.`)) return;
+    const ok = await confirm.ask({
+      title: `Cancel "${entry.label}"?`,
+      text: "It will not be sent.",
+      confirmLabel: "Cancel the send",
+      danger: true,
+    });
+    if (!ok) return;
     const result = await call("DELETE", `schedules/${entry.id}`);
     // Already gone, most likely sent a moment ago: the list should not keep showing it either way.
     if (!result.ok && !/not found/i.test(result.error)) return flash({ kind: "error", text: result.error });
@@ -229,7 +240,7 @@ export function MessagesStudio({ guildId, guildName, memberCount, initial, sched
     if (busy || !parsed.ok) return;
     setBusy(true);
     const name = `${draft.name || "Untitled"} copy`.slice(0, MESSAGE_LIMITS.templateName);
-    const result = await call("POST", "templates", { name, folderId: draft.folderId, content: draft.content, embeds: draft.embeds, buttons: draft.buttons, selects: draft.selects, reactions: draft.reactions });
+    const result = await call("POST", "templates", { name, folderId: draft.folderId, content: draft.content, embeds: draft.embeds, buttons: draft.buttons, selects: draft.selects, reactions: draft.reactions, inTickets: draft.inTickets });
     setBusy(false);
     if (!result.ok) return flash({ kind: "error", text: result.error });
     const saved = result.data as MessageTemplateDto;
@@ -242,7 +253,13 @@ export function MessagesStudio({ guildId, guildName, memberCount, initial, sched
 
   async function remove() {
     if (selectedId === null || busy) return;
-    if (!window.confirm(`Delete "${draft.name}"? This can't be undone.`)) return;
+    const ok = await confirm.ask({
+      title: `Delete "${draft.name}"?`,
+      text: "This can't be undone.",
+      confirmLabel: "Delete",
+      danger: true,
+    });
+    if (!ok) return;
     setBusy(true);
     const result = await call("DELETE", `templates/${selectedId}`);
     setBusy(false);
@@ -281,7 +298,13 @@ export function MessagesStudio({ guildId, guildName, memberCount, initial, sched
   async function deleteFolder(folder: MessageFolderDto) {
     const inside = library.templates.filter((t) => t.folderId === folder.id).length;
     const note = inside > 0 ? ` Its ${inside} ${inside === 1 ? "template moves" : "templates move"} out of the folder, and nothing is deleted.` : "";
-    if (!window.confirm(`Delete the folder "${folder.name}"?${note}`)) return;
+    const ok = await confirm.ask({
+      title: `Delete the folder "${folder.name}"?`,
+      text: note.trim() === "" ? "The folder is removed." : note.trim(),
+      confirmLabel: "Delete the folder",
+      danger: true,
+    });
+    if (!ok) return;
     const result = await call("DELETE", `folders/${folder.id}`);
     if (!result.ok) return flash({ kind: "error", text: result.error });
     setLibrary((current) => ({
@@ -299,8 +322,25 @@ export function MessagesStudio({ guildId, guildName, memberCount, initial, sched
     });
   }
 
+  /** Turns "available in tickets" on or off for a template from the list, without opening it or touching unsaved edits to its text. */
+  async function toggleTickets(template: MessageTemplateDto) {
+    const next = template.inTickets !== true;
+    const result = await call("PATCH", `templates/${template.id}`, { inTickets: next });
+    if (!result.ok) return flash({ kind: "error", text: result.error });
+    setLibrary((current) => ({ ...current, templates: current.templates.map((t) => (t.id === template.id ? { ...t, inTickets: next } : t)) }));
+    if (template.id !== selectedId) return;
+    setDraft((current) => ({ ...current, inTickets: next }));
+    setBaseline((current) => {
+      try {
+        return snapshot({ ...(JSON.parse(current) as Draft), inTickets: next });
+      } catch {
+        return current;
+      }
+    });
+  }
+
   const needle = query.trim().toLowerCase();
-  const visible = library.templates.filter((t) => needle === "" || t.name.toLowerCase().includes(needle));
+  const visible = library.templates.filter((t) => (needle === "" || t.name.toLowerCase().includes(needle)) && (!ticketsOnly || t.inTickets === true));
   const unfiled = visible.filter((t) => t.folderId === null);
 
   function row(template: MessageTemplateDto) {
@@ -310,7 +350,7 @@ export function MessagesStudio({ guildId, guildName, memberCount, initial, sched
         : "Text";
     const sent = template.lastSentAt ? new Date(template.lastSentAt) : null;
     return (
-      <li key={template.id}>
+      <li key={template.id} className="msg-template-row">
         <button
           type="button"
           className="msg-template"
@@ -322,6 +362,16 @@ export function MessagesStudio({ guildId, guildName, memberCount, initial, sched
           <span className="msg-template-meta" title={sent ? `Last sent ${sent.toLocaleString()}` : undefined}>
             {sent ? `${kind} · sent ${sent.toLocaleDateString([], { month: "short", day: "numeric" })}` : kind}
           </span>
+        </button>
+        <button
+          type="button"
+          className="msg-template-chip"
+          aria-pressed={template.inTickets === true}
+          title={template.inTickets === true ? "Staff can pick this message in a ticket. Select to stop offering it." : "Offer this message to staff in tickets"}
+          onClick={() => void toggleTickets(template)}
+        >
+          <TicketIcon />
+          Tickets
         </button>
       </li>
     );
@@ -358,6 +408,10 @@ export function MessagesStudio({ guildId, guildName, memberCount, initial, sched
             onChange={(event) => setQuery(event.target.value)}
           />
         </div>
+        <label className="msg-library-filter">
+          <input type="checkbox" checked={ticketsOnly} onChange={(event) => setTicketsOnly(event.target.checked)} />
+          <span>Only those available in tickets</span>
+        </label>
 
         <div className="msg-library-list">
           {newFolder !== null ? (
@@ -409,8 +463,8 @@ export function MessagesStudio({ guildId, guildName, memberCount, initial, sched
 
           {library.folders.map((folder) => {
             const inside = visible.filter((t) => t.folderId === folder.id);
-            if (needle !== "" && inside.length === 0) return null;
-            const isCollapsed = collapsed.has(folder.id) && needle === "";
+            if ((needle !== "" || ticketsOnly) && inside.length === 0) return null;
+            const isCollapsed = collapsed.has(folder.id) && needle === "" && !ticketsOnly;
             return (
               <section key={folder.id} className="msg-folder">
                 {renaming?.id === folder.id ? (
@@ -493,7 +547,9 @@ export function MessagesStudio({ guildId, guildName, memberCount, initial, sched
             );
           })}
 
-          {needle !== "" && visible.length === 0 ? <p className="msg-empty">No template matches that.</p> : null}
+          {(needle !== "" || ticketsOnly) && visible.length === 0 ? (
+            <p className="msg-empty">{ticketsOnly && needle === "" ? "No template is available in tickets yet." : "No template matches that."}</p>
+          ) : null}
         </div>
 
         {schedules.length > 0 ? (
@@ -554,6 +610,20 @@ export function MessagesStudio({ guildId, guildName, memberCount, initial, sched
                 options={folderOptions}
                 onChange={(next) => setDraft({ ...draft, folderId: next === undefined || next === NO_FOLDER ? null : Number(next) })}
               />
+            </div>
+            <div className="msg-bar-flag">
+              <label className="msg-flag">
+                <input
+                  type="checkbox"
+                  checked={draft.inTickets}
+                  aria-describedby="msg-in-tickets-help"
+                  onChange={(event) => setDraft({ ...draft, inTickets: event.target.checked })}
+                />
+                <span>Available in tickets</span>
+              </label>
+              <p className="field-hint" id="msg-in-tickets-help">
+                Lets staff pick this message from the ticket reply box.
+              </p>
             </div>
           </div>
 
@@ -651,6 +721,7 @@ export function MessagesStudio({ guildId, guildName, memberCount, initial, sched
         />
       ) : null}
       {guard.host}
+      {confirm.host}
     </div>
   );
 }

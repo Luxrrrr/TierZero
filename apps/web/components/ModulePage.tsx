@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import type { FieldDescriptor } from "@tier0/core";
 import { SettingsForm, Switch } from "./form";
 import type { ExtraSection } from "./form/SectionedSettings";
+import type { RowSlots } from "./form/ObjectArray";
 import { CommandRow } from "./CommandRow";
 import { AlertIcon, InfoIcon, SetupIcon } from "./Icons";
 import { useToast } from "./Toaster";
@@ -16,6 +17,7 @@ import { settingsSections } from "../lib/settings-sections";
 import { readFailure, UNREACHABLE } from "../lib/bot-errors";
 import { errorsStillValid } from "../lib/field-error";
 import { useUnsavedGuard } from "../lib/unsaved-guard";
+import { usePresence } from "../lib/use-presence";
 
 interface Props {
   guildId: string;
@@ -43,6 +45,16 @@ interface Props {
     /** Replaces the draft, as an edit in the form would, for a part that edits settings in its own way. */
     update(next: Record<string, unknown>): void;
   }): Record<string, ReactNode>;
+  /**
+   * What to draw into the rows of the page's lists, keyed by the list's schema
+   * path: a status in a row's header, a block at the foot of its open body.
+   * Given the draft, like `sectionIntro`.
+   */
+  rowSlots?(draft: {
+    settings: Record<string, unknown>;
+    dirty: boolean;
+    enabled: boolean;
+  }): Record<string, RowSlots>;
   /** Extra parts of a split settings page, after the schema's own. */
   extraSections?: ExtraSection[];
   /** Drawn under the list of commands, inside the same card. */
@@ -59,6 +71,7 @@ export function ModulePage({
   embedded = false,
   lead,
   sectionIntro,
+  rowSlots,
   extraSections = [],
   commandsFooter,
 }: Props) {
@@ -98,6 +111,7 @@ export function ModulePage({
   }, []);
 
   const dirty = JSON.stringify(settings) !== JSON.stringify(saved);
+  const bar = usePresence(dirty, 200);
   const errorCount = Object.keys(errors).length;
   const status = moduleStatus(enabled, module.missing);
   const hasSettings = Object.keys((module.schema as { fields?: object }).fields ?? {}).length > 0;
@@ -180,6 +194,8 @@ export function ModulePage({
   // caused it; several groups of settings can be off the bottom of the screen.
   useEffect(() => {
     if (errorCount === 0) return;
+    // A sheet that opened on the failing row takes focus to the field itself.
+    if (document.querySelector("[aria-modal='true']")) return;
     // A row and the field inside it are both marked; the field is the one to
     // go to, and a row's own header buttons are not what failed.
     const marked = [...(formRef.current?.querySelectorAll<HTMLElement>('[data-invalid="true"]') ?? [])];
@@ -374,10 +390,12 @@ export function ModulePage({
             disabled={state === "saving"}
             moduleId={module.id}
             rows={module.rows}
+            raised={module.raised}
             actionsLocked={actionsLocked}
             dirty={dirty}
             savedRevision={revision}
             sectionIntro={sectionIntro?.({ settings, dirty, enabled, update: changeDraft })}
+            rowSlots={rowSlots?.({ settings, dirty, enabled })}
             extraSections={
               split && module.commands.length > 0
                 ? [...extraSections, { id: "commands", label: "Commands", content: commandsCard }]
@@ -395,8 +413,8 @@ export function ModulePage({
         </>
       ) : null}
 
-      {dirty ? (
-        <div className="savebar" data-state={barState} role="region" aria-label="Unsaved changes">
+      {bar.mounted ? (
+        <div className="savebar" data-state={barState} data-leaving={bar.leaving ? "true" : undefined} role="region" aria-label="Unsaved changes">
           <div className="savebar-text">
             {state === "error" ? <AlertIcon /> : null}
             {state === "saving" ? "Saving…" : null}

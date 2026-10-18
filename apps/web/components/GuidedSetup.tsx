@@ -157,6 +157,8 @@ export function GuidedSetup({ guildId, serverName, title, blurb, steps }: Props)
   const alreadyOn = step ? step.enabled || outcomes[step.moduleId] === "on" : false;
   const last = index === steps.length - 1;
   const stillMissing = step && !alreadyOn ? missingEssentials(step.schema, drafts[step.moduleId] ?? step.settings) : [];
+  // Until something on this step is changed, what it says is information about the step, not a warning about the person's answers.
+  const touched = step ? JSON.stringify(drafts[step.moduleId]) !== JSON.stringify(stored[step.moduleId]) : false;
   const forwardLabel = alreadyOn || stillMissing.length > 0
     ? last ? "Save and finish" : "Save and continue"
     : last ? "Turn on and finish" : "Turn on and continue";
@@ -242,7 +244,7 @@ export function GuidedSetup({ guildId, serverName, title, blurb, steps }: Props)
 
           {stillMissing.length > 0 ? (
             <div className="wizard-callouts">
-              <div className="callout callout-attention" role="status">
+              <div className={touched ? "callout callout-attention" : "callout callout-muted"} role="status">
                 <InfoIcon />
                 <div>
                   {step.name} stays off until you set {missingSentence(stillMissing)}, because until then it would
@@ -348,7 +350,9 @@ function Finished({ guildId, steps, drafts, outcomes, headingRef }: FinishedProp
         </h2>
         <p className="wizard-summary">
           {turnedOn.length > 0
-            ? "The bot is already using these settings."
+            ? incomplete.length > 0 || leftOff.length > 0
+              ? "The bot is already using what was turned on. What is left is below."
+              : "The bot is already using these settings."
             : leftOff.length > 0
               ? "Your answers are saved, and nothing was switched on yet."
               : "Every step was skipped, so this server is exactly as you left it."}
@@ -362,8 +366,8 @@ function Finished({ guildId, steps, drafts, outcomes, headingRef }: FinishedProp
               <AlertIcon />
               <div>
                 {step.name} is still off, because it does nothing until you set{" "}
-                {missingSentence(missingEssentials(step.schema, drafts[step.moduleId] ?? step.settings))}. Your answers are
-                saved.{" "}
+                {missingSentence(missingEssentials(step.schema, drafts[step.moduleId] ?? step.settings))}. Anything you
+                entered is saved.{" "}
                 <Link href={moduleHref(guildId, { id: step.moduleId, area: step.area })}>Finish setting it up</Link>.
               </div>
             </div>

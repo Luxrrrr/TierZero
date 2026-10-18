@@ -28,6 +28,8 @@ export default async function FlowSetupPage({
   const { id, flow: flowId } = await params;
   const flow = flowById(flowId);
   if (!flow) redirect(`/guilds/${id}/setup`);
+  // Tickets has a setup of its own that checks the panel can open, which this generic one does not.
+  if (flow.id === "tickets") redirect(`/guilds/${id}/tickets/setup`);
 
   try {
     const access = await requireGuildAccess(id);

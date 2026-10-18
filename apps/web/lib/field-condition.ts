@@ -6,11 +6,14 @@
  * - `includes` is met when the sibling holds a list that contains the value.
  * - `equals` is met when the sibling is exactly that value.
  * - With neither, the condition is met whenever the sibling holds anything.
+ * - `hide` leaves the setting out of the form while the condition is not met,
+ *   instead of drawing it greyed out.
  */
 export interface Condition {
   field: string;
   equals?: unknown;
   includes?: unknown;
+  hide?: boolean;
 }
 
 export function conditionMet(
@@ -24,6 +27,14 @@ export function conditionMet(
   }
   if (condition.equals !== undefined) return actual === condition.equals;
   return !isBlank(actual);
+}
+
+/** The setting is not drawn at all: its condition is unmet and says to hide it. */
+export function conditionHidden(
+  condition: Condition | undefined,
+  values: Record<string, unknown>,
+): boolean {
+  return condition?.hide === true && !conditionMet(condition, values);
 }
 
 function isBlank(value: unknown): boolean {
