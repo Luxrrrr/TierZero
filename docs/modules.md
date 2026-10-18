@@ -98,7 +98,7 @@ A list with `essential: true` works the same way as a channel: an empty list is 
 
 `item: "<noun>"` on an `s.array` of objects names one row for the Add button, singular and lower case: `item: "game"` reads "Add game" rather than a guess made from the label.
 
-`when: { field, equals }` makes a field apply only when a sibling has a value. Leave out `equals` to mean "any value". Use `includes` instead when the sibling is a list: `when: { field: "actions", includes: "timeout" }` applies while that list contains the value. The dashboard greys the field out and explains why using the sibling's label, so don't repeat that in `help`. Naming a sibling that doesn't exist fails the tests.
+`when: { field, equals }` makes a field apply only when a sibling has a value. Leave out `equals` to mean "any value". Use `includes` instead when the sibling is a list: `when: { field: "actions", includes: "timeout" }` applies while that list contains the value. The dashboard greys the field out and explains why using the sibling's label, so don't repeat that in `help`. Add `hide: true` to leave it out instead of greying it out (see Controls and conditions). Naming a sibling that doesn't exist fails the tests.
 
 ```ts
 actions: s.array(
@@ -163,6 +163,56 @@ modLogChannel: s.channel({ types: ["text"], optional: true, guided: true, label:
 ```
 
 Which modules the quick setup groups, and in what order, is in `apps/web/lib/guided.ts`. It's the one place the dashboard names modules directly.
+
+### Rows with a lot in them
+
+A list of rows that is more than a few settings each reads badly as a stack of accordions. Three opt-in pieces of metadata change how one is drawn. All of them are dashboard-only, none changes what is stored, and a list that uses none is drawn as before. `formLayoutProblems` in the schema check fails a reference that names nothing.
+
+**`steps`** on the `s.object` that is a row declares numbered parts, each with a title and a line saying what it is for. A setting names its part with `step`; one that names none goes in the first. A part holding a single setting lets the title stand in for that setting's label and help. A row with steps also gets a quieter set of controls: the header offers Edit or Collapse, Duplicate and Remove move into a menu behind three dots (Remove asks first), and the open row ends in Collapse instead of Done. A page can draw a status in the header and a block at the foot of such a row, keyed by the list's path (`rowSlots` on `ModulePage`), without the form knowing what the rows are.
+
+```ts
+export const panelField = s.object(
+  {
+    name: s.string({ label: "Name", step: "where" }),
+    channel: s.channel({ label: "Channel", step: "where" }),
+    message: s.message({ label: "Panel message", step: "see", /* ... */ }),
+    types: s.array(typeField, { label: "Ticket types", step: "types", /* ... */ }),
+  },
+  {
+    steps: [
+      { id: "where", title: "Where it goes", help: "Pick the channel." },
+      { id: "see", title: "What members see" },
+      { id: "types", title: "Ticket types", help: "One for each kind of ticket." },
+    ],
+  },
+);
+```
+
+**`layout: "sheet"`** on an `s.array` of objects draws each row as a card, and Edit opens the row in a sheet from the right instead of unfolding it. `card` says what the card shows, as paths from the row: `emoji` (an emoji setting), `swatch` (a choice whose options carry a `swatch` colour, drawn as a dot), `chips` (a list of roles) and `facts` (settings read out as short phrases: a choice as its label, a list of rows as a count, using the list's `item` for the noun). The card's name is the first filled text setting. Reordering works from the card; Add and Remove (with a confirm) and Duplicate are the sheet's and the list's. The sheet is a dialog: Escape and the scrim close it, Tab stays inside it, focus returns to the card's Edit button, and on a phone it is the whole screen. It edits the same draft as the page, so closing it keeps every change and the page's Save applies them. A row with a refused setting opens the sheet by itself, on the tab that holds it.
+
+Inside a sheet row, `section` names a tab, on any setting at any depth, and a group's `section` is the default for what is inside it. Tabs are listed in order of first appearance, labelled from the id (`"people"` reads People), and a setting naming none is drawn in the first. A group whose settings are spread over several tabs is drawn in each with only the settings that belong there, headed by its entry in `tabLabels` for that tab (falling back to its own label), which lets one stored group serve two tabs without changing its shape.
+
+```ts
+opening: s.object(
+  {
+    mode: s.choice({ /* ... */ section: "basics" }),
+    ping: s.choice({ /* ... */ section: "people" }),
+  },
+  { label: "Where tickets open", tabLabels: { basics: "Where tickets open", people: "Who is told" } },
+),
+```
+
+`nudge: "<short note>"` on a setting asks for nothing, but while it is empty the row's card shows the note in amber and its tab carries a marker. An `essential: true` setting that is empty does the same ("No category yet") while its `when` is met. A refused setting marks its tab in red. `nudge` never refuses a save and leaves the module's status alone, unlike `essential`.
+
+**`formPreview: { kind: "modal", title, label, placeholder, style, required }`** on a list of rows that are the questions of a form adds a Preview button under the list that draws the form as Discord shows it. `title` is a text setting beside the list; the rest are paths in each row.
+
+### Controls and conditions
+
+`control: "segmented"` on an `s.choice` draws two to four options as a row of toggle buttons, with the chosen option's `description` underneath, instead of a drop-down. `control: "swatches"` draws them as colour dots with their names and needs a `swatch` (a CSS colour) on every option.
+
+`when: { field, equals, hide: true }` leaves the setting out of the form while the condition is not met, instead of drawing it greyed out with a sentence about why. Use it where the greyed control would only be a puzzle, such as a menu's placeholder while buttons are picked; the value stays stored. Without `hide` the field is greyed out as before.
+
+An `attach` of `kind: "list"` draws an add button in the message preview unless it says `add: false`, which is for a list that is edited, with its own add button, on the same screen.
 
 ### Messages the owner can edit
 

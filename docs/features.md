@@ -51,7 +51,7 @@ Changes on a settings page are kept until you press **Save changes** (or Ctrl+S)
 
 Quick setup in the sidebar asks only for the few settings a feature can't work without, one feature per screen, and switches each feature on as you save its screen. A feature that would still do nothing, such as Automod with every rule off, keeps your answers but stays off, and the screen says what it still needs. **Moderation** walks through moderation and automod together, and every feature that has a quick setup is listed on its own below it. The last screen says which features are still off or have nothing to do, and what to fill in.
 
-Nothing is locked in. Settings it doesn't ask about keep their values, skipping a step leaves that feature as it was, and you can change anything later on the feature's own page. Features made of repeating rows, like role menus, have no quick setup.
+Nothing is locked in. Settings it doesn't ask about keep their values, skipping a step leaves that feature as it was, and you can change anything later on the feature's own page. Features made of repeating rows get a short version: Roles asks for a first menu, and Tickets has the setup described below.
 
 **Tickets** has a quick setup of its own, under Tickets in the sidebar. It asks where the panel goes, which roles answer, whether tickets open as private channels (and in which category) or as threads, and optionally where closed tickets are logged. It then saves your answers, turns Tickets on and posts the panel, and ends by saying whether members can open a ticket, or what still stops them. It covers the first panel and its first ticket type; more panels and types are added under Settings.
 
@@ -99,6 +99,8 @@ Above each text box there are tools to insert:
 A mention is stored the way Discord stores it, such as `<#1200000000000000008>`, so the editor lists under the text box which channel, role or member each one is.
 
 Name a message and press Save to keep it as a template. Folders group templates, one level deep. Deleting a folder moves its templates out and deletes nothing. The open template is in the address, so a reload or a shared link opens it again, and the list shows when each template was last sent. Leaving the page, or opening another template, with changes not saved asks first.
+
+**Available in tickets** sits beside the folder. Tick it and staff can pick the message from the ticket reply box (see [Replies from the dashboard](#replies-from-the-dashboard)). It is saved with the template, shows as a **Tickets** chip on its row in the list, and the chip can be pressed to turn it on or off without opening the template. **Only those available in tickets** above the list narrows it to the flagged ones. Templates start with it off. A reply can only carry embeds, so the buttons, menus and reactions of a flagged template are left out when staff use it.
 
 Send posts it to the channel you pick, after a confirmation that shows the message once more. The bot needs View Channel and Send Messages there, and Embed Links for an embed. Each send has its own options: send under another name and picture (through a webhook, which needs Manage Webhooks in that channel), send silently, pin it, publish it to followers of an announcement channel, hide link previews, read it out loud, start a thread on it, and reply to a message. These are chosen when you send and aren't saved with the template.
 
@@ -217,7 +219,7 @@ The **Raid tools** tab is for admins and the owner. It needs Moderation switched
 
 `/lockdown channel`, `/lockdown server` and `/lockdown end` do the same from Discord. Discord shows them to members with Manage Channels, so admin staff without that permission need the command allowed for them on the Commands page. The bot itself accepts both. Each lock and unlock is a line in Staff activity.
 
-**Mass ban or kick.** Paste user IDs (up to 200), or choose a window of up to seven days in which people joined. **Preview** lists exactly who would be acted on, and who would be skipped and why: yourself, the bot, the server owner, staff, someone whose top role is at or above yours, or someone the bot can't act on. Nothing runs until you hold the confirm button under the preview, and changing anything after the preview throws it away. The bot works out who would be acted on again when you confirm and refuses if it is no longer the same list, even when the number of members is the same. Only one mass action runs per server at a time, and a second request made while one is starting or running is refused. The page shows the progress and lists each member that failed. Every member actioned gets a case, and one line goes to Staff activity. Members are not sent a message.
+**Mass ban or kick.** Paste user IDs (up to 200), or choose a window of up to seven days in which people joined. The **Last 10 minutes** and **Last hour** buttons fill in the start and leave the end empty, which means up to the moment you preview or confirm, so someone who joined seconds ago is included. **Preview** lists exactly who would be acted on, and who would be skipped and why: yourself, the bot, the server owner, staff, someone whose top role is at or above yours, or someone the bot can't act on. Nothing runs until you hold the confirm button under the preview, and changing anything after the preview throws it away. The bot works out who would be acted on again when you confirm and refuses if it is no longer the same list, even when the number of members is the same. Only one mass action runs per server at a time, and a second request made while one is starting or running is refused. The page shows the progress and lists each member that failed. Every member actioned gets a case, and one line goes to Staff activity. Members are not sent a message.
 
 ### Ban appeals
 
@@ -245,7 +247,7 @@ The Moderation area in the sidebar is where staff read a member's record, leave 
 | Overview | Statistics | Staff |
 | Members | Everyone with something on file | Staff |
 | Mod logs | Member actions (every case) and Staff activity (what staff changed) | Staff. Staff activity is for admins and the owner |
-| Server logs | What happened on the server | Admins and the owner, and moderators if the owner allows it |
+| Server logs | What happened on the server | Admins and the owner, and moderators if **Let moderators open the server logs** is on |
 | Appeals | Ban appeals to read and decide | Admins and the owner |
 | Raid tools | Lockdown, and mass ban or kick | Admins and the owner |
 | Access | Who can use all of this | The owner |
@@ -271,7 +273,7 @@ A search box in the header finds a member from any tab. Press Ctrl+K (Cmd+K on a
 | Take a warn or timeout off a record | Yes | Yes | Yes |
 | Kick, ban, unban | No | Yes | Yes |
 | Read staff activity, export member actions as CSV | No | Yes | Yes |
-| Open the server logs | If the owner allows it | Yes | Yes |
+| Open the server logs | If switched on in the Server logs settings | Yes | Yes |
 | Delete the server logs (in the Danger zone) | No | No | Yes |
 | Edit or delete others' notes, restore deleted notes | No | Yes | Yes |
 | Put a removed action back | No | Yes | Yes |
@@ -325,6 +327,17 @@ Actions open the same form as the dashboard. From a message, the message itself 
 
 Discord shows an entry only to members with the matching permission: Timeout Members for warn, timeout and history, Kick Members for kick, Ban Members for ban. Seeing it isn't enough. The person also has to be on the staff list or be the install owner, with the same levels as the dashboard. If a moderator can't see the entries, give their role Timeout Members. Server owners can change who sees each entry under Server Settings, Integrations. Each entry is also a command on the Commands page, so it can be switched off or limited like any other.
 
+### The right-click menu in the dashboard
+
+Right-click a person or a message anywhere in the dashboard to act on them without leaving the page. That covers names and avatars in a ticket's conversation and transcript, the opener and People list on a ticket, member rows, the member chips in Member actions, Staff activity, the server logs, appeals and raid tools, and the ticket lists. The context menu key or Shift+F10 opens it from the keyboard, and so does the **...** button, which stays visible on touch screens. Hold Shift while right-clicking, or right-click selected text, to get the browser's own menu instead.
+
+- **On a person:** View moderation profile, Warn, Timeout (Change timeout while one is running), Clear timeout, Kick, Ban or Unban, Copy user ID, Open in Discord.
+- **On a message in a ticket:** Warn author, Timeout author, Kick author, Ban author, Copy message text, Copy message link, then the author's profile and Copy user ID. The message is attached to the case. If the bot can't copy it, for example because the ticket channel is gone, the form offers to put the message link in the reason instead.
+
+Choosing an action opens the same form as **Take action**, over the page you were on. When it goes through, a notice says what happened and links to the case.
+
+The menu lists what your level allows and nothing else, using the same rules as **Take action**, so an action the bot would refuse is greyed out with the reason underneath. Entries show greyed out for a moment while the bot checks. Someone without a moderation level, such as a ticket handler, gets only Copy user ID and Open in Discord. Apps and webhooks, like the bot's own replies, can't be acted on.
+
 ### Editing a case
 
 Open a case on the member's page and choose **Edit case**. You can change the reason, the attached messages (remove one, add one, or choose which version of an edited message the member was warned for), and, while a timeout or ban is still running, how long it lasts. A new length counts from now and is applied in Discord straight away, including making a ban permanent. A timeout or ban that has already ended can't have its length changed.
@@ -341,7 +354,7 @@ An edited case shows a blue **Case edited by staff** note with who and when, on 
 
 Three levels, each stronger than the last.
 
-**Remove from record** keeps the entry on the timeline, struck through, with your name, the time and a required reason. It stops counting in totals, statistics, `/history` and `/case`. Moderators and admins can remove warns and timeouts (automod's included). Only the owner can remove a kick, ban or unban. Removing a timeout that's still running also lifts it in Discord, unless the member has left, the bot ranks below them, or another timeout on them is still in force. Removing a ban that's still in force also lifts the ban in Discord, so the record and Discord agree. The dialog says so, and the button reads **Remove and lift the ban**. The Discord ban stays if another ban case on the member is still in force, and Staff activity records what happened in Discord.
+**Remove from record** keeps the entry on the timeline, struck through, with your name, the time and a required reason. It stops counting in totals, statistics, `/history` and `/case`. Moderators and admins can remove warns and timeouts (automod's included). Only the owner can remove a kick, ban or unban. Removing a timeout that's still running also lifts it in Discord, unless the member has left, the bot ranks below them, or another timeout on them is still in force. Removing a ban that's still in force also lifts the ban in Discord, so the record and Discord agree. The dialog says so, and the button reads **Remove and lift the ban**. The Discord ban stays if another ban case on the member is still in force, and Staff activity records what happened in Discord. The message after you confirm says which of these happened: the ban was lifted, it stayed because another ban case is in force, it could not be lifted (the bot may lack Ban Members), or the member was not banned any more.
 
 **Restore** puts a removed action or deleted note back. Admins and the owner can. It never changes anything in Discord, so a restored timeout isn't reapplied and a restored ban isn't repeated. A restored ban only counts as in force if Discord still has the member banned.
 
@@ -553,19 +566,41 @@ The channel name pattern can use `{username}`, `{type}` and `{number}`. Letters 
 
 Under **Automation**, **Working hours** sets when the team answers, as rows of a day and a time, in the time zone you give (UTC when empty). A ticket opened outside them gets a message under its first one saying when the team is back. With no rows, every time counts as working hours. The bot adds a **Close ticket** button and a **Claim** button under it. A type with claiming switched off gets only the Close button.
 
+### Setting up a panel
+
+In **Settings**, under **Panels**, each panel is one row. Its header says where it stands in Discord, such as Posted in #support or Not posted yet. Click **Edit** to open it. A panel has three steps, numbered in the order you do them.
+
+1. **Where it goes.** The panel's name (only you see it, it tells panels apart), the channel it is posted in, and **Members open a ticket with** Buttons or Menu. The menu's grey placeholder text only shows up once you pick Menu.
+2. **What members see.** The panel message exactly as it looks in Discord, with its buttons or menu under it. **Edit message** changes the text. Click one of the buttons to change just that button.
+3. **Ticket types.** One card for each button or menu option. A card shows the emoji and name, a dot in the button's colour, the roles that handle it, how many questions it asks and whether its tickets are private channels or private threads. A type with no handlers, or no category, says so in amber on its card. The arrows change the order. **Add ticket type** adds another, and a panel can have 25.
+
+At the bottom of the panel, the status line says whether it is up in Discord and the main button puts it up: **Post to Discord** the first time, **Update in Discord** after you change it, **Post again** if the message was deleted. It posts what you saved, so it asks you to save first when you have unsaved changes. **Check again** asks Discord whether the message is still there. Before it posts a panel with a type that cannot open tickets yet, it says which type and why and asks you to confirm. **Collapse panel** folds the panel up. The three dots in the panel's header hold **Duplicate** and **Remove**. Removing asks first, and nothing changes until you save.
+
+### Editing a ticket type
+
+**Edit** on a type's card opens a panel from the right with the type's name and emoji at the top and five tabs. Close it with the X, **Close**, the Escape key, or by clicking outside it. Everything you change stays in your unsaved changes, so closing it loses nothing. Save from the bar at the bottom of the page, as with any other setting. A small dot on a tab means something there needs you: amber for something missing, such as no handlers, red for a setting the bot refused. If a save is refused, the panel opens on the tab with the problem.
+
+- **Basics.** The type's name and emoji, the button's text and colour, the menu description, and where its tickets open: a private channel or a private thread, the category and an overflow category for channels, and the channel name.
+- **People.** The **Handlers**, who answer these tickets. Then the observers, who to ping when a ticket opens, the roles that may open this type and the roles that may not.
+- **Form.** The questions asked before the ticket opens. Add, reorder and remove them. **Preview the form** shows them the way Discord does.
+- **Messages.** The first message in the ticket, with the buttons the bot adds under it, and whether the answers are shown under it.
+- **Rules.** How many tickets of this type one member can have open, the wait between tickets, whether staff can claim, whether the opener can close their own ticket, whether closing asks for a reason and whether only staff can reopen. Below those are the settings that differ from the general ones: when inactive tickets close, the transcript channel and whether the opener is asked for a rating.
+
+**Remove this ticket type** is at the bottom of the panel and asks first. **Make a copy** adds a copy of the type right after it.
+
 ### The panel's buttons
 
-In **Settings**, under **Panels**, the preview of each panel message shows what members see under it: one button per ticket type, five to a row, or a menu holding every type when **Members pick a type from** is set to a menu. Click a button, or an option of the menu, to change it right there:
+In step 2 of a panel, the preview of the panel message shows what members see under it: one button per ticket type, five to a row, or a menu holding every type when **Members open a ticket with** is Menu. Click a button, or an option of the menu, to change it right there:
 
 - **Button text** (or **Option text** in a menu). Leave it empty to use the type's name. Discord allows 80 characters on a button.
 - **Emoji**, a normal emoji or a custom one written as `<:name:id>`.
 - **Colour**, one of blurple, grey, green or red, for a button. A menu option has a **Description** instead, the quieter line under its text.
 - **Move left** and **Move right** (up and down in a menu) change the order.
-- **All settings for this ticket type** opens the type further down the page.
+- **All settings for this ticket type** opens the type's panel from the right.
 
-Clicking the menu itself changes its placeholder, the grey text shown before anything is picked. Left empty, Discord shows "Make a selection". The dashed **Add a ticket type** at the end adds a new type with its own button. A panel can have 25 types, which is as many buttons or menu options as Discord allows on one message.
+Clicking the menu itself changes its placeholder, the grey text shown before anything is picked. Left empty, Discord shows "Make a selection". Types are added in step 3, below the preview. A panel can have 25 types, which is as many buttons or menu options as Discord allows on one message.
 
-These edits are part of the settings like any other, so they're kept when you press **Save changes**. To change the panel in Discord, post it or update it from the panel list at the top of Panels.
+These edits are part of the settings like any other, so they're kept when you press **Save changes**. To change the panel in Discord, post it or update it with the button at the bottom of the panel.
 
 The buttons the bot adds under its own messages are shown and edited the same way: Close ticket and Claim under the first message of a type, and in the Messages part, Reopen and Delete ticket under **Closed, channel kept** and Close and Keep open under **Asked to close**. Click one to change its text and its colour.
 
@@ -586,6 +621,18 @@ Everything here is under `/ticket`. Staff are the type's handlers, your admin ro
 
 Each part of `/ticket` can be switched off or limited to roles and channels on its own, on the Commands page or in the Commands part of the ticket settings. See [Commands](#commands).
 
+### Opening a ticket as staff
+
+Staff can start a ticket instead of waiting for one, for example when they need to talk to a member. In the Inbox, press **New ticket** (or `n`) and fill in:
+
+- **Type.** Managers and admin roles can pick any type. A handler can pick the types they handle. A type that can't take tickets right now, such as one whose category is full, says why and can't be picked.
+- **Subject**, if you want one.
+- **Form answers**, folded away. The type's questions are optional here, and anything you answer shows in the ticket as it would for a member.
+- **Members to add.** Search by name and pick up to 10. They need to be in the server and can't be bots. They get access the same way as with `/ticket add`, and they are mentioned in the first message.
+- **First message**, if you want one. It is posted in the ticket under your name as soon as it opens.
+
+Press **Open ticket** and the dashboard takes you to it. You are the ticket's opener, so it counts as yours in the lists. The rules a member has to pass don't apply: the blocklist, the roles allowed to open the type, the limit on open tickets, the wait between tickets and working hours. The category still has to exist and have room, and thread types still open a thread. Nobody is asked to rate it, and it isn't closed or flagged if you leave the server.
+
 ### Closing
 
 The Close ticket button and `/ticket close` close a ticket. The opener may close their own unless the type says otherwise, and a type can ask for a reason in a short form first. `/ticket request-close` asks the opener instead. They get Close and Keep open buttons, and if they don't answer within the time set under General, the ticket closes by itself.
@@ -603,11 +650,13 @@ When the member who opened a ticket leaves the server, **When the opener leaves 
 
 While **Keep transcripts in the dashboard** is on, every message in an open ticket is saved as it's sent, edited or deleted, so the transcript doesn't depend on the channel still being there. When a ticket closes the bot also reads the channel's last 500 messages and saves any it missed, for example while it was offline. Messages are saved the way Discord shows them: formatting, mentions, custom emoji, embeds, buttons, replies and stickers. Reactions are saved when the ticket closes. Tickets closed before an update keep what was saved for them then, so an older transcript can look plainer or have no messages at all. Attached files stay on Discord and only links to them are saved, so a file deleted on Discord is gone from the transcript too. Set **Delete saved messages after this many days** to clear old transcripts. The ticket itself and its details stay. A manager can also delete one transcript by hand; the ticket then records who deleted it and when, so the two can be told apart.
 
-When a ticket closes, the bot can also post the transcript file to the log channel, send it to the opener by direct message, and post a short summary of the ticket to the log channel. The summary has a View in dashboard button once the bot knows the dashboard's address. A type can send its transcripts to a channel of its own.
+When a ticket closes, the bot can also post the transcript file to the log channel, send the transcript by direct message, and post a short summary of the ticket to the log channel. The summary has a View in dashboard button once the bot knows the dashboard's address. A type can send its transcripts to a channel of its own.
+
+**Send the transcript to** decides who gets the direct message: nobody (the default), only the opener, or everyone in the ticket who is not staff. That is the opener and the members added to the ticket, leaving out bots and anyone who is a handler, observer or admin of the ticket's type or who can manage channels or the server. Someone with direct messages closed is skipped, and the ticket still closes. The file is the same web page the dashboard's Download as web page gives, named from the file name under Buttons and form text with .html at the end. **Format of the file sent** can switch that to a text file or send both. The web page is built from the saved messages, so with Keep transcripts in the dashboard off a text file is sent instead. The log channel still gets the text file. A server that had **Send the transcript to the opener** on keeps it as Only the opener.
 
 ### Ratings and reminders
 
-With ratings on, the opener gets a direct message after the ticket closes with buttons from 1 to 5. Picking one saves it and opens a short form for an optional comment. The thanks message is sent when that form is sent; closing the form keeps the rating without a thanks. Only the first rating counts. A type can switch ratings on or off for itself.
+With ratings on, the opener gets a direct message after the ticket closes with buttons from 1 to 5. When the transcript is also sent to the opener, the request is in that same message, under the file. Picking a rating saves it, takes the buttons off the message and shows the rating under the original text, for example "You rated this 4 out of 5" with stars. The wording of that notice is **Rating DM after a rating** under Ratings and reminders. Picking one also opens a short form for an optional comment. The thanks message is sent when that form is sent; closing the form keeps the rating without a thanks. Only the first rating counts, and a second try says it was already rated. A type can switch ratings on or off for itself.
 
 Under **Automation**, auto-close closes a ticket nobody has written in for the time you set, and the clock starts again whenever someone writes. A type can use its own time or never close by itself. Changing these, or moving a ticket to another type, applies to the tickets already open, counted from their last message, and switching auto-close off stops the closes already planned. The staff reminder pings the handlers once if nobody but the opener has written after the time you set. Every one of these times is at least a minute.
 
@@ -615,22 +664,33 @@ Under **Automation**, auto-close closes a ticket nobody has written in for the t
 
 Staff can answer a ticket from the dashboard. The reply is posted in the ticket under their Discord name and avatar, through a webhook the bot creates in the channel. Without Manage Webhooks the bot posts it itself, with the staff member's name in bold on the first line. A reply can ping the people in the ticket and its handler and admin roles, never `@everyone`, `@here` or any other role, and a hint under the box says so.
 
+**Reply** appears on a message in the conversation when you point at it, beside the **...** button, and in the message's right-click menu. It puts a bar above the box saying **Replying to** the author and the start of what they wrote. Select the bar to scroll to that message, **X** or Escape to drop it, and a reply that sends clears it. In Discord the reply starts with a small grey line, ↩ and the name and the first words, that links to the message. A webhook can't make a real Discord reply, so the line stands in for it. The line never pings anyone. When the bot has to post the reply itself it is a real reply and doesn't ping the author. The dashboard's conversation and the transcripts show it the way they show a reply made in Discord. A message that was deleted in Discord can't be replied to. **Shift+R** replies to the member's latest message.
+
 Under the box, **Saved replies** lists the server's saved replies. Search by name or text, pick one with the arrow keys and Enter, and it goes into the box at the cursor with `{user}`, `{number}` and the rest already filled in, ready to edit before sending.
 
 **Attach** adds files, and files can also be dropped on the box or pasted into it, such as a screenshot. A reply carries up to 10 files and 8 MB in all. A file that would break either limit is left out, with a line saying which and why, and the rest are kept. A bar shows the upload, and a failed send keeps the text and the files. Leaving a half-written reply asks first.
+
+**Add embed** opens the same embed builder the Messages page uses, with a preview of how Discord will draw it. A reply carries up to 3 embeds, and each shows as a chip under the box that you can click to edit or remove. Together they can hold 6,000 characters, which is Discord's limit, and the dialog says how much is left. Links and pictures must be web addresses. A reply can be only an embed or only files, with no text. Buttons, menus and reactions are not offered, since a reply can't carry them. Anyone who may reply may add embeds.
+
+The same dialog has a **From saved messages** tab. It lists the templates from the Message creator that are marked **Available in tickets**, grouped by folder, with a search box and a preview of the message as it will look in this ticket. Pick one and press **Add to reply**: its embeds go in as chips you can still edit, with `{user}`, `{number}`, `{server}` and the other variables filled in for this ticket. Tick **Also use its text** to put the message's text in the box too. Buttons, menus and reactions are dropped, and the dialog says so. The usual limits apply, so an embed that would take the reply over 3 embeds or 6,000 characters is left out, with a line saying why.
+
+Under **General**, **Replies from the dashboard** sets who a reply looks like it is from. The default is **The staff member**, as above. Choose **A team name** and every reply goes out under one name and picture, so members see the team and not who answered. **Team name** starts as Support Team. **Team picture** is a link to an image, and without one replies use the bot's picture. **Add who replied as a small line** adds a line such as `Replied by Kairo` at the end of each reply, in Discord's small grey text. Without a webhook the team name is the bold first line instead.
+
+Whichever you pick, the dashboard keeps who really sent each reply. The conversation shows the team name with a small `sent by Kairo` beside it, and the ticket's history and first-response time still count the person. Transcripts show what Discord showed, so a team reply names the team, and names the person only if the line was switched on. A reply sent from the dashboard shows a `via dashboard` tag next to the name, and it is never grouped under a message the same person typed in Discord.
 
 ### The ticket workspace
 
 Tickets has its own section in the dashboard with four tabs. Who sees what depends on who they are. Anyone with Manage Server, and the instance owner, sees everything, including **Settings**. Someone holding a handler role sees the tickets of the types they handle and nothing else. A role listed under **Admin roles** in General sees and works every ticket but has no Settings tab. A handler who can't manage the server doesn't need to be listed anywhere else, because the bot reads their roles from Discord each time. The server shows up for them on Your servers and in the server switcher, marked Tickets, and opens straight on the Inbox.
 
-- **Inbox** lists open tickets with a search box and filters for type, priority and whether a ticket is yours, unclaimed or anyone's. **My queue** shows the open tickets you claimed or answered first. A blue dot marks a ticket where the member wrote last and nobody has answered, and the time on each row is its last activity. Pick one to read the conversation, which refreshes by itself every few seconds while the tab is open. The side panel shows the opener, their answers, who is in the ticket, a timeline of what happened, and **internal notes**, which only staff see and are never sent to Discord. From the header you can claim, change the priority, move the ticket to another type, ask the opener whether it can close, close it and reopen it. The channel can be renamed from **Rename** beside its name in the side panel. Tickets are shown by their per-server number everywhere.
-  - **Live list.** While the tab is in front, the list checks for changes every 15 seconds. New tickets wait behind a **N new tickets** button instead of moving the rows while you read; other activity, such as a member writing or someone closing a ticket, brings the list up to date by itself once the pointer and keyboard focus are out of it. The browser tab's title starts with how many tickets are waiting on staff, as in `(3) Tickets`. **Desktop alerts** is a button, off until you press it and your browser asks: while it is on, a tab in the background checks once a minute and shows an alert when a ticket opens or another one starts waiting on staff. The choice is kept per server in that browser only.
-  - **Keyboard.** `j` and `k` open the next and previous ticket, `c` claims the open ticket, `r` goes to the reply box, `/` goes to the search box and `?` lists them. They do nothing while you are typing in a box.
+- **Inbox** lists open tickets with a search box and filters for type, priority and whether a ticket is yours, unclaimed or anyone's. **My queue** shows the open tickets you claimed or answered first. A blue dot marks a ticket where the member wrote last and nobody has answered, and the time on each row is its last activity. Pick one to read the conversation, which updates as things happen while the tab is open, usually within a second. The same goes for a claim, a priority, a note or a new member someone else adds. The side panel shows the opener, their answers, who is in the ticket, a timeline of what happened, and **internal notes**, which only staff see and are never sent to Discord. From the header you can claim, change the priority, move the ticket to another type, ask the opener whether it can close, close it and reopen it. The channel can be renamed from **Rename** beside its name in the side panel. Tickets are shown by their per-server number everywhere.
+  - **Live list.** While the tab is in front, the list hears about changes as they happen. New tickets wait behind a **N new tickets** button instead of moving the rows while you read; other activity, such as a member writing or someone closing a ticket, brings the list up to date by itself once the pointer and keyboard focus are out of it. The browser tab's title starts with how many tickets are waiting on staff, as in `(3) Tickets`. **Desktop alerts** is a button, off until you press it and your browser asks: while it is on, a tab in the background checks once a minute and shows an alert when a ticket opens or another one starts waiting on staff. The choice is kept per server in that browser only.
+  - **Keyboard.** `j` and `k` open the next and previous ticket, `c` claims the open ticket, `r` goes to the reply box, `Shift+R` replies to the member's latest message, `n` opens the New ticket dialog, `/` goes to the search box and `?` lists them. They do nothing while you are typing in a box.
+  - **New ticket.** The button at the top of the list opens a ticket yourself, for when staff need to talk to someone. See [Opening a ticket as staff](#opening-a-ticket-as-staff).
   - **Adding people.** **Add** in the People list finds a member by name. Pick one from the results, or type a name and press Enter to add the one member who has it. The member must be in the server.
   - A ticket whose opener has left the server says so above the conversation, with when. A thread ticket names the channel it sits in and links to it.
 - **Transcripts** is the archive of closed tickets, with the same search plus rating and handler filters. Select a row, or **Read**, to open its transcript. It looks like the ticket did in Discord, in Discord's dark colours, with the channel's name at the top. Deleted messages stay visible to staff, dimmed and marked. **Show ticket activity** adds claims, priority changes and the like between the messages, in a style of their own; staff notes are only in the side panel. A closed ticket in the Inbox shows the same view and has an **Open transcript** button. A transcript downloads as a web page that looks the same, with times in UTC, or as a text file. Next to each row, the download button opens a small menu with both. If the messages are gone, the page says whether a manager deleted them, naming who and when, or the retention period ran out, and offers no downloads. Discord's own font isn't free to share, so the transcript uses a close substitute. A manager can delete a transcript, which removes the saved messages and leaves a line in an audit record.
 - **Stats** shows tickets open now, opened and closed over 7, 30 or 90 days, the median time to a first answer and to close, ratings, and a breakdown by type and by handler. The name of a type or handler opens the list of their tickets.
-- **Settings** is the same settings form as the other features, split into Panels, General, Transcripts, Ratings, Automation, Saved replies and Messages. The Panels part has a **Health** card and a list headed **In Discord now** with every panel's state: posted, changed since it was posted, still up in a channel it was moved from, deleted in Discord, posted by the older version, or not posted. **Check again** asks Discord whether each message is still there. Update or Post puts the panel up from the settings you saved, and moves it if its channel changed, taking the old message down. Before it posts a panel with a type that cannot open tickets yet, such as one with no category, it says which type and why and asks you to confirm. The Health card lists what would stop tickets working: a missing category, a full one, a deleted panel message, a custom emoji from another server, a type with no handlers. Its heading says how much is wrong, such as one ticket type of eight, and each item opens the panel or type it is about. **General** has **Blocked members**, which finds members by name. The Commands part has the `/ticket` switches.
+- **Settings** is the same settings form as the other features, split into Panels, General, Transcripts, Ratings, Automation, Saved replies and Messages. The Panels part has a **Health** card, then the panels. Each panel's header says where it stands: posted, changed since it was posted, still up in a channel it was moved from, deleted in Discord, posted by the older version, or not posted. The button at the bottom of an open panel (see [Setting up a panel](#setting-up-a-panel)) puts it up from the settings you saved, and moves it if its channel changed, taking the old message down. Before it posts a panel with a type that cannot open tickets yet, such as one with no category, it says which type and why and asks you to confirm. The Health card lists what would stop tickets working: a missing category, a full one, a deleted panel message, a custom emoji from another server, a type with no handlers. Its heading says how much is wrong, such as one ticket type of eight, and each item opens the panel or type it is about. **General** has **Blocked members**, which finds members by name. The Commands part has the `/ticket` switches.
 
 A server with nothing set up yet sees three steps at the top of the Inbox and of Settings, and **Quick setup** (see [Quick setup](#quick-setup)) is the shorter way through them.
 
@@ -638,12 +698,12 @@ Replies and every action in the workspace go through the same code as the slash 
 
 ### Messages and labels
 
-Every message the bot sends about a ticket is edited with the message builder and starts as what the bot posts now. The panel and the first message of each type are under **Panels**. Everything else is in **Messages**, under **What the bot says**: one list, in the order a ticket meets them.
+Every message the bot sends about a ticket is edited with the message builder and starts as what the bot posts now. The panel is step 2 of its row under **Panels**, and the first message of each type is on the Messages tab of that type. Everything else is in **Messages**, under **What the bot says**: one list, in the order a ticket meets them.
 
 - **When a ticket opens**: the reply the opener sees with a link to their ticket.
 - **While a ticket is open**: claimed, unclaimed, priority changed, moved to another type, renamed, member added and removed, asked to close and kept open.
 - **When a ticket closes**: closing, closed with the channel kept, reopened, the transcript post, the transcript sent to the opener and the closed ticket summary.
-- **Ratings and reminders**: the rating request, the thanks and the reminder to staff.
+- **Ratings and reminders**: the rating request, the notice shown after a rating, the thanks and the reminder to staff.
 - **Commands the team runs**: what `/ticket panel`, `/ticket note`, `/ticket transcript` and `/ticket info` reply.
 - **When something goes wrong**: the refusals and errors, folded into **Not allowed**, **Cannot open a ticket** (including the blocklist, the wait between tickets and the roles a type allows) and **Cannot do that right now**. Click one to open it.
 
@@ -651,7 +711,7 @@ Each row says when the message is sent and who sees it: **Public** for everyone 
 
 The buttons and menus the bot adds itself aren't part of those messages. Close ticket and Claim show under the first message of a type, Reopen and Delete ticket under **Closed, channel kept**, and Close and Keep open under **Asked to close**. Click one to change its text and colour (see [The panel's buttons](#the-panels-buttons)). The rating buttons are always 1 to 5.
 
-Variables in the first message, besides the ones every message has: `{user}`, `{username}`, `{subject}`, `{title}` (the subject, or "New ticket" when there is none), `{number}`, `{ticket}`, `{supportRoles}`, `{type}`, `{priority}`, `{answers}` (every answer as a list), `{answer1}` to `{answer5}`, `{claimedBy}`, `{handlers}` and `{pingRoles}`. Only the roles picked under **Who to ping when a ticket opens** are pinged, and `{pingRoles}` names them, so keep it in the text. `{answers}` and `{answer1}` to `{answer5}` are cut to 1000 characters, and the answers shown under the first message are shortened to fit Discord's limits, so long answers never replace your message with the starting one. The first message is filled in again when the ticket is claimed or moved, so `{claimedBy}` and `{type}` stay current. Each message lists its own variables in the editor.
+Variables in the first message, besides the ones every message has: `{user}`, `{username}`, `{subject}`, `{title}` (the subject, or "New ticket" when there is none), `{number}`, `{ticket}`, `{supportRoles}`, `{type}`, `{priority}`, `{answers}` (every answer as a list), `{answer1}` to `{answer5}`, `{claimedBy}`, `{handlers}`, `{pingRoles}` and `{members}` (the members added to the ticket, as mentions, empty when nobody was). Only the roles picked under **Who to ping when a ticket opens** are pinged, and `{pingRoles}` names them, so keep it in the text. `{answers}` and `{answer1}` to `{answer5}` are cut to 1000 characters, and the answers shown under the first message are shortened to fit Discord's limits, so long answers never replace your message with the starting one. The first message is filled in again when the ticket is claimed or moved, so `{claimedBy}` and `{type}` stay current. Each message lists its own variables in the editor.
 
 **Buttons and form text**, below the messages, holds the short strings that go to Discord rather than being sent as a message. Each one has a **Reset** link once you change it.
 
