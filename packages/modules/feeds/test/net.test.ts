@@ -36,6 +36,27 @@ describe("isPublicAddress", () => {
     assert.equal(isPublicAddress("::ffff:8.8.8.8"), true);
   });
 
+  test("looks through an IPv4-mapped address in the form the URL parser produces", () => {
+    for (const address of ["::ffff:7f00:1", "::ffff:a9fe:a9fe", "::ffff:c0a8:101", "::ffff:a00:1", "0:0:0:0:0:ffff:7f00:1"]) {
+      assert.equal(isPublicAddress(address), false, address);
+    }
+    assert.equal(isPublicAddress("::ffff:808:808"), true);
+  });
+
+  test("looks through other ways of writing an IPv4 address in IPv6", () => {
+    for (const address of ["64:ff9b::7f00:1", "64:ff9b::127.0.0.1", "2002:7f00:1::", "2002:a9fe:a9fe::1", "::7f00:1", "::ffff:0:7f00:1"]) {
+      assert.equal(isPublicAddress(address), false, address);
+    }
+    assert.equal(isPublicAddress("64:ff9b::808:808"), true);
+    assert.equal(isPublicAddress("2002:808:808::1"), true);
+  });
+
+  test("refuses Teredo, documentation, discard and site-local ranges", () => {
+    for (const address of ["2001::1", "2001:db8::1", "100::1", "fec0::1", "ff02::1", "fe80::1%eth0"]) {
+      assert.equal(isPublicAddress(address), false, address);
+    }
+  });
+
   test("refuses text that is not an address at all", () => {
     assert.equal(isPublicAddress("localhost"), false);
     assert.equal(isPublicAddress(""), false);
@@ -50,6 +71,12 @@ describe("safeFetch", () => {
   test("will not connect to a loopback address written in IPv6 or as a single number", async () => {
     await assert.rejects(safeFetch("http://[::1]:8081/"), /public internet/);
     await assert.rejects(safeFetch("http://2130706433:8081/"), /public internet/);
+  });
+
+  test("will not connect to a loopback or metadata address written as an IPv4-mapped IPv6 literal", async () => {
+    await assert.rejects(safeFetch("http://[::ffff:127.0.0.1]:8081/"), /public internet/);
+    await assert.rejects(safeFetch("http://[::ffff:7f00:1]:8081/"), /public internet/);
+    await assert.rejects(safeFetch("http://[::ffff:a9fe:a9fe]/latest/meta-data/"), /public internet/);
   });
 
   test("will not resolve a name to a private address", async () => {

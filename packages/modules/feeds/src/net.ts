@@ -33,15 +33,52 @@ function isPublicV4(address: string): boolean {
   return true;
 }
 
+/**
+ * The eight 16-bit groups of an IPv6 address that isIP already accepted. The
+ * URL parser rewrites ::ffff:127.0.0.1 as ::ffff:7f00:1, so an address cannot
+ * be judged from its text; it has to be read as numbers.
+ */
+function groupsOfV6(address: string): number[] | null {
+  let text = address.toLowerCase().split("%")[0] ?? "";
+  const tail = /(\d+\.\d+\.\d+\.\d+)$/.exec(text)?.[1];
+  if (tail) {
+    const [a = 0, b = 0, c = 0, d = 0] = tail.split(".").map(Number);
+    text = `${text.slice(0, -tail.length)}${((a << 8) | b).toString(16)}:${((c << 8) | d).toString(16)}`;
+  }
+  const halves = text.split("::");
+  if (halves.length > 2) return null;
+  const head = halves[0] ? halves[0].split(":") : [];
+  const rest = halves[1] ? halves[1].split(":") : [];
+  const fill = halves.length === 2 ? 8 - head.length - rest.length : 0;
+  if (fill < 0 || (halves.length === 1 && head.length !== 8)) return null;
+  const groups = [...head, ...Array<string>(fill).fill("0"), ...rest].map((group) => parseInt(group, 16));
+  return groups.length === 8 && groups.every((group) => Number.isInteger(group)) ? groups : null;
+}
+
+function v4Of(high: number, low: number): string {
+  return `${high >> 8}.${high & 255}.${low >> 8}.${low & 255}`;
+}
+
 function isPublicV6(address: string): boolean {
-  const lower = address.toLowerCase();
-  const mapped = /^::ffff:(\d+\.\d+\.\d+\.\d+)$/.exec(lower);
-  if (mapped?.[1]) return isPublicV4(mapped[1]);
-  if (lower === "::" || lower === "::1") return false;
-  const first = parseInt(lower.split(":")[0] || "0", 16);
-  if ((first & 0xfe00) === 0xfc00) return false; // unique local
-  if ((first & 0xffc0) === 0xfe80) return false; // link-local
-  if ((first & 0xff00) === 0xff00) return false; // multicast
+  const g = groupsOfV6(address);
+  if (!g) return false;
+  const [g0 = 0, g1 = 0, g2 = 0, g3 = 0, g4 = 0, g5 = 0, g6 = 0, g7 = 0] = g;
+
+  // Forms that carry an IPv4 address are only as public as that address is.
+  if (g0 === 0 && g1 === 0 && g2 === 0 && g3 === 0 && g4 === 0 && g5 === 0xffff) return isPublicV4(v4Of(g6, g7)); // ::ffff:0:0/96
+  if (g0 === 0 && g1 === 0 && g2 === 0 && g3 === 0 && g4 === 0xffff && g5 === 0) return isPublicV4(v4Of(g6, g7)); // ::ffff:0:0:0/96
+  if (g0 === 0x64 && g1 === 0xff9b && g2 === 0 && g3 === 0 && g4 === 0 && g5 === 0) return isPublicV4(v4Of(g6, g7)); // NAT64
+  if (g0 === 0x2002) return isPublicV4(v4Of(g1, g2)); // 6to4
+
+  if (g0 === 0 && g1 === 0 && g2 === 0 && g3 === 0 && g4 === 0 && g5 === 0) return false; // ::, ::1 and the IPv4-compatible range
+  if (g0 === 0x64 && g1 === 0xff9b && g2 === 1) return false; // NAT64 local use
+  if (g0 === 0x100 && g1 === 0 && g2 === 0 && g3 === 0) return false; // discard-only
+  if (g0 === 0x2001 && g1 === 0) return false; // Teredo
+  if (g0 === 0x2001 && g1 === 0xdb8) return false; // documentation
+  if ((g0 & 0xfe00) === 0xfc00) return false; // unique local
+  if ((g0 & 0xffc0) === 0xfe80) return false; // link-local
+  if ((g0 & 0xffc0) === 0xfec0) return false; // deprecated site-local
+  if ((g0 & 0xff00) === 0xff00) return false; // multicast
   return true;
 }
 
