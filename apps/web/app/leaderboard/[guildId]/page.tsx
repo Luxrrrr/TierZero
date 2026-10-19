@@ -5,6 +5,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { ControlApiError, getPublicLeaderboard } from "../../../lib/control-api";
 import { createRateLimit, isGuildId, pageLinks, pageParam, visitorKey, type PublicLeaderboard } from "../../../lib/leaderboard";
+import { createTimedCache } from "../../../lib/timed-cache";
 import "../leaderboard.css";
 
 /*
@@ -17,6 +18,11 @@ export const dynamic = "force-dynamic";
 
 const limit = createRateLimit({ perVisitor: 30, overall: 600, windowMs: 60_000 });
 
+// A board a few seconds old is as good as a fresh one. Serving it from here means the bot is asked about a
+// page at most once in that time however many people open it, and only a request for a page that is not
+// kept counts against the limit above.
+const boards = createTimedCache<PublicLeaderboard>({ ttlMs: 15_000, maxEntries: 500 });
+
 type Outcome = { kind: "ok"; board: PublicLeaderboard } | { kind: "busy" } | { kind: "offline" } | { kind: "missing" };
 
 interface Params {
@@ -27,10 +33,13 @@ interface Params {
 // generateMetadata and the page both need the board; this makes it one request to the bot, counted once.
 const load = cache(async (guildId: string, page: number): Promise<Outcome> => {
   if (!isGuildId(guildId)) return { kind: "missing" };
+  const kept = boards.get(`${guildId}:${page}`);
+  if (kept) return { kind: "ok", board: kept };
   const head = await headers();
   if (!limit.take(visitorKey(head.get("x-forwarded-for"), head.get("x-real-ip")))) return { kind: "busy" };
   try {
     const board = await getPublicLeaderboard(guildId, page);
+    if (board) boards.set(`${guildId}:${page}`, board);
     return board ? { kind: "ok", board } : { kind: "missing" };
   } catch (error) {
     if (error instanceof ControlApiError) return { kind: "offline" };
