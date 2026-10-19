@@ -46,6 +46,7 @@ export async function runFromCommand(
       actorMember,
       actorIsInstanceOwner: false,
       origin: "command",
+      audit: { actorName: interaction.user.username },
     });
     return record;
   } catch (error) {

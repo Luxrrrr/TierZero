@@ -34,7 +34,7 @@ export function lockdownSummary(audit: Pick<LockdownAudit, "locked" | "result" |
 export async function auditLockdown(ctx: Ctx, audit: LockdownAudit): Promise<void> {
   if (audit.result.changed.length === 0 && audit.result.failed.length === 0) return;
   try {
-    const role = audit.automatic ? "automod" : ((await staffRoleOf(ctx.guild.id, audit.actorId)) ?? "mod");
+    const role = audit.automatic ? "automod" : ((await staffRoleOf(ctx.guild.id, audit.actorId)) ?? "discord");
     await prisma.modAudit.create({
       data: {
         guildId: ctx.guild.id,

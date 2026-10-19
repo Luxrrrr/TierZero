@@ -71,7 +71,7 @@ export function AuditLog({ guildId, query, data, actors: known, narrowedHere }: 
             <h2 className="mod-section-title" id="audit-heading">
               Staff activity
             </h2>
-            <p className="mod-section-desc">Everything staff did in this dashboard, newest first.</p>
+            <p className="mod-section-desc">Everything staff did, in the dashboard and in Discord, newest first.</p>
           </div>
         </div>
 
@@ -185,7 +185,19 @@ export function AuditLog({ guildId, query, data, actors: known, narrowedHere }: 
               <span className="mod-empty-icon">
                 <HistoryIcon />
               </span>
-              {filtered ? (
+              {query.infractionId ? (
+                <>
+                  <p className="mod-empty-title">Nothing recorded for this case</p>
+                  <p className="mod-empty-text">
+                    No staff activity was recorded for this case. Actions taken from Discord before this version are not listed here.
+                  </p>
+                  <div className="mod-empty-action">
+                    <Link className="btn btn-secondary btn-sm" href={auditHref(guildId, { ...query, infractionId: 0, page: 1 })}>
+                      Show all staff activity
+                    </Link>
+                  </div>
+                </>
+              ) : filtered ? (
                 <>
                   <p className="mod-empty-title">No entries match these filters</p>
                   <p className="mod-empty-text">Widen the date range or clear a filter to see more of the trail.</p>
@@ -199,7 +211,7 @@ export function AuditLog({ guildId, query, data, actors: known, narrowedHere }: 
                 <>
                   <p className="mod-empty-title">Nothing has been recorded yet</p>
                   <p className="mod-empty-text">
-                    Every action taken from this dashboard, every note added, edited or deleted, every action removed from
+                    Every action taken from this dashboard or in Discord, every note added, edited or deleted, every action removed from
                     or restored to a record, and every change to who has access appears here, with who did it and when.
                   </p>
                 </>

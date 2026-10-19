@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { CSSProperties, ReactNode } from "react";
-import { ROLE_LABEL, type InfractionDto, type StaffRole, type UserRef } from "@tier0/core";
+import { AUDIT_ROLE_LABEL, type AuditActorRole, type InfractionDto, type UserRef } from "@tier0/core";
 import {
   AlertIcon,
   BanIcon,
@@ -131,10 +131,10 @@ export function CaseReason({ action, reason, empty = "No reason given." }: { act
   );
 }
 
-export function RoleBadge({ role }: { role: StaffRole }) {
+export function RoleBadge({ role }: { role: AuditActorRole }) {
   return (
     <span className="mod-badge" data-role={role}>
-      {ROLE_LABEL[role]}
+      {AUDIT_ROLE_LABEL[role]}
     </span>
   );
 }

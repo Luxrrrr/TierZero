@@ -63,6 +63,13 @@ describe("redactProfile", () => {
     assert.deepEqual(result.notes[1]?.deleted, profile.notes[1]?.deleted);
   });
 
+  test("an entry by a Discord moderator is not shown to a moderator either", () => {
+    const fromDiscord: AuditDto = { ...entry, actor: { userId: "400", name: "Wren", role: "discord" }, kind: "action.take", noteId: null };
+    const result = redactProfile({ ...profile, audit: [fromDiscord] }, "mod");
+    assert.deepEqual(result.audit, []);
+    assert.equal(redactProfile({ ...profile, audit: [fromDiscord] }, "admin").audit[0]?.actor.role, "discord");
+  });
+
   test("the deleted text does not survive anywhere in what a moderator receives", () => {
     assert.equal(JSON.stringify(redactProfile(profile, "mod")).includes("note 2"), false);
   });

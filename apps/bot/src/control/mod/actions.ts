@@ -1,7 +1,6 @@
 import {
   canEditInfraction,
   canTakeAction,
-  deletedMessagesText,
   isInForce,
   isModActionKind,
   readEvidence,
@@ -43,8 +42,8 @@ import { forbidden, notFound, ok, refuse, type ModCtx, type Reply } from "./type
  * Moderation actions taken from the dashboard. The work itself is the
  * moderation module's performer, the same one behind the slash commands; this
  * file only decides who may ask, and translates between HTTP and the module.
- * The infraction the performer writes is the record of the action, so no
- * audit row is added here.
+ * The infraction the performer writes is the record of the action, and the
+ * performer writes its Staff activity entry too, so none is added here.
  */
 
 const MODULE_ID = "moderation";
@@ -69,16 +68,6 @@ const PERMISSION_TEXT: Record<ModActionKind, string> = {
 
 type ModerationContext = ModuleContext<ModerationSettings>;
 
-const ACTION_PAST: Record<ModActionKind, string> = {
-  warn: "Warned",
-  timeout: "Timed out",
-  "timeout-clear": "Cleared the timeout of",
-  kick: "Kicked",
-  ban: "Banned",
-  unban: "Unbanned",
-};
-
-const clipReason = (text: string): string => (text.length > 120 ? `${text.slice(0, 117)}...` : text);
 /** The moderation module's context for this server, or null when its stored settings fail validation. */
 async function moderationContext(ctx: ModCtx, state: GuildState): Promise<ModerationContext | null> {
   const moduleCtx = await state.context(ctx.guild, MODULE_ID);
@@ -151,7 +140,7 @@ export async function takeAction(
     // Copied before the action runs: a ban can delete the member's recent messages.
     const evidence = await resolveEvidence(ctx.guild, targetId, evidenceRefs.refs, { member: actorMember, isOwner: actor.role === "owner" });
 
-    const { record, notes, deletion } = await performAction(moduleCtx, {
+    const { record, notes } = await performAction(moduleCtx, {
       action,
       targetId,
       targetName: refOf(names, targetId).name ?? "That user",
@@ -164,6 +153,8 @@ export async function takeAction(
       origin: "dashboard",
       evidence,
       deleteMessages: fields.deleteMessages,
+      // The performer writes the Staff activity entry, under the name and role the dashboard knows them by.
+      audit: { actorName: actor.name, actorRole: actor.role, targetName: refOf(names, targetId).name },
     });
 
     const refs = await resolveUsers(ctx.client, ctx.guild, [targetId, actor.userId]);
@@ -175,24 +166,6 @@ export async function takeAction(
     };
     const infraction = infractionDto({ ...record, voidedAt: null, voidedBy: null, voidReason: null }, ref, ctx.warnExpiryMs ?? null);
     const body: ActionResult = { caseNumber: record.caseNumber, infraction, notes };
-    const deletedText = deletedMessagesText(infraction.evidence);
-
-    // The case is the record of the action, and the audit trail is the record of who took it from the
-    // dashboard, owner included. A failure to write the entry must not undo an action that already happened.
-    await writeAudit({
-      guildId: ctx.guild.id,
-      actor,
-      kind: "action.take",
-      summary: `${ACTION_PAST[action]} ${refOf(refs, targetId).name ?? targetId} (case #${record.caseNumber})${record.reason ? `: ${clipReason(record.reason)}` : ""}${deletedText ? `. ${deletedText}` : ""}`,
-      targetUserId: targetId,
-      infractionId: record.id,
-      after: {
-        action,
-        caseNumber: record.caseNumber,
-        reason: record.reason,
-        ...(deletion ? { messagesDeleted: deletion.deleted.length, messagesNotDeleted: deletion.failed.length } : {}),
-      },
-    }).catch((error: unknown) => console.error("mod: could not write the audit entry for an action:", error));
 
     return ok(body);
   } catch (error) {

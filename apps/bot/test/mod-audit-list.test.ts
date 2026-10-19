@@ -98,6 +98,20 @@ describe("the staff activity list", () => {
     assert.deepEqual(items.map((item) => item.actor.role), ["automod"]);
   });
 
+  test("a Discord moderator's entry keeps that role, and the actor filter finds it", async () => {
+    const DISCORD_MOD = "100000000000000099";
+    const row = await prisma.modAudit.create({
+      data: { guildId: GUILD, actorId: DISCORD_MOD, actorName: "Wren", actorRole: "discord", kind: "action.take", summary: "Warned LuxTester (case #6)", targetUserId: MEMBER },
+    });
+    try {
+      const { items } = await list(`actorId=${DISCORD_MOD}`);
+      assert.equal(items.length, 1);
+      assert.deepEqual(items[0]!.actor, { userId: DISCORD_MOD, name: "Wren", role: "discord" });
+    } finally {
+      await prisma.modAudit.delete({ where: { id: row.id } });
+    }
+  });
+
   test("an unknown stored role still renders as a moderator", async () => {
     await prisma.modAudit.create({
       data: { guildId: GUILD, actorId: HUMAN, actorName: "Tamsin", actorRole: "none", kind: "channel.purge", summary: "Deleted 2 messages" },

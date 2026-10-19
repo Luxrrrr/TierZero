@@ -30,14 +30,14 @@ describe("auditPurge", () => {
     assert.deepEqual(JSON.parse(row!.after!), { channelId: "9", deleted: 20 });
   });
 
-  test("records the actor's staff role when they have one, and says none when they do not", async () => {
+  test("records the actor's staff role when they have one, and a Discord moderator when they do not", async () => {
     await prisma.staffMember.create({ data: { guildId: GUILD, userId: ACTOR, role: "admin", addedBy: "1" } });
     await auditPurge({ guildId: GUILD, actorId: ACTOR, actorName: "ada", channelId: "9", channelName: "", deleted: 1 });
     await prisma.staffMember.deleteMany();
     await auditPurge({ guildId: GUILD, actorId: ACTOR, actorName: "ada", channelId: "9", channelName: "", deleted: 1 });
 
     const rows = await prisma.modAudit.findMany({ where: { guildId: GUILD }, orderBy: { id: "asc" } });
-    assert.deepEqual(rows.slice(-2).map((r) => r.actorRole), ["admin", "none"]);
+    assert.deepEqual(rows.slice(-2).map((r) => r.actorRole), ["admin", "discord"]);
     assert.equal(rows.at(-1)!.summary, "Deleted 1 message in a channel");
   });
 

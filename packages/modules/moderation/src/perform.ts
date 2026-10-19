@@ -21,6 +21,7 @@ import {
   type DmOutcome,
   type OutcomeNote,
 } from "./action-rules.js";
+import { actorRoleFor, auditAction, type ActionAuditOptions } from "./action-audit.js";
 import { botMayDelete, deleteAttachedMessages, deletionNotes, markDeleted, type DeletionReport } from "./delete-evidence.js";
 import { deleteMessageSeconds } from "./duration.js";
 import { escalateAfterWarning, type EscalationOutcome } from "./escalation.js";
@@ -65,6 +66,8 @@ export interface PerformInput {
   deleteMessages?: boolean;
   /** Leaves out the direct message about the action, for a caller that sends its own, such as an accepted appeal. */
   noDirectMessage?: boolean;
+  /** How the actor is named in Staff activity, or that no entry is wanted. The performer writes it for every origin. */
+  audit?: ActionAuditOptions;
 }
 
 export interface PerformOutcome {
@@ -83,7 +86,7 @@ type Ctx = ModuleContext<ModerationSettings>;
 
 /**
  * Takes one moderation action: every check, the direct message, the call to
- * Discord, the record, any scheduled reversal and the mod log post. The slash
+ * Discord, the record, the Staff activity entry, any scheduled reversal and the mod log post. The slash
  * commands and the dashboard both come through here, so an action behaves the
  * same whichever way it was asked for. Throws ActionRefused when it will not
  * go ahead; anything else thrown is a fault.
@@ -304,6 +307,21 @@ async function perform(ctx: Ctx, input: PerformInput): Promise<PerformOutcome> {
         console.error("moderation: could not mark the deleted messages on the case:", error);
       }
     }
+  }
+
+  // After the deletion, so the line can say how many messages went.
+  if (!input.audit?.skip) {
+    await auditAction({
+      guildId: guild.id,
+      actorId: input.moderatorId,
+      actorName: input.audit?.actorName ?? input.actorMember?.displayName ?? input.moderatorId,
+      actorRole: input.audit?.actorRole ?? (await actorRoleFor(guild.id, input.moderatorId, input.actorIsInstanceOwner)),
+      targetId,
+      targetName: input.audit?.targetName !== undefined ? input.audit.targetName : input.targetName,
+      action,
+      record,
+      deletion,
+    });
   }
 
   if (action === "ban" && expiresAt) {

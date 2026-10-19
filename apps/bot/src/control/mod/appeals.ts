@@ -190,6 +190,8 @@ export async function decideAppeal(
           origin: "dashboard",
           // The member is told by the appeal's own message instead.
           noDirectMessage: true,
+          // The decision writes the entry, and it says which case the unban became.
+          audit: { skip: true },
         });
         unbanCase = outcome.record.caseNumber;
         notes.push(...outcome.notes);

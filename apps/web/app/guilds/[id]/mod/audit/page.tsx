@@ -1,6 +1,6 @@
 import { denyStaffPage } from "../../../../../lib/mod-deny";
 import type { Metadata } from "next";
-import { AUTOMOD_ACTOR_NAME, ROLE_LABEL, isAutomodRole, type AuditDto } from "@tier0/core";
+import { AUDIT_ROLE_LABEL, AUTOMOD_ACTOR_NAME, ROLE_LABEL, isAutomodRole, type AuditDto } from "@tier0/core";
 import { requireStaff } from "../../../../../lib/mod-access";
 import { ControlApiError } from "../../../../../lib/control-api";
 import { modAudit, modStaff } from "../../../../../lib/mod-api";
@@ -26,7 +26,7 @@ async function actorOptions(guildId: string, seen: AuditDto[]): Promise<ActorOpt
   }
   for (const { actor } of seen) {
     if (isAutomodRole(actor.role)) continue;
-    if (!byId.has(actor.userId)) byId.set(actor.userId, { userId: actor.userId, name: actor.name, role: ROLE_LABEL[actor.role] });
+    if (!byId.has(actor.userId)) byId.set(actor.userId, { userId: actor.userId, name: actor.name, role: AUDIT_ROLE_LABEL[actor.role] });
   }
   const people = [...byId.values()].sort((a, b) => (a.name ?? "").localeCompare(b.name ?? ""));
   // The bot has no place in the staff list, so automod is offered under a fixed value the bot understands.

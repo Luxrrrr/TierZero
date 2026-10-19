@@ -26,8 +26,8 @@ export async function auditPurge(facts: PurgeFacts): Promise<void> {
         guildId: facts.guildId,
         actorId: facts.actorId,
         actorName: facts.actorName,
-        // Someone holding Manage Messages without a place on the staff list is recorded as having none.
-        actorRole: role ?? "none",
+        // Someone holding Manage Messages without a place on the staff list is recorded as a Discord moderator.
+        actorRole: role ?? "discord",
         kind: "channel.purge",
         summary: `Deleted ${facts.deleted} message${facts.deleted === 1 ? "" : "s"} in ${where}`,
         after: JSON.stringify({ channelId: facts.channelId, deleted: facts.deleted }),

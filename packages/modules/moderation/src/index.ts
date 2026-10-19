@@ -45,6 +45,7 @@ export {
   type PreviousOverwrite,
 } from "./lockdown.js";
 export { auditLockdown, lockdownSummary } from "./raid-audit.js";
+export { actionAuditSummary, type ActionAuditOptions } from "./action-audit.js";
 export { JoinTracker, joinTracker } from "./join-alert.js";
 export { latestOpenBan } from "./infractions.js";
 export { tryDirectMessage, appealRow, dmValues, type DmContext } from "./dm.js";

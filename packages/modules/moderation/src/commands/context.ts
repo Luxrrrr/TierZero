@@ -333,6 +333,7 @@ export async function submitContextAction(
       origin: "command",
       evidence,
       deleteMessages,
+      audit: { actorName: interaction.user.username, targetName: user?.username ?? null },
     });
     const deletionText = [
       ...(deletion ? deletionNotes(deletion) : []),
