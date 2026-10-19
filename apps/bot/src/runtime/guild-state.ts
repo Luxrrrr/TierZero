@@ -12,13 +12,14 @@ import type {
   Shape,
   ShapeValues,
 } from "@tier0/core";
-import { raisedDurations } from "@tier0/core";
+import { assignedRoles, raisedDurations } from "@tier0/core";
 import { prisma } from "@tier0/db";
 import { LABEL_DEFAULTS, SYSTEM_MODULE_ID, type SystemSettings } from "@tier0/module-system";
 import { matchesPayload, namespaceKind } from "./task-payload.js";
 import { parseChannelRules, parseIdList, type CommandSettings } from "./command-policy.js";
 import { storedReply } from "./command-reply.js";
 import { resolveDashboardUrl } from "./dashboard-url.js";
+import { roleGrantProblems } from "./role-grants.js";
 import { editMessage, replyMessage, sendMessage } from "./send-message.js";
 
 // The router resolves a module by name at runtime, so the cache cannot be
@@ -281,7 +282,7 @@ export class GuildState {
   async applyModuleUpdate(
     guild: Guild,
     moduleId: string,
-    patch: { enabled?: boolean; settings?: unknown },
+    patch: { enabled?: boolean; settings?: unknown; actor?: string },
     resync: Resync,
   ): Promise<ApplyModuleUpdateResult> {
     const module = this.registry.get(moduleId);
@@ -308,6 +309,13 @@ export class GuildState {
         return { ok: false, errors: resolved.errors };
       }
       nextSettings = resolved.value as Settings;
+
+      const descriptor = module.settings.describe();
+      const nowGiven = assignedRoles(descriptor, nextSettings);
+      const wasGiven = assignedRoles(descriptor, storedBefore);
+      const added = new Map([...nowGiven].filter(([roleId]) => !wasGiven.has(roleId)));
+      const problems = await roleGrantProblems(guild, patch.actor, added);
+      if (problems.length > 0) return { ok: false, errors: problems };
     }
 
     const isEnabled = module.alwaysOn === true || (patch.enabled ?? wasEnabled);

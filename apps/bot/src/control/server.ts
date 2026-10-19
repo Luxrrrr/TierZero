@@ -40,6 +40,12 @@ interface Deps {
  * Bound to localhost by default. Set CONTROL_HOST if the dashboard runs on a
  * different machine.
  */
+/** The Discord user the dashboard says is making a change. It sends the signed-in account's id and nothing from the browser. */
+function actorIdOf(body: Record<string, unknown>): string | undefined {
+  const { actor } = body;
+  return typeof actor === "string" && /^\d{17,20}$/.test(actor) ? actor : undefined;
+}
+
 export function startControlApi({ client, registry, state, commands }: Deps): void {
   const handle = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
     const send = (status: number, body: unknown) => {
@@ -185,7 +191,7 @@ export function startControlApi({ client, registry, state, commands }: Deps): vo
       const body = await readJsonBody(req);
       if (!body.ok) return send(400, { error: body.error });
       if (!isPlainObject(body.value)) return send(400, { error: "body must be a JSON object" });
-      const reply = await runModuleAction(registry, state, guild, actionMatch[2] ?? "", actionMatch[3] ?? "", body.value.input);
+      const reply = await runModuleAction(registry, state, guild, actionMatch[2] ?? "", actionMatch[3] ?? "", body.value.input, actorIdOf(body.value));
       return send(reply.status, reply.body);
     }
 
@@ -213,7 +219,7 @@ export function startControlApi({ client, registry, state, commands }: Deps): vo
         const body = await readJsonBody(req);
         if (!body.ok) return send(400, { error: body.error });
         if (!isPlainObject(body.value)) return send(400, { error: "body must be a JSON object" });
-        const reply = await runRowAction(registry, state, guild, moduleId, path, actionId, body.value.input);
+        const reply = await runRowAction(registry, state, guild, moduleId, path, actionId, body.value.input, actorIdOf(body.value));
         return send(reply.status, reply.body);
       }
       return send(404, { error: "not found" });
@@ -234,7 +240,7 @@ export function startControlApi({ client, registry, state, commands }: Deps): vo
         return send(400, { error: "body must be a JSON object" });
       }
 
-      const { enabled, settings } = body.value as { enabled?: unknown; settings?: unknown };
+      const { enabled, settings, actor } = body.value as { enabled?: unknown; settings?: unknown; actor?: unknown };
       if (enabled !== undefined && typeof enabled !== "boolean") {
         return send(400, { error: "enabled must be a boolean" });
       }
@@ -248,7 +254,7 @@ export function startControlApi({ client, registry, state, commands }: Deps): vo
       const result = await state.applyModuleUpdate(
         guild,
         moduleId,
-        { enabled, settings },
+        { enabled, settings, actor: actorIdOf({ actor }) },
         commands,
       );
       if (!result.ok) return send(422, { errors: result.errors });

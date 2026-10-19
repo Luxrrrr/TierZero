@@ -63,7 +63,7 @@ export type { DashboardLinks } from "./dashboard-links.js";
 export { plainReply, embedReply, REPLY_COLOR, type ReplyKind } from "./response.js";
 export type { ReplyPlaceholder, ReplyValues, ResponseTemplate } from "./response.js";
 
-export { isRoleAssignable } from "./roles.js";
+export { assignedRoles, isRoleAssignable } from "./roles.js";
 
 export { ModuleRegistry, subcommandKey, subcommandsOf } from "./registry.js";
 export type { ActionDescription, CommandSummary, ModuleSummary, RowDescription, SubcommandSummary } from "./registry.js";

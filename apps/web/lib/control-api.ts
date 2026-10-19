@@ -291,6 +291,7 @@ export async function runRowAction(
   rowPath: string,
   actionId: string,
   input: unknown,
+  actor: string,
 ): Promise<RowActionOutcome> {
   const res = await controlFetch(
     `/guilds/${encodeURIComponent(guildId)}/modules/${segment(moduleId)}` +
@@ -298,7 +299,7 @@ export async function runRowAction(
     {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ input }),
+      body: JSON.stringify({ input, actor }),
     },
   );
   const outcome = await readJson<RowActionOutcome>(res, "the action");
@@ -441,6 +442,7 @@ export async function runModuleAction(
   moduleId: string,
   actionId: string,
   input: unknown,
+  actor: string,
 ): Promise<RowActionOutcome> {
   const res = await controlFetch(
     `/guilds/${encodeURIComponent(guildId)}/modules/${segment(moduleId)}` +
@@ -448,7 +450,7 @@ export async function runModuleAction(
     {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ input }),
+      body: JSON.stringify({ input, actor }),
     },
   );
   const outcome = await readJson<RowActionOutcome>(res, "the action");

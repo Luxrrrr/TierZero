@@ -1,7 +1,8 @@
 import type { Guild } from "discord.js";
-import { resolveList, resolveRow, schemaPathOf, type ModuleRegistry } from "@tier0/core";
+import { assignedRoles, resolveList, resolveRow, schemaPathOf, type ModuleRegistry } from "@tier0/core";
 import type { RowStatus } from "@tier0/core";
 import type { GuildState } from "../runtime/guild-state.js";
+import { roleGrantProblems } from "../runtime/role-grants.js";
 
 export interface Reply {
   status: number;
@@ -50,6 +51,7 @@ export async function runRowAction(
   rowPath: string,
   actionId: string,
   rawInput: unknown,
+  actor?: string,
 ): Promise<Reply> {
   const action = own(own(registry.get(moduleId)?.rows, schemaPathOf(rowPath) ?? "")?.actions, actionId);
   if (!action) return NOT_FOUND;
@@ -73,6 +75,8 @@ export async function runRowAction(
     const parsed = action.input.parse(rawInput ?? {});
     if (!parsed.ok) return { status: 422, body: { errors: parsed.errors } };
     input = parsed.value as Record<string, unknown>;
+    const problems = await roleGrantProblems(guild, actor, assignedRoles(action.input.describe(), input));
+    if (problems.length > 0) return { status: 422, body: { errors: problems } };
   }
 
   try {
@@ -91,6 +95,7 @@ export async function runModuleAction(
   moduleId: string,
   actionId: string,
   rawInput: unknown,
+  actor?: string,
 ): Promise<Reply> {
   const action = own(registry.get(moduleId)?.actions, actionId);
   if (!action) return NOT_FOUND;
@@ -107,6 +112,8 @@ export async function runModuleAction(
     const parsed = action.input.parse(rawInput ?? {});
     if (!parsed.ok) return { status: 422, body: { errors: parsed.errors } };
     input = parsed.value as Record<string, unknown>;
+    const problems = await roleGrantProblems(guild, actor, assignedRoles(action.input.describe(), input));
+    if (problems.length > 0) return { status: 422, body: { errors: problems } };
   }
 
   try {

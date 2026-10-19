@@ -14,5 +14,7 @@ export async function PATCH(
 
   const patch = await readRequestJson(request);
   if (!patch.ok) return patch.response;
-  return proxyControlApi(() => updateGuildModule(id, moduleId, patch.value));
+  // Who is saving goes with the change, because handing out a role takes rights in Discord and the bot checks them.
+  const body = typeof patch.value === "object" && patch.value !== null && !Array.isArray(patch.value) ? { ...patch.value, actor: access.discordUserId } : patch.value;
+  return proxyControlApi(() => updateGuildModule(id, moduleId, body));
 }
