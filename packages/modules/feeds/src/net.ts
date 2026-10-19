@@ -110,6 +110,8 @@ const guardedLookup: typeof dnsLookup = ((hostname: string, options: unknown, ca
 export interface FetchOptions {
   maxBytes?: number;
   timeoutMs?: number;
+  /** The most time the whole fetch, redirects included, may take. A host that keeps sending a byte now and then never trips timeoutMs. */
+  deadlineMs?: number;
   accept?: string;
 }
 
@@ -120,11 +122,14 @@ export interface FetchResult {
 }
 
 export async function safeFetch(rawUrl: string, options: FetchOptions = {}): Promise<FetchResult> {
-  const { maxBytes = 2_000_000, timeoutMs = 10_000, accept = "*/*" } = options;
+  const { maxBytes = 2_000_000, timeoutMs = 10_000, deadlineMs = 30_000, accept = "*/*" } = options;
+  const until = Date.now() + deadlineMs;
   let current = rawUrl;
 
   for (let hop = 0; hop <= MAX_REDIRECTS; hop += 1) {
-    const result = await once(current, { maxBytes, timeoutMs, accept });
+    const remaining = until - Date.now();
+    if (remaining <= 0) throw new FeedFailure("timeout");
+    const result = await once(current, { maxBytes, timeoutMs, deadlineMs: remaining, accept });
     if (result.redirect === undefined) {
       return { status: result.status, body: result.body, url: current };
     }
@@ -198,5 +203,7 @@ function once(rawUrl: string, options: Required<FetchOptions>): Promise<Hop> {
     );
     request.on("timeout", () => request.destroy(new FeedFailure("timeout")));
     request.on("error", reject);
+    const deadline = setTimeout(() => request.destroy(new FeedFailure("timeout")), options.deadlineMs);
+    request.on("close", () => clearTimeout(deadline));
   });
 }

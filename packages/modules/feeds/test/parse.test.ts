@@ -89,3 +89,28 @@ describe("stripHtml", () => {
     assert.equal(stripHtml("a<script>alert(1)</script>b<style>x{}</style>c"), "abc");
   });
 });
+
+describe("stripHtml on hostile text", () => {
+  const within = (limitMs: number, work: () => void) => {
+    const started = Date.now();
+    work();
+    assert.ok(Date.now() - started < limitMs, `took ${Date.now() - started}ms`);
+  };
+
+  test("a long run of opening brackets is not quadratic", () => {
+    within(500, () => stripHtml("<".repeat(2_000_000)));
+  });
+
+  test("many script openers with no closer are not quadratic", () => {
+    within(500, () => stripHtml("<script ".repeat(250_000)));
+  });
+
+  test("an unclosed script drops what follows it and an unclosed tag stays as text", () => {
+    assert.equal(stripHtml("before<script>never closed"), "before");
+    assert.equal(stripHtml("a < b and c"), "a < b and c");
+  });
+
+  test("a numeric reference outside the Unicode range is dropped instead of throwing", () => {
+    assert.equal(stripHtml("a&#1114112;b&#55296;c"), "a&#1114112;b&#55296;c".replace("&#1114112;", "").replace("&#55296;", ""));
+  });
+});

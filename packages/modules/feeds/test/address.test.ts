@@ -111,3 +111,17 @@ describe("the check interval", () => {
     assert.equal(resolve({ pollEvery: "1m" }).ok, false);
   });
 });
+
+describe("discoverFeedLink on hostile pages", () => {
+  test("a page of link openers with no end is read in linear time", () => {
+    const started = Date.now();
+    discoverFeedLink("<link ".repeat(330_000), "https://example.com/");
+    discoverFeedLink(`<link ${"a".repeat(2_000_000)}>`, "https://example.com/");
+    assert.ok(Date.now() - started < 500, `took ${Date.now() - started}ms`);
+  });
+
+  test("still finds a feed in an upper-case tag and ignores a tag that only starts with link", () => {
+    const html = '<head><linkage rel="alternate" type="application/rss+xml" href="/no"><LINK REL="alternate" TYPE="application/rss+xml" HREF="/feed.xml"></head>';
+    assert.equal(discoverFeedLink(html, "https://example.com/blog"), "https://example.com/feed.xml");
+  });
+});

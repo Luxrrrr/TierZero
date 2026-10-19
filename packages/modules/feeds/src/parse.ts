@@ -50,15 +50,59 @@ const ENTITIES: Record<string, string> = {
   "&nbsp;": " ",
 };
 
+/**
+ * Removes everything from an opening script or style tag to its closing tag, or
+ * to the end when it is never closed. A regex for this is quadratic on text with
+ * many opening tags and no closing ones, and feed text comes from strangers.
+ */
+function dropBlocks(html: string): string {
+  const opening = /<(script|style)/gi;
+  let out = "";
+  let from = 0;
+  for (;;) {
+    opening.lastIndex = from;
+    const start = opening.exec(html);
+    if (!start) return out + html.slice(from);
+    out += html.slice(from, start.index);
+    const closing = new RegExp(`</${start[1]}>`, "gi");
+    closing.lastIndex = start.index;
+    const end = closing.exec(html);
+    if (!end) return out;
+    from = end.index + end[0].length;
+  }
+}
+
+/** Removes every <...> run, the same text `/<[^>]+>/g` matches, in one pass. */
+function dropTags(html: string): string {
+  let out = "";
+  let from = 0;
+  for (;;) {
+    const open = html.indexOf("<", from);
+    if (open === -1) return out + html.slice(from);
+    const close = html.indexOf(">", open + 1);
+    if (close === -1) return out + html.slice(from);
+    if (close === open + 1) {
+      out += html.slice(from, close + 1);
+    } else {
+      out += html.slice(from, open);
+    }
+    from = close + 1;
+  }
+}
+
+function codePointOf(code: string): string {
+  const point = Number(code);
+  return point > 0 && point <= 0x10ffff && (point < 0xd800 || point > 0xdfff) ? String.fromCodePoint(point) : "";
+}
+
 /** Feed summaries are HTML. An embed wants plain text. */
 export function stripHtml(html: string): string {
-  return html
-    .replace(/<(script|style)[\s\S]*?<\/\1>/gi, "")
+  const blocks = dropBlocks(html)
     .replace(/<br\s*\/?>/gi, "\n")
-    .replace(/<\/(p|div|li|h[1-6])>/gi, "\n")
-    .replace(/<[^>]+>/g, "")
+    .replace(/<\/(p|div|li|h[1-6])>/gi, "\n");
+  return dropTags(blocks)
     .replace(/&(?:amp|lt|gt|quot|#39|apos|nbsp);/g, (entity) => ENTITIES[entity] ?? entity)
-    .replace(/&#(\d+);/g, (_, code: string) => String.fromCodePoint(Number(code)))
+    .replace(/&#(\d{1,7});/g, (_, code: string) => codePointOf(code))
     .replace(/[ \t]+/g, " ")
     .replace(/\n\s*\n+/g, "\n\n")
     .trim();

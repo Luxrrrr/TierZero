@@ -59,12 +59,31 @@ export function steamAppIdOf(raw: unknown): string | null {
 
 const ATTRIBUTE = /([a-z-]+)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/gi;
 
+/** A real link tag is a few hundred characters. Anything longer is not worth scanning. */
+const LONGEST_LINK_TAG = 2000;
+
+/** The <link ...> tags of a page, found in one pass, since a regex for them is quadratic on hostile input. */
+function linkTags(html: string): string[] {
+  const opening = /<link(?=[\s/>])/gi;
+  const tags: string[] = [];
+  let from = 0;
+  for (;;) {
+    opening.lastIndex = from;
+    const start = opening.exec(html);
+    if (!start) return tags;
+    const close = html.indexOf(">", start.index + 5);
+    if (close === -1) return tags;
+    if (close - start.index <= LONGEST_LINK_TAG) tags.push(html.slice(start.index, close + 1));
+    from = close + 1;
+  }
+}
+
 /**
  * The feed a web page points to in its head, the way browsers and feed readers
  * find one, so a site's or a YouTube channel's own address works as a feed.
  */
 export function discoverFeedLink(html: string, base: string): string | null {
-  for (const tag of html.match(/<link\b[^>]*>/gi) ?? []) {
+  for (const tag of linkTags(html)) {
     const attributes = new Map<string, string>();
     for (const match of tag.matchAll(ATTRIBUTE)) {
       attributes.set((match[1] ?? "").toLowerCase(), match[2] ?? match[3] ?? match[4] ?? "");
