@@ -10,6 +10,11 @@ export interface Reply {
 
 const NOT_FOUND: Reply = { status: 404, body: { error: "not found" } };
 
+/** A table lookup that ignores inherited keys, so an id like "constructor" finds nothing instead of a function. */
+function own<T>(table: Record<string, T> | undefined, key: string): T | undefined {
+  return table && Object.hasOwn(table, key) ? table[key] : undefined;
+}
+
 /** Status lines for every row of one list setting. */
 export async function rowStatuses(
   registry: ModuleRegistry,
@@ -18,7 +23,7 @@ export async function rowStatuses(
   moduleId: string,
   listPath: string,
 ): Promise<Reply> {
-  const hook = registry.get(moduleId)?.rows?.[schemaPathOf(listPath) ?? ""]?.status;
+  const hook = own(registry.get(moduleId)?.rows, schemaPathOf(listPath) ?? "")?.status;
   if (!hook) return NOT_FOUND;
 
   const ctx = await state.context(guild, moduleId);
@@ -46,7 +51,7 @@ export async function runRowAction(
   actionId: string,
   rawInput: unknown,
 ): Promise<Reply> {
-  const action = registry.get(moduleId)?.rows?.[schemaPathOf(rowPath) ?? ""]?.actions?.[actionId];
+  const action = own(own(registry.get(moduleId)?.rows, schemaPathOf(rowPath) ?? "")?.actions, actionId);
   if (!action) return NOT_FOUND;
 
   if (!(await state.isEnabled(guild.id, moduleId))) {
@@ -87,7 +92,7 @@ export async function runModuleAction(
   actionId: string,
   rawInput: unknown,
 ): Promise<Reply> {
-  const action = registry.get(moduleId)?.actions?.[actionId];
+  const action = own(registry.get(moduleId)?.actions, actionId);
   if (!action) return NOT_FOUND;
 
   if (!(await state.isEnabled(guild.id, moduleId))) {

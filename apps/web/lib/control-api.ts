@@ -5,6 +5,7 @@
 import type { MessageBody, ModuleCategory, ModuleNotice, ResponseTemplate, ActionDescription, RowDescription, RowStatus } from "@tier0/core";
 import type { PublicLeaderboard } from "./leaderboard";
 import { failureFromBody, plainSystemText } from "./bot-errors";
+import { segment } from "./path-segment";
 
 export interface FieldValidationError {
   path: string;
@@ -206,7 +207,7 @@ export async function updateGuildModule(
   patch: unknown,
 ): Promise<unknown> {
   const res = await controlFetch(
-    `/guilds/${encodeURIComponent(guildId)}/modules/${encodeURIComponent(moduleId)}`,
+    `/guilds/${encodeURIComponent(guildId)}/modules/${segment(moduleId)}`,
     {
       method: "PATCH",
       headers: { "content-type": "application/json" },
@@ -222,7 +223,7 @@ export async function updateGuildCommand(
   patch: unknown,
 ): Promise<unknown> {
   const res = await controlFetch(
-    `/guilds/${encodeURIComponent(guildId)}/commands/${encodeURIComponent(name)}`,
+    `/guilds/${encodeURIComponent(guildId)}/commands/${segment(name)}`,
     {
       method: "PATCH",
       headers: { "content-type": "application/json" },
@@ -278,8 +279,8 @@ export async function getRowStatuses(
   listPath: string,
 ): Promise<{ statuses: (RowStatus | null)[] }> {
   const res = await controlFetch(
-    `/guilds/${encodeURIComponent(guildId)}/modules/${encodeURIComponent(moduleId)}` +
-      `/rows/${encodeURIComponent(listPath)}/status`,
+    `/guilds/${encodeURIComponent(guildId)}/modules/${segment(moduleId)}` +
+      `/rows/${segment(listPath)}/status`,
   );
   return readJson(res, "the row status");
 }
@@ -292,8 +293,8 @@ export async function runRowAction(
   input: unknown,
 ): Promise<RowActionOutcome> {
   const res = await controlFetch(
-    `/guilds/${encodeURIComponent(guildId)}/modules/${encodeURIComponent(moduleId)}` +
-      `/rows/${encodeURIComponent(rowPath)}/actions/${encodeURIComponent(actionId)}`,
+    `/guilds/${encodeURIComponent(guildId)}/modules/${segment(moduleId)}` +
+      `/rows/${segment(rowPath)}/actions/${segment(actionId)}`,
     {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -429,7 +430,7 @@ export async function getPublicLeaderboard(guildId: string, page: number): Promi
 
 /** The lines a module shows above its settings, which depend on what this server has saved. */
 export async function getModuleNotices(guildId: string, moduleId: string): Promise<ModuleNotice[]> {
-  const res = await controlFetch(`/guilds/${encodeURIComponent(guildId)}/modules/${encodeURIComponent(moduleId)}/notices`, {
+  const res = await controlFetch(`/guilds/${encodeURIComponent(guildId)}/modules/${segment(moduleId)}/notices`, {
     signal: AbortSignal.timeout(5_000),
   });
   return (await readJson<{ notices: ModuleNotice[] }>(res, "the notices")).notices;
@@ -442,8 +443,8 @@ export async function runModuleAction(
   input: unknown,
 ): Promise<RowActionOutcome> {
   const res = await controlFetch(
-    `/guilds/${encodeURIComponent(guildId)}/modules/${encodeURIComponent(moduleId)}` +
-      `/actions/${encodeURIComponent(actionId)}`,
+    `/guilds/${encodeURIComponent(guildId)}/modules/${segment(moduleId)}` +
+      `/actions/${segment(actionId)}`,
     {
       method: "POST",
       headers: { "content-type": "application/json" },
