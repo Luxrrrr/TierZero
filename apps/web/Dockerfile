@@ -1,6 +1,6 @@
 # Built from the repository root, because the dashboard is one package in a
 # pnpm workspace and cannot be installed without the others.
-FROM node:20-slim AS build
+FROM node:22-slim AS build
 RUN corepack enable
 WORKDIR /app
 
@@ -25,7 +25,7 @@ RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store pnpm install --frozen-lo
 RUN pnpm --filter @tier0/db exec prisma generate
 RUN pnpm --filter "@tier0/web..." build
 
-FROM node:20-slim AS runtime
+FROM node:22-slim AS runtime
 RUN corepack enable
 WORKDIR /app
 

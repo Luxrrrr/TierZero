@@ -2,7 +2,7 @@
 
 ## Running it locally
 
-You need Node 20+ and pnpm.
+You need Node 22+ and pnpm.
 
 ```
 pnpm install

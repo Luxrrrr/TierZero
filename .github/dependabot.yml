@@ -1,0 +1,17 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    # A release has to be a month old before a routine update is proposed.
+    # Security updates are not held back by this.
+    cooldown:
+      default-days: 30
+    open-pull-requests-limit: 5
+  - package-ecosystem: docker
+    directories:
+      - /apps/bot
+      - /apps/web
+    schedule:
+      interval: monthly

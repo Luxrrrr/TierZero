@@ -15,7 +15,7 @@ TierZero is in beta. Everything listed below works, but settings and the databas
 ## Requirements
 
 - A computer to run it on. Your own PC works, but the bot is offline whenever that PC is off or asleep, so an old PC, a Raspberry Pi or a cheap rented server that stays on is better for a server you actually use.
-- Docker, or Node 20 and pnpm if you want to run it from source.
+- Docker, or Node 22 and pnpm if you want to run it from source.
 - A Discord application of your own. Both install guides cover creating it.
 - The Manage Server permission on the Discord server the bot is joining. It's one of Discord's own permissions, set on roles under Server Settings, and the server owner has it. Discord requires it to add a bot, and the dashboard only lists servers where you have it.
 
