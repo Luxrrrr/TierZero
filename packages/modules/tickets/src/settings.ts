@@ -565,6 +565,7 @@ export const settingsSchema = s.object(
             cannotClose: replyField("cannotClose"),
             staffOnlyClose: replyField("staffOnlyClose"),
             cannotAdd: replyField("cannotAdd"),
+            addLimit: replyField("addLimit"),
             notOpener: replyField("notOpener"),
             notYourClaim: replyField("notYourClaim"),
             notATicket: replyField("notATicket", "busy"),

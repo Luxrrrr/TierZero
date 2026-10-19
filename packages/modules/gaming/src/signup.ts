@@ -31,6 +31,7 @@ import {
   eventById,
   markReminded,
   register,
+  removeTeammate,
   requiredRolesOf,
   withdraw,
   type EntryWithMembers,
@@ -273,7 +274,14 @@ export const signupComponents: Record<string, ComponentHandler<GamingSettings>> 
     if (event.status !== "open") return refuse(ctx, interaction, "closedAlready");
     const entry = await entryOf(event.id, interaction.user.id);
     if (!entry) return refuse(ctx, interaction, "notRegistered");
-    if (entry.captainId !== interaction.user.id) return refuse(ctx, interaction, "notCaptain", { captain: entry.captainId });
+    if (entry.captainId !== interaction.user.id) {
+      // A captain can name anyone, so a teammate has to be able to take themselves off. The team carries on without them.
+      if (!(await removeTeammate(event.id, entry.id, interaction.user.id))) return refuse(ctx, interaction, "notRegistered");
+      await setRewardRole(ctx, event, [interaction.user.id], false);
+      const fresh = await reload(ctx, event.id);
+      if (fresh) await refreshSignup(ctx, fresh, interaction.message);
+      return say(ctx, interaction, "withdrawn", { title: event.title });
+    }
     if (!(await withdrawEntry(ctx, event, entry.id, interaction.message))) return refuse(ctx, interaction, "notRegistered");
     await say(ctx, interaction, "withdrawn", { title: event.title });
   },

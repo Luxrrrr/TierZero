@@ -460,12 +460,6 @@ export const SIGNUP_REFUSALS = {
     starting: embedReply("Bots cannot be on a team.", "error"),
     variables: [],
   },
-  notCaptain: {
-    label: "Not the captain",
-    help: "When a teammate who is not the captain presses Withdraw.",
-    starting: embedReply("Your captain, <@{captain}>, signed the team up, so they have to withdraw it. Staff can also remove it.", "error"),
-    variables: [variable("captain", "The captain's ID", "123456789012345678")],
-  },
   notRegistered: {
     label: "Not signed up",
     help: "When someone presses Withdraw without being on the sign-up.",

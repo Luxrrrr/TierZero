@@ -458,6 +458,7 @@ export type ReplyKey =
   | "notStaff"
   | "cannotClose"
   | "cannotAdd"
+  | "addLimit"
   | "notATicket"
   | "alreadyClosed"
   | "channelMissing"
@@ -522,6 +523,11 @@ export const REPLIES: Record<ReplyKey, ReplyDefinition> = {
     label: "Not allowed to add a member",
     help: "Shown when someone who is not the opener or support staff uses /ticket add.",
     starting: embedReply("You need to be the ticket opener, hold a support role, or have Manage Channels to do that.", "error"),
+  },
+  addLimit: {
+    label: "Added as many people as allowed",
+    help: "Shown when the ticket opener has added as many people as an opener may, or tries to add a bot. Support staff are not limited.",
+    starting: embedReply("You've added as many people to this ticket as you can. Ask support staff to add anyone else.", "error"),
   },
   notATicket: {
     label: "Not in a ticket",

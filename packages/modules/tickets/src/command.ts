@@ -23,6 +23,9 @@ import type { TicketSettings } from "./settings.js";
 import { sendReply } from "./webhooks.js";
 import { addNote, changeMember, claim, rename, requestClose, setPriority, transfer, unclaim } from "./working.js";
 
+/** How many people the person who opened a ticket may add to it. Support staff have no limit. */
+const OPENER_ADD_LIMIT = 5;
+
 /**
  * `/ticket` and its subcommands. Each one checks who is asking by the rules in
  * core, then calls the same operation the dashboard does. A refusal is one of
@@ -161,8 +164,15 @@ async function inTicket(ctx: TicketCtx, interaction: ChatInputCommandInteraction
       return closeFrom(ctx, interaction, ticket, reason);
     }
     case "add": {
-      if (!may(settings, interaction, "members", ticket) && interaction.user.id !== ticket.openerId) return refuse(ctx, interaction, "cannotAdd");
+      const staffAdds = may(settings, interaction, "members", ticket);
+      if (!staffAdds && interaction.user.id !== ticket.openerId) return refuse(ctx, interaction, "cannotAdd");
       const member = interaction.options.getUser("member", true);
+      if (!staffAdds) {
+        // Each add pings the person and opens the channel to them, so an opener can bring in a few people, not any number.
+        if (member.bot) return refuse(ctx, interaction, "addLimit");
+        const added = await prisma.ticketEvent.count({ where: { ticketId: ticket.id, kind: "member_added", actorId: interaction.user.id } });
+        if (added >= OPENER_ADD_LIMIT) return refuse(ctx, interaction, "addLimit");
+      }
       await answer(ctx, interaction, await changeMember(ctx, ticket, { userId: member.id, action: "add" }, actor, announce));
       return;
     }

@@ -670,7 +670,7 @@ Everything here is under `/ticket`. Staff are the type's handlers, your admin ro
 - `/ticket priority` sets low, normal, high or urgent. The priority shows in the channel topic.
 - `/ticket rename` renames the channel. Discord only allows two renames in ten minutes, so a third one waits its turn: the bot says so, and it goes through by itself within ten minutes.
 - `/ticket transfer` moves the ticket to another type. Its handlers, observers and category become the new type's, the claim is dropped and the new handlers are pinged.
-- `/ticket add` and `/ticket remove` let a member in or take them out. The opener can add people too. Only staff can remove them, and the opener can't be removed.
+- `/ticket add` and `/ticket remove` let a member in or take them out. The opener can add up to five people, and no bots. Staff have no limit, only staff can remove people, and the opener can't be removed.
 - `/ticket reply` sends one of the server's **Saved replies** in the ticket, under your name, with `{user}`, `{staff}`, `{number}`, `{type}` and `{ticket}` filled in. Start typing to pick one. Saved replies are set up in their own part of Settings.
 - `/ticket note` adds a note only staff can read, in the dashboard. Nothing is posted in Discord.
 - `/ticket info` shows the ticket's type, priority, opener and who is handling it, to staff and the opener.
@@ -881,7 +881,7 @@ Staff run these with `/signup`. Anyone with Manage Events or Manage Server can, 
 - `/signup list` shows who is registered and who is waiting. `/signup export` gives the same list as plain text, as a file when it is long, and can post it for everyone.
 - `/signup remove` takes a player, or their whole team, off.
 
-Players press **Sign up**. For a team sign-up, a form asks for the team name and the teammates, as mentions or user ids, and the member who filled it in is the captain. Everyone on the team needs a required role if one is set, can only be on a sign-up once, and has to be on the server. Switch off **Teams must be full** to let a team sign up short. Only the captain can withdraw a team, and staff can remove it.
+Players press **Sign up**. For a team sign-up, a form asks for the team name and the teammates, as mentions or user ids, and the member who filled it in is the captain. Everyone on the team needs a required role if one is set, can only be on a sign-up once, and has to be on the server. Switch off **Teams must be full** to let a team sign up short. Only the captain can withdraw the whole team, and staff can remove it. A teammate who presses Withdraw takes only themselves off, and the team carries on without them.
 
 When the limit is reached, new entries join the waitlist in order, and a place that opens goes to the first one waiting. They are told in the sign-up's channel, by direct message, or both, as you choose, and a direct message that can't be delivered falls back to the channel. With no waitlist, a full sign-up refuses new entries. **Remind registered players before the start** pings everyone registered in the channel that long before a start time. 0 turns it off.
 

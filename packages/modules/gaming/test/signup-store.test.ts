@@ -200,3 +200,34 @@ describe("the sign-up itself", () => {
     assert.equal(await prisma.signupMember.count({ where: { eventId: created.id } }), 0);
   });
 });
+
+describe("a teammate leaving", () => {
+  test("takes only that person off the team and leaves the entry and the captain", async () => {
+    const created = await event({ teamSize: 3, capacity: 4 });
+    const joined = await store.register(GUILD, created.id, [user(11), user(12), user(13)], "Night Owls");
+    assert.ok(joined.ok);
+
+    assert.equal(await store.removeTeammate(created.id, joined.entry.id, user(12)), true);
+    const entry = await store.entryOf(created.id, user(11));
+    assert.deepEqual(entry?.members.map((member) => member.userId), [user(11), user(13)]);
+    assert.equal(await store.entryOf(created.id, user(12)), null);
+  });
+
+  test("the person who left can sign up again", async () => {
+    const created = await event({ teamSize: 2, capacity: 4 });
+    const joined = await store.register(GUILD, created.id, [user(21), user(22)], "");
+    assert.ok(joined.ok);
+    await store.removeTeammate(created.id, joined.entry.id, user(22));
+    const again = await store.register(GUILD, created.id, [user(22)], "");
+    assert.ok(again.ok);
+  });
+
+  test("the captain cannot be taken off this way, nor someone who is not on the entry", async () => {
+    const created = await event({ teamSize: 2, capacity: 4 });
+    const joined = await store.register(GUILD, created.id, [user(31), user(32)], "");
+    assert.ok(joined.ok);
+    assert.equal(await store.removeTeammate(created.id, joined.entry.id, user(31)), false);
+    assert.equal(await store.removeTeammate(created.id, joined.entry.id, user(99)), false);
+    assert.equal((await store.entryOf(created.id, user(31)))?.members.length, 2);
+  });
+});

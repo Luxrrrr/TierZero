@@ -141,6 +141,16 @@ export async function withdraw(eventId: number, entryId: number): Promise<Withdr
   });
 }
 
+/**
+ * Takes one teammate off an entry and leaves the rest of the team where it is. The
+ * captain is not taken off this way, since the entry is theirs and leaving it
+ * means withdrawing it.
+ */
+export async function removeTeammate(eventId: number, entryId: number, userId: string): Promise<boolean> {
+  const removed = await prisma.signupMember.deleteMany({ where: { eventId, entryId, userId, entry: { captainId: { not: userId } } } });
+  return removed.count > 0;
+}
+
 /** The entry a person is on, if any. */
 export function entryOf(eventId: number, userId: string): Promise<EntryWithMembers | null> {
   return prisma.signupEntry.findFirst({ where: { eventId, members: { some: { userId } } }, include: { members: { orderBy: { id: "asc" } } } });
