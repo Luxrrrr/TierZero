@@ -13,5 +13,5 @@
     "studio": "dotenv -e ../../.env -- prisma studio"
   },
   "dependencies": { "@prisma/client": "^5.20.0" },
-  "devDependencies": { "prisma": "^5.20.0" }
+  "devDependencies": { "prisma": "^7.10.0" }
 }
