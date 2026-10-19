@@ -3,6 +3,7 @@ import { parseMessage, parseSendOptions, type MessageBody } from "@tier0/core";
 import { prisma } from "@tier0/db";
 import type { SystemLabels } from "@tier0/module-system";
 import { ok, refuse, type Reply } from "./mod/types.js";
+import { TRUSTED_SEND, roleActionsOf, senderIdOf, senderProblem } from "./message-rights.js";
 import type { DueTask } from "../runtime/scheduler.js";
 
 /**
@@ -33,6 +34,8 @@ export interface SchedulePayload {
   label: string;
   templateId: number | null;
   sender: string;
+  /** The Discord account that scheduled it. Its rights are checked again each time it sends. */
+  actor?: string;
   /** Why the last run of a repeating send failed, so the list can say so. */
   lastError?: string;
 }
@@ -75,12 +78,13 @@ export function parseSchedule(input: Record<string, unknown>, now: Date): Parsed
   const name = typeof input.label === "string" ? input.label.trim() : "";
   const label = (name || message.value.content.trim() || message.value.embeds[0]?.title.trim() || "Message").replace(/\s+/g, " ").slice(0, 80);
   const sender = typeof input.sender === "string" ? input.sender.trim().slice(0, 80) : "";
+  const actor = senderIdOf(input);
 
   return {
     ok: true,
     value: {
       runAt,
-      payload: { message: message.value, options: { ...options.value }, repeat, label, templateId, sender },
+      payload: { message: message.value, options: { ...options.value }, repeat, label, templateId, sender, ...(actor ? { actor } : {}) },
     },
   };
 }
@@ -114,6 +118,13 @@ export async function createSchedule(guild: Guild, input: Record<string, unknown
 
   const channel = guild.channels.cache.get(String(parsed.value.payload.options.channelId));
   if (!channel || !channel.isTextBased() || channel.isDMBased()) return refuse(404, "Pick a text channel on this server to send it to.");
+
+  const problem = await senderProblem(guild, parsed.value.payload.actor, channel, {
+    allowEveryone: parsed.value.payload.options.allowEveryone === true,
+    viaWebhook: typeof parsed.value.payload.options.asName === "string" && parsed.value.payload.options.asName !== "",
+    roles: roleActionsOf(parsed.value.payload.message),
+  });
+  if (problem) return refuse(403, problem);
 
   if ((await prisma.scheduledTask.count({ where: { guildId: guild.id, kind: SCHEDULED_SEND } })) >= MAX_SCHEDULES) {
     return refuse(409, `A server can have at most ${MAX_SCHEDULES} scheduled messages. Cancel one first.`);
@@ -152,7 +163,10 @@ export function scheduledSendRunner(client: Client, send: Send, labelsFor: (guil
         })
       : null;
 
-    const reply = await send(guild, { ...payload.message, ...payload.options, sender: payload.sender, templateId: payload.templateId }, await labelsFor(guild.id));
+    // The person who scheduled it must still be allowed to send it. A schedule saved before that was recorded keeps running as it did.
+    const body: Record<string, unknown> & { [TRUSTED_SEND]?: true } = { ...payload.message, ...payload.options, sender: payload.sender, templateId: payload.templateId, actor: payload.actor };
+    if (payload.actor === undefined) body[TRUSTED_SEND] = true;
+    const reply = await send(guild, body, await labelsFor(guild.id));
     if (reply.status < 400) return;
     const error = (reply.body as { error?: string } | undefined)?.error ?? "Discord refused the message.";
     console.error(`Scheduled message "${payload.label ?? ""}" in guild ${task.guildId} was not sent: ${error}`);

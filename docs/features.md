@@ -110,6 +110,8 @@ Send posts it to the channel you pick, after a confirmation that shows the messa
 
 A sent message can mention people and roles. @everyone and @here only ping when you turn on "Let @everyone and @here ping" for that send, and Discord still ignores them unless the bot has the Mention Everyone permission.
 
+Sending through the dashboard takes what sending by hand takes. You need to be able to see and write in the channel, Mention Everyone for an @everyone ping, and Manage Webhooks to send under another name. A button or menu that gives or takes a role needs Manage Roles and a role above that one, as in Discord. The server owner, anyone with Administrator and the install owner can do all of it. A scheduled message is checked again each time it goes out, so it stops if the person who scheduled it loses those rights.
+
 **Schedule** in the same dialog sends it later instead: pick a channel, a date and time in your own time zone, and whether it goes once, every day or every week. What goes out is the message as it was when you scheduled it, so editing the template afterwards doesn't change it. Scheduled messages are listed under **Scheduled** below the templates, where one can be cancelled. A message that repeats keeps its time of day, and if the bot was off when one was due, it goes out once when the bot is back rather than once for every missed day. If a repeating send fails, the list shows why.
 
 **Replace a sent message** puts the message in the editor in place of one TierZero already sent. Pick it from the messages sent from the Message creator, or paste its link (in Discord, open the message's menu and choose Copy Message Link). Only messages TierZero sent can be replaced, including ones sent under another name. Its buttons start doing what the new version says, and its reactions stay as they are.
@@ -585,6 +587,8 @@ Bots are left out by default. A **Log channel**, if set, gets a post when someon
 The bot needs Manage Roles and Kick Members, and its role has to sit above the verified and unverified roles. The role pickers grey out any role above it. Every reply, the post in the log channel, the direct message and the wording of the buttons and boxes can be changed: the replies under **Replies and errors**, the button, box and removal-reason text under **Labels and text**. Replies understand `{user}`, `{username}` and `{server}`, plus `{role}`, `{round}` and `{rounds}`, `{symbol}`, `{row}`, `{grid}`, `{question}`, `{left}` (tries left), `{until}` and `{canVerify}` (times that count down) where they make sense. Log posts and the direct message add `{method}` and `{reason}`.
 
 ## Role menus
+
+Choosing which roles a menu gives, here or in any other feature that hands out roles, is the same as giving the role in Discord. It takes Manage Roles and a role above the one handed out. Someone with Manage Server alone can still edit everything else, and can save a page whose roles were set by someone else. The server owner, anyone with Administrator and the install owner are never held back.
 
 Members pick roles from a menu you post to a channel, either as buttons (one per role, five to a row, each in the colour you choose) or as a dropdown, which is tidier for a long list and can show a second line under each role. Both keep working after the message leaves the bot's cache, need no message content permission, and give the member a private confirmation. Picking a role you have takes it off again.
 

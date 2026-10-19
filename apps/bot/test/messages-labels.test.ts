@@ -7,6 +7,7 @@ import { handleMessages } from "../dist/control/messages.js";
 const GUILD_ID = "100000000000000001";
 const CHANNEL_ID = "200000000000000002";
 const BOT_ID = "999999999999999999";
+const ACTOR = "700000000000000007";
 
 interface Hook {
   name: string;
@@ -47,6 +48,7 @@ function setup(existing: Hook[] = []) {
 
   const guild = {
     id: GUILD_ID,
+    ownerId: ACTOR,
     name: "Test server",
     memberCount: 10,
     client: { user: { id: BOT_ID, username: "TierZero" } },
@@ -59,7 +61,7 @@ function setup(existing: Hook[] = []) {
 }
 
 const send = (guild: unknown, body: Record<string, unknown>, labels?: SystemLabels) =>
-  handleMessages({ guild: guild as never, method: "POST", segments: ["send"], body: { channelId: CHANNEL_ID, content: "Hi", embeds: [], buttons: [], selects: [], reactions: [], ...body }, ...(labels ? { labels } : {}) });
+  handleMessages({ guild: guild as never, method: "POST", segments: ["send"], body: { actor: ACTOR, channelId: CHANNEL_ID, content: "Hi", embeds: [], buttons: [], selects: [], reactions: [], ...body }, ...(labels ? { labels } : {}) });
 
 describe("the webhook for a message sent under another name", () => {
   test("is called TierZero messages by default", async () => {

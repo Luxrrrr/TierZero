@@ -8,6 +8,7 @@ const GUILD_ID = "100000000000000001";
 const CHANNEL_ID = "200000000000000002";
 const MESSAGE_ID = "300000000000000003";
 const BOT_ID = "999999999999999999";
+const ACTOR = "700000000000000007";
 const HOOK_ID = "400000000000000004";
 const LINK = `https://discord.com/channels/${GUILD_ID}/${CHANNEL_ID}/${MESSAGE_ID}`;
 
@@ -43,6 +44,7 @@ function setup(author: { kind: "bot" } | { kind: "member" } | { kind: "webhook";
   };
   const guild = {
     id: GUILD_ID,
+    ownerId: ACTOR,
     name: "Northwind Gaming",
     memberCount: 306,
     client: { user: { id: BOT_ID, username: "TierZero" } },
@@ -55,7 +57,7 @@ function setup(author: { kind: "bot" } | { kind: "member" } | { kind: "webhook";
 }
 
 const edit = (guild: unknown, body: Record<string, unknown>) =>
-  handleMessages({ guild: guild as never, method: "POST", segments: ["edit"], body: { link: LINK, content: "New rules for {server}", embeds: [], buttons: [], selects: [], reactions: [], ...body } });
+  handleMessages({ guild: guild as never, method: "POST", segments: ["edit"], body: { actor: ACTOR, link: LINK, content: "New rules for {server}", embeds: [], buttons: [], selects: [], reactions: [], ...body } });
 
 describe("parseMessageLink", () => {
   test("reads Discord's Copy Message Link format", () => {

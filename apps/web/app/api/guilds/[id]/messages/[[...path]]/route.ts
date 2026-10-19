@@ -63,7 +63,8 @@ async function handle(method: string, request: Request, { params }: Params) {
       // A send says who sent it, for the {sender} variable. The browser cannot name itself.
       if ((path[0] === "send" || path[0] === "edit" || path[0] === "schedules") && typeof body === "object" && body !== null) {
         const session = await auth();
-        body = { ...(body as Record<string, unknown>), sender: session?.user?.name ?? "the dashboard" };
+        // Who is sending goes with it too, because the bot checks they may send there. The browser cannot name itself.
+        body = { ...(body as Record<string, unknown>), sender: session?.user?.name ?? "the dashboard", actor: access.discordUserId };
       }
     } catch {
       return fail(400, "The request could not be read. Reload the page and try again.");

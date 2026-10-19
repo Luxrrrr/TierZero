@@ -7,6 +7,7 @@ import { handleMessages, messageUrl, sendDto, sendMessage, type SendRecord } fro
 const GUILD_ID = "100000000000000001";
 const CHANNEL_ID = "200000000000000002";
 const SENT_ID = "300000000000000003";
+const ACTOR = "700000000000000007";
 
 function guildWith() {
   const sent: Record<string, unknown>[] = [];
@@ -25,6 +26,7 @@ function guildWith() {
   };
   const guild = {
     id: GUILD_ID,
+    ownerId: ACTOR,
     name: "Northwind Gaming",
     memberCount: 306,
     client: { user: { id: "999999999999999999", username: "TierZero" } },
@@ -36,7 +38,7 @@ function guildWith() {
   return { guild, sent };
 }
 
-const BODY = { channelId: CHANNEL_ID, content: "Raid night at 8", embeds: [], buttons: [], selects: [], reactions: [] };
+const BODY = { actor: ACTOR, channelId: CHANNEL_ID, content: "Raid night at 8", embeds: [], buttons: [], selects: [], reactions: [] };
 
 describe("recording what the Message creator sends", () => {
   test("a send is recorded with where it went", async () => {

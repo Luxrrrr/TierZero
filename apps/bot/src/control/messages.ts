@@ -21,6 +21,7 @@ import {
 import { prisma } from "@tier0/db";
 import { LABEL_DEFAULTS, type SystemLabels } from "@tier0/module-system";
 import { saveInteractions } from "../runtime/message-components.js";
+import { TRUSTED_SEND, roleActionsOf, senderIdOf, senderProblem } from "./message-rights.js";
 import { firstEmptyLimitedMenu, namesOf, toDiscordPayload } from "./message-payload.js";
 import { ok, refuse, type Reply } from "./mod/types.js";
 import { createSchedule, deleteSchedule, listSchedules } from "./message-schedules.js";
@@ -473,6 +474,15 @@ export async function sendMessage(
     return refuse(404, "Pick a text channel on this server to send it to.");
   }
 
+  if (!(TRUSTED_SEND in payload)) {
+    const problem = await senderProblem(guild, senderIdOf(payload), channel, {
+      allowEveryone: choice.allowEveryone,
+      viaWebhook: choice.asName !== "",
+      roles: roleActionsOf(parsed.value),
+    });
+    if (problem) return refuse(403, problem);
+  }
+
   const me = guild.members.me ?? (await guild.members.fetchMe().catch(() => null));
   const permissions = me ? channel.permissionsFor(me) : null;
   if (!permissions?.has(PermissionFlagsBits.ViewChannel) || !permissions.has(PermissionFlagsBits.SendMessages)) {
@@ -610,6 +620,13 @@ async function editSentMessage(guild: Guild, payload: Record<string, unknown>, l
 
   const message = await channel.messages.fetch(link.messageId).catch(() => null);
   if (!message) return refuse(404, "That message was not found. It may have been deleted, or the bot cannot read that channel.");
+
+  const problem = await senderProblem(guild, senderIdOf(payload), channel, {
+    allowEveryone: payload.allowEveryone === true,
+    viaWebhook: message.webhookId !== null,
+    roles: roleActionsOf(parsed.value),
+  });
+  if (problem) return refuse(403, problem);
 
   const sender = typeof payload.sender === "string" && payload.sender.trim() !== "" ? payload.sender.trim().slice(0, 80) : labels.defaultSender;
   const filled = parseMessage(applyVariablesToMessage(parsed.value, variableValues(guild, channel, sender)));
