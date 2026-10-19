@@ -2,6 +2,7 @@ import { prisma } from "@tier0/db";
 import { auth } from "./auth";
 import { fetchUserGuilds, refreshDiscordToken } from "./discord";
 import { authorizedGuildIds } from "./permissions";
+import { isSealed, openToken, sealToken } from "./token-crypto";
 import { listBotGuilds } from "./control-api";
 import {
   afterAuthzFailure,
@@ -64,22 +65,41 @@ async function getValidAccessToken(userId: string): Promise<DiscordAccountTokens
   const account = await prisma.account.findFirst({
     where: { userId, provider: "discord" },
   });
-  if (!account?.access_token) return null;
+  // A token sealed with a different AUTH_SECRET cannot be opened, and reads as no token: the person signs in again.
+  const accessToken = account?.access_token ? openToken(account.access_token) : null;
+  if (!account || !accessToken) {
+    // Tokens that cannot be opened mean AUTH_SECRET changed. Ending the session sends the person to sign in
+    // again, which stores tokens that work, instead of leaving them signed in with no servers to show.
+    if (account?.access_token && isSealed(account.access_token)) {
+      await prisma.session.deleteMany({ where: { userId } }).catch(() => undefined);
+    }
+    return null;
+  }
+  const refreshToken = account.refresh_token ? openToken(account.refresh_token) : null;
 
   const expiresAtMs = (account.expires_at ?? 0) * 1000;
   const stillValid = expiresAtMs > Date.now() + 30_000; // small buffer against clock skew
 
   if (stillValid) {
-    return { accessToken: account.access_token, discordUserId: account.providerAccountId };
+    // A token saved before tokens were sealed is sealed now, the first time it is read.
+    if (!isSealed(account.access_token ?? "") || (account.refresh_token && !isSealed(account.refresh_token))) {
+      await prisma.account
+        .update({
+          where: { id: account.id },
+          data: { access_token: sealToken(accessToken), ...(refreshToken ? { refresh_token: sealToken(refreshToken) } : {}) },
+        })
+        .catch(() => undefined);
+    }
+    return { accessToken, discordUserId: account.providerAccountId };
   }
-  if (!account.refresh_token) return null;
+  if (!refreshToken) return null;
 
-  const refreshed = await refreshDiscordToken(account.refresh_token);
+  const refreshed = await refreshDiscordToken(refreshToken);
   await prisma.account.update({
     where: { id: account.id },
     data: {
-      access_token: refreshed.access_token,
-      refresh_token: refreshed.refresh_token ?? account.refresh_token,
+      access_token: sealToken(refreshed.access_token),
+      refresh_token: sealToken(refreshed.refresh_token ?? refreshToken),
       expires_at: Math.floor(Date.now() / 1000) + refreshed.expires_in,
     },
   });
