@@ -146,17 +146,36 @@ describe("readRequestFields", () => {
       reason: "x",
       durationMs: null,
       deleteDays: null,
+      deleteMessages: false,
     });
     assert.deepEqual(readRequestFields("timeout", { durationMs: 60000, deleteDays: 3 }), {
       reason: null,
       durationMs: 60000,
       deleteDays: null,
+      deleteMessages: false,
     });
     assert.deepEqual(readRequestFields("ban", { durationMs: null, deleteDays: 2 }), {
       reason: null,
       durationMs: null,
       deleteDays: 2,
+      deleteMessages: false,
     });
+  });
+
+  test("reads whether to delete the attached messages, for the actions that can", () => {
+    for (const action of ["warn", "timeout", "kick", "ban"] as const) {
+      assert.equal(readRequestFields(action, { deleteMessages: true }).deleteMessages, true, action);
+      assert.equal(readRequestFields(action, { deleteMessages: false }).deleteMessages, false, action);
+      assert.equal(readRequestFields(action, {}).deleteMessages, false, action);
+    }
+    assert.equal(readRequestFields("unban", { deleteMessages: true }).deleteMessages, false);
+    assert.equal(readRequestFields("timeout-clear", { deleteMessages: true }).deleteMessages, false);
+  });
+
+  test("refuses a choice that is not yes or no", () => {
+    for (const bad of ["true", 1, {}]) {
+      assert.equal(refusal(() => readRequestFields("warn", { deleteMessages: bad })).status, 400);
+    }
   });
 
   test("refuses a field of the wrong type when it applies", () => {
@@ -177,11 +196,14 @@ describe("actionContext", () => {
     assert.deepEqual(dto, {
       requireReason: true,
       dmOnAction: false,
+      dmIncludeMessages: true,
       defaultTimeoutMs: 600000,
       maxTimeoutMs: 28 * DAY,
       deleteMessageDays: 1,
+      deleteMessagesByDefault: false,
       maxBanDays: MAX_BAN_DAYS,
     });
+    assert.equal(actionContext({ requireReason: false, dmOnAction: true, defaultTimeoutDuration: 600000, deleteMessageDays: 0, deleteMessagesByDefault: true }).deleteMessagesByDefault, true);
   });
 });
 

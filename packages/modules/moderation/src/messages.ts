@@ -1,4 +1,5 @@
-import { embedReply, emptyButton, emptyEmbed, plainReply, viewCaseButton, type MessageBody, type MessageVariable, type ResponseTemplate } from "@tier0/core";
+import { REPLY_COLOR, embedReply, emptyButton, emptyEmbed, plainReply, viewCaseButton, type MessageBody, type MessageVariable, type ResponseTemplate } from "@tier0/core";
+import { EVIDENCE_SAMPLE } from "./evidence-text.js";
 
 /**
  * The messages the moderation module sends, as the dashboard offers them. Each
@@ -43,12 +44,91 @@ const MEMBER_URL: MessageVariable = {
 };
 const CREATED: MessageVariable = { name: "created", description: "When the case was made, for an embed's time", sample: "2026-10-15T16:12:00.000Z" };
 
-export const DM_VARIABLES: MessageVariable[] = [ACTION, ACTION_TITLE, REASON, REASON_NOTE, EXPIRES, EXPIRES_RELATIVE, EXPIRY_NOTE, DURATION, MODERATOR, MODERATOR_ID];
+const MODERATOR_NAME: MessageVariable = {
+  name: "moderatorName",
+  description: "The moderator's display name. Empty unless Show who took the action is on, and for an action the bot took by itself",
+  sample: "Ada",
+};
+const EVIDENCE: MessageVariable = {
+  name: "evidence",
+  description: "The messages that led to the action, as the member wrote them, with where and when. Up to five, cut short, and unable to ping anyone. Empty when none were attached or Include the messages is off",
+  sample: EVIDENCE_SAMPLE,
+};
+const EVIDENCE_TITLE: MessageVariable = { name: "evidenceTitle", description: "Message for one, Messages for several. Empty when there are none, so a field named with it is left out along with the messages", sample: "Message" };
+const CASE_NOTE: MessageVariable = { name: "caseNote", description: "Case # and the number. Empty when the action has no case", sample: "Case #118" };
+const CHANNEL: MessageVariable = { name: "channel", description: "The channel the first attached message was in, with a # in front. Empty when no message is attached", sample: "#general" };
+const WHEN: MessageVariable = { name: "when", description: "When the action was taken, as a Discord date that shows in the reader's own time", sample: "<t:1792339920:f>" };
+const WARNINGS: MessageVariable = { name: "warnings", description: "How many warnings count against the member, this one included. Empty for anything but a warning", sample: "3" };
+const WARNING_NOTE: MessageVariable = {
+  name: "warningNote",
+  description: "A sentence such as This is warning 3, on a line of its own. Empty for anything but a warning, and for a first warning. It never says what happens at the next one",
+  sample: " This is warning 3.",
+};
+const ESCALATION_RULE: MessageVariable = { name: "rule", description: "The name of the escalation rule that took the action. Empty for an action a moderator took", sample: "3 warnings in 30 days" };
+const APPEAL_NOTE: MessageVariable = {
+  name: "appealNote",
+  description: "How to appeal, on a line of its own. Only for a ban while ban appeals are on, and empty otherwise",
+  sample: " You can appeal this ban with the button below.",
+};
+const LIFTED_NOTE: MessageVariable = {
+  name: "liftedNote",
+  description: "A sentence saying the restriction was lifted, on a line of its own. Only for an unban or a cleared timeout, and empty otherwise",
+  sample: " Your restriction in this server was lifted.",
+};
 
-export const DM_MESSAGE: MessageBody = embedReply("You were {action} in {server}.{reasonNote}{expiryNote}", "warning");
+export const DM_VARIABLES: MessageVariable[] = [
+  ACTION,
+  ACTION_TITLE,
+  REASON,
+  REASON_NOTE,
+  EVIDENCE,
+  EVIDENCE_TITLE,
+  CASE,
+  CASE_NOTE,
+  CHANNEL,
+  WHEN,
+  CREATED,
+  EXPIRES,
+  EXPIRES_RELATIVE,
+  EXPIRY_NOTE,
+  DURATION,
+  WARNINGS,
+  WARNING_NOTE,
+  ESCALATION_RULE,
+  APPEAL_NOTE,
+  LIFTED_NOTE,
+  MODERATOR,
+  MODERATOR_ID,
+  MODERATOR_NAME,
+];
+
+/**
+ * The direct message. Everything after the first sentence comes from a variable that is empty when it does not
+ * apply, and a field with nothing in it is left out, so a warning, a timeout and a ban each show only what they have.
+ */
+export const DM_MESSAGE: MessageBody = {
+  ...plainReply(""),
+  embeds: [
+    {
+      ...emptyEmbed(),
+      description: "You were {action} in {server}.{reasonNote}{expiryNote}{warningNote}{liftedNote}{appealNote}",
+      color: REPLY_COLOR.warning,
+      timestamp: "{created}",
+      footerText: "{caseNote}",
+      fields: [
+        { name: "Length", value: "{duration}", inline: true },
+        { name: "Moderator", value: "{moderatorName}", inline: true },
+        { name: "{evidenceTitle}", value: "{evidence}", inline: false },
+      ],
+    },
+  ],
+};
+
+/** The direct message before it carried the messages behind an action, for servers that saved it unchanged. */
+export const DM_MESSAGE_BEFORE_CONTEXT: MessageBody = embedReply("You were {action} in {server}.{reasonNote}{expiryNote}", "warning");
 
 export const DM_NOTE =
-  "Sent to the member when a moderator takes an action, if direct messages are on. Everything is worded from {action}, so one message covers warnings, timeouts, kicks, bans and unbans. The moderator's name is not shown unless you add {moderator}. A member with direct messages closed does not get it.";
+  "Sent to the member when a moderator takes an action, if direct messages are on. Everything is worded from {action}, so one message covers warnings, timeouts, kicks, bans and unbans. The messages that led to the action go in through {evidence}. A message saved before that was added does not show them until you add {evidence}, or a field named {evidenceTitle}, to it. The moderator's name is not shown unless Show who took the action is on or you add {moderator}. A member with direct messages closed does not get it.";
 
 export const MODLOG_VARIABLES: MessageVariable[] = [
   CASE,
@@ -188,10 +268,29 @@ export const APPEAL_DECISION_VARIABLES: MessageVariable[] = [
   { name: "response", description: "What staff wrote back, or empty when they wrote nothing", sample: "Welcome back. Keep it friendly in #general." },
   { name: "responseNote", description: "\" \" and what staff wrote back, so it follows a sentence. Empty when they wrote nothing", sample: " Welcome back. Keep it friendly in #general." },
   { name: "retryNote", description: "When the member may appeal again, as a sentence with a space in front. Empty when they may appeal again straight away", sample: " You can appeal again in 7 days." },
+  { name: "reason", description: "The reason the member was banned for, or \"No reason given\"", sample: "Spamming links in #general" },
+  EVIDENCE,
+  EVIDENCE_TITLE,
+  WHEN,
+  CREATED,
 ];
 
 export const APPEAL_ACCEPTED_DM: MessageBody = embedReply("Your appeal for case #{case} in {server} was accepted and the ban has been lifted.{responseNote}", "success");
-export const APPEAL_DENIED_DM: MessageBody = embedReply("Your appeal for case #{case} in {server} was denied.{responseNote}{retryNote}", "error");
+export const APPEAL_DENIED_DM: MessageBody = {
+  ...embedReply("Your appeal for case #{case} in {server} was denied.{responseNote}{retryNote}", "error"),
+  embeds: [
+    {
+      ...emptyEmbed(),
+      description: "Your appeal for case #{case} in {server} was denied.{responseNote}{retryNote}",
+      color: REPLY_COLOR.error,
+      timestamp: "{created}",
+      fields: [
+        { name: "Ban reason", value: "{reason}", inline: false },
+        { name: "{evidenceTitle}", value: "{evidence}", inline: false },
+      ],
+    },
+  ],
+};
 
 interface AppealReplySpec {
   label: string;

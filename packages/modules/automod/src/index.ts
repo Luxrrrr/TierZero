@@ -11,7 +11,7 @@ import { settings, type AutomodSettings } from "./settings.js";
 import type { EvaluationVerdict } from "./evaluator.js";
 import { carryOut, draftInfraction, judgeMessage, noticeLifetimeMs, type Outcome } from "./handler.js";
 import { AutomodState } from "./state.js";
-import { DM_MESSAGE, LOG_MESSAGES, NOTICE_MESSAGE, loggedAs, logValues, ruleName, tripValues, type TripFacts } from "./messages.js";
+import { DM_MESSAGE, LOG_MESSAGES, NOTICE_MESSAGE, dmValues, loggedAs, logValues, ruleName, tripValues, type TripFacts } from "./messages.js";
 import { fill } from "./fill.js";
 
 // One instance for the whole process, not per guild: it is its own map keyed
@@ -149,7 +149,7 @@ async function applyVerdict(
     dashboardBase: await ctx.dashboardUrl(),
   };
   await notifyChannel(ctx, message, facts);
-  await messageMember(ctx, message, facts);
+  await messageMember(ctx, message, facts, evidence);
   await postLog(ctx, facts);
 }
 
@@ -258,17 +258,19 @@ async function notifyChannel(
 
 /**
  * The private message to the member, when it is switched on. It carries the
- * same fixed wording as the notice and nothing the member wrote. A member with
+ * same fixed wording as the notice, plus the member's own message, but never
+ * what matched: that is for the log and the case. A member with
  * direct messages closed is skipped, which ctx.send already treats as routine.
  */
 async function messageMember(
   ctx: ModuleContext<AutomodSettings>,
   message: Message | PartialMessage,
   facts: TripFacts,
+  evidence: readonly EvidenceMessage[],
 ): Promise<void> {
   if (!ctx.settings.dmOnAction || !message.author) return;
   try {
-    await ctx.send(message.author, ctx.settings.dmMessage, tripValues(facts, ctx.settings.labels), { fallback: DM_MESSAGE });
+    await ctx.send(message.author, ctx.settings.dmMessage, dmValues(facts, evidence, ctx.settings.dmIncludeMessages !== false, ctx.settings.labels), { fallback: DM_MESSAGE });
   } catch (error) {
     console.error("[automod] could not message the member:", error);
   }

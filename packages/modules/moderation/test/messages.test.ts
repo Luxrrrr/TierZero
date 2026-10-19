@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { ModuleRegistry, REPLY_COLOR, applyVariablesToMessage, parseMessage, type MessageBody } from "@tier0/core";
 import moderation from "../dist/index.js";
 import { noticeValues } from "../dist/modlog.js";
+import { dmValues } from "../dist/dm.js";
 import { formatModLogEntry } from "./legacy-view.ts";
 import { CASE_REPLY, DM_MESSAGE, HISTORY_REPLY, MODLOG_MESSAGE, PURGE_REPLY } from "../dist/messages.js";
 
@@ -30,7 +31,7 @@ function fill(body: MessageBody, values: Record<string, string | number>): Messa
 describe("the direct message", () => {
   const expiresAt = new Date("2030-01-01T00:00:00.000Z");
   const seconds = Math.floor(expiresAt.getTime() / 1000);
-  const dm = (notice: Parameters<typeof noticeValues>[0]) => fill(settings({}).dmMessage, noticeValues(notice)).embeds[0]?.description;
+  const dm = (notice: Parameters<typeof noticeValues>[0]) => fill(settings({}).dmMessage, dmValues(settings({}) as never, notice)).embeds[0]?.description;
 
   test("reads as it always has until the owner writes another", () => {
     assert.equal(dm({ action: "warn", reason: null, expiresAt: null }), "You were warned in Test Server.");
@@ -40,8 +41,8 @@ describe("the direct message", () => {
       dm({ action: "ban", reason: "Repeated spam", expiresAt }),
       `You were banned in Test Server. Reason: Repeated spam This expires <t:${seconds}:R>.`,
     );
-    assert.equal(dm({ action: "timeout-clear", reason: null, expiresAt: null }), "You were timeout cleared in Test Server.");
-    assert.equal(dm({ action: "unban", reason: null, expiresAt: null }), "You were unbanned in Test Server.");
+    assert.equal(dm({ action: "timeout-clear", reason: null, expiresAt: null }), "You were timeout cleared in Test Server.\nYour restriction in this server was lifted.");
+    assert.equal(dm({ action: "unban", reason: null, expiresAt: null }), "You were unbanned in Test Server.\nYour restriction in this server was lifted.");
   });
 
   test("starts as a warning-coloured embed with nothing above it", () => {

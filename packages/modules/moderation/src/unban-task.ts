@@ -101,12 +101,12 @@ export async function liftTemporaryBan(
   if (alreadyLifted) return;
 
   if (ctx.settings.dmOnAction) {
-    await tryDirectMessage(ctx, userId, {
-      action: "unban",
-      reason: why,
-      expiresAt: null,
-      moderatorId,
-    });
+    await tryDirectMessage(
+      ctx,
+      userId,
+      { action: "unban", reason: why, expiresAt: null, moderatorId },
+      { caseNumber: record.caseNumber, createdAt: record.createdAt },
+    );
   }
 
   await postModLog(ctx, {

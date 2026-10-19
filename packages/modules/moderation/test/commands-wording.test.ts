@@ -260,7 +260,7 @@ describe("the right-click forms", () => {
 
     const ban = (await form("Ban author"))!.data;
     assert.equal(ban.title, "Ban samuel");
-    assert.equal(ban.components![0]!.components[0]!.placeholder, "Why. The message is saved with the case.");
+    assert.equal(ban.components![0]!.components[0]!.placeholder, "Why. The member is sent this and the message, which is saved with the case.");
     const banLength = ban.components![1]!.components[0]!;
     assert.deepEqual([banLength.label, banLength.placeholder], ["How long (empty is permanent)", "1d or 7d. Empty is permanent."]);
   });
@@ -494,5 +494,114 @@ describe("/purge", () => {
       purgeContext({ labels: { counts: { messageMany: "{count} Nachrichten", skippedMany: "{count} blieben, weil sie zu alt sind." } } }, custom.channel),
     );
     assert.equal(world.said[1], "Deleted 2 Nachrichten. 2 blieben, weil sie zu alt sind.");
+  });
+});
+
+describe("deleting the message from the right-click form", () => {
+  const SELECT = 18;
+  interface Shown {
+    components: { type: number; label?: string; component?: { custom_id?: string; options?: { value: string; label: string; default?: boolean }[] } }[];
+  }
+
+  async function open(name: string, stored: Record<string, unknown> = {}) {
+    const entry = contextCommands.find((candidate) => candidate.name === name)!;
+    let shown: Shown | undefined;
+    await entry.run(
+      {
+        user: { id: ACTOR },
+        targetUser: { id: TARGET, username: "samuel" },
+        isUserContextMenuCommand: () => name.endsWith("member"),
+        isMessageContextMenuCommand: () => name.endsWith("author"),
+        targetMessage: { webhookId: null, channelId: CHANNEL, id: MESSAGE, author: { id: TARGET, username: "samuel" } },
+        showModal: async (modal: { toJSON(): never }) => {
+          shown = modal.toJSON() as Shown;
+        },
+        replied: false,
+        deferred: false,
+      } as never,
+      context(stored),
+    );
+    return shown!;
+  }
+
+  const choiceOf = (modal: Shown) => modal.components.find((row) => row.type === SELECT && row.component?.custom_id === "delete");
+
+  test("a message form asks, with Yes and No, and starts on the server's setting", async () => {
+    for (const name of ["Warn author", "Timeout author", "Kick author", "Ban author"]) {
+      const off = choiceOf(await open(name))!;
+      assert.equal(off.label, "Delete the message too", name);
+      assert.deepEqual(off.component!.options!.map((o) => [o.value, o.label, o.default === true]), [["yes", "Yes, delete it", false], ["no", "No, keep it", true]]);
+
+      const on = choiceOf(await open(name, { deleteMessagesByDefault: true }))!;
+      assert.deepEqual(on.component!.options!.map((o) => [o.value, o.default === true]), [["yes", true], ["no", false]]);
+    }
+  });
+
+  test("a form on a member has no message to delete, so it does not ask", async () => {
+    for (const name of ["Warn member", "Timeout member", "Kick member", "Ban member"]) {
+      assert.equal(choiceOf(await open(name, { deleteMessagesByDefault: true })), undefined, name);
+    }
+  });
+
+  test("the question can be reworded", async () => {
+    const stored = { labels: { menu: { deleteLabel: "Nachricht löschen", deleteYes: "Ja", deleteNo: "Nein" } } };
+    const row = choiceOf(await open("Warn author", stored))!;
+    assert.deepEqual([row.label, row.component!.options!.map((o) => o.label)], ["Nachricht löschen", ["Ja", "Nein"]]);
+  });
+
+  describe("on submit", () => {
+    const deletes: string[] = [];
+
+    function readyContext(stored: Record<string, unknown>) {
+      const ctx = context(stored) as unknown as {
+        guild: { channels: { cache: Map<string, unknown> }; members: { me: unknown } };
+      };
+      ctx.guild.channels.cache.set(CHANNEL, {
+        id: CHANNEL,
+        name: "general",
+        isTextBased: () => true,
+        isDMBased: () => false,
+        permissionsFor: () => ({ has: () => true }),
+        messages: { delete: async (id: string) => void deletes.push(id) },
+      });
+      return ctx as never;
+    }
+
+    async function submit(choice: string | null, stored: Record<string, unknown> = {}) {
+      deletes.length = 0;
+      const { recentMessages } = await import("../dist/recent-messages.js");
+      recentMessages.record(GUILD, { id: MESSAGE, channelId: CHANNEL, channelName: "general", authorId: TARGET, content: "buy now", attachments: [], createdAt: Date.now(), deleted: false });
+      const interaction = {
+        user: { id: ACTOR },
+        replied: false,
+        deferred: false,
+        fields: {
+          getTextInputValue: () => "",
+          getStringSelectValues: (id: string) => {
+            if (id === "delete" && choice !== null) return [choice];
+            throw new Error("no such component");
+          },
+        },
+      };
+      await submitContextAction(interaction as never, { rest: `warn:${TARGET}:${CHANNEL}:${MESSAGE}`, ctx: readyContext(stored) } as never);
+    }
+
+    test("Yes deletes the message after the warning, and the reply says so", async () => {
+      await submit("yes");
+      assert.deepEqual(deletes, [MESSAGE]);
+      assert.match(world.said[0]!, /^Warned samuel\. Case #1\..* Deleted 1 message\.$/);
+    });
+
+    test("No keeps it, whatever the setting says", async () => {
+      await submit("no", { deleteMessagesByDefault: true });
+      assert.deepEqual(deletes, []);
+    });
+
+    test("a form without the question, opened before it existed, follows the setting", async () => {
+      await submit(null);
+      assert.deepEqual(deletes, []);
+      await submit(null, { deleteMessagesByDefault: true });
+      assert.deepEqual(deletes, [MESSAGE]);
+    });
   });
 });

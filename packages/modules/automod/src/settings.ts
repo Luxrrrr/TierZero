@@ -2,6 +2,7 @@ import { s, type Field, type Infer } from "@tier0/core";
 import { PATTERN_MAX_LENGTH, patternProblem } from "./patterns.js";
 import {
   DM_MESSAGE,
+  DM_MESSAGE_BEFORE_CONTEXT,
   DM_NOTE,
   DM_VARIABLES,
   LOG_MESSAGES,
@@ -191,11 +192,18 @@ export const settings = s.object({
   dmOnAction: s.boolean({
     label: "Also message the member privately",
     default: false,
-    help: "Sends the member a direct message when one of their messages trips a rule, so they know why without the whole channel seeing. It never quotes what they wrote. A member with direct messages closed is skipped.",
+    help: "Sends the member a direct message when one of their messages trips a rule, so they know why without the whole channel seeing. It gives the rule's reason in general words and never says what matched. A member with direct messages closed is skipped.",
+  }),
+  dmIncludeMessages: s.boolean({
+    label: "Show the member their message in it",
+    default: true,
+    help: "Repeats the message that tripped the rule in the direct message, cut short, so the member can see what it was about. Turn it off to send the reason only.",
+    when: { field: "dmOnAction", equals: true },
   }),
   dmMessage: s.message({
     label: "Direct message to the member",
     starting: DM_MESSAGE,
+    replaces: [DM_MESSAGE_BEFORE_CONTEXT],
     variables: DM_VARIABLES,
     delivery: "dm",
     note: DM_NOTE,

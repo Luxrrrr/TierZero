@@ -15,6 +15,7 @@ import {
   clampDeleteDays,
   confirmLabel,
   consequences,
+  deletionChoiceText,
   describeMs,
   draftMs,
   durationProblem,
@@ -23,6 +24,7 @@ import {
   failureLead,
   initialDuration,
   memberState,
+  offersDeletion,
   presetsWithin,
   readContext,
   readResult,
@@ -66,6 +68,8 @@ const context: ActionContextDto = {
   moduleEnabled: true,
   requireReason: false,
   dmOnAction: true,
+  dmIncludeMessages: true,
+  deleteMessagesByDefault: false,
   defaultTimeoutMs: 10 * MINUTE_MS,
   maxTimeoutMs: DISCORD_TIMEOUT_MAX_MS,
   deleteMessageDays: 1,
@@ -388,6 +392,13 @@ describe("consequences", () => {
     assert.ok(!consequences({ ...base, kind: "warn" }).some((line) => /direct message/.test(line)));
     assert.ok(consequences({ ...base, kind: "warn", dmOnAction: true }).some((line) => /direct message/.test(line)));
   });
+
+  test("says the member also sees the messages that were attached", () => {
+    const line = (messageCount: number) => consequences({ ...base, kind: "warn", dmOnAction: true, messageCount }).find((entry) => /direct message/.test(entry));
+    assert.doesNotMatch(line(0)!, /attached/);
+    assert.match(line(1)!, /with the reason and the message you attached/);
+    assert.match(line(3)!, /with the reason and the 3 messages you attached/);
+  });
 });
 
 describe("enterKeyAction", () => {
@@ -559,5 +570,61 @@ describe("changing a running timeout", () => {
   test("says the running timeout is replaced", () => {
     const lines = consequences({ kind: "timeout", dmOnAction: false, banLength: "permanent", deleteDays: 0, until: "Oct 10, 2026, 01:00 PM UTC", replacing: "Oct 18, 2026, 04:34 PM UTC" });
     assert.match(lines[0]!, /running until Oct 18, 2026, 04:34 PM UTC is replaced/);
+  });
+});
+
+describe("deleting the attached messages with the action", () => {
+  const draft = (over: Partial<ActionDraft> = {}): ActionDraft => ({
+    kind: "warn",
+    reason: "",
+    duration: unchosenDuration(),
+    banLength: "permanent",
+    deleteDays: 0,
+    evidence: [{ channelId: "100000000000000001", messageId: "100000000000000002" }],
+    ...over,
+  });
+
+  test("is offered for a warning, timeout, kick and ban that have a message attached", () => {
+    for (const kind of ["warn", "timeout", "kick", "ban"] as const) {
+      assert.equal(offersDeletion(kind, 1), true, kind);
+      assert.equal(offersDeletion(kind, 0), false, kind);
+    }
+    assert.equal(offersDeletion("timeout-clear", 2), false);
+    assert.equal(offersDeletion("unban", 2), false);
+  });
+
+  test("is worded for one message and for several", () => {
+    assert.equal(deletionChoiceText(1).label, "Also delete this message");
+    assert.equal(deletionChoiceText(3).label, "Also delete these 3 messages");
+    assert.match(deletionChoiceText(2).note, /attached as evidence, in the channels they were sent in/);
+    assert.match(deletionChoiceText(2).note, /the action still goes through and the result says which messages could not be deleted/);
+  });
+
+  test("is sent only when switched on, for an action that takes it, with messages attached", () => {
+    const send = (over: Partial<ActionDraft>, kind: ActionDraft["kind"] = "warn") => {
+      const check = buildRequest(draft({ kind, duration: kind === "timeout" ? { choice: 10 * MINUTE_MS, ...splitMs(10 * MINUTE_MS) } : unchosenDuration(), ...over }), context);
+      assert.ok(check.ok);
+      return check.request;
+    };
+    assert.equal(send({ deleteMessages: true }).deleteMessages, true);
+    assert.equal("deleteMessages" in send({ deleteMessages: false }), false);
+    assert.equal("deleteMessages" in send({}), false);
+    assert.equal("deleteMessages" in send({ deleteMessages: true, evidence: [] }), false);
+    assert.equal(send({ deleteMessages: true }, "kick").deleteMessages, true);
+    assert.equal(send({ deleteMessages: true }, "timeout").deleteMessages, true);
+    assert.equal("deleteMessages" in send({ deleteMessages: true }, "unban"), false);
+  });
+
+  test("says in the summary that the messages will be deleted", () => {
+    const base = { kind: "warn" as const, dmOnAction: false, banLength: "permanent" as const, deleteDays: 0, until: null };
+    assert.ok(!consequences({ ...base, deleteCount: 0 }).some((line) => /deleted from Discord/.test(line)));
+    assert.ok(consequences({ ...base, deleteCount: 1 }).includes("The message you attached will be deleted from Discord once this goes through."));
+    assert.ok(consequences({ ...base, deleteCount: 4 }).includes("The 4 messages you attached will be deleted from Discord once this goes through."));
+  });
+
+  test("starts from the server's setting, and off when an older bot does not send one", () => {
+    assert.equal(readContext({ ...context, deleteMessagesByDefault: true })?.deleteMessagesByDefault, true);
+    assert.equal(readContext({ ...context, deleteMessagesByDefault: "yes" })?.deleteMessagesByDefault, false);
+    assert.equal(readContext({ moduleEnabled: true })?.deleteMessagesByDefault, false);
   });
 });

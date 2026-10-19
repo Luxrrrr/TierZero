@@ -5,7 +5,7 @@ import type { EscalationAction, EscalationRule, ModerationSettings } from "./set
 import { describeDiscordError } from "./action-rules.js";
 import { deleteMessageSeconds } from "./duration.js";
 import { tryDirectMessage } from "./dm.js";
-import { recordInfraction, type InfractionRecord } from "./infractions.js";
+import { discardRecord, recordInfraction, type InfractionRecord } from "./infractions.js";
 import { fetchBanOrNull, fetchMemberOrNull } from "./lookups.js";
 import { postModLog } from "./reply.js";
 import { staffRoleOf } from "./staff.js";
@@ -239,9 +239,12 @@ async function escalate(ctx: Ctx, userId: string, now: Date): Promise<Escalation
   const reason = fillLabel(settings.labels.reasons.escalated, { rule: automatic.rule, warns: describeAutomatic(automatic) }).slice(0, 500);
   const moderatorId = botId ?? "0";
 
+  // Written first so the member's message can carry the case number, and taken back if Discord refuses.
+  const record = await recordInfraction({ guildId: guild.id, userId, moderatorId, action, reason, expiresAt, automatic });
+
   // The member is told first, while the bot still shares a server with them, as a moderator's action does.
   if (settings.dmOnAction && member) {
-    await tryDirectMessage(ctx, userId, { action, reason, expiresAt, durationMs, moderatorId });
+    await tryDirectMessage(ctx, userId, { action, reason, expiresAt, durationMs, moderatorId }, { caseNumber: record.caseNumber, createdAt: record.createdAt, rule: automatic.rule });
   }
 
   try {
@@ -253,10 +256,9 @@ async function escalate(ctx: Ctx, userId: string, now: Date): Promise<Escalation
     }
   } catch (error) {
     console.warn(`moderation: Discord refused the escalation ${action} on ${userId} in guild ${guild.id}: ${describeDiscordError(error)}`);
+    await discardRecord(record.id);
     return null;
   }
-
-  const record = await recordInfraction({ guildId: guild.id, userId, moderatorId, action, reason, expiresAt, automatic });
   if (action === "ban" && expiresAt) await ctx.tasks.schedule("unban", expiresAt, { userId });
 
   await postModLog(ctx, {

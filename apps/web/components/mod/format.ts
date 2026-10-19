@@ -1,4 +1,4 @@
-import { AUTOMOD_NAME, caseStateOf, describeAutomatic, isInForce, type AutomaticCase, type InfractionDto, type UserRef } from "@tier0/core";
+import { AUTOMOD_NAME, caseStateOf, describeAutomatic, isInForce, type AutomaticCase, type EvidenceMessage, type InfractionDto, type UserRef } from "@tier0/core";
 
 /**
  * The plain logic behind the mod dashboard's shared pieces. No React here, so
@@ -8,6 +8,13 @@ import { AUTOMOD_NAME, caseStateOf, describeAutomatic, isInForce, type Automatic
 /** The one way automod is shown: named Automod, with the shield in place of an avatar. */
 export function automodUser(user: UserRef): UserRef {
   return { ...user, name: AUTOMOD_NAME, avatarUrl: null, inServer: true, automod: true };
+}
+
+/** The tag for a case whose action deleted the messages attached to it, or null when it deleted none. */
+export function messagesDeletedTag(evidence: readonly Pick<EvidenceMessage, "deletedWithAction">[]): string | null {
+  const count = evidence.filter((message) => message.deletedWithAction === true).length;
+  if (count === 0) return null;
+  return count === 1 ? "Message deleted" : `${count} messages deleted`;
 }
 
 /**

@@ -1,6 +1,6 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { REPLY_COLOR, embedReply } from "@tier0/core";
+import { REPLY_COLOR } from "@tier0/core";
 import { settings } from "../dist/settings.js";
 import { evaluateMessage, fingerprintOf } from "../dist/evaluator.js";
 import { carryOut, noticeLifetimeMs, MIN_NOTICE_MS } from "../dist/handler.js";
@@ -81,8 +81,11 @@ describe("defaults are what automod has always said", () => {
     assert.equal(stock.noticeLifetime, 8000);
     assert.equal(stock.dmOnAction, false);
     assert.deepEqual(stock.dmMessage, DM_MESSAGE);
-    assert.deepEqual(DM_MESSAGE, embedReply("In {server}, {outcome} ({rule}{reasonNote}).", "warning"));
+    assert.equal(DM_MESSAGE.embeds[0]?.description, "In {server}, {outcome} ({rule}{reasonNote}).");
+    assert.equal(DM_MESSAGE.embeds[0]?.color, REPLY_COLOR.warning);
+    assert.deepEqual(DM_MESSAGE.embeds[0]?.fields.map((field) => field.value), ["{duration}", "{evidence}"]);
     assert.equal(DM_MESSAGE.content, "", "the direct message pings nobody");
+    assert.equal(stock.dmIncludeMessages, true);
   });
 
   test("a notice saved as plain text before it became a message is still read", () => {

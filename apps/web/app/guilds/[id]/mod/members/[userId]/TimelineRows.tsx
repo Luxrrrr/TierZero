@@ -5,7 +5,7 @@ import Link from "next/link";
 import { forwardRef, useEffect, useId, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import type { AuditDto, InfractionDto, NoteDto, StaffRole, UserRef } from "@tier0/core";
-import { actorRoleWord } from "@tier0/core";
+import { actorRoleWord, deletedMessagesText } from "@tier0/core";
 import { BanIcon, ChevronDownIcon, HistoryIcon, NoteIcon, PencilIcon, TrashIcon, UndoIcon } from "../../../../../../components/Icons";
 import { ActionBadge, Avatar, CaseReason, StateIcon, actionLabel, displayName, moderatorOf, timeAgo } from "../../../../../../components/mod/ModUi";
 import { changeSubject, controlName, infractionSubject, noteSubject, toggleName } from "./a11y";
@@ -27,7 +27,7 @@ import {
   warnExpiry,
   type SnapshotDiff,
 } from "./timeline";
-import { automaticLine } from "../../../../../../components/mod/format";
+import { automaticLine, messagesDeletedTag } from "../../../../../../components/mod/format";
 import type { Run } from "./useModAction";
 
 const REASON_LIMIT = 500;
@@ -289,6 +289,11 @@ export function InfractionRow({
                   Expired
                 </span>
               ) : null}
+              {messagesDeletedTag(infraction.evidence) ? (
+                <span className="mod-pill" data-tone="neutral" title="The messages attached to this case were deleted from Discord together with the action. The copies kept here are still readable.">
+                  {messagesDeletedTag(infraction.evidence)}
+                </span>
+              ) : null}
               {infraction.automatic ? (
                 <span className="mod-pill" data-tone="neutral" title="The bot took this case by itself when an escalation rule fired">
                   Automatic
@@ -364,6 +369,7 @@ export function InfractionRow({
                   {formatDateTime(infraction.expiresAt, timeZone)}
                 </Detail>
               ) : null}
+              {deletedMessagesText(infraction.evidence) ? <Detail label="Messages">{deletedMessagesText(infraction.evidence)}</Detail> : null}
               {removed ? <Detail label="Removed">{formatDateTime(removed.at, timeZone)}</Detail> : null}
             </dl>
             <History entries={entries} timeZone={timeZone} />

@@ -2,6 +2,7 @@ import {
   APPEAL_LIMITS,
   can,
   isAppealStatus,
+  readEvidence,
   type Actor,
   type AppealDetailDto,
   type AppealDto,
@@ -16,6 +17,7 @@ import {
   APPEAL_DENIED_DM as APPEAL_DENIED_FALLBACK,
   fetchBanOrNull,
   fetchMemberOrNull,
+  formatEvidence,
   performAction,
   retryNote,
   type ModerationSettings,
@@ -218,11 +220,19 @@ export async function decideAppeal(
     }).catch((error: unknown) => console.error("mod: could not write the audit entry for an appeal:", error));
 
     const settings = moduleCtx.settings;
+    // What the ban was for, so the member is not left to guess: its reason and the messages kept with it.
+    const ban = row.infractionId ? await prisma.infraction.findUnique({ where: { id: row.infractionId } }).catch(() => null) : null;
+    const evidence = settings.dmIncludeMessages === false ? { title: "", value: "" } : formatEvidence(readEvidence(ban?.evidence), settings.labels.notes);
     const values = {
       case: row.caseNumber,
       response: response.value ?? "",
       responseNote: response.value ? ` ${response.value}` : "",
       retryNote: decision === "denied" ? retryNote(settings, decidedAt) : "",
+      reason: ban?.reason ?? settings.labels.actions.noReason,
+      evidence: evidence.value,
+      evidenceTitle: evidence.value === "" ? "" : evidence.title,
+      when: `<t:${Math.floor(decidedAt.getTime() / 1000)}:f>`,
+      created: decidedAt.toISOString(),
     };
     const sent = await ctx.client.users
       .fetch(row.userId)

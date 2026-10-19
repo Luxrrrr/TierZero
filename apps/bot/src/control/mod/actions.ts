@@ -1,6 +1,7 @@
 import {
   canEditInfraction,
   canTakeAction,
+  deletedMessagesText,
   isInForce,
   isModActionKind,
   readEvidence,
@@ -150,7 +151,7 @@ export async function takeAction(
     // Copied before the action runs: a ban can delete the member's recent messages.
     const evidence = await resolveEvidence(ctx.guild, targetId, evidenceRefs.refs, { member: actorMember, isOwner: actor.role === "owner" });
 
-    const { record, notes } = await performAction(moduleCtx, {
+    const { record, notes, deletion } = await performAction(moduleCtx, {
       action,
       targetId,
       targetName: refOf(names, targetId).name ?? "That user",
@@ -162,6 +163,7 @@ export async function takeAction(
       actorIsInstanceOwner: actor.role === "owner",
       origin: "dashboard",
       evidence,
+      deleteMessages: fields.deleteMessages,
     });
 
     const refs = await resolveUsers(ctx.client, ctx.guild, [targetId, actor.userId]);
@@ -173,6 +175,7 @@ export async function takeAction(
     };
     const infraction = infractionDto({ ...record, voidedAt: null, voidedBy: null, voidReason: null }, ref, ctx.warnExpiryMs ?? null);
     const body: ActionResult = { caseNumber: record.caseNumber, infraction, notes };
+    const deletedText = deletedMessagesText(infraction.evidence);
 
     // The case is the record of the action, and the audit trail is the record of who took it from the
     // dashboard, owner included. A failure to write the entry must not undo an action that already happened.
@@ -180,10 +183,15 @@ export async function takeAction(
       guildId: ctx.guild.id,
       actor,
       kind: "action.take",
-      summary: `${ACTION_PAST[action]} ${refOf(refs, targetId).name ?? targetId} (case #${record.caseNumber})${record.reason ? `: ${clipReason(record.reason)}` : ""}`,
+      summary: `${ACTION_PAST[action]} ${refOf(refs, targetId).name ?? targetId} (case #${record.caseNumber})${record.reason ? `: ${clipReason(record.reason)}` : ""}${deletedText ? `. ${deletedText}` : ""}`,
       targetUserId: targetId,
       infractionId: record.id,
-      after: { action, caseNumber: record.caseNumber, reason: record.reason },
+      after: {
+        action,
+        caseNumber: record.caseNumber,
+        reason: record.reason,
+        ...(deletion ? { messagesDeleted: deletion.deleted.length, messagesNotDeleted: deletion.failed.length } : {}),
+      },
     }).catch((error: unknown) => console.error("mod: could not write the audit entry for an action:", error));
 
     return ok(body);

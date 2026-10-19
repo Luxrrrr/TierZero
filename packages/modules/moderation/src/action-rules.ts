@@ -245,6 +245,8 @@ export interface RequestFields {
   reason: string | null;
   durationMs: number | null;
   deleteDays: number | null;
+  /** Whether to delete the attached messages after the action. Only a warning, timeout, kick or ban takes it. */
+  deleteMessages: boolean;
 }
 
 /**
@@ -252,7 +254,7 @@ export interface RequestFields {
  * field that does not apply to the action is ignored, whatever it holds.
  */
 export function readRequestFields(action: ModerationAction, body: Record<string, unknown>): RequestFields {
-  const { reason, durationMs, deleteDays } = body;
+  const { reason, durationMs, deleteDays, deleteMessages } = body;
   if (reason !== undefined && reason !== null && typeof reason !== "string") {
     throw new ActionRefused(400, "The reason must be text.");
   }
@@ -263,7 +265,11 @@ export function readRequestFields(action: ModerationAction, body: Record<string,
   if (action === "ban" && deleteDays !== undefined && deleteDays !== null && typeof deleteDays !== "number") {
     throw new ActionRefused(400, "The days of messages to delete must be a number.");
   }
+  if (deleteMessages !== undefined && deleteMessages !== null && typeof deleteMessages !== "boolean") {
+    throw new ActionRefused(400, "Whether to delete the messages must be yes or no.");
+  }
   return {
+    deleteMessages: deleteMessages === true && (action === "warn" || action === "timeout" || action === "kick" || action === "ban"),
     reason: typeof reason === "string" ? reason : null,
     durationMs: takesDuration && typeof durationMs === "number" ? durationMs : null,
     deleteDays: action === "ban" && typeof deleteDays === "number" ? deleteDays : null,
@@ -273,8 +279,10 @@ export function readRequestFields(action: ModerationAction, body: Record<string,
 export interface ContextSettings {
   requireReason: boolean;
   dmOnAction: boolean;
+  dmIncludeMessages?: boolean;
   defaultTimeoutDuration: number;
   deleteMessageDays: number;
+  deleteMessagesByDefault?: boolean;
 }
 
 /** What the dashboard's action form needs from the server's Moderation settings. */
@@ -284,9 +292,11 @@ export function actionContext(
   return {
     requireReason: settings.requireReason,
     dmOnAction: settings.dmOnAction,
+    dmIncludeMessages: settings.dmIncludeMessages !== false,
     defaultTimeoutMs: settings.defaultTimeoutDuration,
     maxTimeoutMs: MAX_TIMEOUT_MS,
     deleteMessageDays: settings.deleteMessageDays,
+    deleteMessagesByDefault: settings.deleteMessagesByDefault === true,
     maxBanDays: MAX_BAN_DAYS,
   };
 }

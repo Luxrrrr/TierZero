@@ -1,4 +1,4 @@
-import { canTakeAction, isInForce, isModActionKind } from "@tier0/core";
+import { canDeleteWithAction, canTakeAction, isInForce, isModActionKind } from "@tier0/core";
 import type {
   ActionContextDto,
   ActionRequest,
@@ -415,6 +415,26 @@ export interface ActionDraft {
   deleteDays: number;
   /** Messages from the member to keep with the action. */
   evidence?: EvidenceRef[];
+  /** Delete those messages from Discord once the action has gone through. */
+  deleteMessages?: boolean;
+}
+
+/**
+ * Whether the form offers to delete the attached messages: only for an action
+ * that records them, and only while some are attached.
+ */
+export function offersDeletion(kind: ModActionKind, attached: number): boolean {
+  return canDeleteWithAction(kind) && attached > 0;
+}
+
+/** The switch's label and the note under it, for however many messages are attached. */
+export function deletionChoiceText(count: number): { label: string; note: string } {
+  return {
+    label: count === 1 ? "Also delete this message" : `Also delete these ${count} messages`,
+    note:
+      "Deletes the messages attached as evidence, in the channels they were sent in, once the action has gone through. The copy kept with the case stays readable. " +
+      "If Discord refuses, the action still goes through and the result says which messages could not be deleted.",
+  };
 }
 
 export interface DraftErrors {
@@ -465,6 +485,7 @@ export function buildRequest(draft: ActionDraft, context: ActionContextDto): Dra
       deleteDays: draft.kind === "ban" ? clampDeleteDays(draft.deleteDays) : null,
       // Only an action that puts something on the record has anything to attach it to.
       ...(draft.evidence && draft.evidence.length > 0 && draft.kind !== "timeout-clear" && draft.kind !== "unban" ? { evidence: draft.evidence } : {}),
+      ...(draft.deleteMessages === true && offersDeletion(draft.kind, draft.evidence?.length ?? 0) ? { deleteMessages: true } : {}),
     },
   };
 }
@@ -474,6 +495,10 @@ export function buildRequest(draft: ActionDraft, context: ActionContextDto): Dra
 export interface ConsequenceInput {
   kind: ModActionKind;
   dmOnAction: boolean;
+  /** How many messages are attached, when the direct message will repeat them. */
+  messageCount?: number;
+  /** How many attached messages will be deleted from Discord, when the moderator chose that. */
+  deleteCount?: number;
   banLength: BanLength;
   deleteDays: number;
   /** The formatted end of a timeout or temporary ban, when the length is valid. */
@@ -540,7 +565,22 @@ export function consequences(input: ConsequenceInput): string[] {
       lines.push("They will be able to rejoin the server with a new invite.");
       break;
   }
-  if (input.dmOnAction) lines.push("The member will get a direct message from the bot saying what happened, with the reason.");
+  const deleting = input.deleteCount ?? 0;
+  if (deleting > 0) {
+    lines.push(
+      deleting === 1
+        ? "The message you attached will be deleted from Discord once this goes through."
+        : `The ${deleting} messages you attached will be deleted from Discord once this goes through.`,
+    );
+  }
+  if (input.dmOnAction) {
+    const count = input.messageCount ?? 0;
+    lines.push(
+      count > 0
+        ? `The member will get a direct message from the bot saying what happened, with the reason and ${count === 1 ? "the message" : `the ${count} messages`} you attached.`
+        : "The member will get a direct message from the bot saying what happened, with the reason.",
+    );
+  }
   return lines;
 }
 
@@ -603,6 +643,8 @@ export function readContext(raw: unknown): FormContext | null {
     moduleEnabled: value.moduleEnabled,
     requireReason: value.requireReason === true,
     dmOnAction: value.dmOnAction === true,
+    dmIncludeMessages: value.dmIncludeMessages === true,
+    deleteMessagesByDefault: value.deleteMessagesByDefault === true,
     defaultTimeoutMs: finiteNumber(value.defaultTimeoutMs, 10 * MINUTE_MS),
     maxTimeoutMs: finiteNumber(value.maxTimeoutMs, DISCORD_TIMEOUT_MAX_MS),
     deleteMessageDays: clampDeleteDays(finiteNumber(value.deleteMessageDays, 0)),

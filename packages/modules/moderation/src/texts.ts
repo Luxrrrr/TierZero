@@ -503,6 +503,16 @@ const NOTES = {
   correctionFailed: { label: "Correction could not be sent", text: "They had already been sent a message about it and the correction could not be delivered.", max: 300 },
   raidLocked: { label: "The alert locked channels", text: "Locked {count}.", max: 200, placeholders: ["count"], help: "What {lockdownNote} becomes in the join-rate alert when it locked channels. {count} is the number with the word after it." },
   appealRetry: { label: "When a denied member may appeal again", text: "You can appeal again {when}.", max: 200, placeholders: ["when"], help: "What {retryNote} becomes in the message about a denied appeal. {when} is the time, counted from now. Left out when they may appeal again straight away." },
+  warningNote: { label: "Warning count, after a sentence", text: "This is warning {n}.", max: 200, placeholders: ["n"], help: "What {warningNote} becomes in the direct message for a warning that is the member's second or later. {n} is how many warnings count against them." },
+  appealNote: { label: "How to appeal, after a sentence", text: "You can appeal this ban with the button below.", max: 200, help: "What {appealNote} becomes in the direct message for a ban, while ban appeals are on. Left out otherwise." },
+  liftedNote: { label: "A restriction was lifted", text: "Your restriction in this server was lifted.", max: 200, help: "What {liftedNote} becomes in the direct message when a ban or a timeout is lifted." },
+  evidenceOne: { label: "Title for one message", text: "Message", max: 60, help: "The heading of the block of messages in the direct message, which is {evidenceTitle}." },
+  evidenceMany: { label: "Title for several messages", text: "Messages", max: 60 },
+  evidenceMoreOne: { label: "One more message", text: "and {n} more message", max: 100, placeholders: ["n"], help: "Ends the block of messages when some do not fit." },
+  evidenceMoreMany: { label: "More messages", text: "and {n} more messages", max: 100, placeholders: ["n"] },
+  evidenceDeleted: { label: "A message that was deleted", text: "(deleted)", max: 40, help: "Shown beside a message that no longer exists, in place of a link to it." },
+  evidenceAttachments: { label: "A message's attachments", text: "Attachments: {names}", max: 100, placeholders: ["names"], help: "Lists the file names a message carried. Only the names are shown, never links." },
+  evidenceNoText: { label: "A message with no text", text: "(no text)", max: 40 },
 } satisfies Record<string, TextSpec>;
 
 const TIME = {
@@ -547,13 +557,16 @@ const MENU = {
   modalTitle: { label: "Form title", text: "{verb} {name}", max: 45, placeholders: ["verb", "name"], help: "Shortened to Discord's limit of 45 characters once filled in." },
   reasonLabel: { label: "Reason box", text: "Reason", max: 45 },
   reasonPlaceholder: { label: "Reason hint on a member", text: "Why", max: 100 },
-  reasonPlaceholderMessage: { label: "Reason hint on a message", text: "Why. The message is saved with the case.", max: 100 },
+  reasonPlaceholderMessage: { label: "Reason hint on a message", text: "Why. The member is sent this and the message, which is saved with the case.", max: 100 },
   timeoutLabel: { label: "Timeout length box", text: "How long", max: 45 },
   timeoutPlaceholder: { label: "Timeout length hint", text: "10m, 2h or 7d. Empty uses the server's default.", max: 100 },
   banLabel: { label: "Ban length box", text: "How long (empty is permanent)", max: 45 },
   banPlaceholder: { label: "Ban length hint", text: "1d or 7d. Empty is permanent.", max: 100 },
   presetLabel: { label: "Preset box", text: "Preset", max: 45, help: "Shown above the reason when the server has reason presets." },
   presetPlaceholder: { label: "Preset hint", text: "Pick a common reason, or write one below", max: 100 },
+  deleteLabel: { label: "Delete the message box", text: "Delete the message too", max: 45, help: "Shown on the right-click actions on a message, to choose whether the message is deleted together with the action." },
+  deleteYes: { label: "Delete the message, yes", text: "Yes, delete it", max: 100 },
+  deleteNo: { label: "Delete the message, no", text: "No, keep it", max: 100 },
 } satisfies Record<string, TextSpec>;
 
 const REASONS = {

@@ -627,6 +627,17 @@
   }
 }
 
+/* The choice to delete the attached messages along with the action. */
+.ta-delete {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.ta-delete-label {
+  margin: 0;
+}
+
 @keyframes ta-sheet {
   from {
     transform: translateY(1.5rem);

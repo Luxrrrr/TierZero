@@ -1,7 +1,7 @@
-import type { GuildMember } from "discord.js";
 import { prisma } from "@tier0/db";
-import type { MemberProfile, MemberSearchHit, Page, UserRef } from "@tier0/core";
+import type { MemberProfile, MemberSearchPage, Page, UserRef } from "@tier0/core";
 import { toAuditDtos } from "./audit-list.js";
+import { findMembers } from "./member-find.js";
 import {
   filterMembers,
   infractionDto,
@@ -35,15 +35,6 @@ function group<T extends { userId: string }>(rows: T[]): Map<string, T[]> {
     else grouped.set(row.userId, [row]);
   }
   return grouped;
-}
-
-function refFromMember(member: GuildMember): UserRef {
-  return {
-    userId: member.id,
-    name: member.displayName,
-    avatarUrl: member.displayAvatarURL({ size: 64 }),
-    inServer: true,
-  };
 }
 
 /** GET /mod/members?q=&filter=all|active|notes|recent&sort=recent|most|name|notes&page=&pageSize= -> Page of MemberSummary */
@@ -166,31 +157,11 @@ export async function memberProfile(ctx: ModCtx, userId: string): Promise<Reply>
 
 /** GET /mod/member-search?q= -> MemberSearchHit[], guild members matching a name, for pickers */
 export async function searchGuildMembers(ctx: ModCtx, query: string): Promise<Reply> {
-  const { guild } = ctx;
-  const q = query.trim();
-  if (q === "") return ok([] satisfies MemberSearchHit[]);
-
-  const found = new Map<string, GuildMember>();
-  if (isSnowflake(q)) {
-    const exact =
-      guild.members.cache.get(q) ?? (await withinBudget(guild.members.fetch(q).catch(() => null), null));
-    if (exact) found.set(exact.id, exact);
-  }
-
-  const results = await withinBudget(guild.members.search({ query: q, limit: SEARCH_LIMIT }).catch(() => null), null);
-  if (results) {
-    for (const member of results.values()) found.set(member.id, member);
-  } else {
-    const needle = q.toLowerCase();
-    for (const member of guild.members.cache.values()) {
-      if (member.displayName.toLowerCase().includes(needle) || member.user.username.toLowerCase().includes(needle)) {
-        found.set(member.id, member);
-      }
-    }
-  }
-
-  const hits: MemberSearchHit[] = [...found.values()]
-    .slice(0, SEARCH_LIMIT)
-    .map((member) => ({ user: refFromMember(member) }));
+  const { hits } = await findMembers(ctx.guild, query.trim().slice(0, 100), { allowBots: true, limit: SEARCH_LIMIT });
   return ok(hits);
+}
+
+/** GET tickets members?q= -> MemberSearchPage; bots are left out because they cannot be added to a ticket. */
+export async function searchGuildMemberPage(ctx: ModCtx, query: string): Promise<Reply> {
+  return ok(await findMembers(ctx.guild, query.trim().slice(0, 100)) satisfies MemberSearchPage);
 }

@@ -1,5 +1,5 @@
 import { createInfraction, prisma } from "@tier0/db";
-import type { AutomaticCase, EvidenceMessage } from "@tier0/core";
+import { isCounting, warnExpiresAt, type AutomaticCase, type EvidenceMessage } from "@tier0/core";
 import type { ModerationAction } from "./modlog.js";
 
 export interface InfractionRecord {
@@ -48,6 +48,31 @@ export async function recordInfraction(input: RecordInfractionInput): Promise<In
     evidence: JSON.stringify(input.evidence ?? []),
     ...(input.automatic ? { automatic: JSON.stringify(input.automatic) } : {}),
   });
+}
+
+/** How many of a member's warnings count right now, a moderator's and automod's, under the server's warning expiry. */
+export async function countWarnings(guildId: string, userId: string, warnExpiryMs: number | null, now: Date = new Date()): Promise<number> {
+  const rows = await prisma.infraction.findMany({
+    where: { guildId, userId, action: { in: ["warn", "automod-warn"] }, voidedAt: null },
+    select: { action: true, createdAt: true },
+  });
+  return rows.filter((row) => isCounting({ action: row.action, active: true, expiresAt: null, removed: false, warnExpiresAt: warnExpiresAt(row.action, row.createdAt, warnExpiryMs) }, now)).length;
+}
+
+/** Takes back a case written for an action Discord then refused, so the record does not claim it happened. */
+export async function discardRecord(id: number): Promise<void> {
+  try {
+    await prisma.infraction.delete({ where: { id } });
+  } catch (error) {
+    console.error("moderation: could not remove the case of an action that did not go through:", error);
+  }
+}
+
+/** Replaces the copies of messages kept with a case, such as to mark the ones its action deleted. */
+export async function saveEvidence(id: number, evidence: EvidenceMessage[]): Promise<string> {
+  const serialized = JSON.stringify(evidence);
+  await prisma.infraction.update({ where: { id }, data: { evidence: serialized } });
+  return serialized;
 }
 
 /** Marks the most recent open infraction of `action` inactive, for a reversal. */

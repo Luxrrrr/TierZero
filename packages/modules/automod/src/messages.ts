@@ -1,5 +1,5 @@
-import { automodRuleLabel, dashboardLinks, embedReply, emptyEmbed, plainReply, viewCaseButton, type MessageBody, type MessageEmbed, type MessageVariable } from "@tier0/core";
-import { describeLength } from "@tier0/module-moderation";
+import { REPLY_COLOR, automodRuleLabel, dashboardLinks, embedReply, emptyEmbed, plainReply, viewCaseButton, type EvidenceMessage, type MessageBody, type MessageEmbed, type MessageVariable } from "@tier0/core";
+import { DEFAULT_WORDING as MODERATION_WORDING, EVIDENCE_SAMPLE, describeLength, formatEvidence } from "@tier0/module-moderation";
 import { fill } from "./fill.js";
 import { DEFAULT_AUTOMOD_WORDING, type AutomodWording } from "./texts.js";
 
@@ -83,13 +83,65 @@ export const NOTICE_MESSAGE: MessageBody = embedReply("{outcomeTitle} ({rule}{re
 
 export const NOTICE_NOTE = "Posted in the channel where the message was, and removed again after the time set below. It can only mention the member it is about.";
 
-/** Never the matched text: what a member wrote goes only to the log and the case, which staff read. */
-export const DM_VARIABLES: MessageVariable[] = [USER, USER_ID, RULE, RULE_KEY, ACTION, REASON, REASON_NOTE, OUTCOME, DURATION];
+const EVIDENCE: MessageVariable = {
+  name: "evidence",
+  description: "The message that tripped the rule, as the member wrote it, with where and when. Cut short and unable to ping anyone. Empty when Include the message is off",
+  sample: EVIDENCE_SAMPLE,
+};
+const EVIDENCE_TITLE: MessageVariable = { name: "evidenceTitle", description: "Message when there is one, so a field named with it is left out along with the message. Empty when there is none", sample: "Message" };
+const CASE_NOTE: MessageVariable = { name: "caseNote", description: "Case # and the number. Empty when no case was recorded", sample: "Case #118" };
+const CHANNEL: MessageVariable = { name: "channel", description: "The channel the message was in, with a # in front. Empty when the message is not shown", sample: "#general" };
+const WHEN: MessageVariable = { name: "when", description: "When the rule tripped, as a Discord date that shows in the reader's own time", sample: "<t:1792339920:f>" };
 
-export const DM_MESSAGE: MessageBody = embedReply("In {server}, {outcome} ({rule}{reasonNote}).", "warning");
+/**
+ * The member's own message may be shown back to them, but never what matched: there is no {match} here, and the
+ * reason is the generic one. What matched goes to the log and the case, which staff read.
+ */
+export const DM_VARIABLES: MessageVariable[] = [USER, USER_ID, RULE, RULE_KEY, ACTION, REASON, REASON_NOTE, OUTCOME, DURATION, EVIDENCE, EVIDENCE_TITLE, CASE, CASE_NOTE, CHANNEL, WHEN];
+
+export const DM_MESSAGE: MessageBody = {
+  ...plainReply(""),
+  embeds: [
+    {
+      ...emptyEmbed(),
+      description: "In {server}, {outcome} ({rule}{reasonNote}).",
+      color: REPLY_COLOR.warning,
+      timestamp: "now",
+      footerText: "{caseNote}",
+      fields: [
+        { name: "Length", value: "{duration}", inline: true },
+        { name: "{evidenceTitle}", value: "{evidence}", inline: false },
+      ],
+    },
+  ],
+};
+
+/** The direct message before it showed the member their own message, for servers that saved it unchanged. */
+export const DM_MESSAGE_BEFORE_CONTEXT: MessageBody = embedReply("In {server}, {outcome} ({rule}{reasonNote}).", "warning");
 
 export const DM_NOTE =
-  "Sent privately to the member whose message tripped a rule, when it is switched on. It gives the rule's reason in general words and never quotes what they wrote. A member with direct messages closed does not get it.";
+  "Sent privately to the member whose message tripped a rule, when it is switched on. It gives the rule's reason in general words and shows the member their own message through {evidence}, never what matched. A message saved before {evidence} existed does not show it until you add {evidence}, or a field named {evidenceTitle}, to it. A member with direct messages closed does not get it.";
+
+/** What the member's direct message adds to the trip's own values. Every one is present and empty when it does not apply. */
+export function dmValues(
+  facts: TripFacts,
+  evidence: readonly EvidenceMessage[],
+  include: boolean,
+  wording: AutomodWording = DEFAULT_AUTOMOD_WORDING,
+  now: Date = new Date(),
+): Record<string, string> {
+  const shown = include ? formatEvidence(evidence, MODERATION_WORDING.notes) : { title: "", value: "" };
+  const first = evidence[0]?.channelName;
+  return {
+    ...tripValues(facts, wording),
+    evidence: shown.value,
+    evidenceTitle: shown.value === "" ? "" : shown.title,
+    case: facts.caseNumber === undefined ? "" : String(facts.caseNumber),
+    caseNote: facts.caseNumber === undefined ? "" : `Case #${facts.caseNumber}`,
+    channel: shown.value !== "" && first ? `#${first.replace(/\s+/g, " ").slice(0, 100)}` : "",
+    when: `<t:${Math.floor(now.getTime() / 1000)}:f>`,
+  };
+}
 
 export const LOG_VARIABLES: MessageVariable[] = [USER, USER_ID, RULE, RULE_KEY, ACTION, REASON, MATCH, PROBLEMS, DURATION, CASE, CASE_URL, MEMBER_URL];
 

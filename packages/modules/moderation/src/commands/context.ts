@@ -26,6 +26,7 @@ import {
 } from "@tier0/core";
 import type { ModerationSettings } from "../settings.js";
 import { ActionRefused } from "../action-rules.js";
+import { deletionNotes } from "../delete-evidence.js";
 import { parseDuration } from "../duration.js";
 import { resolveEvidence } from "../evidence.js";
 import { fetchMemberOrNull } from "../lookups.js";
@@ -81,9 +82,25 @@ const DISCORD_PERMISSION: Record<MenuAction, bigint> = {
 };
 
 const REASON_ROOM = 400;
+const DELETE_YES = "yes";
+const DELETE_NO = "no";
 /** Discord's limits on a select menu in a form: 25 options, each label, value and description at most 100 characters. */
 const PRESET_OPTIONS_MAX = 25;
 const clipOption = (text: string): string => (text.length > 100 ? `${text.slice(0, 97)}...` : text);
+
+/**
+ * Whether the form's "Delete the message" choice says yes. A form opened before the choice existed has
+ * none to read, and then the server's default decides, as it would have when the form was built.
+ */
+function wantsDeletion(interaction: ModalSubmitInteraction, byDefault: boolean): boolean {
+  try {
+    const picked = interaction.fields.getStringSelectValues("delete")[0];
+    if (picked === undefined) return byDefault;
+    return picked === DELETE_YES;
+  } catch {
+    return byDefault;
+  }
+}
 
 /** The preset picked in the form, if the form had a picker and something was picked. */
 function pickedPreset(interaction: ModalSubmitInteraction): string | null {
@@ -188,6 +205,21 @@ async function openForm(interaction: ContextMenuCommandInteraction, ctx: Ctx, ac
     modal.addComponents(new ActionRowBuilder<TextInputBuilder>().addComponents(duration));
   }
 
+  // Only an action on a message has a message to delete. The choice starts where the server's setting says.
+  if (target.message) {
+    const byDefault = ctx.settings.deleteMessagesByDefault === true;
+    const choice = new StringSelectMenuBuilder()
+      .setCustomId("delete")
+      .setRequired(true)
+      .setMinValues(1)
+      .setMaxValues(1)
+      .addOptions(
+        new StringSelectMenuOptionBuilder().setLabel(clipOption(menu.deleteYes)).setValue(DELETE_YES).setDefault(byDefault),
+        new StringSelectMenuOptionBuilder().setLabel(clipOption(menu.deleteNo)).setValue(DELETE_NO).setDefault(!byDefault),
+      );
+    modal.addLabelComponents(new LabelBuilder().setLabel(menu.deleteLabel).setStringSelectMenuComponent(choice));
+  }
+
   await interaction.showModal(modal);
 }
 
@@ -285,7 +317,9 @@ export async function submitContextAction(
     }
     const reason = [typed, link && evidence.length === 0 ? `Message: ${link}` : ""].filter(Boolean).join("\n") || null;
 
-    const { record, noteKeys } = await performAction(ctx, {
+    const deleteMessages = link !== null && wantsDeletion(interaction, ctx.settings.deleteMessagesByDefault === true);
+
+    const { record, noteKeys, deletion } = await performAction(ctx, {
       action,
       targetId,
       targetName: user?.username ?? labels.actions.memberFallbackStart,
@@ -298,13 +332,21 @@ export async function submitContextAction(
       actorIsInstanceOwner: false,
       origin: "command",
       evidence,
+      deleteMessages,
     });
+    const deletionText = [
+      ...(deletion ? deletionNotes(deletion) : []),
+      // The message could not be copied into the case, and only a copy kept with the case is ever deleted.
+      ...(deleteMessages && evidence.length === 0 ? ["The message could not be read, so it was not deleted."] : []),
+    ]
+      .map((note) => ` ${note}`)
+      .join("");
 
     const at = record.expiresAt ? Math.floor(record.expiresAt.getTime() / 1000) : null;
     await say(ctx, interaction, "confirmations", CONFIRMATION[action], {
       name: user?.username ?? labels.actions.memberFallback,
       case: record.caseNumber,
-      notes: noteKeys.map((key) => ` ${labels.notes[key]}`).join(""),
+      notes: noteKeys.map((key) => ` ${labels.notes[key]}`).join("") + deletionText,
       until: at === null ? "" : `<t:${at}:f>`,
       expiry: at === null ? "" : ` ${fillLabel(labels.notes.banExpires, { when: `<t:${at}:R>` })}`,
     });

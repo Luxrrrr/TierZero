@@ -17,7 +17,7 @@ const { performAction } = await import("../dist/perform.js");
 const { ActionRefused } = await import("../dist/action-rules.js");
 
 interface World {
-  sent: { to: string; text: string }[];
+  sent: { to: string; text: string; values: Record<string, unknown> }[];
   discord: string[];
   failBan: boolean;
   /** Who Discord says is in the server. */
@@ -93,9 +93,9 @@ function context(stored: Record<string, unknown> = {}) {
       modLogMessage: {},
     },
     tasks: { schedule: async () => undefined, cancel: async () => 0 },
-    send: async (target: { id: string }, body: { content?: string; embeds?: { description?: string }[] }) => {
+    send: async (target: { id: string }, body: { content?: string; embeds?: { description?: string }[] }, values: Record<string, unknown> = {}) => {
       // The stock messages are embeds, an owner's plain text is content.
-      world.sent.push({ to: target.id, text: body.content || body.embeds?.[0]?.description || "" });
+      world.sent.push({ to: target.id, text: body.content || body.embeds?.[0]?.description || "", values });
       return {};
     },
   } as never;
@@ -342,5 +342,53 @@ describe("refusals carry what an owner needs to reword them", () => {
     const { notes, noteKeys } = await performAction(context(), input({ action: "ban", targetId: STRANGER }));
     assert.deepEqual(noteKeys, ["banNotInServer", "dmWithheld"]);
     assert.equal(notes.length, 2);
+  });
+});
+
+describe("what the member's message carries", () => {
+  const evidence = [
+    { id: "9001", channelId: "5001", channelName: "general", content: "check out my server", attachments: [], createdAt: "2026-10-18T12:00:00.000Z", url: "https://discord.com/channels/1/5001/9001", deleted: false },
+    { id: "9002", channelId: "5001", channelName: "general", content: "@everyone join", attachments: [{ name: "ad.png", url: "https://cdn.example/ad.png", contentType: "image/png" }], createdAt: "2026-10-18T12:01:00.000Z", url: "https://discord.com/channels/1/5001/9002", deleted: true },
+  ];
+
+  test("a warning tells them the case, the messages and how many warnings count", async () => {
+    await performAction(context(), input({ action: "warn", reason: "first" }));
+    const { record } = await performAction(context(), input({ action: "warn", reason: "second", evidence }));
+    const values = world.sent[1]!.values;
+    assert.equal(values.case, record.caseNumber);
+    assert.equal(values.caseNote, `Case #${record.caseNumber}`);
+    assert.equal(values.warnings, 2);
+    assert.equal(values.warningNote, "\nThis is warning 2.");
+    assert.equal(values.evidenceTitle, "Messages");
+    assert.match(String(values.evidence), /check out my server/);
+    assert.match(String(values.evidence), /\(deleted\)/);
+    assert.doesNotMatch(String(values.evidence), /cdn\.example/, "attachments are named, never linked");
+    assert.doesNotMatch(String(values.evidence), /@everyone/, "a ping is broken");
+    assert.equal(values.moderatorName, "", "the moderator is not named unless the server asks");
+  });
+
+  test("a ban carries its case before Discord is asked, and the case is gone again when Discord refuses", async () => {
+    await performAction(context(), input({ action: "ban", evidence }));
+    assert.equal(world.sent[0]!.values.case, (await cases())[0]!.caseNumber);
+    assert.equal(world.sent[0]!.values.warnings, "");
+
+    world.failBan = true;
+    await refused(performAction(context(), input({ action: "ban", targetId: STRANGER })));
+    assert.equal((await cases()).length, 1, "the refused ban left no case");
+  });
+
+  test("a timeout tells them how long, and the moderator's name shows only when the server turns that on", async () => {
+    const named = { ...member(ACTOR, { top: 5, perms: ALL_PERMISSIONS }), displayName: "Ada" };
+    await performAction(context({ dmShowModerator: true }), input({ action: "timeout", durationMs: 600_000, actorMember: named }));
+    await performAction(context(), input({ action: "timeout", durationMs: 600_000, actorMember: named }));
+    assert.equal(world.sent[0]!.values.duration, "10 minutes");
+    assert.equal(world.sent[0]!.values.moderatorName, "Ada");
+    assert.equal(world.sent[1]!.values.moderatorName, "");
+  });
+
+  test("a timeout cleared says the restriction was lifted, with its case", async () => {
+    const { record } = await performAction(context(), input({ action: "timeout-clear" }));
+    assert.match(String(world.sent[0]!.values.liftedNote), /lifted/);
+    assert.equal(world.sent[0]!.values.case, record.caseNumber);
   });
 });

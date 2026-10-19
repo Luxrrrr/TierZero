@@ -406,15 +406,30 @@ describe("the direct message to the member", () => {
     assert.equal(dm.values.user, `<@${MEMBER}>`);
   });
 
-  test("never carries what the member wrote, or anything only staff should see", async () => {
+  test("shows the member their own message but never what matched, or anything only staff should see", async () => {
     const { sent } = await trip({ actions: ["delete"], stored: { dmOnAction: true }, dashboard: "https://bot.example.com" });
     const dm = sent.find((s) => s.target === MEMBER);
     assert.ok(dm);
-    for (const value of Object.values(dm.values)) {
-      assert.ok(!value.includes("badword") && !value.includes("other thing") && !value.includes("bot.example.com"), value);
+    for (const [key, value] of Object.entries(dm.values)) {
+      if (key === "evidence") continue;
+      assert.ok(!value.includes("badword") && !value.includes("other thing") && !value.includes("bot.example.com"), `${key}: ${value}`);
     }
-    assert.deepEqual(Object.keys(dm.values).sort(), ["action", "duration", "outcome", "outcomeTitle", "reason", "reasonNote", "rule", "ruleKey", "user", "userId"]);
+    assert.deepEqual(Object.keys(dm.values).sort(), [
+      "action", "case", "caseNote", "channel", "duration", "evidence", "evidenceTitle", "outcome", "outcomeTitle", "reason", "reasonNote", "rule", "ruleKey", "user", "userId", "when",
+    ]);
+    assert.ok(dm.values.evidence?.includes("you badword, and then some other thing too"), "their own words are repeated back");
+    assert.equal(dm.values.evidenceTitle, "Message");
+    assert.ok(dm.values.evidence?.includes("(deleted)"), "a message automod removed has no link");
+    assert.ok(!dm.values.evidence?.includes("https://"), "no link to a message that is gone");
     assert.equal(dm.options.mentions, undefined, "a direct message mentions nobody on its own account");
+  });
+
+  test("leaves the message out when the server turns that off", async () => {
+    const { sent } = await trip({ actions: ["delete"], stored: { dmOnAction: true, dmIncludeMessages: false } });
+    const dm = sent.find((s) => s.target === MEMBER);
+    assert.equal(dm?.values.evidence, "");
+    assert.equal(dm?.values.evidenceTitle, "");
+    assert.equal(dm?.values.channel, "");
   });
 
   test("uses the owner's message", async () => {

@@ -5,6 +5,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import type { EvidenceRef, ModActionKind } from "@tier0/core";
 import { AlertIcon, ShieldIcon } from "../../../../../../components/Icons";
 import { Select } from "../../../../../../components/form/Select";
+import { Switch } from "../../../../../../components/form/Switch";
 import { StateIcon } from "../../../../../../components/mod/ModUi";
 import {
   ACTION_REASON_LIMIT,
@@ -24,6 +25,7 @@ import {
   clampDeleteDays,
   confirmLabel,
   consequences,
+  deletionChoiceText,
   describeMs,
   draftMs,
   durationProblem,
@@ -33,6 +35,7 @@ import {
   failureLead,
   initialDuration,
   isHeavy,
+  offersDeletion,
   presetsWithin,
   readResult,
   splitMs,
@@ -274,6 +277,8 @@ function ActionForm({
   );
   const [banLength, setBanLength] = useState<BanLength>("permanent");
   const [deleteDays, setDeleteDays] = useState(() => clampDeleteDays(context.deleteMessageDays));
+  // Starts where the server's setting says, and stays the moderator's to change.
+  const [deleteMessages, setDeleteMessages] = useState(context.deleteMessagesByDefault === true);
   // When the chosen length is counted from. It moves only when the reader
   // changes the length, so the end time, which is read out as it changes,
   // does not tick over by itself every minute while the dialog is open.
@@ -319,6 +324,7 @@ function ActionForm({
   const reasonErrorId = useId();
   const errorId = useId();
   const deleteId = useId();
+  const deleteNoteId = useId();
 
   // A typed reason or picked messages are lost by leaving the page, so leaving asks first.
   const guard = useUnsavedGuard({ dirty: !busy && (reason.trim() !== "" || evidence.length !== startCount), onDiscard: () => setReason("") });
@@ -330,7 +336,9 @@ function ActionForm({
   const newEnd = timed && lengthOk ? endsAt(lengthMs, anchor) : null;
   const until = newEnd ? formatDateTime(newEnd, timeZone) : null;
   const current = changing && member.timeoutUntil ? formatDateTime(member.timeoutUntil, timeZone) : null;
-  const lines = consequences({ kind, dmOnAction: context.dmOnAction, banLength, deleteDays, until, replacing: current });
+  const canDelete = offersDeletion(kind, evidence.length);
+  const deleteText = deletionChoiceText(evidence.length);
+  const lines = consequences({ kind, dmOnAction: context.dmOnAction, messageCount: context.dmIncludeMessages && kind !== "timeout-clear" && kind !== "unban" ? evidence.length : 0, deleteCount: canDelete && deleteMessages ? evidence.length : 0, banLength, deleteDays, until, replacing: current });
   const sooner = current ? earlierEndWarning(member.timeoutUntil, newEnd, current) : null;
 
   useEffect(() => {
@@ -357,7 +365,7 @@ function ActionForm({
 
   async function submit() {
     if (submitting.current) return;
-    const check = buildRequest({ kind, reason, duration, banLength, deleteDays, evidence }, context);
+    const check = buildRequest({ kind, reason, duration, banLength, deleteDays, evidence, deleteMessages }, context);
     if (!check.ok) {
       setErrors(check.errors);
       focusFirstInvalid(check.errors);
@@ -574,13 +582,35 @@ function ActionForm({
           ) : null}
           <p className="pf-field-hint" id={reasonHintId}>
             {context.dmOnAction
-              ? "Saved on their record and included in the direct message they get."
+              ? evidence.length > 0 && context.dmIncludeMessages && kind !== "timeout-clear" && kind !== "unban"
+                ? "Saved on their record and sent to them in a direct message, with the messages you attached."
+                : "Saved on their record and included in the direct message they get."
               : "Saved on their record for staff to read."}
           </p>
         </div>
 
         {kind !== "timeout-clear" && kind !== "unban" ? (
           <EvidencePicker guildId={guildId} userId={userId} selected={evidence} onChange={setEvidence} disabled={busy} seed={seed} />
+        ) : null}
+
+        {canDelete ? (
+          <div className="pf-field">
+            <div className="ta-delete">
+              <Switch
+                checked={deleteMessages}
+                disabled={busy}
+                onChange={setDeleteMessages}
+                aria-labelledby={`${deleteNoteId}-label`}
+                aria-describedby={deleteNoteId}
+              />
+              <span className="pf-field-label ta-delete-label" id={`${deleteNoteId}-label`}>
+                {deleteText.label}
+              </span>
+            </div>
+            <p className="pf-field-hint" id={deleteNoteId}>
+              {deleteText.note}
+            </p>
+          </div>
         ) : null}
 
         <div className="ta-summary" data-tone={heavy ? "danger" : undefined} id={descriptionId}>

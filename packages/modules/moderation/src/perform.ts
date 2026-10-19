@@ -21,10 +21,11 @@ import {
   type DmOutcome,
   type OutcomeNote,
 } from "./action-rules.js";
+import { botMayDelete, deleteAttachedMessages, deletionNotes, markDeleted, type DeletionReport } from "./delete-evidence.js";
 import { deleteMessageSeconds } from "./duration.js";
 import { escalateAfterWarning, type EscalationOutcome } from "./escalation.js";
 import { guardAgainstMember, guardForDashboard } from "./hierarchy-guard.js";
-import { deactivateOpen, deactivateOpenTimeouts, recordInfraction, type InfractionRecord } from "./infractions.js";
+import { countWarnings, deactivateOpen, deactivateOpenTimeouts, discardRecord, recordInfraction, saveEvidence, type InfractionRecord } from "./infractions.js";
 import type { ModerationAction } from "./modlog.js";
 import { tryCorrectionMessage, tryDirectMessage } from "./dm.js";
 import { fetchBanOrNull, fetchMemberOrNull } from "./lookups.js";
@@ -57,6 +58,11 @@ export interface PerformInput {
   origin: ActionOrigin;
   /** Copies of messages to keep with the case. Taken before the action, because a ban can delete the messages. */
   evidence?: EvidenceMessage[];
+  /**
+   * Deletes the messages in `evidence` once the action has gone through. It only ever reaches those
+   * messages, and only for a warning, timeout, kick or ban.
+   */
+  deleteMessages?: boolean;
   /** Leaves out the direct message about the action, for a caller that sends its own, such as an accepted appeal. */
   noDirectMessage?: boolean;
 }
@@ -69,6 +75,8 @@ export interface PerformOutcome {
   noteKeys: OutcomeNote[];
   /** The case an escalation rule took straight after this warning, if one did. */
   escalation?: EscalationOutcome | null;
+  /** What became of the attached messages, when the action was asked to delete them. */
+  deletion?: DeletionReport | null;
 }
 
 type Ctx = ModuleContext<ModerationSettings>;
@@ -166,16 +174,39 @@ async function perform(ctx: Ctx, input: PerformInput): Promise<PerformOutcome> {
     throw new ActionRefused(409, notTimedOut(input.targetName));
   }
 
-  const notify = async (expiresAt: Date | null, durationMs: number | null = null): Promise<DmOutcome> => {
-    const decision = shouldMessage(action, targetMember !== null, settings.dmOnAction && !input.noDirectMessage);
-    if (decision !== "send") return decision;
-    const sent = await tryDirectMessage(ctx, targetId, {
+  // Written before the member is told, so their message can carry the case number. An action Discord then
+  // refuses has its case taken back, so the record never says something happened that did not.
+  let pending: InfractionRecord | null = null;
+  const writeRecord = (expiresAt: Date | null): Promise<InfractionRecord> =>
+    recordInfraction({
+      guildId: guild.id,
+      userId: targetId,
+      moderatorId: input.moderatorId,
       action,
       reason,
       expiresAt,
-      durationMs,
-      moderatorId: input.moderatorId,
+      evidence: input.evidence ?? [],
     });
+
+  const deletes = input.deleteMessages === true && (action === "warn" || action === "timeout" || action === "kick" || action === "ban");
+  const attached = input.evidence ?? [];
+
+  const notify = async (expiresAt: Date | null, durationMs: number | null = null): Promise<DmOutcome> => {
+    const decision = shouldMessage(action, targetMember !== null, settings.dmOnAction && !input.noDirectMessage);
+    if (decision !== "send") return decision;
+    const sent = await tryDirectMessage(
+      ctx,
+      targetId,
+      { action, reason, expiresAt, durationMs, moderatorId: input.moderatorId },
+      {
+        caseNumber: pending?.caseNumber,
+        createdAt: pending?.createdAt,
+        // A message about to be deleted has no link worth opening, so the member is shown it as removed.
+        evidence: deletes ? attached.map((message) => (botMayDelete(guild, message) ? { ...message, deleted: true } : message)) : input.evidence,
+        moderatorDisplayName: input.actorMember?.displayName,
+        warnings: action === "warn" ? await countWarnings(guild.id, targetId, settings.warnExpiry ?? null).catch(() => undefined) : undefined,
+      },
+    );
     return sent ? "sent" : "failed";
   };
 
@@ -188,6 +219,8 @@ async function perform(ctx: Ctx, input: PerformInput): Promise<PerformOutcome> {
       console.warn(
         `moderation: Discord refused ${action} on ${targetId} in guild ${guild.id}: ${describeDiscordError(error)}`,
       );
+      if (pending) await discardRecord(pending.id);
+      pending = null;
       const failed = action as Exclude<ModerationAction, "warn">;
       const { code, values } = discordFailureCode(failed, words.verbs);
       let correctionNote = "";
@@ -211,11 +244,13 @@ async function perform(ctx: Ctx, input: PerformInput): Promise<PerformOutcome> {
   // the member; a message about a reversal is sent once it has happened.
   switch (action) {
     case "warn":
+      pending = await writeRecord(null);
       dm = await notify(null);
       break;
     case "timeout": {
       const ms = timeoutMs!;
       expiresAt = new Date(Date.now() + ms);
+      pending = await writeRecord(expiresAt);
       dm = await notify(expiresAt, ms);
       await discordCall(() => targetMember!.timeout(ms, reason ?? undefined));
       break;
@@ -225,11 +260,13 @@ async function perform(ctx: Ctx, input: PerformInput): Promise<PerformOutcome> {
       await deactivateOpenTimeouts(guild.id, targetId);
       break;
     case "kick":
+      pending = await writeRecord(null);
       dm = await notify(null);
       await discordCall(() => targetMember!.kick(reason ?? undefined));
       break;
     case "ban":
       expiresAt = banMs === null ? null : new Date(Date.now() + banMs);
+      pending = await writeRecord(expiresAt);
       dm = await notify(expiresAt, banMs);
       await discordCall(() =>
         guild.members.ban(targetId, {
@@ -250,15 +287,24 @@ async function perform(ctx: Ctx, input: PerformInput): Promise<PerformOutcome> {
       break;
   }
 
-  const record = await recordInfraction({
-    guildId: guild.id,
-    userId: targetId,
-    moderatorId: input.moderatorId,
-    action,
-    reason,
-    expiresAt,
-    evidence: input.evidence ?? [],
-  });
+  let record = pending ?? (await writeRecord(expiresAt));
+  pending = record;
+
+  // Only now that the action has gone through, so one Discord refused deletes nothing.
+  let deletion: DeletionReport | null = null;
+  if (deletes && attached.length > 0) {
+    const by = { id: input.moderatorId, ...(input.actorMember?.displayName ? { name: input.actorMember.displayName } : {}) };
+    deletion = await deleteAttachedMessages(guild, attached, by);
+    if (deletion.deleted.length > 0 || deletion.alreadyGone.length > 0) {
+      try {
+        const evidence = await saveEvidence(record.id, markDeleted(attached, deletion, by));
+        record = { ...record, evidence };
+        pending = record;
+      } catch (error) {
+        console.error("moderation: could not mark the deleted messages on the case:", error);
+      }
+    }
+  }
 
   if (action === "ban" && expiresAt) {
     await ctx.tasks.schedule("unban", expiresAt, { userId: targetId });
@@ -282,7 +328,8 @@ async function perform(ctx: Ctx, input: PerformInput): Promise<PerformOutcome> {
   // Counted once the warning is on the record, so it is among the warnings counted.
   const escalation = action === "warn" ? await escalateAfterWarning(ctx, targetId) : null;
   if (escalation) notes.push(escalationNote(escalation));
-  return { record, notes, noteKeys: outcomeNoteKeys(facts), escalation };
+  if (deletion) notes.push(...deletionNotes(deletion));
+  return { record, notes, noteKeys: outcomeNoteKeys(facts), escalation, deletion };
 }
 
 const ESCALATED: Record<EscalationOutcome["action"], string> = { timeout: "timed them out", kick: "kicked them", ban: "banned them" };

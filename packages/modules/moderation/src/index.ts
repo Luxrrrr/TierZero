@@ -47,7 +47,8 @@ export {
 export { auditLockdown, lockdownSummary } from "./raid-audit.js";
 export { JoinTracker, joinTracker } from "./join-alert.js";
 export { latestOpenBan } from "./infractions.js";
-export { tryDirectMessage, appealRow } from "./dm.js";
+export { tryDirectMessage, appealRow, dmValues, type DmContext } from "./dm.js";
+export { DM_EVIDENCE, EVIDENCE_SAMPLE, formatEvidence, neutralise, type FormattedEvidence } from "./evidence-text.js";
 export { postModLog } from "./reply.js";
 export { APPEAL_ACCEPTED_DM, APPEAL_DENIED_DM } from "./messages.js";
 export {
@@ -60,6 +61,7 @@ export {
   type ActionOrigin,
 } from "./action-rules.js";
 export { fetchBanOrNull, fetchMemberOrNull } from "./lookups.js";
+export { botMayDelete, deleteAttachedMessages, deletionNotes, markDeleted, type DeletionReport } from "./delete-evidence.js";
 export { BLOCKED_TEXT, blockedActions, type AvailabilityInput } from "./availability.js";
 export { describeLength } from "./modlog.js";
 export { DEFAULT_WORDING, fillLabel, labelGroup, timeWordsGroup, type TextSpec, type Wording } from "./texts.js";

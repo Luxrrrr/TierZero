@@ -10,6 +10,7 @@ import {
   hueFor,
   infractionStatus,
   initialsFor,
+  messagesDeletedTag,
   moderatorOf,
   timeAgo,
 } from "../components/mod/format.ts";
@@ -145,5 +146,17 @@ describe("one identity for automod", () => {
   test("a person's case is left as it is", () => {
     const person = { userId: "7", name: "Tamsin", avatarUrl: null, inServer: true };
     assert.equal(moderatorOf({ action: "warn", moderator: person }), person);
+  });
+});
+
+describe("messagesDeletedTag", () => {
+  test("says nothing unless the action deleted a message", () => {
+    assert.equal(messagesDeletedTag([]), null);
+    assert.equal(messagesDeletedTag([{}, { deletedWithAction: false }]), null);
+  });
+
+  test("names one message, or counts several, ignoring messages that were already gone", () => {
+    assert.equal(messagesDeletedTag([{ deletedWithAction: true }]), "Message deleted");
+    assert.equal(messagesDeletedTag([{ deletedWithAction: true }, {}, { deletedWithAction: true }]), "2 messages deleted");
   });
 });

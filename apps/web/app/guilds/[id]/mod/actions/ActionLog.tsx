@@ -21,7 +21,7 @@ import {
   ruleLabel,
 } from "../../../../../components/mod/ModUi";
 import { DownloadIcon, HistoryIcon, SearchIcon, UserIcon } from "../../../../../components/Icons";
-import { automaticLine } from "../../../../../components/mod/format";
+import { automaticLine, messagesDeletedTag } from "../../../../../components/mod/format";
 import {
   ACTION_CHIPS,
   SOURCE_CHIPS,
@@ -282,6 +282,11 @@ function ActionRow({ guildId, item, now, canSeeStaffActivity }: { guildId: strin
                 </>
               ) : null}
             </span>
+          </span>
+        ) : null}
+        {messagesDeletedTag(item.evidence) ? (
+          <span className="mod-pill" data-tone="neutral" title="The messages attached to this case were deleted from Discord together with the action">
+            {messagesDeletedTag(item.evidence)}
           </span>
         ) : null}
         {item.edited ? (
