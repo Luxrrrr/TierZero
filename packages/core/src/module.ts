@@ -355,6 +355,18 @@ export interface RowAction<T = unknown> {
   }): Promise<RowActionResult>;
 }
 
+/**
+ * Something a person can do to the whole feature from its settings page, such
+ * as posting a message to a channel. Like a row action it works on the saved
+ * settings, and the dashboard draws the button and its inputs from this.
+ */
+export interface ModuleAction<T = unknown> {
+  label: string;
+  help?: string;
+  input?: ObjectField<Shape>;
+  run(args: { ctx: ModuleContext<T>; input: Record<string, unknown> }): Promise<RowActionResult>;
+}
+
 export interface RowHooks<T = unknown> {
   /** One entry per row, in order. A null leaves that row without a status line. */
   status?(args: {
@@ -436,6 +448,8 @@ export interface ModuleDefinition<S extends Shape = Shape> {
    * list's path in the schema without indices, such as `news.feeds`.
    */
   rows?: Record<string, RowHooks<ShapeValues<S>>>;
+  /** Buttons on the settings page that act on the whole feature, keyed by action id. */
+  actions?: Record<string, ModuleAction<ShapeValues<S>>>;
   /**
    * Lines shown above the settings form that depend on this server's saved
    * state rather than on the schema, such as the address of a page the module

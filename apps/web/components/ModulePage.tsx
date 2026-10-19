@@ -390,6 +390,7 @@ export function ModulePage({
             disabled={state === "saving"}
             moduleId={module.id}
             rows={module.rows}
+            moduleActions={module.actions}
             raised={module.raised}
             actionsLocked={actionsLocked}
             dirty={dirty}

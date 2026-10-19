@@ -11122,3 +11122,8 @@ html[data-theme-motion] *::after {
     transform: none;
   }
 }
+
+.module-actions { display: grid; gap: var(--space-3, 0.75rem); }
+.module-action { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+.module-action-text { min-width: 0; }
+.module-action-text .field-help { margin: 0.125rem 0 0; }

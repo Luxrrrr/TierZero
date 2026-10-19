@@ -77,3 +77,37 @@ export async function runRowAction(
     return { status: 200, body: { ok: false, message: "Something went wrong. Check the bot's log." } };
   }
 }
+
+/** Runs an action that belongs to the whole module, using the settings as last saved. */
+export async function runModuleAction(
+  registry: ModuleRegistry,
+  state: GuildState,
+  guild: Guild,
+  moduleId: string,
+  actionId: string,
+  rawInput: unknown,
+): Promise<Reply> {
+  const action = registry.get(moduleId)?.actions?.[actionId];
+  if (!action) return NOT_FOUND;
+
+  if (!(await state.isEnabled(guild.id, moduleId))) {
+    return { status: 200, body: { ok: false, message: "Turn this feature on first." } };
+  }
+
+  const ctx = await state.context(guild, moduleId);
+  if (!ctx) return NOT_FOUND;
+
+  let input: Record<string, unknown> = {};
+  if (action.input) {
+    const parsed = action.input.parse(rawInput ?? {});
+    if (!parsed.ok) return { status: 422, body: { errors: parsed.errors } };
+    input = parsed.value as Record<string, unknown>;
+  }
+
+  try {
+    return { status: 200, body: await action.run({ ctx, input }) };
+  } catch (error) {
+    console.error(`[${moduleId}] action ${actionId} failed:`, error);
+    return { status: 200, body: { ok: false, message: "Something went wrong. Check the bot's log." } };
+  }
+}

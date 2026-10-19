@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, type ReactNode } from "react";
-import type { FieldDescriptor, FieldTopic, FormStep, ListPreview, MessageAttach, MessageBody, RowCard, RowDescription } from "@tier0/core";
+import type { ActionDescription, FieldDescriptor, FieldTopic, FormStep, ListPreview, MessageAttach, MessageBody, RowCard, RowDescription } from "@tier0/core";
 import { describeDuration, shortDuration } from "../lib/duration";
 import { conditionHidden, conditionMet, type Condition } from "../lib/field-condition";
 import { declaredSteps, stepGroups } from "../lib/form-steps";
@@ -37,6 +37,7 @@ import { AttachedComponents } from "./form/AttachedComponents";
 import { MessageList } from "./form/MessageList";
 import { ChevronRightIcon } from "./Icons";
 import { ObjectArray, type RowSlots, type RowsContext } from "./form/ObjectArray";
+import { RowActionPanel, useRowActionRunner } from "./form/rowRuntime";
 import { MultiRolePicker, RolePicker } from "./form/RolePicker";
 import { Select, type SelectOption } from "./form/Select";
 import { Switch } from "./form/Switch";
@@ -96,6 +97,8 @@ interface Props {
   extraSections?: ExtraSection[];
   /** What the page draws into a list's rows, keyed by the list's schema path: a status and a foot. */
   rowSlots?: Record<string, RowSlots>;
+  /** Buttons that act on the whole feature, drawn in a card above the settings. */
+  moduleActions?: ActionDescription[];
 }
 
 interface RenderContext {
@@ -160,6 +163,7 @@ export function SettingsForm({
   sectionIntro,
   extraSections = [],
   rowSlots,
+  moduleActions = [],
 }: Props) {
   const fields = (schema.fields ?? {}) as Fields;
   const entries = Object.entries(fields);
@@ -289,10 +293,16 @@ export function SettingsForm({
     return cards;
   };
 
+  const actionsCard =
+    moduleActions.length > 0 && moduleId !== undefined ? (
+      <ModuleActionsCard guildId={guildId} moduleId={moduleId} actions={moduleActions} locked={actionsLocked} ctx={ctx} />
+    ) : null;
+
   const parts = sections ? settingsSections(schema) : null;
   if (!parts) {
     return (
       <div className="settings-groups">
+        {actionsCard}
         {/* A card holding one setting is named after it: "Role menus", not "General". */}
         {groupCards(entries, { id: "group-general", title: generalLabel, hideLoneLabel: true })}
       </div>
@@ -300,6 +310,8 @@ export function SettingsForm({
   }
 
   return (
+    <>
+      {actionsCard}
     <SectionedSettings
       sections={parts}
       errors={errors}
@@ -314,6 +326,85 @@ export function SettingsForm({
         </div>
       )}
     />
+    </>
+  );
+}
+
+/**
+ * Buttons for what a person can do to the feature as a whole. Like a row's
+ * actions they run against the saved settings, which is why the page locks
+ * them while there are edits.
+ */
+function ModuleActionsCard({
+  guildId,
+  moduleId,
+  actions,
+  locked,
+  ctx,
+}: {
+  guildId: string;
+  moduleId: string;
+  actions: ActionDescription[];
+  locked: string | null;
+  ctx: RenderContext;
+}) {
+  const runner = useRowActionRunner({ guildId, moduleId, wholeModule: true, onFinished: () => {} });
+  const [open, setOpen] = useState<string | null>(null);
+  const active = actions.find((action) => action.id === open);
+
+  useEffect(() => {
+    if (locked) setOpen(null);
+  }, [locked]);
+
+  return (
+    <section className="card settings-group" aria-label="Actions">
+      <div className="card-header">
+        <div className="card-header-text">
+          <h2 className="card-title">Actions</h2>
+        </div>
+      </div>
+      <div className="settings-group-body">
+        <div className="module-actions">
+          {actions.map((action) => (
+            <div className="module-action" key={action.id}>
+              <div className="module-action-text">
+                <strong>{action.label}</strong>
+                {action.help ? <p className="field-help">{action.help}</p> : null}
+              </div>
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                disabled={locked !== null || runner.running !== null}
+                title={locked ?? undefined}
+                aria-expanded={action.input ? open === action.id : undefined}
+                onClick={() => (action.input ? setOpen(open === action.id ? null : action.id) : void runner.run("", action, {}))}
+              >
+                {runner.running === `#${action.id}` ? <span className="spinner" aria-hidden="true" /> : null}
+                {action.input ? "Set up" : "Run"}
+              </button>
+            </div>
+          ))}
+        </div>
+        {active?.input ? (
+          <RowActionPanel
+            key={active.id}
+            action={active}
+            initial={defaultsFor((active.input.fields ?? {}) as Fields, makeRowId)}
+            running={runner.running === `#${active.id}`}
+            renderFields={({ value, onChange: setInput, errors, disabled }) =>
+              actionInputFields(active.input as FieldDescriptor, `action.${active.id}`, value, setInput, errors, {
+                ...ctx,
+                disabled,
+                rows: undefined,
+              })
+            }
+            run={(value) => runner.run("", active, value)}
+            onClose={() => setOpen(null)}
+          />
+        ) : null}
+        {locked ? <p className="field-help">{locked}.</p> : null}
+      </div>
+    </section>
   );
 }
 

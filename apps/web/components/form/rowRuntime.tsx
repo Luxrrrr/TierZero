@@ -80,11 +80,13 @@ export type RunResult =
 interface RunnerArgs {
   guildId: string;
   moduleId: string;
+  /** Runs the module's own actions instead of a row's; the row path is then ignored. */
+  wholeModule?: boolean;
   onFinished(): void;
 }
 
 
-export function useRowActionRunner({ guildId, moduleId, onFinished }: RunnerArgs) {
+export function useRowActionRunner({ guildId, moduleId, wholeModule = false, onFinished }: RunnerArgs) {
   const { push } = useToast();
   const [running, setRunning] = useState<string | null>(null);
 
@@ -96,9 +98,9 @@ export function useRowActionRunner({ guildId, moduleId, onFinished }: RunnerArgs
     ): Promise<RunResult> => {
       setRunning(`${rowPath}#${action.id}`);
       try {
+        const where = wholeModule ? "" : `/rows/${encodeURIComponent(rowPath)}`;
         const res = await fetch(
-          `/api/guilds/${guildId}/modules/${moduleId}` +
-            `/rows/${encodeURIComponent(rowPath)}/actions/${encodeURIComponent(action.id)}`,
+          `/api/guilds/${guildId}/modules/${moduleId}${where}/actions/${encodeURIComponent(action.id)}`,
           {
             method: "POST",
             headers: { "content-type": "application/json" },
@@ -134,7 +136,7 @@ export function useRowActionRunner({ guildId, moduleId, onFinished }: RunnerArgs
         setRunning(null);
       }
     },
-    [guildId, moduleId, onFinished, push],
+    [guildId, moduleId, wholeModule, onFinished, push],
   );
 
   return { run, running };

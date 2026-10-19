@@ -8,7 +8,7 @@ import type { CommandSync } from "../runtime/commands.js";
 import { prisma } from "@tier0/db";
 import { config } from "../config.js";
 import { systemLabels } from "../runtime/system-messages.js";
-import { rowStatuses, runRowAction } from "./rows.js";
+import { rowStatuses, runModuleAction, runRowAction } from "./rows.js";
 import { customEmojis, handleMessages } from "./messages.js";
 import { handleMod } from "./mod/index.js";
 import { handleTickets } from "./tickets/index.js";
@@ -175,6 +175,17 @@ export function startControlApi({ client, registry, state, commands }: Deps): vo
       const guild = client.guilds.cache.get(noticesMatch[1] ?? "");
       if (!guild) return send(404, { error: "guild not found" });
       const reply = await moduleNotices(registry, state, guild, noticesMatch[2] ?? "");
+      return send(reply.status, reply.body);
+    }
+
+    const actionMatch = /^\/guilds\/(\d+)\/modules\/([^/]+)\/actions\/([^/]+)$/.exec(url.pathname);
+    if (actionMatch && req.method === "POST") {
+      const guild = client.guilds.cache.get(actionMatch[1] ?? "");
+      if (!guild) return send(404, { error: "guild not found" });
+      const body = await readJsonBody(req);
+      if (!body.ok) return send(400, { error: body.error });
+      if (!isPlainObject(body.value)) return send(400, { error: "body must be a JSON object" });
+      const reply = await runModuleAction(registry, state, guild, actionMatch[2] ?? "", actionMatch[3] ?? "", body.value.input);
       return send(reply.status, reply.body);
     }
 

@@ -2,7 +2,7 @@
 // from route handlers and server components, both of which run on the
 // server, so the secret never reaches anything shipped to the browser.
 
-import type { MessageBody, ModuleCategory, ModuleNotice, ResponseTemplate, RowDescription, RowStatus } from "@tier0/core";
+import type { MessageBody, ModuleCategory, ModuleNotice, ResponseTemplate, ActionDescription, RowDescription, RowStatus } from "@tier0/core";
 import type { PublicLeaderboard } from "./leaderboard";
 import { failureFromBody, plainSystemText } from "./bot-errors";
 
@@ -142,6 +142,8 @@ export interface GuildModuleState {
   schema: Record<string, unknown>;
   /** Which list settings carry a status line or actions, keyed by schema path. */
   rows: Record<string, RowDescription>;
+  /** Buttons for the whole feature, drawn at the top of its settings page. */
+  actions?: ActionDescription[];
   commands: GuildCommandState[];
 }
 
@@ -431,4 +433,23 @@ export async function getModuleNotices(guildId: string, moduleId: string): Promi
     signal: AbortSignal.timeout(5_000),
   });
   return (await readJson<{ notices: ModuleNotice[] }>(res, "the notices")).notices;
+}
+
+export async function runModuleAction(
+  guildId: string,
+  moduleId: string,
+  actionId: string,
+  input: unknown,
+): Promise<RowActionOutcome> {
+  const res = await controlFetch(
+    `/guilds/${encodeURIComponent(guildId)}/modules/${encodeURIComponent(moduleId)}` +
+      `/actions/${encodeURIComponent(actionId)}`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ input }),
+    },
+  );
+  const outcome = await readJson<RowActionOutcome>(res, "the action");
+  return { ...outcome, message: plainSystemText(String(outcome.message ?? "")) };
 }

@@ -46,6 +46,7 @@ export type {
   RowAction,
   RowActionResult,
   RowHooks,
+  ModuleAction,
   RowRef,
   RowStatus,
   ScheduledWork,
@@ -65,7 +66,7 @@ export type { ReplyPlaceholder, ReplyValues, ResponseTemplate } from "./response
 export { isRoleAssignable } from "./roles.js";
 
 export { ModuleRegistry, subcommandKey, subcommandsOf } from "./registry.js";
-export type { CommandSummary, ModuleSummary, RowDescription, SubcommandSummary } from "./registry.js";
+export type { ActionDescription, CommandSummary, ModuleSummary, RowDescription, SubcommandSummary } from "./registry.js";
 export { resolveList, resolveRow, schemaPathOf } from "./rows.js";
 
 export {

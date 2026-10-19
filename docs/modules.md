@@ -347,6 +347,25 @@ Both hooks see the settings as last saved, never a draft, so the dashboard disab
 
 A `message` or a refusal from the bot is shown to the owner as it is when it reads as a sentence. Network error codes inside it (`getaddrinfo ENOTFOUND`, `ECONNREFUSED` and the like) are rewritten into plain words by the dashboard, but a module should still say what went wrong in its own words.
 
+## Module actions
+
+`actions` puts buttons on a module's settings page for things that are done to the feature as a whole, not to one row: posting a message, opening a sign-up. The shape is a row action without the row.
+
+```ts
+actions: {
+  post: {
+    label: "Post the verification message",
+    help: "Puts the message in the channel above, or updates it.",
+    input: s.object({ ... }), // optional; drawn as a form under the button
+    async run({ ctx, input }) {
+      return { ok: true, message: "Posted." };
+    },
+  },
+},
+```
+
+The page runs an action against the saved settings, so it greys the buttons out while there are unsaved edits or the feature is off. `message` is shown to whoever pressed the button. The control API route is `POST /guilds/:id/modules/:moduleId/actions/:actionId` with `{ input }`, and `describe()` lists them as `actions`.
+
 ## Notices
 
 `notices(ctx)` returns lines drawn above the settings form, for what depends on this server's saved state rather than the schema, such as the address of a page the module serves. Each is `{ tone: "info" | "attention", text, link? }`, where `link.href` is a dashboard path or a full address. The page reads them when it is opened and after every save. A hook that throws is logged and shows nothing.

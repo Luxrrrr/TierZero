@@ -17,6 +17,8 @@ export interface ModuleSummary {
   schema: FieldDescriptor;
   /** Which list settings have a status line, and the actions on their rows. */
   rows: Record<string, RowDescription>;
+  /** Actions on the whole feature, drawn on its settings page. */
+  actions: ActionDescription[];
 }
 
 export interface CommandSummary {
@@ -88,6 +90,13 @@ export function subcommandsOf(command: string, json: unknown): SubcommandSummary
 
 /** A slash command, or an entry in the right-click menu of a member or a message. */
 export type CommandKind = "slash" | "user" | "message";
+
+export interface ActionDescription {
+  id: string;
+  label: string;
+  help?: string;
+  input?: FieldDescriptor;
+}
 
 export interface RowDescription {
   status: boolean;
@@ -177,6 +186,12 @@ export class ModuleRegistry {
         })),
       ],
       schema: module.settings.describe(),
+      actions: Object.entries(module.actions ?? {}).map(([id, action]) => ({
+        id,
+        label: action.label,
+        help: action.help,
+        input: action.input?.describe(),
+      })),
       rows: Object.fromEntries(
         Object.entries(module.rows ?? {}).map(([path, hooks]) => [
           path,
