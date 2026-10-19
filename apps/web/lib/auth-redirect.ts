@@ -15,9 +15,8 @@ export async function redirectToLogin(): Promise<never> {
 }
 
 /**
- * An install nobody has claimed yet goes to the first-run screen from any
- * signed-in page, so the operator who signs in first is the one asked to claim
- * it, rather than whoever next opens the home page.
+ * An install with no owner recorded yet goes to the waiting screen from any
+ * signed-in page, since there is nobody to check access against.
  */
 export async function redirectIfUnclaimed(): Promise<void> {
   if (!(await isInstanceClaimed())) redirect("/setup");

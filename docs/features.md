@@ -279,7 +279,7 @@ A search box in the header finds a member from any tab. Press Ctrl+K (Cmd+K on a
 
 ### Who can use it
 
-- **The owner of the install** is the account that clicked **Make me the owner** on the first-run screen, or the user ID in `INSTANCE_OWNER_ID`. The owner can use Moderation on every server the bot is in.
+- **The owner of the install** is the Discord account that owns the bot's application, or the user ID in `INSTANCE_OWNER_ID` if that is set. For an application owned by a team, it is the team's owner. The owner can use Moderation on every server the bot is in.
 - **Everyone else** can use it only on servers where the owner has added them, as a Moderator or an Admin. The owner does that on the Access tab, by name or Discord user ID, even before the person has opened the dashboard.
 - **Manage Server** doesn't make someone staff. It opens the Settings tab and nothing else under Moderation. Being staff doesn't give access to a server's settings either.
 

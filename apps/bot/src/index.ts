@@ -24,6 +24,7 @@ import { startControlApi } from "./control/server.js";
 import { SCHEDULED_SEND, scheduledSendRunner } from "./control/message-schedules.js";
 import { sendMessage } from "./control/messages.js";
 import { systemLabels } from "./runtime/system-messages.js";
+import { syncInstanceOwner } from "./instance-owner.js";
 import { config } from "./config.js";
 
 const registry = new ModuleRegistry();
@@ -71,6 +72,11 @@ registerMessageComponents(client, state);
 
 client.once(Events.ClientReady, async (ready) => {
   console.log(`Connected as ${ready.user.tag}`);
+
+  await syncInstanceOwner(client).then(
+    (ownerId) => !ownerId && console.warn("Could not read who owns the Discord application. Set INSTANCE_OWNER_ID in .env to name the owner."),
+    (error) => console.error("Could not record the instance owner", error),
+  );
 
   for (const guild of ready.guilds.cache.values()) {
     await prisma.guild.upsert({

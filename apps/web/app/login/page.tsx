@@ -15,8 +15,7 @@ export const metadata: Metadata = {
 export const dynamic = "force-dynamic";
 
 export default async function LoginPage({ searchParams }: { searchParams: Promise<{ next?: string | string[] }> }) {
-  // A fresh install is claimed on the first-run screen, so the operator who
-  // signs in first is asked there rather than claimed for without knowing.
+  // Until the bot has recorded who owns the install there is nothing to sign in to.
   if (!(await isInstanceClaimed())) redirect("/setup");
 
   const next = safeNext((await searchParams).next) ?? "/guilds";

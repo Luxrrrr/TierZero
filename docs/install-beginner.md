@@ -173,10 +173,9 @@ Choose your server and click **Authorize**. The bot appears in your member list.
 ## Step 8: Sign in
 
 1. Open your browser and go to <http://localhost:8080>. That address means port 8080 on this computer, which is where the dashboard runs.
-2. The first time, it shows **Set up TierZero**. Choose to sign in with Discord and approve.
-3. It then asks whether this account should own the install. Click **Make me the owner**.
+2. Choose to sign in with Discord and approve.
 
-The owner can use the moderation part of the dashboard on every server, decides who else can, and installs updates. Make sure that's you. Until someone clicks **Make me the owner**, every visit to the dashboard comes back to this screen.
+You are the owner of the install if you are the person who created the bot's application in step 4. TierZero asks Discord who owns that application, so there is nothing to click. The owner can use the moderation part of the dashboard on every server, decides who else can, and installs updates. If you see **Waiting for the bot** instead, the bot hasn't started or can't log in yet. Check that the bot's token in `.env` is right and try again.
 
 Your server appears in the list. If it doesn't, you need the Manage Server permission there and the bot has to have joined it in step 7. You need both.
 

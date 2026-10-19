@@ -257,7 +257,7 @@ The bot schedules some work itself under kinds no module owns, passed to the `Sc
 
 ## Not built
 
-**Setup wizard.** The Developer Portal is where non-developers get stuck, so the install guides cover it. A wizard that collected credentials would have to write a file the dashboard can't reliably reload, since credentials live in the environment and Compose owns the environment. Validating credentials already set is smaller and doesn't have that problem. The first-run screen at `/setup` only claims ownership, and only on its button: a GET never claims. While nobody owns the install, `/login` and every page under `/guilds` send the visitor there.
+**Setup wizard.** The Developer Portal is where non-developers get stuck, so the install guides cover it. A wizard that collected credentials would have to write a file the dashboard can't reliably reload, since credentials live in the environment and Compose owns the environment. Validating credentials already set is smaller and doesn't have that problem. Nobody claims the install from the dashboard. The bot writes the owner of its Discord application to `Instance.ownerId` on every start (`apps/bot/src/instance-owner.ts`, a team's owner for team applications), and `INSTANCE_OWNER_ID` overrides it. While neither exists, `/setup` shows a waiting screen and `/login` and every page under `/guilds` send the visitor there.
 
 **Sent message history.** Replacing a sent message works from its link, since nothing records which messages a template was sent as. A list of sends per template needs a table of its own.
 

@@ -10,9 +10,9 @@ async function discordIdFor(userId: string): Promise<string | null> {
 }
 
 /**
- * INSTANCE_OWNER_ID, when set, always wins over whatever setup recorded -
- * that is what "overrides" means here. Otherwise this is whichever Discord
- * account claimed the instance first.
+ * INSTANCE_OWNER_ID, when set, always wins. Otherwise this is the owner of the
+ * Discord application, which the bot records each time it connects
+ * (apps/bot/src/instance-owner.ts). Nothing on the web side can set it.
  */
 export async function getInstanceOwnerId(): Promise<string | null> {
   const override = process.env.INSTANCE_OWNER_ID;
@@ -31,39 +31,4 @@ export async function isInstanceOwner(userId: string): Promise<boolean> {
   if (!ownerId) return false;
   const discordId = await discordIdFor(userId);
   return discordId !== null && discordId === ownerId;
-}
-
-/**
- * Records the first account through the setup wizard as the instance owner.
- * A no-op when INSTANCE_OWNER_ID is set, since the environment variable wins
- * regardless of what's in the database.
- *
- * This is a first-run race: two people could open /setup at the same
- * instant and both see an unclaimed instance. It's resolved, not merely
- * ignored - the `upsert` guarantees the Instance row exists (idempotent, so
- * concurrent callers racing on it don't clobber each other), and the
- * `updateMany` below is a single atomic UPDATE guarded by `ownerId: null`.
- * SQLite serializes writes to the database file, so only one of the two
- * concurrent updateMany calls actually matches a null ownerId and changes a
- * row; the other affects zero rows and silently loses the race. Both
- * requests still proceed to /guilds - the loser just isn't recorded as
- * owner, and can be replaced by hand via INSTANCE_OWNER_ID if that matters
- * for a given install.
- */
-export async function claimInstanceOwnership(userId: string): Promise<void> {
-  if (process.env.INSTANCE_OWNER_ID) return;
-
-  const discordId = await discordIdFor(userId);
-  if (!discordId) return;
-
-  await prisma.instance.upsert({
-    where: { id: INSTANCE_ID },
-    update: {},
-    create: { id: INSTANCE_ID },
-  });
-
-  await prisma.instance.updateMany({
-    where: { id: INSTANCE_ID, ownerId: null },
-    data: { ownerId: discordId, setupAt: new Date() },
-  });
 }
