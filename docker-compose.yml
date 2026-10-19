@@ -5,14 +5,23 @@ services:
       dockerfile: apps/bot/Dockerfile
     image: tier0-bot:latest
     restart: unless-stopped
-    env_file: .env
+    # Each container gets only the settings it uses. The bot holds the Discord
+    # token and the dashboard holds the OAuth secret and the session key, so a
+    # compromise of one does not hand over the other's.
     environment:
+      DISCORD_TOKEN: ${DISCORD_TOKEN:?DISCORD_TOKEN is not set. Copy .env.example to .env and fill it in.}
+      DISCORD_CLIENT_ID: ${DISCORD_CLIENT_ID:?DISCORD_CLIENT_ID is not set. Copy .env.example to .env and fill it in.}
+      INTERNAL_API_SECRET: ${INTERNAL_API_SECRET:?INTERNAL_API_SECRET is not set. Copy .env.example to .env and fill it in.}
+      INSTANCE_OWNER_ID: ${INSTANCE_OWNER_ID:-}
+      CONTROL_PORT: ${CONTROL_PORT:-8081}
       # Absolute inside the container. The value in .env is relative to the
       # Prisma schema, which is only correct when running from source.
       DATABASE_URL: file:/data/tier0.db
       # Reachable from the dashboard container over the compose network. The
       # port is never published, so nothing outside that network can reach it.
       CONTROL_HOST: 0.0.0.0
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
     volumes:
       - ./data:/data
     networks: [internal]
@@ -23,14 +32,24 @@ services:
       dockerfile: apps/web/Dockerfile
     image: tier0-web:latest
     restart: unless-stopped
-    env_file: .env
     environment:
+      DISCORD_CLIENT_ID: ${DISCORD_CLIENT_ID:?DISCORD_CLIENT_ID is not set. Copy .env.example to .env and fill it in.}
+      DISCORD_CLIENT_SECRET: ${DISCORD_CLIENT_SECRET:?DISCORD_CLIENT_SECRET is not set. Copy .env.example to .env and fill it in.}
+      AUTH_SECRET: ${AUTH_SECRET:?AUTH_SECRET is not set. Copy .env.example to .env and fill it in.}
+      INTERNAL_API_SECRET: ${INTERNAL_API_SECRET:?INTERNAL_API_SECRET is not set. Copy .env.example to .env and fill it in.}
+      INSTANCE_OWNER_ID: ${INSTANCE_OWNER_ID:-}
+      ALLOW_INSECURE_HTTP: ${ALLOW_INSECURE_HTTP:-}
       DATABASE_URL: file:/data/tier0.db
       CONTROL_API_URL: http://bot:8081
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
     ports:
       # The host side is configurable for a machine where 8080 is taken. The
-      # container always listens on 8080.
-      - "${DASHBOARD_PORT:-8080}:8080"
+      # container always listens on 8080. Left alone it answers on every address
+      # the machine has, so any device on the home network or on Tailscale can
+      # open it. DASHBOARD_BIND=127.0.0.1 limits it to this machine, which is what
+      # a server on the internet wants when a tunnel or proxy provides HTTPS.
+      - "${DASHBOARD_BIND:-0.0.0.0}:${DASHBOARD_PORT:-8080}:8080"
     volumes:
       - ./data:/data
     depends_on: [bot]

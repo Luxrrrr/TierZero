@@ -41,7 +41,7 @@ Fill in `.env` with your Discord application's values, then:
 docker compose up -d
 ```
 
-Open http://localhost:8080 and sign in with Discord. The first account to sign in becomes the owner of the install, who can use the moderation area on every server and decides who else can.
+Open http://localhost:8080 and sign in with Discord. The owner of the install is the Discord account that owns the bot's application, who can use the moderation area on every server and decides who else can.
 
 ## Features
 

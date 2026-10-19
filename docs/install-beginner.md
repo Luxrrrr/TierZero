@@ -225,7 +225,7 @@ The [quick install](install.md) has a longer troubleshooting table. If you're st
 
 ## Optional: let moderators use the dashboard from anywhere
 
-Everything above works on the computer running TierZero. The dashboard's address, `localhost:8080`, only exists on that computer, so nobody else can open it. If you're the only one who configures the bot, you can skip this section.
+Everything above works on the computer running TierZero. Other devices on your home network can also open the dashboard at that computer's address, such as `http://192.168.1.20:8080`, once you add that address under Redirects in the Developer Portal like the `localhost` one. It isn't encrypted, so keep it on your own network. If you're the only one who configures the bot, you can skip this section.
 
 If you want moderators to use the moderation dashboard on their own devices, you have to make the dashboard reachable for them first. Adding them under **Moderation**, then **Access**, only says who is allowed in. It doesn't give them a way to get there. If you skip this section, your moderators can't use the dashboard, and they can still moderate in Discord as normal.
 

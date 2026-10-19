@@ -101,7 +101,7 @@ Select your server. The overview lists every feature with a switch, and switchin
 
 For a moderator to use the dashboard, two things have to be true: they can reach it, and you've added them to the access list.
 
-**Reaching it.** The dashboard only opens at `localhost:8080` on the machine running TierZero, so a moderator on their own device can't see it yet. You have to make it reachable, either on a public domain with a Cloudflare Tunnel or on a private network with Tailscale. Both are covered in [Reaching the dashboard from other devices](#reaching-the-dashboard-from-other-devices). If you're the only person using the dashboard, you don't need either.
+**Reaching it.** The dashboard opens at `localhost:8080` on the machine running TierZero. Other devices on your home network or Tailscale can also open it at that machine's address, such as `http://192.168.1.20:8080`, as long as the address is added under Redirects in the Developer Portal like the `localhost` one. That connection is plain HTTP. For moderators outside your home network, use either a public domain with a Cloudflare Tunnel or Tailscale. Both are covered in [Reaching the dashboard from other devices](#reaching-the-dashboard-from-other-devices). If you're the only person using the dashboard, you don't need either.
 
 **The access list.** Moderation has its own list of who's allowed in. Open **Moderation**, go to the **Access** tab and add each person as Moderator or Admin. The owner is the only person who can use it without being added. [Features](features.md#moderation-dashboard) lists what each level can do.
 
@@ -109,7 +109,7 @@ The list is separate from Discord's Manage Server permission on purpose. Giving 
 
 ## Reaching the dashboard from other devices
 
-The dashboard only opens on the machine running it, at `localhost:8080`. For moderators on their own devices, or for you on your phone, it has to be reachable some other way. Pick one:
+The dashboard answers on every address the machine has, over plain HTTP, so anything on your home network or Tailscale can open it. Anything that can reach the machine from the internet can too, which happens on a rented server (VPS) or if you forward port 8080 on your router. Sign-in still needs a Discord account you've given access to, but the connection isn't encrypted, so don't leave it open to the internet. For moderators outside your home network, pick one:
 
 | | Cloudflare Tunnel | Tailscale | Your own reverse proxy |
 | --- | --- | --- | --- |
@@ -118,6 +118,16 @@ The dashboard only opens on the machine running it, at `localhost:8080`. For mod
 | Ports to open on your router | None | None | 80 and 443 |
 
 If you don't follow this section, the [beginner guide](install-beginner.md#optional-let-moderators-use-the-dashboard-from-anywhere) walks through it step by step.
+
+### Running it on a server
+
+On a VPS or any machine with a public address, stop the dashboard answering on the public side. Add this to `.env`:
+
+```
+DASHBOARD_BIND=127.0.0.1
+```
+
+Then run `docker compose up -d`. The dashboard now only answers on the machine itself, and a Cloudflare Tunnel or your own reverse proxy gives people HTTPS from outside. Don't count on the server's firewall to do this job. Docker publishes ports around most firewalls, including `ufw`, so a port you meant to keep closed can still be open.
 
 ### Cloudflare Tunnel (recommended)
 
@@ -180,6 +190,8 @@ proxy_set_header Host $host;
 
 Caddy and Cloudflare Tunnel pass it through by default. Reading pages isn't affected, only saves.
 
+The dashboard also refuses to sign anyone in over plain HTTP at an address the internet can reach, since the session would cross the network unencrypted. It knows a connection is HTTPS when the proxy sends `X-Forwarded-Proto: https`. Caddy and Cloudflare Tunnel send it. For nginx, add `proxy_set_header X-Forwarded-Proto $scheme;`. Home network, Tailscale and `localhost` addresses are never affected. If you see the "This connection isn't private" screen and you know the address is private, set `ALLOW_INSECURE_HTTP=true` in `.env`.
+
 ### Things that apply either way
 
 Only the dashboard should be reachable from outside. The bot's control API listens on the private network between the two containers, and Docker Compose doesn't publish its port. Keep it that way. Anyone holding `INTERNAL_API_SECRET` can use the API, and only the dashboard should have it.
@@ -232,7 +244,7 @@ Leave `CONTROL_HOST` unset so the bot only listens on localhost, and set `CONTRO
 | Dashboard says the bot isn't responding | The bot container is stopped or unreachable | `docker compose ps`, then `docker compose logs bot` |
 | Sign-in fails after choosing Discord | The redirect in the Developer Portal doesn't match the address in your browser | Make them identical, including `http` versus `https` |
 | "Not a well formed URL" from Discord | The dashboard address has no dot in its host | Use the full name (the `.ts.net` one on Tailscale) and add it as a redirect |
-| A moderator can't open the dashboard at all | It only opens on the machine running TierZero by default | See [Reaching the dashboard from other devices](#reaching-the-dashboard-from-other-devices) |
+| A moderator can't open the dashboard at all | They aren't on your home network or Tailscale, or `DASHBOARD_BIND` is set to `127.0.0.1` | See [Reaching the dashboard from other devices](#reaching-the-dashboard-from-other-devices) |
 | Your server isn't listed | You lack Manage Server there, or the bot isn't a member | You need both |
 | "This request did not come from the dashboard" when saving | The reverse proxy isn't passing the host through | See [Reaching the dashboard from other devices](#reaching-the-dashboard-from-other-devices) |
 | Mod log posts have no View in dashboard button, or it opens the wrong address | The bot learns the address from the owner opening the dashboard, and hasn't yet, or saw a different one | Open the dashboard once at the address your moderators use, or type it into **Dashboard address** in the moderation settings |
