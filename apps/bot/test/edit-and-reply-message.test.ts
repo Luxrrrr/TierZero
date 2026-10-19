@@ -131,6 +131,17 @@ describe("editMessage", () => {
     assert.equal((edits[0]?.embeds as { data: { title: string } }[])[0]?.data.title, "Menu Pings");
   });
 
+  test("never pings anyone, since the post already pinged who it meant to when it was sent", async () => {
+    const edits: Record<string, unknown>[] = [];
+    await editMessage(
+      fakeMessage(edits) as never,
+      body({ content: "Looking for more <@&123456789012345678> {name}" }),
+      { name: "<@&987654321098765432>" },
+      { persist: async () => undefined },
+    );
+    assert.deepEqual(edits[0]?.allowedMentions, { parse: [] });
+  });
+
   test("uses the fallback when the owner's message no longer fits", async () => {
     const edits: Record<string, unknown>[] = [];
     await quietly(() =>

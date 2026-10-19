@@ -217,7 +217,9 @@ export async function editMessage(
         content: rendered.payload.content ?? "",
         embeds: rendered.payload.embeds ?? [],
         components,
-        allowedMentions: rendered.payload.allowedMentions ?? { parse: [] },
+        // The post already pinged who it meant to when it was sent. Refreshing it must not ping anyone new,
+        // such as a role a member typed into their nickname or a note that now appears in the text.
+        allowedMentions: { parse: [] },
       });
     } catch (error) {
       if (rendered.message.embeds.length === 0 || !refusesEmbeds(error)) throw error;
@@ -227,7 +229,7 @@ export async function editMessage(
         content: flat.content ?? "",
         embeds: [],
         components,
-        allowedMentions: flat.allowedMentions ?? { parse: [] },
+        allowedMentions: { parse: [] },
       });
     }
 
