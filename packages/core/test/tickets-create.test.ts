@@ -49,7 +49,14 @@ describe("readTicketCreate", () => {
   test("reads the smallest request", () => {
     const read = readTicketCreate(valid);
     assert.ok(read.ok);
-    assert.deepEqual(read.value, { typeId: "billing", subject: null, answers: [], memberIds: [MEMBER], firstMessage: null });
+    assert.deepEqual(read.value, { typeId: "billing", subject: null, answers: [], memberIds: [MEMBER], firstMessage: null, notifyHandlers: false });
+  });
+
+  test("the handlers are only notified when asked, and only by a real true", () => {
+    const on = readTicketCreate({ ...valid, notifyHandlers: true });
+    assert.ok(on.ok && on.value.notifyHandlers === true);
+    const odd = readTicketCreate({ ...valid, notifyHandlers: "yes" });
+    assert.ok(odd.ok && odd.value.notifyHandlers === false);
   });
 
   test("keeps the subject, the answers and the first message, trimmed", () => {

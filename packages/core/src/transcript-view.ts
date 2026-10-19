@@ -651,7 +651,7 @@ export function transcriptTree(input: TranscriptTreeInput): TranscriptElement {
     // Discord showed the line naming the sender; the dashboard's own view names them in the header instead.
     const shown =
       message.staffLine && message.sentBy && !ctx.showSender
-        ? [message.content, ticketStaffLine(message.sentBy.name)].filter((part) => part !== "").join("\n")
+        ? [message.content, message.staffLineText ?? ticketStaffLine(message.sentBy.name, "Replied by {name}")].filter((part) => part !== "").join("\n")
         : message.content;
     return { message, context, nodes: shown ? parseDiscordMarkdown(shown, context) : [] };
   });

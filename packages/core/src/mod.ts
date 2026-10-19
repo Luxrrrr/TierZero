@@ -434,6 +434,8 @@ export interface EvidenceMessage {
   /** Who deleted it, when the server log could tell at the time. */
   deletedBy?: DeletionSource;
   deletedByName?: string | null;
+  /** The moderator deleted it together with the action this case records. */
+  deletedWithAction?: boolean;
   /** Every version of the text, oldest first, the last being the current one. Present only when it was edited. */
   versions?: MessageVersion[];
   /** Which of `versions` the moderator picked as the one that broke the rules. Left out when it is the latest. */
@@ -728,6 +730,14 @@ export interface StaffDto {
 
 export interface MemberSearchHit {
   user: UserRef;
+  /** The account username, shown next to a display name that differs from it. */
+  username?: string;
+}
+
+/** A page of name search results, with how many more matched than were returned. */
+export interface MemberSearchPage {
+  hits: MemberSearchHit[];
+  more: number;
 }
 
 /** The common shape of a refusal, so the dashboard can tell a missing permission from a missing record. */
@@ -766,6 +776,23 @@ export interface ActionRequest {
   deleteDays: number | null;
   /** Messages from the member to keep with the action. */
   evidence?: EvidenceRef[];
+  /** Delete the attached messages once the action has gone through. Applies to a warning, timeout, kick or ban. */
+  deleteMessages?: boolean;
+}
+
+/** How many messages one action may delete. */
+export const DELETE_MESSAGES_LIMIT = 20;
+
+/** Whether an action can delete the messages attached to it. */
+export function canDeleteWithAction(kind: ModActionKind): boolean {
+  return kind === "warn" || kind === "timeout" || kind === "kick" || kind === "ban";
+}
+
+/** The case's "Deleted 2 messages" line, or null when the action deleted none. */
+export function deletedMessagesText(evidence: readonly Pick<EvidenceMessage, "deletedWithAction">[]): string | null {
+  const count = evidence.filter((message) => message.deletedWithAction === true).length;
+  if (count === 0) return null;
+  return count === 1 ? "Deleted 1 message" : `Deleted ${count} messages`;
 }
 
 export interface ActionResult {
@@ -781,6 +808,10 @@ export interface ActionContextDto {
   moduleEnabled: boolean;
   requireReason: boolean;
   dmOnAction: boolean;
+  /** The direct message repeats the messages attached to an action. Absent from an older bot, which does not. */
+  dmIncludeMessages?: boolean;
+  /** Whether the "also delete the message" choice starts on. Absent from an older bot, where it starts off. */
+  deleteMessagesByDefault?: boolean;
   /** Prefilled timeout length. */
   defaultTimeoutMs: number;
   maxTimeoutMs: number;

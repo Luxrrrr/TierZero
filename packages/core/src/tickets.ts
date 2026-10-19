@@ -554,6 +554,8 @@ export interface TicketSentAs {
   avatarUrl: string | null;
   /** The reply ended with a line saying who sent it, which Discord showed. */
   staffLine: boolean;
+  /** The line as Discord showed it, when the reply was stored with it. Replies stored before the wording could be changed read as null. */
+  line: string | null;
 }
 
 /** Reads `TicketMessage.sentAs`. Anything that is not a name reads as none. */
@@ -566,7 +568,7 @@ export function readTicketSentAs(stored: string | null | undefined): TicketSentA
     return null;
   }
   if (!isRecord(parsed) || text(parsed.name).trim() === "") return null;
-  return { name: short(parsed.name, TICKET_TEAM_NAME_MAX), avatarUrl: webUrl(parsed.avatarUrl), staffLine: parsed.staffLine === true };
+  return { name: short(parsed.name, TICKET_TEAM_NAME_MAX), avatarUrl: webUrl(parsed.avatarUrl), staffLine: parsed.staffLine === true, line: text(parsed.line).trim() === "" ? null : short(parsed.line, 200) };
 }
 
 /** A person's name as it can sit in a line of Discord text without formatting or pinging. */
@@ -575,9 +577,32 @@ export function plainName(name: string): string {
   return (cleaned || "staff").slice(0, TICKET_TEAM_NAME_MAX);
 }
 
-/** The small line a team reply ends with when the setting names who replied. */
-export function ticketStaffLine(name: string): string {
-  return `-# Replied by ${plainName(name)}`;
+export const TICKET_STAFF_LINE_DEFAULT = "Sent by {user}";
+export const TICKET_STAFF_LINE_MAX = 80;
+/** What the line said before its wording could be changed, for stored replies that never kept the line itself. */
+const TICKET_STAFF_LINE_LEGACY = "Replied by {name}";
+
+/**
+ * The small line a team reply ends with when the setting names who replied,
+ * as Discord's small text. `{name}` is the staff member's name as plain text and
+ * `{user}` is a mention of them, which opens their profile when clicked. Nothing
+ * else in the wording or the name can make a mention, and the reply is sent with
+ * that person left out of the pings, so the line never notifies anyone.
+ */
+export function ticketStaffLine(name: string, wording: string = TICKET_STAFF_LINE_DEFAULT, userId?: string): string {
+  const mention = userId !== undefined && /^\d{17,20}$/.test(userId) ? `<@${userId}>` : null;
+  const marker = "\u0000";
+  const filled = (wording.trim() === "" ? TICKET_STAFF_LINE_DEFAULT : wording)
+    .replace(/\{name\}/g, () => plainName(name))
+    .replace(/\{user\}/g, () => marker);
+  const text = filled.replace(/[<>@\r\n]+/g, " ").replace(/\s+/g, " ").trim();
+  return `-# ${text.split(marker).join(mention ?? plainName(name)) || plainName(name)}`;
+}
+
+/** The line Discord showed under a stored team reply, or null when it had none. */
+export function storedStaffLine(sentAs: Pick<TicketSentAs, "staffLine" | "line"> | null, senderName: string): string | null {
+  if (!sentAs?.staffLine) return null;
+  return sentAs.line ?? ticketStaffLine(senderName, TICKET_STAFF_LINE_LEGACY);
 }
 
 /** A stored message as the dashboard and the transcript files read it. */
@@ -594,7 +619,13 @@ export function ticketMessageFromRow(row: TicketMessageRow): TicketMessageDto {
       bot: row.authorBot === true,
       color: hexColor(row.authorColor),
     },
-    ...(sentAs ? { sentBy: { userId: row.authorId, name: row.authorName }, staffLine: sentAs.staffLine } : {}),
+    ...(sentAs
+      ? {
+          sentBy: { userId: row.authorId, name: row.authorName },
+          staffLine: sentAs.staffLine,
+          ...(storedStaffLine(sentAs, row.authorName) ? { staffLineText: storedStaffLine(sentAs, row.authorName)! } : {}),
+        }
+      : {}),
     content: row.content,
     attachments: readTicketAttachments(row.attachments),
     embeds: readTicketEmbeds(row.embeds),
@@ -705,6 +736,8 @@ export interface TicketMessageDto {
   sentBy?: { userId: string; name: string };
   /** The reply ended with a line naming `sentBy`, which Discord showed. */
   staffLine?: boolean;
+  /** That line as Discord showed it, in Discord's small-text markup. */
+  staffLineText?: string;
   content: string;
   attachments: TicketAttachmentDto[];
   embeds: TicketEmbedDto[];
@@ -1712,6 +1745,8 @@ export interface TicketCreateRequest {
   answers: TicketAnswer[];
   memberIds: string[];
   firstMessage: string | null;
+  /** Ping the type's handler roles in the first message. Off unless staff ask for it. */
+  notifyHandlers: boolean;
 }
 
 /** What `POST create` returns: where the new ticket is. */
@@ -1763,7 +1798,7 @@ export function readTicketCreate(input: unknown): TicketRead<TicketCreateRequest
   if (firstMessage.length > TICKET_CREATE_MESSAGE_MAX) {
     return { ok: false, error: `The first message can be at most ${TICKET_CREATE_MESSAGE_MAX} characters.` };
   }
-  return { ok: true, value: { typeId, subject: subject === "" ? null : subject, answers, memberIds, firstMessage: firstMessage === "" ? null : firstMessage } };
+  return { ok: true, value: { typeId, subject: subject === "" ? null : subject, answers, memberIds, firstMessage: firstMessage === "" ? null : firstMessage, notifyHandlers: body.notifyHandlers === true } };
 }
 
 export function readTicketTransfer(input: unknown): TicketRead<TicketTransferRequest> {

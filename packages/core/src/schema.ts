@@ -667,6 +667,14 @@ export interface MessageFieldOptions extends FieldMeta {
    * back to.
    */
   starting: MessageBody;
+  /**
+   * What `starting` used to be. The dashboard saves a message whole the first
+   * time its settings are saved, so a server that never edited the wording
+   * still holds the old default, and a better default would never reach it. A
+   * saved message equal to one of these is read as the current default. Once an
+   * owner changes the wording it no longer matches and is kept as written.
+   */
+  replaces?: MessageBody[];
   /** Where it goes. A direct message cannot carry reactions or role, channel, user and mentionable menus. */
   delivery?: MessageDelivery;
   /** Set to false where the message cannot carry buttons or menus at all. */
@@ -696,9 +704,15 @@ export interface MessageFieldOptions extends FieldMeta {
  * changing a setting's kind does not lose what owners already wrote.
  */
 function message(options: MessageFieldOptions): Field<MessageBody> {
-  const { variables = [], starting, delivery = "channel", components = true, note, attach, audience, ...meta } = options;
+  const { variables = [], starting, replaces = [], delivery = "channel", components = true, note, attach, audience, ...meta } = options;
   const fit = (body: MessageBody) => restrictMessage(body, delivery, components);
   const defaultValue = fit(starting);
+  const oldDefaults = new Set(
+    replaces.flatMap((body) => {
+      const parsed = parseMessage(body);
+      return parsed.ok ? [JSON.stringify(fit(parsed.value))] : [];
+    }),
+  );
   return {
     kind: "message",
     meta,
@@ -716,7 +730,8 @@ function message(options: MessageFieldOptions): Field<MessageBody> {
         // the editor already pointed at the exact piece while it was typed.
         return fail(path, parsed.errors[0]?.message ?? "is not a valid message");
       }
-      return { ok: true, value: fit(parsed.value) };
+      const value = fit(parsed.value);
+      return { ok: true, value: oldDefaults.has(JSON.stringify(value)) ? defaultValue : value };
     },
     describe: () => ({
       kind: "message",

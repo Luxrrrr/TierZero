@@ -536,6 +536,15 @@ describe("a reply sent under the team's name", () => {
     assert.equal(dto.author.userId, "130000000000000002");
     assert.deepEqual(dto.sentBy, { userId: "130000000000000002", name: "Kairo" });
     assert.equal(dto.staffLine, true);
+    // Stored before the wording could change, so it reads as what Discord showed then.
+    assert.equal(dto.staffLineText, "-# Replied by Kairo");
+  });
+
+  test("a reply stored with its line shows that line", () => {
+    const dto = ticketMessageFromRow(row({ sentAs: JSON.stringify({ name: "Support Team", avatarUrl: null, staffLine: true, line: "-# Sent by Kairo" }) }));
+    assert.equal(dto.staffLineText, "-# Sent by Kairo");
+    const quiet = ticketMessageFromRow(row({ sentAs: JSON.stringify({ name: "Support Team", avatarUrl: null, staffLine: false }) }));
+    assert.equal(quiet.staffLineText, undefined);
   });
 
   test("a row without it, or with a damaged one, reads as the staff member", () => {
@@ -547,9 +556,12 @@ describe("a reply sent under the team's name", () => {
   });
 
   test("the line naming the sender cannot ping or format", () => {
-    assert.equal(ticketStaffLine("Kairo"), "-# Replied by Kairo");
-    assert.equal(ticketStaffLine("**@everyone** <@123>"), "-# Replied by everyone 123");
-    assert.equal(ticketStaffLine("***"), "-# Replied by staff");
+    assert.equal(ticketStaffLine("Kairo"), "-# Sent by Kairo");
+    assert.equal(ticketStaffLine("**@everyone** <@123>"), "-# Sent by everyone 123");
+    assert.equal(ticketStaffLine("***"), "-# Sent by staff");
+    assert.equal(ticketStaffLine("Kairo", "Handled by {name}"), "-# Handled by Kairo");
+    assert.equal(ticketStaffLine("Kairo", "<@123> @here {name}"), "-# 123 here Kairo");
+    assert.equal(ticketStaffLine("Kairo", "  "), "-# Sent by Kairo");
     assert.equal(readTicketSentAs(JSON.stringify({ name: "T", avatarUrl: "javascript:x" }))?.avatarUrl, null);
   });
 });
