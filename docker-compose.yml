@@ -22,6 +22,17 @@ services:
       CONTROL_HOST: 0.0.0.0
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]
+    # Nothing in the image is written to while it runs. The database is in the data folder and scratch space is memory.
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /home/node:uid=1000,gid=1000
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:'+(process.env.CONTROL_PORT||8081)+'/health').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
     volumes:
       - ./data:/data
     networks: [internal]
@@ -43,6 +54,17 @@ services:
       CONTROL_API_URL: http://bot:8081
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /home/node:uid=1000,gid=1000
+      - /app/apps/web/.next/cache:uid=1000,gid=1000
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8080/insecure').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 90s
     ports:
       # The host side is configurable for a machine where 8080 is taken. The
       # container always listens on 8080. Left alone it answers on every address
