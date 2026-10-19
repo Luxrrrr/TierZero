@@ -202,7 +202,7 @@ export const moderationSettings = s.object({
         optional: true,
         min: "1m",
         max: "7d",
-        help: "Leave it empty to keep the server locked until someone unlocks it.",
+        help: "The channels reopen by themselves after this. Anyone can set off a join alert by joining in numbers, so a length is safer than leaving it empty, which keeps the server locked until someone unlocks it.",
         when: { field: "lockdown", equals: true },
       }),
       message: s.message({
