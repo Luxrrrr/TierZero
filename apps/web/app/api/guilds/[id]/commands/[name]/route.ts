@@ -1,6 +1,6 @@
 import { requireGuildAccess } from "../../../../../../lib/authz";
 import { updateGuildCommand } from "../../../../../../lib/control-api";
-import { authzFailureResponse, crossOriginWriteResponse, proxyControlApi } from "../../../../../../lib/api-helpers";
+import { authzFailureResponse, crossOriginWriteResponse, proxyControlApi, readRequestJson } from "../../../../../../lib/api-helpers";
 
 export async function PATCH(
   request: Request,
@@ -12,6 +12,7 @@ export async function PATCH(
   const access = await requireGuildAccess(id);
   if (!access.ok) return authzFailureResponse(access);
 
-  const patch = await request.json();
-  return proxyControlApi(() => updateGuildCommand(id, name, patch));
+  const patch = await readRequestJson(request);
+  if (!patch.ok) return patch.response;
+  return proxyControlApi(() => updateGuildCommand(id, name, patch.value));
 }

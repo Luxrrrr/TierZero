@@ -3,6 +3,7 @@ import { ControlApiError } from "./control-api";
 import { ownerMessage } from "./bot-errors";
 import type { AuthzFail } from "./authz";
 import { isSameOriginRequest } from "./mod-proxy";
+import { readJsonLimited } from "./body-limit";
 
 /** The answer to a write that did not come from a dashboard page, or null when it did. */
 export function crossOriginWriteResponse(request: Request): NextResponse | null {
@@ -42,12 +43,15 @@ export async function proxyControlApi<T>(work: () => Promise<T>): Promise<NextRe
  * body is the caller's mistake and must not surface as an unhandled 500.
  */
 export async function readRequestJson(request: Request): Promise<{ ok: true; value: unknown } | { ok: false; response: NextResponse }> {
-  try {
-    return { ok: true, value: await request.json() };
-  } catch {
+  const value = await readJsonLimited(request);
+  if (value === null) {
+    return { ok: false, response: NextResponse.json({ error: "That is too large to save. Shorten it and try again." }, { status: 413 }) };
+  }
+  if (value === undefined) {
     return {
       ok: false,
       response: NextResponse.json({ error: "The change could not be read. Reload the page and try again." }, { status: 400 }),
     };
   }
+  return { ok: true, value };
 }

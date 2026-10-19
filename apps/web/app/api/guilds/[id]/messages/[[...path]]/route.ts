@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
+import { readTextLimited } from "../../../../../../lib/body-limit";
 import { ControlApiError, messagesRequest } from "../../../../../../lib/control-api";
 import { auth } from "../../../../../../lib/auth";
 import { requireGuildAccess } from "../../../../../../lib/authz";
 import { authzFailureResponse } from "../../../../../../lib/api-helpers";
-import { isSameOriginWrite, utf8Length } from "../../../../../../lib/mod-proxy";
+import { isSameOriginWrite } from "../../../../../../lib/mod-proxy";
 
 /**
  * The browser's way to the message library and to sending. Who may use it is
@@ -54,10 +55,8 @@ async function handle(method: string, request: Request, { params }: Params) {
 
   let body: unknown;
   if (method === "POST" || method === "PATCH") {
-    const declared = Number(request.headers.get("content-length") ?? "0");
-    if (declared > MAX_BODY_BYTES) return fail(413, "That message is too large to save.");
-    const text = await request.text().catch(() => "");
-    if (utf8Length(text) > MAX_BODY_BYTES) return fail(413, "That message is too large to save.");
+    const text = await readTextLimited(request, MAX_BODY_BYTES);
+    if (text === null) return fail(413, "That message is too large to save.");
     try {
       body = text.trim() === "" ? {} : (JSON.parse(text) as unknown);
       // A send says who sent it, for the {sender} variable. The browser cannot name itself.

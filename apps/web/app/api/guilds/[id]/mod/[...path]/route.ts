@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { readTextLimited } from "../../../../../../lib/body-limit";
 import { modRequest, ControlApiError } from "../../../../../../lib/control-api";
 import type { MemberProfile } from "@tier0/core";
 import { requireStaff } from "../../../../../../lib/mod-access";
@@ -10,7 +11,6 @@ import {
   isSameOriginWrite,
   modProxyPermission,
   MOD_PROXY_MAX_BODY_BYTES,
-  utf8Length,
 } from "../../../../../../lib/mod-proxy";
 
 /**
@@ -27,11 +27,8 @@ function fail(status: number, error: string) {
 }
 
 async function readBody(request: Request): Promise<Record<string, unknown> | "too-large" | "invalid"> {
-  const declared = Number(request.headers.get("content-length") ?? "0");
-  if (declared > MOD_PROXY_MAX_BODY_BYTES) return "too-large";
-
-  const text = await request.text().catch(() => "");
-  if (utf8Length(text) > MOD_PROXY_MAX_BODY_BYTES) return "too-large";
+  const text = await readTextLimited(request, MOD_PROXY_MAX_BODY_BYTES);
+  if (text === null) return "too-large";
   if (text.trim() === "") return {};
   try {
     const parsed: unknown = JSON.parse(text);

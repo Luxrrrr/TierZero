@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
+import { readTextLimited } from "../../../../../../lib/body-limit";
 import { ControlApiError, ticketsRequest } from "../../../../../../lib/control-api";
 import { isTicketManager, ticketSession } from "../../../../../../lib/tickets-access";
-import { isSameOriginWrite, utf8Length } from "../../../../../../lib/mod-proxy";
+import { isSameOriginWrite } from "../../../../../../lib/mod-proxy";
 import {
   downloadFileName,
   ticketProxyBodyLimit,
@@ -29,11 +30,8 @@ function fail(status: number, error: string) {
 }
 
 async function readBody(request: Request, limit: number): Promise<Record<string, unknown> | "too-large" | "invalid"> {
-  const declared = Number(request.headers.get("content-length") ?? "0");
-  if (declared > limit) return "too-large";
-
-  const text = await request.text().catch(() => "");
-  if (utf8Length(text) > limit) return "too-large";
+  const text = await readTextLimited(request, limit);
+  if (text === null) return "too-large";
   if (text.trim() === "") return {};
   try {
     const parsed: unknown = JSON.parse(text);
