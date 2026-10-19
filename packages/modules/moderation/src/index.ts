@@ -62,6 +62,7 @@ export {
   type ActionOrigin,
 } from "./action-rules.js";
 export { fetchBanOrNull, fetchMemberOrNull } from "./lookups.js";
+export { staffRoleOf } from "./staff.js";
 export { botMayDelete, deleteAttachedMessages, deletionNotes, markDeleted, type DeletionReport } from "./delete-evidence.js";
 export { BLOCKED_TEXT, blockedActions, type AvailabilityInput } from "./availability.js";
 export { describeLength } from "./modlog.js";

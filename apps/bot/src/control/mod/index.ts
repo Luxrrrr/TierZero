@@ -1,5 +1,6 @@
 import type { Client, Guild } from "discord.js";
-import { isStaffRole, type Actor } from "@tier0/core";
+import type { Actor } from "@tier0/core";
+import { staffRoleOf } from "@tier0/module-moderation";
 import type { GuildState } from "../../runtime/guild-state.js";
 import { systemLabels } from "../../runtime/system-messages.js";
 import { actionContextFor, actionTarget, editInfraction, memberMessages, takeAction } from "./actions.js";
@@ -15,6 +16,8 @@ import { listStaff, removeStaff, setStaff } from "./staff.js";
 import { exportStats, modStats } from "./stats.js";
 import { parseStatsRange } from "./stats-calc.js";
 import { forbidden, refuse, type ModCtx, type Reply } from "./types.js";
+
+const SNOWFLAKE = /^\d{17,20}$/;
 
 export interface ModRequest {
   client: Client;
@@ -32,16 +35,34 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
 /**
- * Reads the actor the dashboard attached. The dashboard fills it in from the
- * signed-in session, and the control API is only reachable with the shared
- * secret, so nothing a browser sends can name itself an owner.
+ * Reads the actor the dashboard attached. The dashboard says which Discord account is
+ * acting, from the signed-in session, and the bot works out what that account is on
+ * the staff list itself. Whatever role the request claimed is ignored, so a
+ * dashboard that forwarded the wrong one could not make anyone an owner.
  */
-function actorOf(body: unknown): Actor | null {
-  if (!isRecord(body) || !isRecord(body.actor)) return null;
-  const { userId, name, role } = body.actor;
-  if (typeof userId !== "string" || !/^\d{17,20}$/.test(userId)) return null;
-  if (typeof name !== "string" || !isStaffRole(role)) return null;
+async function actorOf(guild: Guild, body: unknown): Promise<Actor | Reply> {
+  if (!isRecord(body) || !isRecord(body.actor)) return refuse(400, "The request did not say who is making it.");
+  const { userId, name } = body.actor;
+  if (typeof userId !== "string" || !SNOWFLAKE.test(userId) || typeof name !== "string") {
+    return refuse(400, "The request did not say who is making it.");
+  }
+  const role = await staffRoleOf(guild.id, userId);
+  if (!role) return forbidden("use the moderation tools on this server. The owner can add you under Access");
   return { userId, name: name.slice(0, 80), role };
+}
+
+/**
+ * Reads that depend on who is asking are given the viewer's account by the
+ * dashboard. What that account may see is worked out here, from the staff list,
+ * and replaces any owner or role the request carried.
+ */
+async function viewerIs(guild: Guild, query: URLSearchParams): Promise<Reply | null> {
+  const viewer = query.get("viewer");
+  const role = viewer !== null && SNOWFLAKE.test(viewer) ? await staffRoleOf(guild.id, viewer) : null;
+  if (!role) return forbidden("use the moderation tools on this server. The owner can add you under Access");
+  query.set("owner", role === "owner" ? "1" : "0");
+  query.set("role", role);
+  return null;
 }
 
 const idOf = (value: string | undefined): number | null => {
@@ -60,6 +81,12 @@ export async function handleMod(request: ModRequest): Promise<Reply | null> {
   const [area, a, b] = segments;
 
   if (method === "GET") {
+    const asksAsSomeone =
+      (area === "members" && a !== undefined && (b === "messages" || b === "standing")) || area === "server-logs" || area === "messages";
+    if (asksAsSomeone) {
+      const refused = await viewerIs(guild, query);
+      if (refused) return refused;
+    }
     if (area === "actions" && a === "context" && b === undefined) return actionContextFor(ctx, state);
     if (area === "members" && a === undefined) return listMembers(ctx, query);
     if (area === "members" && a !== undefined && b === undefined) return memberProfile(ctx, a);
@@ -92,7 +119,7 @@ export async function handleMod(request: ModRequest): Promise<Reply | null> {
     return null;
   }
 
-  const actor = actorOf(body) ?? refuse(400, "The request did not say who is making it.");
+  const actor = await actorOf(guild, body);
   if (isReply(actor)) return actor;
   const payload = isRecord(body) ? body : {};
 
