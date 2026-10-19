@@ -4,6 +4,7 @@ import { EmptyState, LoadFailure } from "../mod/ModUi";
 import { AlertIcon, InboxIcon, InfoIcon } from "../Icons";
 import { inboxHref, isMyQueue } from "../../lib/ticket-format";
 import { needsFirstRun } from "../../lib/ticket-health";
+import { FillViewport } from "./FillViewport";
 import { FirstRun } from "./FirstRun";
 import { InboxList } from "./InboxList";
 import { InboxLive } from "./InboxLive";
@@ -82,6 +83,7 @@ export function InboxScreen({ guildId, viewerId, filters, context, list, selecte
         <FirstRun guildId={guildId} panels={ctx.panels} health={ctx.health} canManage={canManage} />
       ) : (
         <div className="tk-inbox" data-has-ticket={selected ? "true" : undefined}>
+          <FillViewport />
           <div className="tk-inbox-list mod-card" id={LIST_ID}>
             <TicketFilters guildId={guildId} filters={filters} panels={ctx.panels} variant="inbox" ticketId={selected?.id} viewerId={viewerId} />
             <div className="tk-list-tools">

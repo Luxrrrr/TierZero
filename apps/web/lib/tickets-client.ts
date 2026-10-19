@@ -1,6 +1,7 @@
 import {
   ticketListQuery,
   type MemberSearchHit,
+  type MemberSearchPage,
   type TicketActionResult,
   type TicketCloseRequest,
   type TicketContextDto,
@@ -134,7 +135,7 @@ export const ticketsClient = {
   count: (guildId: string, filters: Partial<TicketListFilters>, signal?: AbortSignal, hold?: Hold) =>
     ticketCall<TicketCountDto>(guildId, "GET", listPath("count", filters, hold), undefined, signal),
   findMembers: (guildId: string, q: string, signal?: AbortSignal) =>
-    ticketCall<MemberSearchHit[]>(guildId, "GET", membersPath({ q }), undefined, signal),
+    ticketCall<MemberSearchPage>(guildId, "GET", membersPath({ q }), undefined, signal),
   memberNames: (guildId: string, ids: readonly string[], signal?: AbortSignal) =>
     ticketCall<MemberSearchHit[]>(guildId, "GET", membersPath({ ids }), undefined, signal),
   rename: (guildId: string, ticketId: number, body: TicketRenameRequest) =>

@@ -271,6 +271,8 @@ export interface ReplySettings {
   teamName?: string;
   teamAvatar?: string;
   showStaffName?: boolean;
+  /** The wording of the line, with {name} for who sent it and {user} for a mention of them. */
+  staffLine?: string;
 }
 
 export interface ReplyIdentity {
@@ -291,7 +293,7 @@ export const DEFAULT_TEAM_NAME = "Support Team";
  */
 export function replyIdentity(
   replies: ReplySettings | undefined,
-  actor: { name: string; avatarUrl: string | null },
+  actor: { name: string; avatarUrl: string | null; userId?: string },
   botAvatar: string | null,
 ): ReplyIdentity {
   if (replies?.identity !== "team") return { name: actor.name.slice(0, 80) || "Staff", avatarUrl: actor.avatarUrl, team: false, staffLine: null };
@@ -299,7 +301,7 @@ export function replyIdentity(
     name: replies.teamName?.trim().slice(0, 80) || DEFAULT_TEAM_NAME,
     avatarUrl: replies.teamAvatar?.trim() || botAvatar,
     team: true,
-    staffLine: replies.showStaffName === true ? ticketStaffLine(actor.name) : null,
+    staffLine: replies.showStaffName === true ? ticketStaffLine(actor.name, replies.staffLine, actor.userId) : null,
   };
 }
 

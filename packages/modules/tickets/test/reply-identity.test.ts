@@ -15,6 +15,18 @@ describe("a dashboard reply under the team's name", () => {
     assert.equal(replies.identity, "staff");
     assert.equal(replies.teamName, "Support Team");
     assert.equal(replies.showStaffName, false);
+    // A server saved before the wording could be changed gets the new default.
+    assert.equal(replies.staffLine, "Sent by {user}");
+  });
+
+  test("the wording can be changed, and the line never carries a mention", async () => {
+    const w = setup(team({ showStaffName: true, staffLine: "Answered by {name} @everyone <@123>" }));
+    const { row, channel: ch } = await open(w);
+    const result = await replyToTicket(w.ctx, row.id, "On it", actor);
+    assert.equal(ch.webhookSent[0]!.content, "On it\n-# Answered by Grace everyone 123");
+    assert.equal(result.message.staffLineText, "-# Answered by Grace everyone 123");
+    const stored = await prisma.ticketMessage.findFirstOrThrow({ where: { ticketId: row.id, source: "dashboard" } });
+    assert.equal(JSON.parse(stored.sentAs!).line, "-# Answered by Grace everyone 123");
   });
 
   test("the webhook carries the team's name and picture, and the row keeps the real sender", async () => {
@@ -54,8 +66,10 @@ describe("a dashboard reply under the team's name", () => {
     const w = setup(team({ showStaffName: true }));
     const { row, channel: ch } = await open(w);
     const result = await replyToTicket(w.ctx, row.id, "On it @everyone", actor);
-    assert.equal(ch.webhookSent[0]!.content, "On it @everyone\n-# Replied by Grace");
-    assert.deepEqual((ch.webhookSent[0]!.allowedMentions as { parse: string[] }).parse, []);
+    assert.equal(ch.webhookSent[0]!.content, `On it @everyone\n-# Sent by <@${grace.id}>`);
+    const allowed = ch.webhookSent[0]!.allowedMentions as { parse: string[]; users: string[] };
+    assert.deepEqual(allowed.parse, []);
+    assert.ok(!allowed.users.includes(grace.id), "the sender is left out of the pings, so the mention in the line cannot notify them");
     const stored = await prisma.ticketMessage.findFirstOrThrow({ where: { ticketId: row.id, source: "dashboard" } });
     assert.equal(stored.content, "On it @everyone");
     assert.equal(JSON.parse(stored.sentAs!).staffLine, true);
@@ -66,8 +80,8 @@ describe("a dashboard reply under the team's name", () => {
     const w = setup(team({ showStaffName: true }));
     const { row, channel: ch } = await open(w);
     await replyToTicket(w.ctx, row.id, "x".repeat(1990), actor);
-    assert.deepEqual(ch.webhookSent.map((m) => String(m.content).length), [1990, 19]);
-    assert.equal(ch.webhookSent[1]!.content, "-# Replied by Grace");
+    assert.deepEqual(ch.webhookSent.map((m) => String(m.content).length), [1990, 32]);
+    assert.equal(ch.webhookSent[1]!.content, `-# Sent by <@${grace.id}>`);
     const stored = await prisma.ticketMessage.findMany({ where: { ticketId: row.id, source: "dashboard" }, orderBy: { id: "asc" } });
     assert.deepEqual(stored.map((m) => [m.content.length, JSON.parse(m.sentAs!).staffLine]), [[1990, false], [0, true]]);
   });
@@ -78,7 +92,7 @@ describe("a dashboard reply under the team's name", () => {
     ch.webhooks = "denied";
     const result = await replyToTicket(w.ctx, row.id, "On it", actor);
     assert.equal(result.delivery, "bot");
-    assert.equal((ch.sent.at(-1)!.options as { content: string }).content, "**Northwind Support**\nOn it\n-# Replied by Grace");
+    assert.equal((ch.sent.at(-1)!.options as { content: string }).content, `**Northwind Support**\nOn it\n-# Sent by <@${grace.id}>`);
     const stored = await prisma.ticketMessage.findFirstOrThrow({ where: { ticketId: row.id, source: "dashboard" } });
     assert.equal(stored.authorId, grace.id);
     assert.equal(stored.content, "On it");

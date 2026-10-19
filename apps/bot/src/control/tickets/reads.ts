@@ -22,7 +22,7 @@ import {
   type TicketTemplatesDto,
 } from "@tier0/core";
 import { storedBody } from "../messages.js";
-import { searchGuildMembers } from "../mod/members.js";
+import { searchGuildMemberPage } from "../mod/members.js";
 import { refOf, resolveUsers } from "../mod/names.js";
 import { awaitingStaffFor } from "./detail.js";
 import { summaryDto } from "./dto.js";
@@ -105,7 +105,7 @@ export async function findMembers(env: TicketEnv, query: URLSearchParams): Promi
     return ok(ids.map((id) => ({ user: refOf(refs, id) })));
   }
   const q = (query.get("q") ?? "").trim().slice(0, 100);
-  return searchGuildMembers({ client: env.client, guild: env.guild }, q);
+  return searchGuildMemberPage({ client: env.client, guild: env.guild }, q);
 }
 
 export async function ticketsAccess(env: TicketEnv): Promise<Reply> {

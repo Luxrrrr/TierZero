@@ -41,6 +41,8 @@ let ids: { billing: number; tech: number; legacy: number };
 const member = (id: string, roles: string[], manageGuild = false) => ({
   id,
   displayName: `Member ${id.slice(-2)}`,
+  nickname: null,
+  user: { username: `member${id.slice(-2)}`, globalName: null, bot: false },
   displayAvatarURL: () => `https://cdn.discordapp.com/avatars/${id}/a.png`,
   roles: { cache: new Map([[GUILD, {}], ...roles.map((role) => [role, {}] as [string, object])]) },
   permissions: { has: () => manageGuild },
@@ -584,7 +586,10 @@ describe("routes for the workspace's next screens", () => {
   test("members are found by name, or named by id", async () => {
     const found = await call("GET", "members?q=member 0", { viewer: TECH });
     assert.equal(found?.status, 200);
-    assert.ok(found?.body.length > 0);
+    assert.ok(found?.body.hits.length > 0);
+    assert.equal(found?.body.more, 0);
+    // Any part of a name matches, not only the start.
+    assert.ok((await call("GET", "members?q=ber01", { viewer: TECH }))?.body.hits.length > 0);
     const named = await call("GET", `members?ids=${TECH},nope`, { viewer: MANAGER });
     assert.deepEqual(named?.body.map((hit: { user: { userId: string } }) => hit.user.userId), [TECH]);
     assert.equal((await call("GET", "members?q=x", { viewer: NOBODY }))?.status, 403);
@@ -640,7 +645,7 @@ describe("opening a ticket as staff", () => {
     });
     const [ctxArg, request, actor] = calls[0]!.args as [unknown, any, any];
     assert.ok(ctxArg);
-    assert.deepEqual(request, { typeId: "tech", subject: "About Friday", answers: [], memberIds: [OPENER], firstMessage: null });
+    assert.deepEqual(request, { typeId: "tech", subject: "About Friday", answers: [], memberIds: [OPENER], firstMessage: null, notifyHandlers: false });
     assert.equal(actor.userId, TECH);
   });
 

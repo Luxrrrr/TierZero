@@ -34,19 +34,39 @@ describe("opening a ticket as staff", () => {
     assert.equal(events[0]!.actorId, grace.id);
   });
 
-  test("mentions the creator and the added members in the first message, and nobody else", async () => {
+  test("pings the added members and neither the staff member nor the handlers", async () => {
     const w = setup();
     const result = await openTicketAs(w.ctx, { typeId: "support", memberIds: [ada.id] }, actor);
     const welcome = w.sent.find((entry) => entry.target === channelOf(w, result.channelId));
     assert.ok(welcome);
-    assert.deepEqual(welcome.options.mentions, { users: [grace.id, ada.id], roles: [] });
+    assert.deepEqual(welcome.options.mentions, { users: [ada.id], roles: [] });
     assert.equal(welcome.values.members, `<@${ada.id}>`);
+    assert.equal(welcome.values.pingRoles, "");
+    // The staff member is named as text, not mentioned.
+    assert.equal(welcome.values.user, "grace");
+    assert.equal(welcome.body.content, "{members} {pingRoles}");
     assert.equal((await prisma.ticket.findUniqueOrThrow({ where: { id: result.id } })).controlsMessageId, welcome.message?.id);
+    // The default text mentions the members itself, so no second message is needed.
+    assert.equal(channelOf(w, result.channelId).sent.length, 1);
+  });
 
-    // The default first message has no {members}, so the people added are still told.
-    const follow = channelOf(w, result.channelId).sent.at(-1);
-    assert.equal(follow?.content, `<@${ada.id}>`);
-    assert.deepEqual((follow?.options as { allowedMentions: unknown }).allowedMentions, { users: [ada.id], roles: [] });
+  test("the handlers are pinged only when staff ask for it", async () => {
+    const w = setup();
+    const result = await openTicketAs(w.ctx, { typeId: "support", memberIds: [ada.id], notifyHandlers: true }, actor);
+    const welcome = w.sent.find((entry) => entry.target === channelOf(w, result.channelId));
+    assert.ok(welcome);
+    const mentions = welcome.options.mentions as { users: string[]; roles: string[] };
+    assert.deepEqual(mentions.users, [ada.id]);
+    assert.ok(mentions.roles.length > 0);
+    assert.match(String(welcome.values.pingRoles), /<@&\d+>/);
+  });
+
+  test("a custom first message that mentions {user} shows the staff member's name, not a mention", async () => {
+    const w = setup({}, { welcome: { content: "Hi {members}, {user} opened this", embeds: [], components: [] } });
+    const result = await openTicketAs(w.ctx, { typeId: "support", memberIds: [ada.id] }, actor);
+    const welcome = w.sent.find((entry) => entry.target === channelOf(w, result.channelId));
+    assert.equal(welcome?.values.user, "grace");
+    assert.ok(!JSON.stringify(welcome?.options.mentions).includes(grace.id));
   });
 
   test("a first message that holds {members} is not followed by a second mention", async () => {

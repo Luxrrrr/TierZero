@@ -5,7 +5,7 @@ import {
   readTicketMentions,
   readTicketSentAs,
   ticketMessageFromRow,
-  ticketStaffLine,
+  storedStaffLine,
   TRANSCRIPT_CSS,
   TRANSCRIPT_URL_ATTRS,
   TRANSCRIPT_VOID_TAGS,
@@ -322,7 +322,7 @@ export function renderStoredTranscriptText(
     const embeds = readTicketEmbeds(message.embeds);
     const attachments = readTicketAttachments(message.attachments);
     const sentAs = readTicketSentAs(message.sentAs);
-    const staffLine = sentAs?.staffLine ? ticketStaffLine(message.authorName) : null;
+    const staffLine = storedStaffLine(sentAs, message.authorName);
     if (message.content) lines.push(plainMentions(message.content, message.mentions, posters));
     else if (embeds.length === 0 && attachments.length === 0 && !staffLine) lines.push(texts.unavailable);
     if (staffLine) lines.push(staffLine);

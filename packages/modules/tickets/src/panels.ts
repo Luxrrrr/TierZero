@@ -63,7 +63,7 @@ export const typeField = s.object({
   }),
   welcome: s.message({
     label: "First message in the ticket",
-    note: "Only the roles picked under \"Who to ping when a ticket opens\" are notified, and {pingRoles} names them, so keep it in the text. The Close and Claim buttons are added under it for you.",
+    note: "Only the roles picked under \"Who to ping when a ticket opens\" are notified, and {pingRoles} names them, so keep it in the text. A member opening a ticket pings themselves and those roles; a ticket staff open from the dashboard pings neither the staff member nor the roles unless they tick Notify the handlers. The Close and Claim buttons are added under it for you.",
     starting: OPENED_MESSAGE,
     variables: WELCOME_VARIABLES,
     components: false,

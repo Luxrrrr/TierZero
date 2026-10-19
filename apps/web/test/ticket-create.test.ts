@@ -95,6 +95,8 @@ describe("createRequest", () => {
     assert.equal(request.firstMessage, "Hi");
     assert.equal(request.memberIds.length, 2);
     assert.equal(request.typeId, "a");
+    assert.equal(request.notifyHandlers, false);
+    assert.equal(createRequest({ ...emptyDraft("a"), notifyHandlers: true }, chosen).notifyHandlers, true);
   });
 });
 

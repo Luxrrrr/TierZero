@@ -224,7 +224,7 @@
     display: grid;
     grid-template-columns: minmax(18rem, 21rem) minmax(0, 1fr);
     align-items: stretch;
-    height: max(38rem, calc(100dvh - 12rem));
+    height: max(38rem, var(--tk-fill, calc(100dvh - 11rem)));
   }
 
   .tk-inbox[data-has-ticket="true"] .tk-inbox-list,
@@ -2707,6 +2707,33 @@
 
 .tk-member-hit[aria-selected="true"] {
   background: var(--accent-soft);
+}
+
+.tk-member-hits[aria-busy="true"] {
+  opacity: 0.6;
+}
+
+.tk-member-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.tk-member-username {
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+}
+
+.tk-member-hit mark {
+  background: transparent;
+  color: var(--accent-text);
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.tk-member-retry {
+  align-self: flex-start;
 }
 
 .tk-blocked-body {

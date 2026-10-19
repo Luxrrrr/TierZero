@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
-import type { UserRef } from "@tier0/core";
+import type { MemberSearchHit, UserRef } from "@tier0/core";
 import { Avatar, displayName } from "../mod/ModUi";
+import { splitMatch } from "../../lib/name-match";
 import { ticketsClient } from "../../lib/tickets-client";
 
-const SEARCH_DELAY_MS = 300;
+const SEARCH_DELAY_MS = 150;
 
 /**
  * Finds a member of the server by name, the way Moderation's "Find a member"
@@ -35,7 +36,9 @@ export function MemberSearch({
   onName?(name: string): void;
 }) {
   const [query, setQuery] = useState("");
-  const [hits, setHits] = useState<UserRef[]>([]);
+  const [hits, setHits] = useState<MemberSearchHit[]>([]);
+  const [more, setMore] = useState(0);
+  const [attempt, setAttempt] = useState(0);
   const [active, setActive] = useState(-1);
   const [state, setState] = useState<"idle" | "searching" | "done" | "failed">("idle");
   const [failure, setFailure] = useState<string | null>(null);
@@ -48,24 +51,27 @@ export function MemberSearch({
     const q = query.trim();
     if (q.length < 2) {
       setHits([]);
+      setMore(0);
       setState("idle");
       setActive(-1);
       return;
     }
     const ask = ++latest.current;
     const controller = new AbortController();
+    setState("searching");
     const timer = window.setTimeout(async () => {
-      setState("searching");
       const result = await ticketsClient.findMembers(guildId, q, controller.signal).catch(() => null);
       if (ask !== latest.current || controller.signal.aborted) return;
       if (!result || !result.ok) {
         setFailure(result && !result.ok ? result.error : null);
         setState("failed");
         setHits([]);
+        setMore(0);
         return;
       }
       const skip = new Set(exclude);
-      setHits(result.value.map((hit) => hit.user).filter((user) => !skip.has(user.userId)));
+      setHits(result.value.hits.filter((hit) => !skip.has(hit.user.userId)));
+      setMore(result.value.more);
       setActive(-1);
       setState("done");
     }, SEARCH_DELAY_MS);
@@ -74,13 +80,14 @@ export function MemberSearch({
       window.clearTimeout(timer);
     };
     // `exclude` is read when the answer lands; a new array each render must not search again.
-  }, [guildId, query]);
+  }, [guildId, query, attempt]);
 
   const pick = (user: UserRef | undefined) => {
     if (!user) return;
     onPick(user);
     setQuery("");
     setHits([]);
+    setMore(0);
     setActive(-1);
     setState("idle");
   };
@@ -94,8 +101,8 @@ export function MemberSearch({
       setActive((index) => (index <= 0 ? hits.length - 1 : index - 1));
     } else if (event.key === "Enter") {
       event.preventDefault();
-      if (active >= 0) pick(hits[active]);
-      else if (hits.length === 1) pick(hits[0]);
+      if (active >= 0) pick(hits[active]?.user);
+      else if (hits.length === 1 && state === "done") pick(hits[0]?.user);
       else if (onName && query.trim() !== "") onName(query.trim());
     } else if (event.key === "Escape" && query !== "") {
       event.preventDefault();
@@ -108,11 +115,13 @@ export function MemberSearch({
     state === "searching"
       ? "Searching"
       : state === "failed"
-        ? (failure ?? "The search did not work. Try again.")
+        ? (failure ?? "The search did not work.")
         : state === "done"
           ? hits.length === 0
             ? "Nobody in the server has that name."
-            : `${hits.length} found. Use the arrow keys to pick one.`
+            : more > 0
+              ? `${hits.length} shown and ${more} more. Keep typing to narrow it down.`
+              : `${hits.length} found. Use the arrow keys to pick one.`
           : query.trim().length === 1
             ? "Type at least two letters."
             : "";
@@ -143,9 +152,14 @@ export function MemberSearch({
       <p className="tk-small tk-muted" id={statusId} aria-live="polite">
         {status}
       </p>
+      {state === "failed" ? (
+        <button type="button" className="btn btn-secondary btn-sm tk-member-retry" onClick={() => setAttempt((count) => count + 1)}>
+          Try again
+        </button>
+      ) : null}
       {hits.length > 0 ? (
-        <ul className="tk-member-hits" role="listbox" id={listId} aria-label="Members found">
-          {hits.map((user, index) => (
+        <ul className="tk-member-hits" role="listbox" id={listId} aria-label="Members found" aria-busy={state === "searching" || undefined}>
+          {hits.map(({ user, username }, index) => (
             <li
               key={user.userId}
               id={`${listId}-${index}`}
@@ -157,12 +171,33 @@ export function MemberSearch({
               onMouseEnter={() => setActive(index)}
             >
               <Avatar user={user} size="sm" menu={false} />
-              <span className="tk-member-name">{displayName(user)}</span>
+              <span className="tk-member-text">
+                <span className="tk-member-name">
+                  <Highlight text={displayName(user)} query={query} />
+                </span>
+                {username && username !== displayName(user) ? (
+                  <span className="tk-member-username">
+                    <Highlight text={username} query={query} />
+                  </span>
+                ) : null}
+              </span>
               {!user.inServer ? <span className="tk-muted tk-small">Not in the server</span> : null}
             </li>
           ))}
         </ul>
       ) : null}
     </div>
+  );
+}
+
+function Highlight({ text, query }: { text: string; query: string }) {
+  const { before, match, after } = splitMatch(text, query);
+  if (match === "") return <>{text}</>;
+  return (
+    <>
+      {before}
+      <mark>{match}</mark>
+      {after}
+    </>
   );
 }

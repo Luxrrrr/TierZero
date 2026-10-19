@@ -38,9 +38,10 @@ export interface CreateDraft {
   answers: string[];
   members: UserRef[];
   firstMessage: string;
+  notifyHandlers: boolean;
 }
 
-export const emptyDraft = (typeId: string | null = null): CreateDraft => ({ typeId, subject: "", answers: [], members: [], firstMessage: "" });
+export const emptyDraft = (typeId: string | null = null): CreateDraft => ({ typeId, subject: "", answers: [], members: [], firstMessage: "", notifyHandlers: false });
 
 /** Adds a member to the draft's list, once, up to the most a ticket can start with. */
 export function withMember(members: readonly UserRef[], user: UserRef): { members: UserRef[]; problem: string | null } {
@@ -70,6 +71,7 @@ export interface CreateBody {
   answers: TicketAnswer[];
   memberIds: string[];
   firstMessage: string | null;
+  notifyHandlers: boolean;
 }
 
 /** The request for a draft: answers the staff member filled in, paired with their question. */
@@ -86,6 +88,7 @@ export function createRequest(draft: CreateDraft, type: TicketTypeOption): Creat
     answers,
     memberIds: draft.members.map((member) => member.userId),
     firstMessage: firstMessage === "" ? null : firstMessage,
+    notifyHandlers: draft.notifyHandlers,
   };
 }
 

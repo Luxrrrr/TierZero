@@ -17,11 +17,12 @@ import { addMember, categoryFor, topicFor } from "./channels.js";
 import type { TicketChannel, TicketCtx } from "./context.js";
 import { recordEvent, ticketRows } from "./controls.js";
 import { ticketChannelName } from "./naming.js";
+import { OPENED_MESSAGE } from "./messages.js";
 import { resetAutoClose } from "./notice.js";
 import { createChannel } from "./open.js";
 import { TicketActionError } from "./outcome.js";
 import { atLeastAMinute, ticketNumber } from "./records.js";
-import { effectiveChannelName, findType, subjectOf, type PanelType } from "./resolve.js";
+import { effectiveChannelName, findType, pingRolesOf, subjectOf, type PanelType } from "./resolve.js";
 import { sendReply } from "./webhooks.js";
 import { welcomeBody, welcomeFallback, welcomeValuesOf } from "./welcome.js";
 
@@ -43,6 +44,9 @@ const CATEGORY_TEXT = {
   categoryGone: "This ticket type's category was deleted. Choose another in the ticket settings first.",
   categoryFull: "This ticket type's category is full. Close some tickets or set an overflow category in the ticket settings.",
 } as const;
+
+/** The default first message with the opener left out of its text, since the opener here is the staff member. */
+const STAFF_OPENED_CONTENT = "{members} {pingRoles}";
 
 const CREATE_FAILED =
   "The bot could not create the ticket. Check that it can manage channels and roles in the ticket category, or manage threads in the panel's channel for a thread ticket, and that the category has room.";
@@ -161,12 +165,21 @@ export async function openTicketAs(ctx: TicketCtx, request: StaffTicketRequest, 
   }
   const addedIds = added.map((person) => person.id);
 
-  const values = welcomeValuesOf(ctx.settings, type, ticket, addedIds);
-  const body = welcomeBody(type, ticket, values);
+  // The staff member is the opener on the record but is never mentioned: they know they opened it,
+  // so the message names them as text. The handlers are only pinged when staff asked for it, apart from
+  // a thread, which only lets in the roles its first message mentions.
+  const pinged = request.notifyHandlers === true || type.opening.mode === "thread" ? [...new Set([...type.handlers, ...pingRolesOf(type)])] : [];
+  const values = {
+    ...welcomeValuesOf(ctx.settings, type, ticket, addedIds),
+    user: creator?.displayName ?? actor.name,
+    pingRoles: pinged.map((id) => `<@&${id}>`).join(" "),
+  };
+  const welcomeType = type.welcome.content === OPENED_MESSAGE.content ? { ...type, welcome: { ...type.welcome, content: STAFF_OPENED_CONTENT } } : type;
+  const body = welcomeBody(welcomeType, ticket, values);
   const welcome = await ctx.send(channel, body, values, {
-    fallback: welcomeFallback(type, ticket, values),
+    fallback: welcomeFallback(welcomeType, ticket, values),
     rows: ticketRows(ctx.settings, ticket, type),
-    mentions: { users: [actor.userId, ...addedIds], roles: [] },
+    mentions: { users: addedIds, roles: pinged },
   });
   if (welcome) {
     await prisma.ticket.update({ where: { id: ticket.id }, data: { controlsMessageId: welcome.id } });
@@ -175,9 +188,13 @@ export async function openTicketAs(ctx: TicketCtx, request: StaffTicketRequest, 
   // An owner's first message that leaves out {members} would add people without telling them.
   const shown = textOf(applyVariablesToMessage(body, Object.fromEntries(Object.entries(values).map(([key, value]) => [key, String(value)]))));
   const unmentioned = addedIds.filter((id) => !shown.includes(`<@${id}>`));
-  if (unmentioned.length > 0) {
+  const unnotified = pinged.filter((id) => !shown.includes(`<@&${id}>`));
+  if (unmentioned.length > 0 || unnotified.length > 0) {
     const extra = await channel
-      .send({ content: unmentioned.map((id) => `<@${id}>`).join(" "), allowedMentions: { users: unmentioned, roles: [] } })
+      .send({
+        content: [...unmentioned.map((id) => `<@${id}>`), ...unnotified.map((id) => `<@&${id}>`)].join(" "),
+        allowedMentions: { users: unmentioned, roles: unnotified },
+      })
       .catch(() => null);
     if (extra) await storeMessage(ctx, ticket, extra);
   }

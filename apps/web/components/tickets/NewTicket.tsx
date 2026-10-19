@@ -297,6 +297,17 @@ function NewTicketDialog({ guildId, panels, viewerId, onClose }: { guildId: stri
             <p className="pf-field-hint">Posted in the ticket under your name as soon as it opens.</p>
           </div>
 
+          <div className="pf-field">
+            <label className="tk-tpl-text">
+              <input type="checkbox" checked={draft.notifyHandlers} disabled={busy} onChange={(event) => change({ notifyHandlers: event.target.checked })} />
+              <span>Notify the handlers</span>
+            </label>
+            <p className="pf-field-hint">
+              Pings the roles that handle this type. Left off, only the members you add are notified, and you are never pinged. A thread
+              ticket always notifies them, since a thread only lets in the roles it mentions.
+            </p>
+          </div>
+
           {problem ? (
             <p className="pf-field-error" role="alert">
               {problem}

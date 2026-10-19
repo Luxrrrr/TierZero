@@ -89,7 +89,8 @@ export async function sendReply(
 
   const type = typeOfTicket(ctx.settings, ticket)?.type;
   const people = [ticket.openerId, ...(ticket.claimedById ? [ticket.claimedById] : []), ...memberIdsIn(ctx, channel)];
-  const allowedMentions = replyMentions(people, staffRolesOf(ctx.settings, type));
+  // The line naming the sender may mention them, which must never ping them, so they are left out of the allowed users.
+  const allowedMentions = replyMentions(people.filter((id) => id !== actor.userId), staffRolesOf(ctx.settings, type));
   const who = replyIdentity(ctx.settings.general?.replies, actor, ctx.client.user?.displayAvatarURL?.() ?? null);
   const now = new Date();
   const embedPayloads = replyEmbedPayloads(embeds, now);
@@ -160,7 +161,7 @@ export async function sendReply(
         at: part.message.createdAt ?? at,
         // A webhook's message and the bot's own both carry Discord's APP tag.
         bot: true,
-        sentAs: who.team ? JSON.stringify({ name: who.name, avatarUrl: who.avatarUrl, staffLine: tail }) : null,
+        sentAs: who.team ? JSON.stringify({ name: who.name, avatarUrl: who.avatarUrl, staffLine: tail, ...(tail ? { line: who.staffLine!.replace(/<@d+>/g, `@${actor.name}`) } : {}) }) : null,
         embeds: index === 0 && embeds.length > 0 ? replyEmbedsJson(embeds, now) : "[]",
         replyToId: index === 0 && replyTo ? replyTo.messageId : null,
       });
