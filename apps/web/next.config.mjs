@@ -15,6 +15,24 @@ const nextConfig = {
   env: {
     NEXT_PUBLIC_APP_VERSION: root.version ?? "0.0.0",
   },
+  poweredByHeader: false,
+  // Nothing here is meant to be shown inside another site's frame, and a
+  // dashboard that can be framed can be clicked through. frame-ancestors is the
+  // modern control and X-Frame-Options covers browsers that ignore it.
+  async headers() {
+    return [
+      {
+        source: "/:path*",
+        headers: [
+          { key: "Content-Security-Policy", value: "frame-ancestors 'none'" },
+          { key: "X-Frame-Options", value: "DENY" },
+          { key: "X-Content-Type-Options", value: "nosniff" },
+          { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+          { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
+        ],
+      },
+    ];
+  },
   // next dev otherwise writes a pair of editor tooling files into this
   // directory on every run. They are generated output, not project files.
   agentRules: false,
