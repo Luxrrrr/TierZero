@@ -1,6 +1,6 @@
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
-import { AUTOMOD_NAME, automodRef, isAutomodActor, actorRoleWord, auditActorRole, isAutomodRole, canEditInfraction, can, canDeleteNote, canEditNote, canTakeAction, canVoidAction, isInForce, isModActionKind, isStaffRole, permissionForAction } from "../dist/mod.js";
+import { AUTOMOD_NAME, automodRef, isAutomodActor, actorRoleWord, auditActorRole, isAutomodRole, AUDIT_ROLE_LABEL, canEditInfraction, can, canDeleteNote, canEditNote, canTakeAction, canVoidAction, isInForce, isModActionKind, isStaffRole, permissionForAction } from "../dist/mod.js";
 
 describe("can", () => {
   test("lets every role look and add notes", () => {
@@ -250,6 +250,7 @@ describe("audit actors", () => {
   test("a stored role is read as itself, or as a moderator when unknown", () => {
     assert.equal(auditActorRole("automod"), "automod");
     assert.equal(auditActorRole("admin"), "admin");
+    assert.equal(auditActorRole("discord"), "discord");
     assert.equal(auditActorRole("none"), "mod");
     assert.equal(auditActorRole(""), "mod");
   });
@@ -258,6 +259,14 @@ describe("audit actors", () => {
     assert.equal(actorRoleWord("mod"), "moderator");
     assert.equal(actorRoleWord("owner"), "owner");
     assert.equal(actorRoleWord("automod"), "");
+    assert.equal(actorRoleWord("discord"), "discord moderator");
+  });
+
+  test("a Discord moderator has its own label and is not a role a viewer can hold", () => {
+    assert.equal(AUDIT_ROLE_LABEL.discord, "Discord moderator");
+    assert.equal(AUDIT_ROLE_LABEL.mod, "Moderator");
+    assert.equal(isStaffRole("discord"), false);
+    assert.equal(isAutomodRole("discord"), false);
   });
 });
 

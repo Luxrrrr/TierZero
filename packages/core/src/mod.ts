@@ -226,9 +226,18 @@ export const ROLE_LABEL: Record<StaffRole, string> = {
 /**
  * Who an audit entry is shown as. Automod is the bot acting on its own and is
  * deliberately not a StaffRole: that type decides what a person may do, and
- * the bot has no seat in it.
+ * the bot has no seat in it. "discord" is someone who acted from Discord with
+ * the permission for it but has no place on the staff list. Both only ever
+ * name the actor on an entry; neither is a role a viewer can hold.
  */
-export type AuditActorRole = StaffRole | "automod";
+export type AuditActorRole = StaffRole | "automod" | "discord";
+
+/** What an audit actor's role reads as, including the two that are not on the staff list. */
+export const AUDIT_ROLE_LABEL: Record<AuditActorRole, string> = {
+  ...ROLE_LABEL,
+  automod: "Automod",
+  discord: "Discord moderator",
+};
 
 /**
  * The one name automod is shown under, wherever an actor, moderator or author
@@ -239,14 +248,16 @@ export const AUTOMOD_NAME = AUTOMOD_ACTOR_NAME;
 
 export const isAutomodRole = (role: AuditActorRole): role is "automod" => role === "automod";
 
+export const isDiscordRole = (role: AuditActorRole): role is "discord" => role === "discord";
+
 /** Narrows a stored role to what an entry can display, treating anything unknown as a moderator. */
 export function auditActorRole(stored: string): AuditActorRole {
-  return stored === "automod" || isStaffRole(stored) ? stored : "mod";
+  return stored === "automod" || stored === "discord" || isStaffRole(stored) ? stored : "mod";
 }
 
 /** The word after an actor's name ("moderator"), or an empty string for automod, which is its own name. */
 export function actorRoleWord(role: AuditActorRole): string {
-  return isAutomodRole(role) ? "" : ROLE_LABEL[role].toLowerCase();
+  return isAutomodRole(role) ? "" : AUDIT_ROLE_LABEL[role].toLowerCase();
 }
 
 /** Who is doing something. The dashboard fills this in from the session, never from the browser. */

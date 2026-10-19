@@ -87,6 +87,8 @@ export {
   actorRoleWord,
   auditActorRole,
   isAutomodRole,
+  isDiscordRole,
+  AUDIT_ROLE_LABEL,
   ROLE_LABEL,
   STAFF_ROLES,
   can,
