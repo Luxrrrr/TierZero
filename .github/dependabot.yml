@@ -1,17 +1,33 @@
 version: 2
 updates:
+  # One pull request a month with the minor and patch updates that are due, and
+  # none for a new major version. A major version of Node, Prisma, TypeScript or
+  # ESLint is a decision made by hand, with a rebuild to test it.
   - package-ecosystem: npm
     directory: /
     schedule:
-      interval: weekly
+      interval: monthly
     # A release has to be a month old before a routine update is proposed.
-    # Security updates are not held back by this.
     cooldown:
       default-days: 30
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 1
+    groups:
+      minor-and-patch:
+        update-types:
+          - minor
+          - patch
+    ignore:
+      - dependency-name: "*"
+        update-types:
+          - version-update:semver-major
   - package-ecosystem: docker
     directories:
       - /apps/bot
       - /apps/web
     schedule:
       interval: monthly
+    open-pull-requests-limit: 1
+    ignore:
+      - dependency-name: "*"
+        update-types:
+          - version-update:semver-major
