@@ -835,7 +835,7 @@ export default defineModule({
     },
     post: {
       label: "Post the verification message",
-      help: "Puts the message with its verify button in the channel above, or updates it if it is already there. Save your changes first.",
+      help: "Puts the message with its verify button in the channel above, or updates it if it is already there.",
       async run({ ctx }) {
         const channelId = ctx.settings.post.channel;
         const channel = channelId ? ctx.guild.channels.cache.get(channelId) : undefined;

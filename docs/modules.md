@@ -364,7 +364,7 @@ actions: {
 },
 ```
 
-The page runs an action against the saved settings, so it greys the buttons out while there are unsaved edits or the feature is off. `message` is shown to whoever pressed the button. The control API route is `POST /guilds/:id/modules/:moduleId/actions/:actionId` with `{ input }`, and `describe()` lists them as `actions`.
+On a page split into sections, `section` names the part an action is drawn at the top of, and an action without one is drawn above all of them. The page runs an action against the saved settings, so it greys the buttons out while there are unsaved edits or the feature is off. `message` is shown to whoever pressed the button. The control API route is `POST /guilds/:id/modules/:moduleId/actions/:actionId` with `{ input }`, and `describe()` lists them as `actions`.
 
 ## Notices
 

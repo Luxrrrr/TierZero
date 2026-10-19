@@ -42,7 +42,8 @@ const number = (value: unknown, fallback: number): number => (typeof value === "
 export const gamingActions: Record<string, ModuleAction<GamingSettings>> = {
   openSignup: {
     label: "Open a sign-up",
-    help: "Posts a sign-up for a scrim or tournament with its join buttons. Save your changes first.",
+    section: "scrimSignups",
+    help: "Posts a sign-up for a scrim or tournament with its join buttons.",
     input: createInput,
     async run({ ctx, input }: { ctx: GamingCtx; input: Input }) {
       if (!ctx.settings.signups.enabled) return { ok: false, message: "Turn on Scrim and tournament sign-ups first, and save." };
@@ -86,7 +87,8 @@ export const gamingActions: Record<string, ModuleAction<GamingSettings>> = {
 
   closeSignup: {
     label: "Close a sign-up",
-    help: "Stops taking sign-ups. Save your changes first.",
+    section: "scrimSignups",
+    help: "Stops taking sign-ups.",
     input: closeInput,
     async run({ ctx, input }: { ctx: GamingCtx; input: Input }) {
       const event = await eventById(ctx.guild.id, number(input.number, 0));

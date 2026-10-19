@@ -363,6 +363,8 @@ export interface RowAction<T = unknown> {
 export interface ModuleAction<T = unknown> {
   label: string;
   help?: string;
+  /** On a page split into sections, the section whose top it is drawn at. Without it, above all of them. */
+  section?: string;
   input?: ObjectField<Shape>;
   run(args: { ctx: ModuleContext<T>; input: Record<string, unknown> }): Promise<RowActionResult>;
 }

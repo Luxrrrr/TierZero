@@ -293,12 +293,26 @@ export function SettingsForm({
     return cards;
   };
 
-  const actionsCard =
-    moduleActions.length > 0 && moduleId !== undefined ? (
-      <ModuleActionsCard guildId={guildId} moduleId={moduleId} actions={moduleActions} locked={actionsLocked} ctx={ctx} />
-    ) : null;
-
   const parts = sections ? settingsSections(schema) : null;
+  const partIds = new Set((parts ?? []).map((part) => part.id));
+  const cardFor = (actions: ActionDescription[]) =>
+    actions.length > 0 && moduleId !== undefined ? (
+      <ModuleActionsCard guildId={guildId} moduleId={moduleId} actions={actions} locked={actionsLocked} ctx={ctx} />
+    ) : null;
+  // An action names the part of a split page it belongs to; any other is drawn above the page.
+  const actionsCard = cardFor(moduleActions.filter((action) => !action.section || !partIds.has(action.section)));
+  const partIntro: Record<string, ReactNode> = { ...sectionIntro };
+  for (const id of partIds) {
+    const card = cardFor(moduleActions.filter((action) => action.section === id));
+    if (card) {
+      partIntro[id] = (
+        <>
+          {sectionIntro?.[id]}
+          <div className="settings-groups">{card}</div>
+        </>
+      );
+    }
+  }
   if (!parts) {
     return (
       <div className="settings-groups">
@@ -311,11 +325,11 @@ export function SettingsForm({
 
   return (
     <>
-      {actionsCard}
+      {actionsCard ? <div className="settings-groups">{actionsCard}</div> : null}
     <SectionedSettings
       sections={parts}
       errors={errors}
-      intro={sectionIntro}
+      intro={partIntro}
       extra={extraSections}
       render={(section) => (
         <div className="settings-groups">
@@ -380,7 +394,7 @@ function ModuleActionsCard({
                 onClick={() => (action.input ? setOpen(open === action.id ? null : action.id) : void runner.run("", action, {}))}
               >
                 {runner.running === `#${action.id}` ? <span className="spinner" aria-hidden="true" /> : null}
-                {action.input ? "Set up" : "Run"}
+                {action.input ? "Fill in" : "Run"}
               </button>
             </div>
           ))}
@@ -388,7 +402,7 @@ function ModuleActionsCard({
         {active?.input ? (
           <RowActionPanel
             key={active.id}
-            action={active}
+            action={{ id: active.id, label: active.label }}
             initial={defaultsFor((active.input.fields ?? {}) as Fields, makeRowId)}
             running={runner.running === `#${active.id}`}
             renderFields={({ value, onChange: setInput, errors, disabled }) =>

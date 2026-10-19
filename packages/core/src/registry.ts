@@ -95,6 +95,7 @@ export interface ActionDescription {
   id: string;
   label: string;
   help?: string;
+  section?: string;
   input?: FieldDescriptor;
 }
 
@@ -190,6 +191,7 @@ export class ModuleRegistry {
         id,
         label: action.label,
         help: action.help,
+        section: action.section,
         input: action.input?.describe(),
       })),
       rows: Object.fromEntries(
