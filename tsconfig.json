@@ -5,6 +5,7 @@
     { "path": "packages/db" },
     { "path": "packages/modules/utility" },
     { "path": "packages/modules/welcome" },
+    { "path": "packages/modules/verification" },
     { "path": "packages/modules/roles" },
     { "path": "packages/modules/automod" },
     { "path": "packages/modules/leveling" },

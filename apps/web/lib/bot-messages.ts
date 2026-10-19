@@ -372,7 +372,7 @@ export function kindOf(starting: MessageBody): MessageKind | null {
  * Features in the order owners reach for them: what moderators and members see
  * most comes first. A feature not listed follows, by name.
  */
-export const FEATURE_ORDER = ["moderation", "automod", "tickets", "welcome", "roles", "leveling", "feeds", "utility", "auditlog", "serverlog", "system"];
+export const FEATURE_ORDER = ["moderation", "automod", "tickets", "welcome", "verification", "roles", "leveling", "feeds", "utility", "auditlog", "serverlog", "system"];
 
 function featureRank(id: string): number {
   const index = FEATURE_ORDER.indexOf(id);

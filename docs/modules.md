@@ -508,6 +508,17 @@ tasks: {
 
 Tasks are database rows, so they survive a restart. `cancel` matches on a subset of the payload.
 
+## Verification
+
+`packages/modules/verification` is the reference for a module that answers its own buttons and a modal.
+
+- The post is `ctx.send` with `components: false` on the field and the module's button as `rows`. The bot finds its earlier post by the button's custom id in the last 50 messages of the channel and edits it with `ctx.edit`, so nothing is stored and a repost can't leave two live buttons. A module that posts to a channel it can't search should store ids instead, as roles does.
+- `ctx.reply` drops every button except links. To put a button of the module's own on an ephemeral reply, send it with `ctx.reply` and then call `interaction.editReply({ components })`, which leaves the text alone.
+- A rewritable reply to a command or button is a `s.message` with `delivery: "dm"`, `components: false`, `compact: true` and `audience: "private"`, filled with `ctx.reply`.
+- `ChallengeBook` in `src/logic.ts` holds codes and miss counts in memory on purpose: it keeps a guessable answer out of the database, and a restart costs a member one more press. Nothing in it is imported from discord.js, so `test/logic.test.ts` drives it with a fake clock.
+- A setting that has to apply at a later time, such as removing a member who never verifies, is a `ctx.tasks.reschedule` on join and a `ctx.tasks.cancel` on leave. The handler checks the setting and the member again when it runs, since either may have changed.
+- Nothing on the settings page can run the post: `rows` actions exist only for list rows. A top-level action would need a new hook in `packages/core`.
+
 ## Testing
 
 `pnpm test` builds the workspace and runs Node's built-in test runner. Tests go in a `test` folder next to the module and import the built output.

@@ -9,6 +9,7 @@
 | Automod | Seven rules: invites, links, capitals, repeated text, mentions, banned words, rate limiting. |
 | Tickets | Panels members use to open a private channel or thread with the right staff. |
 | Welcome messages | Greetings, farewells and roles on join. |
+| Verification | A button, captcha or question new members pass to get a role. |
 | Role menus | Members pick their roles from buttons or a dropdown. |
 | Log channel | Posts edits, deletions, joins, role changes and more into a Discord channel. |
 | Leveling | XP, role rewards and a leaderboard, with an optional public web page for it. No image cards. |
@@ -40,6 +41,7 @@ Changes on a settings page are kept until you press **Save changes** (or Ctrl+S)
 - [Automod](#automod)
 - [Welcome messages](#welcome-messages)
 - [Role menus](#role-menus)
+- [Verification](#verification)
 - [Tickets](#tickets)
 - [Log channel](#log-channel)
 - [News and patch notes](#news-and-patch-notes)
@@ -546,6 +548,41 @@ The feature shows **Needs setup** until it has something to do: a greeting chann
 ![Welcome message settings with a live preview](images/welcome-settings.png)
 
 ## Role menus
+
+## Verification
+
+New members get a role only after they pass a check. Pick a **Verified role** and, if you like, an **Unverified role** that is given on join and taken away on a pass. Hide your channels from everyone but the verified role and a new member sees nothing until they verify. The feature shows **Needs setup** until a verified role is picked.
+
+**How members verify** is one of three:
+
+- **Press a button.** One click.
+- **Captcha.** A few quick rounds with no images, shown only to that member. **Rounds** says how many (one to five) and **Kinds of round** says which ones they are drawn from:
+  - **Press the picture**: six emoji buttons, and they press the one they are told.
+  - **Count them**: they count some pictures and press the number.
+  - **Odd one out**: one button is different from the rest.
+  - **Which does not belong**: three buttons are alike and one is not.
+  - **Smallest to biggest**: they press three pictures in order of size.
+  - **A small puzzle**: a sum, or a word to type backwards.
+  - **Code in squares**: a four character code drawn in coloured squares, which they type. Each member's code has its own colours and a little noise. Leave it out if members use screen readers.
+
+  Getting a round wrong ends the attempt and costs a try, and they start again from the first round with new ones. The buttons carry random ids, so nothing in them says which is right. The puzzles are in English and are not editable, but the text around each round is.
+- **Answer a question.** You write the question and a list of accepted answers. Any one of them passes, ignoring capitals, accents and extra spaces.
+
+For the captcha and the question, **Tries allowed** counts wrong answers. When they run out the member is either locked out for a length you set or removed from the server, and can join again and start over. A captcha or question that has gone unanswered for ten minutes, or that was shown before the bot restarted, is replaced when the member presses the button again, and the tries they have already used are kept.
+
+**Where members verify** takes a channel, a direct message or both. With a direct message the bot sends each new member the message and its button as they join, and nothing is posted in a channel. A member with direct messages closed cannot verify that way, so pick both if that matters. For the channel, pick it under **Verification message**, save, then press **Post the verification message** on the settings page. `/verification post` in Discord does the same and needs Manage Server. The message is edited with the message builder, and the bot adds the button under it. Running the command again edits the message in place, and removes any extra copy in that channel, instead of posting a second one. The bot finds its own message by the button on it, so nothing is stored. If you change the channel, the old message stays where it was, so delete it yourself. The button keeps working after a restart. `/verification send user` makes a member verify again: it takes the verified role back, gives the unverified role, restarts the removal timer and sends them the verification message by direct message. It needs Manage Server.
+
+Under **New members**:
+
+- **Minimum account age** keeps very new accounts out. A younger account is either **held back**, which lets them join but refuses the button until the account is old enough (and tells them when), or **removed** as soon as they join.
+- **A member who never verifies** is left alone by default. Choose to remove them after a wait from a minute to 28 days. This only applies to members who joined while the feature was on, and the wait survives a restart. A member who leaves, or is given the verified role by hand, is taken off the schedule.
+- The bot can send a removed member a direct message with the reason first.
+
+Bots are left out by default. A **Log channel**, if set, gets a post when someone verifies, runs out of tries or is removed.
+
+**Raid protection** uses Discord's own defences when many people join at once. Set how many people and how short a time, such as 10 people within a minute. When that happens the bot raises the server's verification level to Very High, which only lets in accounts with a verified phone number, and pauses invites. After **How long it lasts** it puts both back, but only the level if it is still the one the bot set. It can tell a channel when it starts and ends. **Start raid protection now** and **End raid protection now** on the settings page do the same by hand. Both changes need the bot to have Manage Server. If the bot restarts during a raid, the protections still end on time, but **End raid protection now** can't find the raid until then.
+
+The bot needs Manage Roles and Kick Members, and its role has to sit above the verified and unverified roles. The role pickers grey out any role above it. Every reply, the post in the log channel, the direct message and the wording of the buttons and boxes can be changed: the replies under **Replies and errors**, the button, box and removal-reason text under **Labels and text**. Replies understand `{user}`, `{username}` and `{server}`, plus `{role}`, `{round}` and `{rounds}`, `{symbol}`, `{row}`, `{grid}`, `{question}`, `{left}` (tries left), `{until}` and `{canVerify}` (times that count down) where they make sense. Log posts and the direct message add `{method}` and `{reason}`.
 
 Members pick roles from a menu you post to a channel, either as buttons (one per role, five to a row, each in the colour you choose) or as a dropdown, which is tidier for a long list and can show a second line under each role. Both keep working after the message leaves the bot's cache, need no message content permission, and give the member a private confirmation. Picking a role you have takes it off again.
 
