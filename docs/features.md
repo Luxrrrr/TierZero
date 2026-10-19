@@ -11,6 +11,7 @@
 | Welcome messages | Greetings, farewells and roles on join. |
 | Verification | A button, captcha or question new members pass to get a role. |
 | Role menus | Members pick their roles from buttons or a dropdown. |
+| Gaming tools | Join-to-create voice channels, looking-for-group posts and scrim or tournament sign-ups. |
 | Log channel | Posts edits, deletions, joins, role changes and more into a Discord channel. |
 | Leveling | XP, role rewards and a leaderboard, with an optional public web page for it. No image cards. |
 | News and patch notes | RSS feeds, YouTube channels and Steam patch notes, posted as embeds. |
@@ -40,12 +41,13 @@ Changes on a settings page are kept until you press **Save changes** (or Ctrl+S)
 - [Moderation dashboard](#moderation-dashboard)
 - [Automod](#automod)
 - [Welcome messages](#welcome-messages)
-- [Role menus](#role-menus)
 - [Verification](#verification)
+- [Role menus](#role-menus)
 - [Tickets](#tickets)
 - [Log channel](#log-channel)
 - [News and patch notes](#news-and-patch-notes)
 - [Leveling](#leveling)
+- [Gaming tools](#gaming-tools)
 - [Utility](#utility)
 - [Updates, changelog and what's coming](#updates-changelog-and-whats-coming)
 
@@ -547,8 +549,6 @@ The feature shows **Needs setup** until it has something to do: a greeting chann
 
 ![Welcome message settings with a live preview](images/welcome-settings.png)
 
-## Role menus
-
 ## Verification
 
 New members get a role only after they pass a check. Pick a **Verified role** and, if you like, an **Unverified role** that is given on join and taken away on a pass. Hide your channels from everyone but the verified role and a new member sees nothing until they verify. The feature shows **Needs setup** until a verified role is picked.
@@ -583,6 +583,8 @@ Bots are left out by default. A **Log channel**, if set, gets a post when someon
 **Raid protection** uses Discord's own defences when many people join at once. Set how many people and how short a time, such as 10 people within a minute. When that happens the bot raises the server's verification level to Very High, which only lets in accounts with a verified phone number, and pauses invites. After **How long it lasts** it puts both back, but only the level if it is still the one the bot set. It can tell a channel when it starts and ends. **Start raid protection now** and **End raid protection now** on the settings page do the same by hand. Both changes need the bot to have Manage Server. If the bot restarts during a raid, the protections still end on time, but **End raid protection now** can't find the raid until then.
 
 The bot needs Manage Roles and Kick Members, and its role has to sit above the verified and unverified roles. The role pickers grey out any role above it. Every reply, the post in the log channel, the direct message and the wording of the buttons and boxes can be changed: the replies under **Replies and errors**, the button, box and removal-reason text under **Labels and text**. Replies understand `{user}`, `{username}` and `{server}`, plus `{role}`, `{round}` and `{rounds}`, `{symbol}`, `{row}`, `{grid}`, `{question}`, `{left}` (tries left), `{until}` and `{canVerify}` (times that count down) where they make sense. Log posts and the direct message add `{method}` and `{reason}`.
+
+## Role menus
 
 Members pick roles from a menu you post to a channel, either as buttons (one per role, five to a row, each in the colour you choose) or as a dropdown, which is tidier for a long list and can show a second line under each role. Both keep working after the message leaves the bot's cache, need no message content permission, and give the member a private confirmation. Picking a role you have takes it off again.
 
@@ -834,6 +836,50 @@ The **Updates** link in the sidebar opens a page with the version you are runnin
 **Coming soon**, just above Help, opens the roadmap in a window from any page: what is planned. It is the same list as on the Updates page.
 
 The dashboard does not apply updates itself, because that would give it the power to replace itself and run commands on your machine. The page shows the two commands to run instead. It reads releases and the roadmap from GitHub and sends nothing about your install. The owner can switch checking off on the Updates page, and then nothing is requested, and the roadmap shown is the one that came with your version.
+
+## Gaming tools
+
+Three features for gaming servers. Each has its own switch on the module's page, so a server can run one and leave the others off, and they all start off. The bot needs Manage Channels and Move Members for the voice rooms, and Manage Roles if a sign-up gives a role.
+
+The wording of everything the bot says is under **Replies and errors**, and button text and the short strings Discord limits are under **Labels and text**. Times that people type, like `20:00`, are read in the **Time zone** you pick on the page. Everyone sees the posted time in their own zone.
+
+### Join-to-create voice channels
+
+Pick one or more voice channels as hubs. Whoever joins a hub gets a voice channel of their own, named from the hub's **Room name** (`{user}`, `{username}` and `{number}` are available), and is moved into it. The room is deleted when the last person leaves. A hub can set the category the rooms go in (otherwise the hub's own), a user limit and a bitrate. A bitrate above what the server's boost level allows is lowered to the most it allows.
+
+Each member has one room per hub. Joining the hub again takes them back to the room they already have.
+
+The owner changes their room with `/room`:
+
+- `/room rename`, `/room limit`, `/room lock` and `/room unlock`. Locking lets in only the people in the room now and anyone the owner permits.
+- `/room permit` lets someone in, even while it is locked. `/room kick` removes someone and stops them rejoining until they are permitted.
+- `/room transfer` hands the room to someone in it.
+- `/room claim` takes a room whose owner has left. A hub chooses what happens when the owner leaves and others stay: anyone can claim it, it passes to someone still in it, or the owner stays the owner.
+
+Members with a role listed under **Roles that can manage any room** can use these in rooms they don't own. Discord only lets a channel be renamed twice every ten minutes, so a third rename inside that window is queued and the owner is told.
+
+Who owns a room is kept by the bot, not read from channel permissions. The owner is also given Manage Channels, Move Members and the mute and deafen permissions on their room, as far as the bot holds them itself. If Discord refuses those, the room is made without them and `/room` still works. A room the bot made is deleted when it is empty, including after a restart: every ten minutes the bot goes over its rooms and removes the ones that emptied while it was away. A room is given a minute to fill before that applies.
+
+### Looking for group
+
+`/lfg` posts a request for players. The game comes from a list you fill in, with an optional emoji, role to ping and channel for each, and the member picks it as they type. They say how many more players they need, and may add a note and a start time.
+
+The post shows the party, the open places, the start time and when it lapses, with **Join**, **Leave** and **Close** buttons. It is rewritten each time someone joins or leaves. The author counts as the first player. When the last place is taken the post becomes a "party full" message and loses its buttons, and the party can be pinged under it. **Make a voice channel for a full party** also gives them a room named from **Name of the party's voice channel**, owned by the author and removed once it is empty. It is given ten minutes for people to arrive.
+
+A post closes after the time under **Close a post after**, counted from the start time when it has one. The author or anyone with Manage Messages can close it earlier with the button. Under the same settings you can set the wait between one member's posts and how many posts one member can have open. Posts are kept, so a restart loses nothing.
+
+### Scrim and tournament sign-ups
+
+Staff run these with `/signup`. Anyone with Manage Events or Manage Server can, and so can members with a role under **Staff roles**.
+
+- `/signup create` posts a sign-up with a title, game, start time, team size from 1 to 10, an optional limit on teams (or players, when the team size is 1), an optional waitlist, and up to two roles one of which a player needs. A reward role can be given to everyone who is registered. It posts in the channel you name, else the default channel, else where it was run.
+- `/signup close` stops sign-ups and turns the post into a closed one. **take-roles** takes the reward role back.
+- `/signup list` shows who is registered and who is waiting. `/signup export` gives the same list as plain text, as a file when it is long, and can post it for everyone.
+- `/signup remove` takes a player, or their whole team, off.
+
+Players press **Sign up**. For a team sign-up, a form asks for the team name and the teammates, as mentions or user ids, and the member who filled it in is the captain. Everyone on the team needs a required role if one is set, can only be on a sign-up once, and has to be on the server. Switch off **Teams must be full** to let a team sign up short. Only the captain can withdraw a team, and staff can remove it.
+
+When the limit is reached, new entries join the waitlist in order, and a place that opens goes to the first one waiting. They are told in the sign-up's channel, by direct message, or both, as you choose, and a direct message that can't be delivered falls back to the channel. With no waitlist, a full sign-up refuses new entries. **Remind registered players before the start** pings everyone registered in the channel that long before a start time. 0 turns it off.
 
 ## Utility
 

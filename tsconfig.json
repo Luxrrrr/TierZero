@@ -6,6 +6,7 @@
     { "path": "packages/modules/utility" },
     { "path": "packages/modules/welcome" },
     { "path": "packages/modules/verification" },
+    { "path": "packages/modules/gaming" },
     { "path": "packages/modules/roles" },
     { "path": "packages/modules/automod" },
     { "path": "packages/modules/leveling" },

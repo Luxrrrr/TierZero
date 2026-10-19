@@ -34,6 +34,9 @@ model Guild {
   ticketAudits        TicketAudit[]
   appeals             Appeal[]
   lockedChannels      LockedChannel[]
+  voiceRooms          VoiceRoom[]
+  lfgPosts            LfgPost[]
+  signupEvents        SignupEvent[]
 
   /// The last case number handed out here. It only ever goes up, so a number
   /// that was purged is never given to a different case.
@@ -694,4 +697,130 @@ model ServerLogEntry {
   @@index([guildId, actorId, at])
   @@index([guildId, targetId, at])
   @@index([guildId, channelId, at])
+}
+
+/// A voice channel the bot made for a member, kept so it is still cleaned up after a restart.
+model VoiceRoom {
+  id        Int      @id @default(autoincrement())
+  guildId   String
+  channelId String   @unique
+  /// The generated id of the hub row in the settings that made it, or "lfg" for a party's room.
+  hubId     String
+  ownerId   String
+  /// The lowest number not used by another room of the same hub, for the {number} in a name.
+  number    Int      @default(0)
+  createdAt DateTime @default(now())
+
+  guild Guild @relation(fields: [guildId], references: [id], onDelete: Cascade)
+
+  @@index([guildId, hubId])
+  @@index([guildId, ownerId])
+}
+
+/// A looking-for-group post. The author counts as the first player, so a post that needs
+/// three more has four places in all.
+model LfgPost {
+  id             Int       @id @default(autoincrement())
+  guildId        String
+  channelId      String
+  messageId      String?
+  /// The generated id of the game row in the settings. The name is copied in so a removed game still reads right.
+  gameId         String
+  gameName       String
+  authorId       String
+  authorName     String
+  needed         Int
+  note           String    @default("")
+  startsAt       DateTime?
+  /// "open", "full", "closed" or "expired".
+  status         String    @default("open")
+  createdAt      DateTime  @default(now())
+  expiresAt      DateTime
+  closedAt       DateTime?
+  /// The voice channel made for the party when the post filled, if the server asks for one.
+  voiceChannelId String?
+
+  guild   Guild       @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  members LfgMember[]
+
+  @@index([guildId, status])
+  @@index([guildId, authorId, status])
+  @@index([guildId, authorId, createdAt])
+  @@index([status, expiresAt])
+}
+
+/// Someone who joined a looking-for-group post, other than its author.
+model LfgMember {
+  id       Int      @id @default(autoincrement())
+  postId   Int
+  userId   String
+  userName String
+  joinedAt DateTime @default(now())
+
+  post LfgPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@unique([postId, userId])
+}
+
+/// A scrim or tournament sign-up. A capacity of 0 means no limit.
+model SignupEvent {
+  id            Int       @id @default(autoincrement())
+  guildId       String
+  channelId     String
+  messageId     String?
+  title         String
+  game          String    @default("")
+  note          String    @default("")
+  startsAt      DateTime?
+  /// Players to a team. 1 means players sign up alone.
+  teamSize      Int       @default(1)
+  /// The most teams, or players when the team size is 1, that can be registered.
+  capacity      Int       @default(0)
+  waitlist      Boolean   @default(true)
+  /// Role ids as JSON. A member needs one of them to sign up, or none are needed when the list is empty.
+  requiredRoles String    @default("[]")
+  rewardRoleId  String?
+  /// "open" or "closed".
+  status        String    @default("open")
+  reminderSent  Boolean   @default(false)
+  createdById   String
+  createdAt     DateTime  @default(now())
+  closedAt      DateTime?
+
+  guild   Guild          @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  entries SignupEntry[]
+  members SignupMember[]
+
+  @@index([guildId, status])
+  @@index([guildId, createdAt])
+}
+
+/// One player or team on a sign-up, either registered or waiting for a place.
+model SignupEntry {
+  id        Int      @id @default(autoincrement())
+  eventId   Int
+  captainId String
+  teamName  String   @default("")
+  /// "registered" or "waitlist".
+  status    String
+  createdAt DateTime @default(now())
+
+  event   SignupEvent    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  members SignupMember[]
+
+  @@index([eventId, status, id])
+}
+
+/// A person on a sign-up entry, the captain included. One row per person per event keeps anyone from signing up twice.
+model SignupMember {
+  id      Int    @id @default(autoincrement())
+  entryId Int
+  eventId Int
+  userId  String
+
+  entry SignupEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  event SignupEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, userId])
+  @@index([entryId])
 }

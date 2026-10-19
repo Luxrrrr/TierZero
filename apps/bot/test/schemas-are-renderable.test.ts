@@ -5,6 +5,7 @@ import { ModuleRegistry, formLayoutProblems, layoutProblems, messageAttachProble
 import utility from "@tier0/module-utility";
 import welcome from "@tier0/module-welcome";
 import verification from "@tier0/module-verification";
+import gaming from "@tier0/module-gaming";
 import roles from "@tier0/module-roles";
 import automod from "@tier0/module-automod";
 import leveling from "@tier0/module-leveling";
@@ -37,7 +38,7 @@ const RENDERABLE = new Set([
 ]);
 
 const registry = new ModuleRegistry();
-for (const module of [utility, welcome, verification, roles, automod, leveling, moderation, tickets, auditlog, feeds, system]) {
+for (const module of [utility, welcome, verification, gaming, roles, automod, leveling, moderation, tickets, auditlog, feeds, system]) {
   registry.register(module);
 }
 
@@ -107,7 +108,7 @@ describe("every registered module", () => {
   const modules = registry.describe();
 
   test("registers at least the modules under test", () => {
-    assert.equal(modules.length, 11);
+    assert.equal(modules.length, 12);
   });
 
   for (const module of modules) {

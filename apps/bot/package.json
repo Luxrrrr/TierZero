@@ -23,6 +23,7 @@
     "@tier0/module-utility": "workspace:*",
     "@tier0/module-welcome": "workspace:*",
     "@tier0/module-verification": "workspace:*",
+    "@tier0/module-gaming": "workspace:*",
     "discord.js": "^14.16.0"
   },
   "devDependencies": {
