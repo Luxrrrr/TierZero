@@ -38,14 +38,24 @@ export async function readTextLimited(request: Request, limit: number = BODY_LIM
   return new TextDecoder().decode(whole);
 }
 
-/** The body parsed as JSON, null when it is too large, or undefined when it is not JSON. An empty body reads as `{}`. */
-export async function readJsonLimited(request: Request, limit: number = BODY_LIMIT_BYTES): Promise<unknown | null | undefined> {
+export type JsonRead<T> = { ok: true; value: T } | { ok: false; reason: "too-large" | "invalid" };
+
+/** The body parsed as JSON. An empty body reads as `{}`. */
+export async function readJsonLimited(request: Request, limit: number = BODY_LIMIT_BYTES): Promise<JsonRead<unknown>> {
   const text = await readTextLimited(request, limit);
-  if (text === null) return null;
-  if (text.trim() === "") return {};
+  if (text === null) return { ok: false, reason: "too-large" };
+  if (text.trim() === "") return { ok: true, value: {} };
   try {
-    return JSON.parse(text) as unknown;
+    return { ok: true, value: JSON.parse(text) as unknown };
   } catch {
-    return undefined;
+    return { ok: false, reason: "invalid" };
   }
+}
+
+/** The same, for a route that only takes a JSON object. A list, a string or null is "invalid". */
+export async function readJsonObjectLimited(request: Request, limit: number = BODY_LIMIT_BYTES): Promise<JsonRead<Record<string, unknown>>> {
+  const read = await readJsonLimited(request, limit);
+  if (!read.ok) return read;
+  if (typeof read.value !== "object" || read.value === null || Array.isArray(read.value)) return { ok: false, reason: "invalid" };
+  return { ok: true, value: read.value as Record<string, unknown> };
 }

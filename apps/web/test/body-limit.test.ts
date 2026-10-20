@@ -1,6 +1,6 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { readJsonLimited, readTextLimited } from "../lib/body-limit.ts";
+import { readJsonLimited, readJsonObjectLimited, readTextLimited } from "../lib/body-limit.ts";
 
 const streamOf = (chunks: string[], pulled: { count: number } = { count: 0 }) => {
   const encoder = new TextEncoder();
@@ -49,10 +49,35 @@ describe("readTextLimited", () => {
 });
 
 describe("readJsonLimited", () => {
-  test("parses JSON, reads an empty body as an empty object, and tells too large from not JSON", async () => {
-    assert.deepEqual(await readJsonLimited(chunked(streamOf(['{"a":', "1}"])), 100), { a: 1 });
-    assert.deepEqual(await readJsonLimited(new Request("http://dashboard.test/api", { method: "POST" }), 100), {});
-    assert.equal(await readJsonLimited(chunked(streamOf(["not json"])), 100), undefined);
-    assert.equal(await readJsonLimited(chunked(streamOf(["x".repeat(50)])), 10), null);
+  test("parses JSON and reads an empty body as an empty object", async () => {
+    assert.deepEqual(await readJsonLimited(chunked(streamOf(['{"a":', "1}"])), 100), { ok: true, value: { a: 1 } });
+    assert.deepEqual(await readJsonLimited(new Request("http://dashboard.test/api", { method: "POST" }), 100), { ok: true, value: {} });
+  });
+
+  test("says whether a body was too large or not JSON", async () => {
+    assert.deepEqual(await readJsonLimited(chunked(streamOf(["not json"])), 100), { ok: false, reason: "invalid" });
+    assert.deepEqual(await readJsonLimited(chunked(streamOf(["x".repeat(50)])), 10), { ok: false, reason: "too-large" });
+  });
+
+  test("a body that is the JSON value null is read as null, not as too large", async () => {
+    assert.deepEqual(await readJsonLimited(chunked(streamOf(["null"])), 100), { ok: true, value: null });
+  });
+});
+
+describe("readJsonObjectLimited", () => {
+  test("gives back an object, and an empty body as an empty object", async () => {
+    assert.deepEqual(await readJsonObjectLimited(chunked(streamOf(['{"a":1}'])), 100), { ok: true, value: { a: 1 } });
+    assert.deepEqual(await readJsonObjectLimited(new Request("http://dashboard.test/api", { method: "POST" }), 100), { ok: true, value: {} });
+  });
+
+  test("refuses a list, a string and null as invalid", async () => {
+    for (const body of ["[1,2]", '"text"', "null", "7"]) {
+      assert.deepEqual(await readJsonObjectLimited(chunked(streamOf([body])), 100), { ok: false, reason: "invalid" }, body);
+    }
+  });
+
+  test("keeps telling too large from invalid", async () => {
+    assert.deepEqual(await readJsonObjectLimited(chunked(streamOf(["{" + "x".repeat(50)])), 10), { ok: false, reason: "too-large" });
+    assert.deepEqual(await readJsonObjectLimited(chunked(streamOf(["{bad"])), 100), { ok: false, reason: "invalid" });
   });
 });

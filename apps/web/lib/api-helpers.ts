@@ -43,15 +43,24 @@ export async function proxyControlApi<T>(work: () => Promise<T>): Promise<NextRe
  * body is the caller's mistake and must not surface as an unhandled 500.
  */
 export async function readRequestJson(request: Request): Promise<{ ok: true; value: unknown } | { ok: false; response: NextResponse }> {
-  const value = await readJsonLimited(request);
-  if (value === null) {
-    return { ok: false, response: NextResponse.json({ error: "That is too large to save. Shorten it and try again." }, { status: 413 }) };
+  const read = await readJsonLimited(request);
+  if (read.ok) return read;
+  return read.reason === "too-large"
+    ? { ok: false, response: failure(413, "That is too large to save. Shorten it and try again.") }
+    : { ok: false, response: failure(400, "The change could not be read. Reload the page and try again.") };
+}
+
+/** A JSON error answer, in the shape every route uses. */
+export function failure(status: number, error: string): NextResponse {
+  return NextResponse.json({ error }, { status });
+}
+
+/** What a browser is told when the bot did not answer properly. Shared by the proxies that pass a bot answer straight through. */
+export function botErrorResponse(error: unknown): NextResponse {
+  if (error instanceof ControlApiError) {
+    if (error.status === 504) return failure(504, "The bot took too long to answer. Try again in a moment.");
+    if (error.status === 503) return failure(503, "The bot is offline or unreachable. Check that it is running, then try again.");
+    return failure(error.status, error.message);
   }
-  if (value === undefined) {
-    return {
-      ok: false,
-      response: NextResponse.json({ error: "The change could not be read. Reload the page and try again." }, { status: 400 }),
-    };
-  }
-  return { ok: true, value };
+  return failure(502, "The bot could not be reached. Check that it is running, then try again.");
 }

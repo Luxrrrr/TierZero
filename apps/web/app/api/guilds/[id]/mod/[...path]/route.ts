@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
-import { readTextLimited } from "../../../../../../lib/body-limit";
-import { modRequest, ControlApiError } from "../../../../../../lib/control-api";
+import { readJsonObjectLimited } from "../../../../../../lib/body-limit";
+import { modRequest } from "../../../../../../lib/control-api";
+import { botErrorResponse, failure } from "../../../../../../lib/api-helpers";
 import type { MemberProfile } from "@tier0/shared-moderation";
 import { requireStaff } from "../../../../../../lib/mod-access";
 import { redactProfile } from "../../../../../../lib/profile-redact";
@@ -22,23 +23,6 @@ import {
 
 type Params = { params: Promise<{ id: string; path: string[] }> };
 
-function fail(status: number, error: string) {
-  return NextResponse.json({ error }, { status });
-}
-
-async function readBody(request: Request): Promise<Record<string, unknown> | "too-large" | "invalid"> {
-  const text = await readTextLimited(request, MOD_PROXY_MAX_BODY_BYTES);
-  if (text === null) return "too-large";
-  if (text.trim() === "") return {};
-  try {
-    const parsed: unknown = JSON.parse(text);
-    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return "invalid";
-    return parsed as Record<string, unknown>;
-  } catch {
-    return "invalid";
-  }
-}
-
 async function handle(method: string, request: Request, { params }: Params) {
   const { id, path } = await params;
 
@@ -50,14 +34,14 @@ async function handle(method: string, request: Request, { params }: Params) {
       forwardedHost: request.headers.get("x-forwarded-host"),
     })
   ) {
-    return fail(403, "This request did not come from the dashboard. Reload the page and try again.");
+    return failure(403, "This request did not come from the dashboard. Reload the page and try again.");
   }
 
   const permission = modProxyPermission(method, path);
-  if (!permission) return fail(404, "There is nothing at this address.");
+  if (!permission) return failure(404, "There is nothing at this address.");
 
   const access = await requireStaff(id, permission);
-  if (!access.ok) return fail(access.status, access.message);
+  if (!access.ok) return failure(access.status, access.message);
 
   const url = new URL(request.url);
   // The bot is told who is asking, because it limits the list to channels that person can read. The browser
@@ -74,9 +58,13 @@ async function handle(method: string, request: Request, { params }: Params) {
 
   let body: unknown;
   if (method !== "GET") {
-    const sent = await readBody(request);
-    if (sent === "too-large") return fail(413, "That is too long to save. Shorten it and try again.");
-    if (sent === "invalid") return fail(400, "The request could not be read. Reload the page and try again.");
+    const read = await readJsonObjectLimited(request, MOD_PROXY_MAX_BODY_BYTES);
+    if (!read.ok) {
+      return read.reason === "too-large"
+        ? failure(413, "That is too long to save. Shorten it and try again.")
+        : failure(400, "The request could not be read. Reload the page and try again.");
+    }
+    const sent = read.value;
     // Whatever the browser claimed about who is acting is replaced.
     body = { ...sent, actor: access.actor };
   }
@@ -100,12 +88,7 @@ async function handle(method: string, request: Request, { params }: Params) {
     }
     return NextResponse.json(reply.body, { status: reply.status });
   } catch (error) {
-    if (error instanceof ControlApiError) {
-      if (error.status === 504) return fail(504, "The bot took too long to answer. Try again in a moment.");
-      if (error.status === 503) return fail(503, "The bot is offline or unreachable. Check that it is running, then try again.");
-      return fail(error.status, error.message);
-    }
-    return fail(502, "The bot could not be reached. Check that it is running, then try again.");
+    return botErrorResponse(error);
   }
 }
 

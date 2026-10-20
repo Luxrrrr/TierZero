@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
-import { readTextLimited } from "../../../../../../lib/body-limit";
-import { ControlApiError, ticketsRequest } from "../../../../../../lib/control-api";
+import { readJsonObjectLimited } from "../../../../../../lib/body-limit";
+import { ticketsRequest } from "../../../../../../lib/control-api";
+import { botErrorResponse, failure } from "../../../../../../lib/api-helpers";
 import { isTicketManager, ticketSession } from "../../../../../../lib/tickets-access";
 import { isSameOriginWrite } from "../../../../../../lib/mod-proxy";
 import {
@@ -25,23 +26,6 @@ type Params = { params: Promise<{ id: string; path: string[] }> };
 
 const GUILD_ID = /^\d{17,20}$/;
 
-function fail(status: number, error: string) {
-  return NextResponse.json({ error }, { status });
-}
-
-async function readBody(request: Request, limit: number): Promise<Record<string, unknown> | "too-large" | "invalid"> {
-  const text = await readTextLimited(request, limit);
-  if (text === null) return "too-large";
-  if (text.trim() === "") return {};
-  try {
-    const parsed: unknown = JSON.parse(text);
-    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return "invalid";
-    return parsed as Record<string, unknown>;
-  } catch {
-    return "invalid";
-  }
-}
-
 async function handle(method: string, request: Request, { params }: Params) {
   const { id, path } = await params;
 
@@ -53,23 +37,27 @@ async function handle(method: string, request: Request, { params }: Params) {
       forwardedHost: request.headers.get("x-forwarded-host"),
     })
   ) {
-    return fail(403, "This request did not come from the dashboard. Reload the page and try again.");
+    return failure(403, "This request did not come from the dashboard. Reload the page and try again.");
   }
 
   const needed = GUILD_ID.test(id) ? ticketProxyClass(method, path) : null;
-  if (!needed) return fail(404, "There is nothing at this address.");
+  if (!needed) return failure(404, "There is nothing at this address.");
 
   const session = await ticketSession();
-  if (!session.ok) return fail(session.status, session.message);
+  if (!session.ok) return failure(session.status, session.message);
   if (needed === "manager" && !(await isTicketManager(session.userId, id))) {
-    return fail(403, "Only a member with Manage Server can do that.");
+    return failure(403, "Only a member with Manage Server can do that.");
   }
 
   let body: unknown;
   if (method !== "GET") {
-    const sent = await readBody(request, ticketProxyBodyLimit(method, path));
-    if (sent === "too-large") return fail(413, "That is too long to send. Shorten it and try again.");
-    if (sent === "invalid") return fail(400, "The request could not be read. Reload the page and try again.");
+    const read = await readJsonObjectLimited(request, ticketProxyBodyLimit(method, path));
+    if (!read.ok) {
+      return read.reason === "too-large"
+        ? failure(413, "That is too long to send. Shorten it and try again.")
+        : failure(400, "The request could not be read. Reload the page and try again.");
+    }
+    const sent = read.value;
     // Whatever the browser claimed about who is acting is replaced.
     body = { ...sent, actor: session.actor };
   }
@@ -85,15 +73,10 @@ async function handle(method: string, request: Request, { params }: Params) {
       return new Response(reply.file.text, { status: 200, headers: transcriptHeaders(download.format, filename) });
     }
     // A file on any other path, or JSON where a transcript was expected, is not passed on as a page.
-    if (reply.file) return fail(502, "The bot sent an answer the dashboard did not expect. Reload the page and try again.");
+    if (reply.file) return failure(502, "The bot sent an answer the dashboard did not expect. Reload the page and try again.");
     return NextResponse.json(reply.body, { status: reply.status, headers: { "cache-control": "no-store" } });
   } catch (error) {
-    if (error instanceof ControlApiError) {
-      if (error.status === 504) return fail(504, "The bot took too long to answer. Try again in a moment.");
-      if (error.status === 503) return fail(503, "The bot is offline or unreachable. Check that it is running, then try again.");
-      return fail(error.status, error.message);
-    }
-    return fail(502, "The bot could not be reached. Check that it is running, then try again.");
+    return botErrorResponse(error);
   }
 }
 
