@@ -28,7 +28,7 @@ services:
       - /tmp
       - /home/node:uid=1000,gid=1000
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:'+(process.env.CONTROL_PORT||8081)+'/health').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:'+(process.env.CONTROL_PORT||8081)+'/health').then((r)=>r.text().then(()=>process.exit(r.ok?0:1))).catch(()=>process.exit(1))"]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -60,7 +60,7 @@ services:
       - /home/node:uid=1000,gid=1000
       - /app/apps/web/.next/cache:uid=1000,gid=1000
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8080/insecure').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8080/insecure').then((r)=>r.text().then(()=>process.exit(r.ok?0:1))).catch(()=>process.exit(1))"]
       interval: 30s
       timeout: 5s
       retries: 3
