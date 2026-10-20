@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import type { TicketDetailDto, TicketMessageDto } from "@tier0/core";
+import type { TicketDetailDto, TicketMessageDto } from "@tier0/shared-tickets";
 import { ArrowDownIcon } from "../Icons";
 import { knownNames, ticketNumber, ticketTopic, transcriptActivity } from "../../lib/ticket-format";
 import { Switch } from "../form/Switch";

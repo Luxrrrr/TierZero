@@ -12,16 +12,18 @@ import {
   type User,
 } from "discord.js";
 import {
-  canTicket,
-  ticketAccess,
   type MessageBody,
   type ModuleContext,
   type ReplyValues,
+} from "@tier0/core";
+import {
+  canTicket,
+  ticketAccess,
   type TicketAccess,
   type TicketAccessTarget,
   type TicketActor,
   type TicketPermission,
-} from "@tier0/core";
+} from "@tier0/shared-tickets";
 import type { Ticket } from "@tier0/db";
 import { REPLIES, type ReplyKey } from "./messages.js";
 import { accessSettingsOf } from "./resolve.js";

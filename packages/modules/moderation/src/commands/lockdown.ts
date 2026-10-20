@@ -1,5 +1,6 @@
 import { ChannelType, MessageFlags, PermissionFlagsBits, SlashCommandBuilder, type ChatInputCommandInteraction } from "discord.js";
-import { can, type CommandDefinition, type ModuleContext } from "@tier0/core";
+import { type CommandDefinition, type ModuleContext } from "@tier0/core";
+import { can } from "@tier0/shared-moderation";
 import type { ModerationSettings } from "../settings.js";
 import { parseDuration } from "../duration.js";
 import { botCanLock, lockChannels, unlockChannels, type LockResult } from "../lockdown.js";

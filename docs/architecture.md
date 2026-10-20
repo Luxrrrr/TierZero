@@ -24,6 +24,14 @@ Prisma declares the provider in the schema, not the connection string, so Postgr
 
 A dashboard crash doesn't drop the gateway connection, and the dashboard can run on a public domain while the bot stays elsewhere.
 
+## Packages
+
+`packages/core` is the module contract: the settings schema, `defineModule`, the registry and the message builder. A module and the dashboard both read it, and it knows nothing about any one feature.
+
+`packages/shared/moderation` and `packages/shared/tickets` hold the rules and shapes that the bot, the feature module and the dashboard have to agree on: who may do what, the form of each reply, parsing, and the server log catalog. The dashboard loads them, so they import neither discord.js nor the database. A lint rule enforces that. They sit between core and the modules: `shared/tickets` uses `shared/moderation`, and both use core.
+
+The dashboard imports core, the shared packages and the database package, and never the bot or a module.
+
 ### Control API
 
 The bot owns module settings and the moderation records. The dashboard never writes those tables. A settings `PATCH` validates against the schema, upserts the row, clears the cache, schedules a command resync and runs `onEnable`, `onDisable` or `onSettingsChange`, all before it responds. A second writer would split that sequence, and a saved setting could stop matching what the bot is doing.
@@ -99,7 +107,7 @@ The bot owns the data and the dashboard is a client, same as elsewhere. The diff
 
 ### Permissions
 
-Three levels. The install owner is staff everywhere and is never stored. Admins and moderators are `StaffMember` rows the owner creates. The access check only reads those two values, so a hand-edited row can't grant owner. `packages/core/src/mod.ts` holds every rule, imports neither discord.js nor the database, and also builds the matrix on the Access tab.
+Three levels. The install owner is staff everywhere and is never stored. Admins and moderators are `StaffMember` rows the owner creates. The access check only reads those two values, so a hand-edited row can't grant owner. `packages/shared/moderation/src/mod.ts` holds every rule, imports neither discord.js nor the database, and also builds the matrix on the Access tab.
 
 ### How a write reaches the bot
 
@@ -125,7 +133,7 @@ A temporary ban is lifted by the `unban` scheduled task (`unban-task.ts`). The s
 
 ### Server logs
 
-The `serverlog` module records what happens on a server into `ServerLogEntry` and, for messages, `LoggedMessage` with its `LoggedMessageEdit` rows. The kinds of event are one catalog in `packages/core/src/serverlog.ts`: categories, types and labels. The bot writes entries with those ids, the settings are one switch per category, and the dashboard builds its filters from the same list, so a new kind of event is one line there and one handler in `events.ts`.
+The `serverlog` module records what happens on a server into `ServerLogEntry` and, for messages, `LoggedMessage` with its `LoggedMessageEdit` rows. The kinds of event are one catalog in `packages/shared/moderation/src/serverlog.ts`: categories, types and labels. The bot writes entries with those ids, the settings are one switch per category, and the dashboard builds its filters from the same list, so a new kind of event is one line there and one handler in `events.ts`.
 
 Handlers write through `record()`, which checks that the category is on and the channel is not left out, trims long values, and prunes. Pruning runs from the write path at most once an hour per server, so a server with no traffic keeps what it has until someone deletes the logs. Who did something comes from `executorOf()`, which waits a moment and reads the server's audit log. It returns null without the View Audit Log permission. A kick and a departure look the same on the gateway, so a leave is checked against the audit log before it is recorded as a kick. Purges arrive as one `messageDeleteBulk` event instead of one delete per message.
 
@@ -155,13 +163,13 @@ A new length goes to Discord first (`edit-length.ts`: `member.timeout` for a tim
 
 Automod writes an `action.take` audit row for every case it records (`auditAutomodCase` in the moderation module), with the bot as actor and a role of `automod`. `automod` is a display role for audit rows only (`AuditActorRole`), never a `StaffRole`, so it grants nothing. The `actorId=automod` filter matches that role instead of an id. `backfillAutomodAudit` gives older cases their row on start and skips any case that already has one. `repairAutomodAudit` then rewrites old summaries once: a raw member id becomes the name when it can be found, and a reason that lost its match is rebuilt from the case. The summary carries the match (`staffReasonOf`), because Staff activity is staff only. The `after` snapshot, the channel notice and the DM do not.
 
-The bot's own account is one identity in every moderator or actor slot. `resolveUsers` in `apps/bot/src/control/mod/names.ts` maps the bot id to `automodRef` from `@tier0/core` (name `Automod`, no avatar, `automod: true`), and the web `Avatar` draws a shield for it. A lookup about who wrote a logged message opts out with `keepBotAccount`, and so do server log actors: the bot does work for every feature, so an entry is shown as Automod only when `details.deletedBy` is `automod` (`actsAsAutomod`).
+The bot's own account is one identity in every moderator or actor slot. `resolveUsers` in `apps/bot/src/control/mod/names.ts` maps the bot id to `automodRef` from `@tier0/shared-moderation` (name `Automod`, no avatar, `automod: true`), and the web `Avatar` draws a shield for it. A lookup about who wrote a logged message opts out with `keepBotAccount`, and so do server log actors: the bot does work for every feature, so an entry is shown as Automod only when `details.deletedBy` is `automod` (`actsAsAutomod`).
 
-Automod reasons are stored as `<ruleKey>: <wording>`. Nothing shows the key: `readableReason`, `parseAutomodReason` and `automodRuleLabel` in `@tier0/core` turn it into the rule's name for the dashboard, Staff activity summaries and the CSV export. The automod module's `ruleName` reads a stored `ruleNames` value equal to its key (the old default) as the new default, without migrating settings.
+Automod reasons are stored as `<ruleKey>: <wording>`. Nothing shows the key: `readableReason`, `parseAutomodReason` and `automodRuleLabel` in `@tier0/shared-moderation` turn it into the rule's name for the dashboard, Staff activity summaries and the CSV export. The automod module's `ruleName` reads a stored `ruleNames` value equal to its key (the old default) as the new default, without migrating settings.
 
 ### Escalation, expiry, raid tools and appeals
 
-**One counting rule.** `isCounting` in `packages/core/src/mod.ts` says whether a case counts toward totals: not removed, and for a warning (`warn`, `automod-warn`) not past `warnExpiresAt(action, createdAt, expiryMs)`. The Members summary, the CSV and escalation all read it, with the server's `warnExpiry` passed down as `ModCtx.warnExpiryMs`. `isInForce` is unchanged and still answers only whether a restriction bites now. A warning is never in force, so expiry shows up as the `expired` case state instead.
+**One counting rule.** `isCounting` in `packages/shared/moderation/src/mod.ts` says whether a case counts toward totals: not removed, and for a warning (`warn`, `automod-warn`) not past `warnExpiresAt(action, createdAt, expiryMs)`. The Members summary, the CSV and escalation all read it, with the server's `warnExpiry` passed down as `ModCtx.warnExpiryMs`. `isInForce` is unchanged and still answers only whether a restriction bites now. A warning is never in force, so expiry shows up as the `expired` case state instead.
 
 **Escalation** is `escalation.ts`. `performAction` calls `escalateAfterWarning` after it records a `warn`, and automod calls `escalateFromPeer` after an `automod-warn` whose rule has `countTowardEscalation`. `pickRule` and `countedWarnings` are pure. A rule's id is its dedupe key: it fires again only for warnings newer than the last case carrying its id in `Infraction.automatic`, and removed automatic cases still count as fired. Counting runs behind a per-member queue. The action is recorded with `recordInfraction`, not `performAction`, so an automatic case is not a warning and cannot set off another rule. `standingBlocks` lists who is never touched.
 
@@ -183,7 +191,7 @@ Name lookups on Discord get a 1.5 second budget per request, with remembered ans
 
 ## Ticket workspace
 
-Same split as moderation: the bot owns the tickets and the dashboard reads and writes through the control API. Code is in `apps/bot/src/control/tickets` and `apps/web/app/guilds/[id]/tickets`, the shared rules in `packages/core/src/tickets.ts`.
+Same split as moderation: the bot owns the tickets and the dashboard reads and writes through the control API. Code is in `apps/bot/src/control/tickets` and `apps/web/app/guilds/[id]/tickets`, the shared rules in `packages/shared/tickets/src/tickets.ts`.
 
 ### Access
 
@@ -245,7 +253,7 @@ The browser side is `lib/ticket-longpoll.ts`: ask with `wait=20`, apply the answ
 
 `TicketMessage` keeps each message as Discord drew it: content, attachments, full embeds, button and menu rows, stickers, the author's role colour and whether they are a bot or webhook, the id of the message it replies to, and the names behind every mention as they read when it was stored. Reactions are read once, at close, because the bot has no reaction intent. Rows stored before these columns existed read with them empty and still render.
 
-The dashboard and the downloaded file draw one tree. `packages/core/src/transcript-markdown.ts` parses Discord's markdown, `transcript-view.ts` builds the element tree (grouping, dates, replies, embeds) and `transcript-style.ts` holds the one stylesheet, Discord's dark theme. The dashboard turns the tree into React elements in `apps/web/lib/transcript-react.ts`; the bot writes it as HTML in `transcript-html.ts`. Neither decides layout, so the two can't drift, and a test renders one fixture through both and compares them. Ticket events and staff notes are not Discord messages and stay out of the tree unless the reader turns on ticket activity.
+The dashboard and the downloaded file draw one tree. `packages/shared/tickets/src/transcript-markdown.ts` parses Discord's markdown, `transcript-view.ts` builds the element tree (grouping, dates, replies, embeds) and `transcript-style.ts` holds the one stylesheet, Discord's dark theme. The dashboard turns the tree into React elements in `apps/web/lib/transcript-react.ts`; the bot writes it as HTML in `transcript-html.ts`. Neither decides layout, so the two can't drift, and a test renders one fixture through both and compares them. Ticket events and staff notes are not Discord messages and stay out of the tree unless the reader turns on ticket activity.
 
 Transcripts are rendered by the bot from the stored rows (`packages/modules/tickets/src/transcript-html.ts`), with every piece of member text escaped and only http and https addresses linked. The markdown parser caps length and nesting depth and never searches twice for a closing mark it didn't find, so member text can't stall it. The proxy serves them as attachments with `sandbox` in the Content-Security-Policy and `nosniff`, so the HTML can't run in the dashboard's origin even if the escaping had a hole. The file also carries its own policy for when it is opened from disk.
 

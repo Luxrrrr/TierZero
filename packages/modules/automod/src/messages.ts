@@ -1,4 +1,5 @@
-import { REPLY_COLOR, automodRuleLabel, dashboardLinks, embedReply, emptyEmbed, plainReply, viewCaseButton, type EvidenceMessage, type MessageBody, type MessageEmbed, type MessageVariable } from "@tier0/core";
+import { REPLY_COLOR, embedReply, emptyEmbed, plainReply, type MessageBody, type MessageEmbed, type MessageVariable } from "@tier0/core";
+import { automodRuleLabel, dashboardLinks, viewCaseButton, type EvidenceMessage } from "@tier0/shared-moderation";
 import { DEFAULT_WORDING as MODERATION_WORDING, EVIDENCE_SAMPLE, describeLength, formatEvidence } from "@tier0/module-moderation";
 import { fill } from "./fill.js";
 import { DEFAULT_AUTOMOD_WORDING, type AutomodWording } from "./texts.js";

@@ -2,7 +2,7 @@ import { EvidenceList } from "../../../../../components/mod/Evidence";
 import Link from "next/link";
 import { Select } from "../../../../../components/form/Select";
 import { LogSwitch } from "../../../../../components/mod/LogSwitch";
-import type { InfractionDto, Page, UserRef } from "@tier0/core";
+import type { InfractionDto, Page, UserRef } from "@tier0/shared-moderation";
 import {
   ActionBadge,
   Pager,

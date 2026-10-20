@@ -1,6 +1,7 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { LEGACY_TYPE_ID, ModuleRegistry, canTicket, ticketAccess } from "@tier0/core";
+import { ModuleRegistry } from "@tier0/core";
+import { LEGACY_TYPE_ID, canTicket, ticketAccess } from "@tier0/shared-tickets";
 import tickets from "../dist/index.js";
 import {
   accessSettingsOf,

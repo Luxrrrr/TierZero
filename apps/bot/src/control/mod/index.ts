@@ -1,5 +1,5 @@
 import type { Client, Guild } from "discord.js";
-import type { Actor } from "@tier0/core";
+import type { Actor } from "@tier0/shared-moderation";
 import { staffRoleOf } from "@tier0/module-moderation";
 import type { GuildState } from "../../runtime/guild-state.js";
 import { systemLabels } from "../../runtime/system-messages.js";

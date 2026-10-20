@@ -1,6 +1,6 @@
 import { denyStaffPage } from "../../../../../lib/mod-deny";
 import type { Metadata } from "next";
-import { AUDIT_ROLE_LABEL, AUTOMOD_ACTOR_NAME, ROLE_LABEL, isAutomodRole, type AuditDto } from "@tier0/core";
+import { AUDIT_ROLE_LABEL, AUTOMOD_ACTOR_NAME, ROLE_LABEL, isAutomodRole, type AuditDto } from "@tier0/shared-moderation";
 import { requireStaff } from "../../../../../lib/mod-access";
 import { ControlApiError } from "../../../../../lib/control-api";
 import { modAudit, modStaff } from "../../../../../lib/mod-api";

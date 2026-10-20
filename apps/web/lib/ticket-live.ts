@@ -1,4 +1,4 @@
-import type { TicketCountDto, TicketListFilters } from "@tier0/core";
+import type { TicketCountDto, TicketListFilters } from "@tier0/shared-tickets";
 
 /**
  * What keeps the inbox list current without reloading it under the reader:

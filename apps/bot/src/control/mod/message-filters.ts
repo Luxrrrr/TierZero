@@ -1,5 +1,5 @@
 import type { Prisma } from "@tier0/db";
-import { MESSAGE_LOG_STATES, type MessageLogState } from "@tier0/core";
+import { MESSAGE_LOG_STATES, type MessageLogState } from "@tier0/shared-moderation";
 
 const SNOWFLAKE = /^\d{17,20}$/;
 const SEARCH_MAX = 200;

@@ -1,7 +1,7 @@
 import { test, describe, before, after, beforeEach } from "node:test";
 import assert from "node:assert/strict";
 import { PermissionFlagsBits } from "discord.js";
-import { DELETE_MESSAGES_LIMIT, clearDeletionNotes, deletedMessagesText, readEvidence, takeDeletionNote, type EvidenceMessage } from "@tier0/core";
+import { DELETE_MESSAGES_LIMIT, clearDeletionNotes, deletedMessagesText, readEvidence, takeDeletionNote, type EvidenceMessage } from "@tier0/shared-moderation";
 import { createTestDatabase } from "./db-helper.ts";
 import { moderationSettingsWith } from "./settings-helper.ts";
 

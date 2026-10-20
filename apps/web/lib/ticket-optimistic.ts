@@ -1,4 +1,4 @@
-import type { TicketMessageDto } from "@tier0/core";
+import type { TicketMessageDto } from "@tier0/shared-tickets";
 
 /**
  * A reply the viewer just sent, shown in the conversation before Discord has

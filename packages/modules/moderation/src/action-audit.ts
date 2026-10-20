@@ -1,4 +1,4 @@
-import { deletedMessagesText, readEvidence, type AuditActorRole, type ModActionKind } from "@tier0/core";
+import { deletedMessagesText, readEvidence, type AuditActorRole, type ModActionKind } from "@tier0/shared-moderation";
 import { prisma } from "@tier0/db";
 import type { InfractionRecord } from "./infractions.js";
 import type { DeletionReport } from "./delete-evidence.js";

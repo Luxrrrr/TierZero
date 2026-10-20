@@ -1,5 +1,5 @@
 import { prisma } from "@tier0/db";
-import type { Actor, AuditKind } from "@tier0/core";
+import type { Actor, AuditKind } from "@tier0/shared-moderation";
 
 export interface AuditEntry {
   guildId: string;

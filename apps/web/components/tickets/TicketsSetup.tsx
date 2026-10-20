@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import type { TicketContextDto, TicketPanelPostResult } from "@tier0/core";
+import type { TicketContextDto, TicketPanelPostResult } from "@tier0/shared-tickets";
 import { ChannelPicker, Field, MultiRolePicker } from "../form";
 import { AlertIcon, CheckIcon, ExternalLinkIcon, InfoIcon } from "../Icons";
 import { readFailure, UNREACHABLE } from "../../lib/bot-errors";

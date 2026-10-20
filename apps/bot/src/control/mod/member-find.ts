@@ -1,5 +1,5 @@
 import type { Guild, GuildMember } from "discord.js";
-import type { MemberSearchHit, UserRef } from "@tier0/core";
+import type { MemberSearchHit, UserRef } from "@tier0/shared-moderation";
 import { withinBudget } from "./names.js";
 
 /** Most hits returned; the rest are only counted, so the dashboard can say to keep typing. */

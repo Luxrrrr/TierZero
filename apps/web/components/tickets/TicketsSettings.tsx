@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import type { TicketContextDto, TicketPanelStatusDto } from "@tier0/core";
+import type { TicketContextDto, TicketPanelStatusDto } from "@tier0/shared-tickets";
 import { ModulePage } from "../ModulePage";
 import { AlertIcon } from "../Icons";
 import type { ModuleView } from "../../lib/module-view";

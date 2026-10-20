@@ -1,13 +1,15 @@
 import { PermissionFlagsBits, type GuildBasedChannel } from "discord.js";
 import { prisma, type Ticket } from "@tier0/db";
 import {
+  type UserRef,
+} from "@tier0/shared-moderation";
+import {
   readTicketAnswers,
   ticketPermissions,
   type TicketDetailDto,
   type TicketMemberDto,
   type TicketMessagesPage,
-  type UserRef,
-} from "@tier0/core";
+} from "@tier0/shared-tickets";
 import { refOf, resolveUsers } from "../mod/names.js";
 import { accessTarget, eventDtos, messageDto, noteDto, summaryDto, withStoredName } from "./dto.js";
 import { staffRolesOf, transcriptRemovalOf, typeOfTicket, type TicketSettings } from "./runtime.js";

@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useId, useRef, useState, type ClipboardEvent, type DragEvent, type KeyboardEvent } from "react";
-import { TICKET_REPLY_MAX, type MessageEmbed, type TicketDetailDto, type TicketMessageDto, type TicketReplyFile, type TicketSavedReplyDto } from "@tier0/core";
+import { type MessageEmbed } from "@tier0/core";
+import { TICKET_REPLY_MAX, type TicketDetailDto, type TicketMessageDto, type TicketReplyFile, type TicketSavedReplyDto } from "@tier0/shared-tickets";
 import { CharacterCount } from "../../app/guilds/[id]/mod/members/[userId]/CharacterCount";
 import { useToast } from "../Toaster";
 import { InfoIcon, LockIcon, MessagesIcon, PaperclipIcon, PlusIcon, SendIcon, UndoIcon, XIcon } from "../Icons";

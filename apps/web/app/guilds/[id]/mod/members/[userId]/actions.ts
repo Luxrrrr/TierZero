@@ -1,4 +1,4 @@
-import { canDeleteWithAction, canTakeAction, isInForce, isModActionKind } from "@tier0/core";
+import { canDeleteWithAction, canTakeAction, isInForce, isModActionKind } from "@tier0/shared-moderation";
 import type {
   ActionContextDto,
   ActionRequest,
@@ -9,7 +9,7 @@ import type {
   ReasonPresetDto,
   StaffRole,
   EvidenceRef,
-} from "@tier0/core";
+} from "@tier0/shared-moderation";
 
 /**
  * The rules behind the profile's "Take action" control: which actions a role

@@ -1,7 +1,8 @@
 import { test, describe, beforeEach } from "node:test";
 import assert from "node:assert/strict";
 import { PermissionFlagsBits } from "discord.js";
-import { emptyEmbed, plainReply, ticketHealth, ticketHealthSummary, type MessageBody } from "@tier0/core";
+import { emptyEmbed, plainReply, type MessageBody } from "@tier0/core";
+import { ticketHealth, ticketHealthSummary } from "@tier0/shared-tickets";
 import { ADMIN, CAT, HANDLER, LOG, OBSERVER, PANEL_CHANNEL, ada, grace, mallory, mod, open, prisma, refusalText, settingsOf, setup, tickets } from "./ticket-world.ts";
 import { channel, interaction, member, user, type World } from "./fake-discord.ts";
 

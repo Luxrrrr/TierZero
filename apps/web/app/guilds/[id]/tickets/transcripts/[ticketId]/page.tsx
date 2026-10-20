@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { parseTicketListFilters } from "@tier0/core";
+import { parseTicketListFilters } from "@tier0/shared-tickets";
 import { ControlApiError } from "../../../../../../lib/control-api";
 import { ticketDetail, ticketMessages, ticketsContext } from "../../../../../../lib/tickets-api";
 import { ticketIdFrom } from "../../../../../../lib/ticket-format";

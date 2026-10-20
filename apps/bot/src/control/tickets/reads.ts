@@ -20,7 +20,7 @@ import {
   type TicketStatsDto,
   type TicketTemplateDto,
   type TicketTemplatesDto,
-} from "@tier0/core";
+} from "@tier0/shared-tickets";
 import { storedBody } from "../messages.js";
 import { searchGuildMemberPage } from "../mod/members.js";
 import { refOf, resolveUsers } from "../mod/names.js";

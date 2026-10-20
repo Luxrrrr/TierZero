@@ -1,6 +1,6 @@
 import { denyStaffPage } from "../../../../../lib/mod-deny";
 import type { Metadata } from "next";
-import { can, type UserRef } from "@tier0/core";
+import { can, type UserRef } from "@tier0/shared-moderation";
 import { requireStaff } from "../../../../../lib/mod-access";
 import { ControlApiError } from "../../../../../lib/control-api";
 import { modInfractions, modStaff } from "../../../../../lib/mod-api";

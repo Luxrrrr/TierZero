@@ -11,7 +11,7 @@ import {
   type LoggedMessageDto,
   type Page,
   type ServerLogEntryDto,
-} from "@tier0/core";
+} from "@tier0/shared-moderation";
 import { fetchMemberOrNull, viewerCanRead } from "@tier0/module-moderation";
 import { loadLogged, parseAttachments, purgeEntries, storedDecision, versionsOf, type LoggedRow, type ServerLogSettings } from "@tier0/module-serverlog";
 import type { GuildState } from "../../runtime/guild-state.js";

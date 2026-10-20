@@ -1,5 +1,6 @@
 import { PermissionFlagsBits, type GuildMember } from "discord.js";
-import { AUTOMOD_ACTOR_NAME, describeAutomatic, isCounting, readAutomatic, warnExpiresAt, type AutomaticCase, type ModuleContext } from "@tier0/core";
+import { type ModuleContext } from "@tier0/core";
+import { AUTOMOD_ACTOR_NAME, describeAutomatic, isCounting, readAutomatic, warnExpiresAt, type AutomaticCase } from "@tier0/shared-moderation";
 import { prisma } from "@tier0/db";
 import type { EscalationAction, EscalationRule, ModerationSettings } from "./settings.js";
 import { describeDiscordError } from "./action-rules.js";

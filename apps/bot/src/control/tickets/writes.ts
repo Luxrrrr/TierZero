@@ -15,7 +15,7 @@ import {
   type TicketActor,
   type TicketError,
   type TicketPermission,
-} from "@tier0/core";
+} from "@tier0/shared-tickets";
 import { createLimiter } from "../mod/limiter.js";
 import { accessTarget } from "./dto.js";
 import { ticketDetail } from "./detail.js";

@@ -1,4 +1,5 @@
-import { s, SERVER_LOG_CATEGORIES } from "@tier0/core";
+import { s } from "@tier0/core";
+import { SERVER_LOG_CATEGORIES } from "@tier0/shared-moderation";
 import type { Infer } from "@tier0/core";
 
 const category = (id: (typeof SERVER_LOG_CATEGORIES)[number]["id"]) => {

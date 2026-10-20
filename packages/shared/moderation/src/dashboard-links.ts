@@ -1,4 +1,4 @@
-import { emptyButton, type MessageButton } from "./components.js";
+import { emptyButton, type MessageButton } from "@tier0/core";
 
 /**
  * Where a member's record and a single case live in the dashboard. The bot puts

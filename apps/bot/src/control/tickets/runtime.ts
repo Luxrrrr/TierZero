@@ -1,6 +1,8 @@
 import type {
   MessageEmbed,
   ModuleContext,
+} from "@tier0/core";
+import type {
   TicketActionResult,
   TicketActor,
   TicketCreateResult,
@@ -10,7 +12,7 @@ import type {
   TicketPriority,
   TicketReplyFile,
   TicketReplyResult,
-} from "@tier0/core";
+} from "@tier0/shared-tickets";
 import {
   acquireWait,
   accessSettingsOf,

@@ -2,7 +2,7 @@
 
 import { createContext, useContext } from "react";
 import type { MouseEvent as ReactMouseEvent } from "react";
-import type { StaffRole, UserRef } from "@tier0/core";
+import type { StaffRole, UserRef } from "@tier0/shared-moderation";
 import type { ContextMenuAnchor } from "../ContextMenu";
 import { isKeyboardContextMenu } from "../../lib/menu-position";
 import type { MenuUser, MessageRef } from "../../lib/person-menu";

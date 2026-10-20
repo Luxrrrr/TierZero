@@ -1,6 +1,6 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import type { MemberSummary, UserRef } from "@tier0/core";
+import type { MemberSummary, UserRef } from "@tier0/shared-moderation";
 import { mergeResults, moveActive, opensPalette, paletteMessage } from "../components/mod/palette.ts";
 
 const key = (over: Partial<Parameters<typeof opensPalette>[0]>) => ({

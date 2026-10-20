@@ -1,4 +1,4 @@
-import { caseStateOf, isWarning, type InfractionDto, type UserRef } from "@tier0/core";
+import { caseStateOf, isWarning, type InfractionDto, type UserRef } from "@tier0/shared-moderation";
 
 /**
  * Query handling and display rules for the action log. Kept free of React so

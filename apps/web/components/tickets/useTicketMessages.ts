@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { TicketMessageDto, TicketMessagesPage } from "@tier0/core";
+import type { TicketMessageDto, TicketMessagesPage } from "@tier0/shared-tickets";
 import { arrivalAnnouncement } from "../../lib/ticket-format";
 import { startLongPoll, type PollOutcome } from "../../lib/ticket-longpoll";
 import { discardPending, mergeArrivals, pendingMessage, settlePending } from "../../lib/ticket-optimistic";

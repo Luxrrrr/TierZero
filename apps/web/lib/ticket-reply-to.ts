@@ -1,4 +1,4 @@
-import { ticketReplySnippet, type TicketMessageDto } from "@tier0/core";
+import { ticketReplySnippet, type TicketMessageDto } from "@tier0/shared-tickets";
 
 /**
  * Replying to one message of a conversation. What the reply bar says, which

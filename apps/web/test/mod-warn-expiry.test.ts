@@ -1,6 +1,6 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import type { InfractionDto, UserRef } from "@tier0/core";
+import type { InfractionDto, UserRef } from "@tier0/shared-moderation";
 import { automaticLine, infractionStatus } from "../components/mod/format.ts";
 import { describeState, infractionState } from "../app/guilds/[id]/mod/actions/params.ts";
 import { automaticFromHref, warnExpiry } from "../app/guilds/[id]/mod/members/[userId]/timeline.ts";

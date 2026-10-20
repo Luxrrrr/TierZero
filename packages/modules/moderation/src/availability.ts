@@ -1,4 +1,4 @@
-import { MOD_ACTION_KINDS, type ModActionKind } from "@tier0/core";
+import { MOD_ACTION_KINDS, type ModActionKind } from "@tier0/shared-moderation";
 import { needsMember, targetIdentityCode } from "./action-rules.js";
 import { checkStanding, type HierarchyRule } from "./hierarchy.js";
 

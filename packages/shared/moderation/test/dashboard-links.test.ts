@@ -1,6 +1,7 @@
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
-import { ModuleRegistry, defineModule, dashboardLinks, normalizeOrigin, s, viewCaseButton } from "../dist/index.js";
+import { ModuleRegistry, defineModule, normalizeOrigin, s } from "@tier0/core";
+import { dashboardLinks, viewCaseButton } from "../dist/index.js";
 
 describe("dashboardLinks", () => {
   test("points the member's record at one case", () => {

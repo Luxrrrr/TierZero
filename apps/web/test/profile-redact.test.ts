@@ -1,6 +1,6 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import type { AuditDto, MemberProfile, NoteDto, UserRef } from "@tier0/core";
+import type { AuditDto, MemberProfile, NoteDto, UserRef } from "@tier0/shared-moderation";
 import { redactProfile } from "../lib/profile-redact.ts";
 
 const user = (userId: string): UserRef => ({ userId, name: userId, avatarUrl: null, inServer: true });

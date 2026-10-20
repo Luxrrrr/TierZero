@@ -1,5 +1,5 @@
 import type { Client } from "discord.js";
-import { AUTOMOD_ACTOR_NAME } from "@tier0/core";
+import { AUTOMOD_ACTOR_NAME } from "@tier0/shared-moderation";
 import { prisma } from "@tier0/db";
 
 export interface AutomodCaseFacts {

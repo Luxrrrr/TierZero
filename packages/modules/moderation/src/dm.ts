@@ -1,5 +1,6 @@
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, type MessageActionRowComponentBuilder } from "discord.js";
-import { customId, type EvidenceMessage, type ModuleContext } from "@tier0/core";
+import { customId, type ModuleContext } from "@tier0/core";
+import { type EvidenceMessage } from "@tier0/shared-moderation";
 import type { ModerationSettings } from "./settings.js";
 import { DM_MESSAGE } from "./messages.js";
 import { formatEvidence } from "./evidence-text.js";

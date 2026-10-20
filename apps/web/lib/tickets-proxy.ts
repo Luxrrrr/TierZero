@@ -11,7 +11,7 @@
  * Manage Server.
  */
 
-import { TICKET_REPLY_FILES_BYTES_MAX, TICKET_WAIT_MAX_SECONDS } from "@tier0/core";
+import { TICKET_REPLY_FILES_BYTES_MAX, TICKET_WAIT_MAX_SECONDS } from "@tier0/shared-tickets";
 
 /** Top-level paths the browser may reach. Anything else is a 404 here and never forwarded. */
 export const TICKET_PROXY_ROOTS: readonly string[] = ["access", "context", "list", "count", "members", "stats", "templates", "panels", "create", "items"];

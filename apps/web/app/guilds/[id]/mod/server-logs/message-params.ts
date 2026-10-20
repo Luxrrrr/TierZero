@@ -1,4 +1,4 @@
-import { MESSAGE_LOG_STATES, type MessageLogState } from "@tier0/core";
+import { MESSAGE_LOG_STATES, type MessageLogState } from "@tier0/shared-moderation";
 
 /**
  * Query handling for the message log tab, kept free of React so the rules can

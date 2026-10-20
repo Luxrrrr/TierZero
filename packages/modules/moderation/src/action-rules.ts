@@ -6,7 +6,8 @@
  * the two from drifting apart.
  */
 
-import { canTakeAction, type ActionContextDto, type ModActionKind, type ReplyValues, type StaffRole } from "@tier0/core";
+import { type ReplyValues } from "@tier0/core";
+import { canTakeAction, type ActionContextDto, type ModActionKind, type StaffRole } from "@tier0/shared-moderation";
 import { MAX_TIMEOUT_MS, validateBanDuration, validateTimeoutDuration } from "./duration.js";
 import type { ModerationAction } from "./modlog.js";
 import { DEFAULT_WORDING, refusalSentence, type RefusalCode, type Wording } from "./texts.js";

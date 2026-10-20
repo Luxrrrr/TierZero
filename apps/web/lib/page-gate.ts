@@ -1,4 +1,5 @@
-import { can, type ModPermission, type StaffRole, type TicketAccessLevel } from "@tier0/core";
+import { can, type ModPermission, type StaffRole } from "@tier0/shared-moderation";
+import { type TicketAccessLevel } from "@tier0/shared-tickets";
 
 /**
  * The refusals of the Moderation and Tickets pages, decided again by their

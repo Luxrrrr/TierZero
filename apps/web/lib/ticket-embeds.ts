@@ -1,4 +1,5 @@
-import { MESSAGE_LIMITS, TICKET_REPLY_EMBEDS_MAX, embedLength, parseMessage, readTicketReplyEmbeds, type MessageEmbed, type MessageError } from "@tier0/core";
+import { MESSAGE_LIMITS, embedLength, parseMessage, type MessageEmbed, type MessageError } from "@tier0/core";
+import { TICKET_REPLY_EMBEDS_MAX, readTicketReplyEmbeds } from "@tier0/shared-tickets";
 
 /**
  * What the reply box decides about the embeds of a reply: how much of Discord's

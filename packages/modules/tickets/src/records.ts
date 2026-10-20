@@ -1,5 +1,7 @@
-import type { MessageEmbed, TicketAttachmentDto, TicketMentionName, TicketTranscriptRemoval } from "@tier0/core";
-import { CATEGORY_CHANNEL_LIMIT, colorToInt, ticketStaffLine } from "@tier0/core";
+import type { MessageEmbed } from "@tier0/core";
+import type { TicketAttachmentDto, TicketMentionName, TicketTranscriptRemoval } from "@tier0/shared-tickets";
+import { colorToInt } from "@tier0/core";
+import { CATEGORY_CHANNEL_LIMIT, ticketStaffLine } from "@tier0/shared-tickets";
 
 /**
  * The parts of keeping a ticket that need no Discord connection: what a stored

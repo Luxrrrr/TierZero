@@ -1,6 +1,6 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import type { AuditDto, AuditKind, UserRef } from "@tier0/core";
+import type { AuditDto, AuditKind, UserRef } from "@tier0/shared-moderation";
 import { auditEntryLink, memberRecordHref } from "../app/guilds/[id]/mod/audit/params.ts";
 
 const member: UserRef = { userId: "100", name: "LuxTester", avatarUrl: null, inServer: true };

@@ -1,6 +1,6 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { DEFAULT_TICKET_FILTERS, parseTicketListFilters, ticketAccess, type TicketAccessSettings } from "@tier0/core";
+import { DEFAULT_TICKET_FILTERS, parseTicketListFilters, ticketAccess, type TicketAccessSettings } from "@tier0/shared-tickets";
 import { listOrder, listWhere, searchWhere, viewerScope } from "../dist/control/tickets/query.js";
 
 const GUILD = "100000000000000001";

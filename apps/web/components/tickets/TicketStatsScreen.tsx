@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { TICKET_STATS_PERIODS, type TicketStatsDto } from "@tier0/core";
+import { TICKET_STATS_PERIODS, type TicketStatsDto } from "@tier0/shared-tickets";
 import { HourStrip } from "../../app/guilds/[id]/mod/StatsCharts";
 import { EmptyState, LoadFailure, UserChip } from "../mod/ModUi";
 import { ChartIcon, CheckIcon, ClockIcon, StarIcon } from "../Icons";

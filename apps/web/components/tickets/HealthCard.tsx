@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import type { TicketHealthIssue, TicketHealthSummary, TicketPanelOption } from "@tier0/core";
+import type { TicketHealthIssue, TicketHealthSummary, TicketPanelOption } from "@tier0/shared-tickets";
 import { AlertIcon, CheckIcon, WarnTriangleIcon } from "../Icons";
 import { healthHeadline, healthLines } from "../../lib/ticket-health";
 import { openSettingsTarget } from "./settings-target";

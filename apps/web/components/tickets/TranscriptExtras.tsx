@@ -2,7 +2,7 @@
 
 import { useTransition } from "react";
 import { useRouter } from "next/navigation";
-import type { TicketListFilters } from "@tier0/core";
+import type { TicketListFilters } from "@tier0/shared-tickets";
 import { DateRangePicker } from "../form/DateRangePicker";
 import { Select } from "../form/Select";
 import { XIcon } from "../Icons";

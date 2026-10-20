@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { CSSProperties, ReactNode } from "react";
-import { AUDIT_ROLE_LABEL, type AuditActorRole, type InfractionDto, type UserRef } from "@tier0/core";
+import { AUDIT_ROLE_LABEL, type AuditActorRole, type InfractionDto, type UserRef } from "@tier0/shared-moderation";
 import {
   AlertIcon,
   BanIcon,

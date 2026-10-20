@@ -1,5 +1,5 @@
 import Link from "next/link";
-import type { AppealDetailDto, AppealDto, AppealListDto } from "@tier0/core";
+import type { AppealDetailDto, AppealDto, AppealListDto } from "@tier0/shared-moderation";
 import { AlertIcon, InboxIcon } from "../../../../../components/Icons";
 import { Avatar, EmptyState, Pager, PastEnd, Pill, RelativeTime, displayName, isPastEnd } from "../../../../../components/mod/ModUi";
 import { PersonMenuArea } from "../../../../../components/mod/PersonMenuArea";

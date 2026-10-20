@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import type { TicketCountDto, TicketListFilters } from "@tier0/core";
+import type { TicketCountDto, TicketListFilters } from "@tier0/shared-tickets";
 import { ArrowUpIcon, BellIcon } from "../Icons";
 import {
   LIVE_HIDDEN_POLL_MS,

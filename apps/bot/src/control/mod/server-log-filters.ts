@@ -1,5 +1,5 @@
 import type { Prisma } from "@tier0/db";
-import { isServerLogCategory, isServerLogType } from "@tier0/core";
+import { isServerLogCategory, isServerLogType } from "@tier0/shared-moderation";
 
 const SNOWFLAKE = /^\d{17,20}$/;
 const SEARCH_MAX = 200;

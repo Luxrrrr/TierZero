@@ -1,6 +1,7 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { applyVariablesToMessage, parseMessage, embedLength, type EvidenceMessage, type MessageBody } from "@tier0/core";
+import { applyVariablesToMessage, parseMessage, embedLength, type MessageBody } from "@tier0/core";
+import { type EvidenceMessage } from "@tier0/shared-moderation";
 import { DM_EVIDENCE, formatEvidence, neutralise } from "../dist/evidence-text.js";
 import { dmValues } from "../dist/dm.js";
 import { DM_MESSAGE } from "../dist/messages.js";

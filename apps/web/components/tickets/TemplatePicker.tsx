@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from "react";
-import type { MessageEmbed, TicketDetailDto, TicketTemplateDto, TicketTemplatesDto } from "@tier0/core";
+import type { MessageEmbed } from "@tier0/core";
+import type { TicketDetailDto, TicketTemplateDto, TicketTemplatesDto } from "@tier0/shared-tickets";
 import { filledTemplate, groupTemplates, insertTemplate, leftOutNote, matchTemplates, templateValues, type TemplateInsert } from "../../lib/ticket-templates";
 import { embedProblems } from "../../lib/ticket-embeds";
 import { ticketsClient } from "../../lib/tickets-client";

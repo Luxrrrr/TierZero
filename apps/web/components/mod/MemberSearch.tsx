@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
 import { useRouter } from "next/navigation";
 import { confirmLeave } from "../../lib/unsaved-guard";
-import type { MemberSearchHit, MemberSummary, Page } from "@tier0/core";
+import type { MemberSearchHit, MemberSummary, Page } from "@tier0/shared-moderation";
 import { ChevronRightIcon, SearchIcon } from "../Icons";
 import { Avatar, displayName } from "./ModUi";
 import {

@@ -8,7 +8,7 @@ import {
   type TicketHealthIssue,
   type TicketMessageDto,
   type TicketPanelOption,
-} from "@tier0/core";
+} from "@tier0/shared-tickets";
 import { isTicketTabCurrent, ticketLanding, ticketTabsFor } from "../lib/ticket-tabs.ts";
 import { firstRunSteps, healthLines, healthSummary, issuesBeyondFirstRun, needsFirstRun } from "../lib/ticket-health.ts";
 import {

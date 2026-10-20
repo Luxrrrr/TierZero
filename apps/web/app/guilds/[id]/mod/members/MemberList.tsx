@@ -1,5 +1,5 @@
 import Link from "next/link";
-import type { MemberSummary, Page } from "@tier0/core";
+import type { MemberSummary, Page } from "@tier0/shared-moderation";
 import {
   ArrowDownIcon,
   ArrowUpIcon,

@@ -1,5 +1,6 @@
 import { AttachmentBuilder, ChannelType, RESTJSONErrorCodes, type Message, type TextChannel, type Webhook } from "discord.js";
-import { ticketReplyQuoteLine, type MessageEmbed, type TicketActor, type TicketReplyFile } from "@tier0/core";
+import { type MessageEmbed } from "@tier0/core";
+import { ticketReplyQuoteLine, type TicketActor, type TicketReplyFile } from "@tier0/shared-tickets";
 import { prisma, type Ticket } from "@tier0/db";
 import { noteActivity } from "./capture.js";
 import { memberIdsIn } from "./channels.js";

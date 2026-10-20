@@ -1,4 +1,5 @@
-import { embedReply, emptyButton, emptyEmbed, plainReply, s, type Field, type MessageBody, type MessageButton, type MessageVariable, type TicketAnswer } from "@tier0/core";
+import { embedReply, emptyButton, emptyEmbed, plainReply, s, type Field, type MessageBody, type MessageButton, type MessageVariable } from "@tier0/core";
+import { type TicketAnswer } from "@tier0/shared-tickets";
 
 /**
  * Wording the ticket messages start with, the values they are filled from, and

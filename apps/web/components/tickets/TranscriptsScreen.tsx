@@ -1,5 +1,5 @@
 import Link from "next/link";
-import type { TicketContextDto, TicketListFilters, TicketPage } from "@tier0/core";
+import type { TicketContextDto, TicketListFilters, TicketPage } from "@tier0/shared-tickets";
 import { EmptyState, LoadFailure, Pager, RelativeTime, UserChip, displayName } from "../mod/ModUi";
 import { ArchiveIcon, DownloadIcon, EyeIcon, SearchIcon } from "../Icons";
 import { activeFilterCount, archiveRowActions, ticketNumber, ticketTitle, transcriptsHref } from "../../lib/ticket-format";

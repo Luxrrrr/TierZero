@@ -1,4 +1,5 @@
-import { AUTOMOD_ACTOR_NAME, type ModuleContext } from "@tier0/core";
+import { type ModuleContext } from "@tier0/core";
+import { AUTOMOD_ACTOR_NAME } from "@tier0/shared-moderation";
 import { prisma } from "@tier0/db";
 import type { ModerationSettings } from "./settings.js";
 import type { LockResult } from "./lockdown.js";

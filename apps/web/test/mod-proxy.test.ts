@@ -1,6 +1,6 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { can } from "@tier0/core";
+import { can } from "@tier0/shared-moderation";
 import { isMemberMessagesRead, isProfileRead, isSameOriginWrite, modProxyPermission, utf8Length } from "../lib/mod-proxy.ts";
 
 describe("modProxyPermission", () => {

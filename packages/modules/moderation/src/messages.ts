@@ -1,4 +1,5 @@
-import { REPLY_COLOR, embedReply, emptyButton, emptyEmbed, plainReply, viewCaseButton, type MessageBody, type MessageVariable, type ResponseTemplate } from "@tier0/core";
+import { REPLY_COLOR, embedReply, emptyButton, emptyEmbed, plainReply, type MessageBody, type MessageVariable, type ResponseTemplate } from "@tier0/core";
+import { viewCaseButton } from "@tier0/shared-moderation";
 import { EVIDENCE_SAMPLE } from "./evidence-text.js";
 
 /**

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { UserRef } from "@tier0/core";
+import type { UserRef } from "@tier0/shared-moderation";
 import { Avatar, displayName } from "../mod/ModUi";
 import { blockedIds, withBlocked } from "../../lib/ticket-blocklist";
 import { ticketsClient } from "../../lib/tickets-client";

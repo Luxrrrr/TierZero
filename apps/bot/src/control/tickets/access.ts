@@ -1,6 +1,6 @@
 import { PermissionFlagsBits, type Guild } from "discord.js";
 import { instanceOwnerId } from "@tier0/db";
-import { ticketAccess, type TicketAccess, type TicketActor } from "@tier0/core";
+import { ticketAccess, type TicketAccess, type TicketActor } from "@tier0/shared-tickets";
 import { rememberBounded, withinBudget } from "../mod/names.js";
 import { accessSettingsOf, type TicketSettings } from "./runtime.js";
 

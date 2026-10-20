@@ -2,7 +2,7 @@
 
 import { useEffect, useId, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { MESSAGE_LOG_STATES } from "@tier0/core";
+import { MESSAGE_LOG_STATES } from "@tier0/shared-moderation";
 import { SearchIcon, XIcon } from "../../../../../components/Icons";
 import { hasMessageLogFilters, messageLogHref, type MessageLogQuery } from "./message-params";
 import { Combobox } from "../../../../../components/form/Combobox";

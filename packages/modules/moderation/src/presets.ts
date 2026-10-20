@@ -1,4 +1,4 @@
-import { presetNamed, type ReasonPresetDto } from "@tier0/core";
+import { presetNamed, type ReasonPresetDto } from "@tier0/shared-moderation";
 import { MAX_TIMEOUT_MS } from "./duration.js";
 import type { ModerationAction } from "./modlog.js";
 import type { ReasonPreset } from "./settings.js";

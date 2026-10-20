@@ -4,7 +4,7 @@ import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import type { ActionTargetDto, ModActionKind, StaffRole } from "@tier0/core";
+import type { ActionTargetDto, ModActionKind, StaffRole } from "@tier0/shared-moderation";
 import { ContextMenu, type ContextMenuItem } from "../ContextMenu";
 import { CopyIcon, ExternalLinkIcon, UndoIcon, UserIcon } from "../Icons";
 import { useToast } from "../Toaster";

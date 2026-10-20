@@ -1,4 +1,4 @@
-import type { UserRef } from "@tier0/core";
+import type { UserRef } from "@tier0/shared-moderation";
 import { Avatar, displayName } from "../../../../../components/mod/ModUi";
 
 /** Avatar, name and id on two lines. The id matters here: it is what the owner would paste to add the same person. */

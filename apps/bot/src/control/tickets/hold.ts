@@ -1,5 +1,5 @@
 import type { Ticket } from "@tier0/db";
-import type { TicketListFilters, TicketMessagesPage } from "@tier0/core";
+import type { TicketListFilters, TicketMessagesPage } from "@tier0/shared-tickets";
 import { messagesPage } from "./detail.js";
 import { listWhere } from "./query.js";
 import { countTickets } from "./reads.js";

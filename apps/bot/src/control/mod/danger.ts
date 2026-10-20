@@ -1,5 +1,5 @@
 import { prisma } from "@tier0/db";
-import { can, type Actor } from "@tier0/core";
+import { can, type Actor } from "@tier0/shared-moderation";
 import { writeAudit } from "./audit.js";
 import { forbidden, ok, refuse, type ModCtx, type Reply } from "./types.js";
 

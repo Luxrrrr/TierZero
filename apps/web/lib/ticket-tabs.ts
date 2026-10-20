@@ -1,4 +1,4 @@
-import type { TicketAccessLevel } from "@tier0/core";
+import type { TicketAccessLevel } from "@tier0/shared-tickets";
 
 export interface TicketTab {
   id: "inbox" | "transcripts" | "stats" | "settings";

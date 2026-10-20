@@ -1,7 +1,7 @@
 import type { Message, PartialMessage } from "discord.js";
 import { prisma } from "@tier0/db";
 import type { Prisma } from "@tier0/db";
-import { EVIDENCE_LIMITS, type DeletionSource, type EvidenceAttachment, type EvidenceMessage, type MessageVersion } from "@tier0/core";
+import { EVIDENCE_LIMITS, type DeletionSource, type EvidenceAttachment, type EvidenceMessage, type MessageVersion } from "@tier0/shared-moderation";
 import { extrasOf } from "./extras.js";
 import type { DeletionDecision } from "./deletion-source.js";
 import { guarded, pruneIfDue } from "./record.js";

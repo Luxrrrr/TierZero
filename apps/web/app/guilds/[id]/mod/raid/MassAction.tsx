@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useId, useRef, useState } from "react";
-import { MASS_ACTION_LIMIT, type MassActionKind, type MassJobDto, type MassPreviewDto } from "@tier0/core";
+import { MASS_ACTION_LIMIT, type MassActionKind, type MassJobDto, type MassPreviewDto } from "@tier0/shared-moderation";
 import { AlertIcon, BanIcon, DoorIcon, UsersIcon } from "../../../../../components/Icons";
 import { Select } from "../../../../../components/form/Select";
 import { Pill, RelativeTime, UserChip } from "../../../../../components/mod/ModUi";

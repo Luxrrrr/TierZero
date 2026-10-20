@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Select } from "../../../../../components/form/Select";
 import { LogSwitch } from "../../../../../components/mod/LogSwitch";
-import { isAutomodRole, type AuditDto, type Page, type UserRef } from "@tier0/core";
+import { isAutomodRole, type AuditDto, type Page, type UserRef } from "@tier0/shared-moderation";
 import { Avatar, Pager, PastEnd, RoleBadge, UserChip, When, dayCountText, isPastEnd } from "../../../../../components/mod/ModUi";
 import { ArrowRightIcon, NoteIcon, PencilIcon, SearchIcon, TrashIcon, UndoIcon, UserIcon, HistoryIcon } from "../../../../../components/Icons";
 import { ExpandableRow } from "./ExpandableRow";

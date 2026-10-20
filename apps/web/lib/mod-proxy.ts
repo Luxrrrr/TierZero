@@ -1,4 +1,4 @@
-import type { ModPermission } from "@tier0/core";
+import type { ModPermission } from "@tier0/shared-moderation";
 
 /**
  * The rules the mod API proxy applies before anything reaches the bot. Kept

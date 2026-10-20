@@ -4,7 +4,8 @@ import {
   type Message,
   type PartialMessage,
 } from "discord.js";
-import { defineModule, noteDeletion, takeDeletionNote, type EvidenceMessage, type ModuleContext } from "@tier0/core";
+import { defineModule, type ModuleContext } from "@tier0/core";
+import { noteDeletion, takeDeletionNote, type EvidenceMessage } from "@tier0/shared-moderation";
 import { createInfraction } from "@tier0/db";
 import { auditAutomodCase, escalateFromPeer, evidenceForTrip, loggedCopyOf, staffReasonOf } from "@tier0/module-moderation";
 import { settings, type AutomodSettings } from "./settings.js";

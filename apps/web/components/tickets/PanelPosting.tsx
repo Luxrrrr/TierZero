@@ -2,7 +2,7 @@
 
 import { useEffect, useId, useState } from "react";
 import { useRouter } from "next/navigation";
-import type { TicketHealthIssue, TicketPanelOption, TicketPanelStatusDto } from "@tier0/core";
+import type { TicketHealthIssue, TicketPanelOption, TicketPanelStatusDto } from "@tier0/shared-tickets";
 import { useChannels } from "../form/ChannelPicker";
 import { useToast } from "../Toaster";
 import { Pill, RelativeTime } from "../mod/ModUi";

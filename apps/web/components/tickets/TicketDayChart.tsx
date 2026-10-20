@@ -1,7 +1,7 @@
 "use client";
 
 import { useId } from "react";
-import type { TicketStatsDto } from "@tier0/core";
+import type { TicketStatsDto } from "@tier0/shared-tickets";
 import { smoothPath, useCursor, type Point } from "../../app/guilds/[id]/mod/StatsCharts";
 import { fullDate, gridValues, labelIndexes, niceMax, shortDate } from "../../app/guilds/[id]/mod/stats-logic";
 import { dayChartSummary } from "../../lib/ticket-stats";

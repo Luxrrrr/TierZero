@@ -1,6 +1,6 @@
 import { test, describe, before, after } from "node:test";
 import assert from "node:assert/strict";
-import { readEvidence, takeDeletionNote, clearDeletionNotes } from "@tier0/core";
+import { readEvidence, takeDeletionNote, clearDeletionNotes } from "@tier0/shared-moderation";
 import { createTestDatabase } from "../../moderation/test/db-helper.ts";
 
 const db = createTestDatabase();

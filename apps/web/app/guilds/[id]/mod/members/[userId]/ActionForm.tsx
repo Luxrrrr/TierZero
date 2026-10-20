@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useId, useRef, useState } from "react";
-import type { EvidenceRef, ModActionKind } from "@tier0/core";
+import type { EvidenceRef, ModActionKind } from "@tier0/shared-moderation";
 import { AlertIcon, ShieldIcon } from "../../../../../../components/Icons";
 import { Select } from "../../../../../../components/form/Select";
 import { Switch } from "../../../../../../components/form/Switch";

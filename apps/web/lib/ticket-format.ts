@@ -12,7 +12,7 @@ import {
   type TicketSummaryDto,
   type TicketTranscriptDeleteResult,
   type TranscriptActivity,
-} from "@tier0/core";
+} from "@tier0/shared-tickets";
 
 /**
  * The words and the small calculations the ticket workspace repeats: labels,

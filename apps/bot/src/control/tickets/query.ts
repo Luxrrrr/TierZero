@@ -1,5 +1,5 @@
 import type { Prisma } from "@tier0/db";
-import { LEGACY_TYPE_ID, type TicketAccess, type TicketListFilters, type TicketSort } from "@tier0/core";
+import { LEGACY_TYPE_ID, type TicketAccess, type TicketListFilters, type TicketSort } from "@tier0/shared-tickets";
 
 /**
  * The ticket list's filters as a database query, kept free of the handlers so

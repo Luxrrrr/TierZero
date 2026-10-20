@@ -1,5 +1,8 @@
 import type { Ticket, TicketEvent, TicketMessage, TicketNote } from "@tier0/db";
 import {
+  type UserRef,
+} from "@tier0/shared-moderation";
+import {
   isTicketEventKind,
   isTicketPriority,
   readTicketDetail,
@@ -9,8 +12,7 @@ import {
   type TicketMessageDto,
   type TicketNoteDto,
   type TicketSummaryDto,
-  type UserRef,
-} from "@tier0/core";
+} from "@tier0/shared-tickets";
 
 /** Row to reply shapes. Nothing here reaches Discord; names are looked up by the caller and passed in. */
 

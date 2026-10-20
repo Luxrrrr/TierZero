@@ -2,13 +2,15 @@ import { randomUUID } from "node:crypto";
 import { ChannelType } from "discord.js";
 import {
   applyVariablesToMessage,
+} from "@tier0/core";
+import {
   TICKET_CREATE_MEMBERS_MAX,
   TICKET_FORM_QUESTIONS_MAX,
   type TicketActor,
   type TicketAnswer,
   type TicketCreateRequest,
   type TicketCreateResult,
-} from "@tier0/core";
+} from "@tier0/shared-tickets";
 import { prisma, type Ticket } from "@tier0/db";
 import { rememberOpenTicket } from "./cache.js";
 import { notifyTicket } from "./live.js";

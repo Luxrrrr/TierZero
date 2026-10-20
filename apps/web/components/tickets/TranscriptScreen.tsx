@@ -1,5 +1,5 @@
 import Link from "next/link";
-import type { TicketContextDto, TicketDetailDto, TicketListFilters, TicketMessagesPage } from "@tier0/core";
+import type { TicketContextDto, TicketDetailDto, TicketListFilters, TicketMessagesPage } from "@tier0/shared-tickets";
 import { EmptyState, LoadFailure } from "../mod/ModUi";
 import { InfoIcon } from "../Icons";
 import { inboxHref, ticketNumber, transcriptsHref } from "../../lib/ticket-format";

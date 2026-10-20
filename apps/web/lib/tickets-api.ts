@@ -7,7 +7,7 @@ import {
   type TicketPage,
   type TicketPanelStatusDto,
   type TicketStatsDto,
-} from "@tier0/core";
+} from "@tier0/shared-tickets";
 import { ControlApiError, ticketsRequest } from "./control-api";
 
 /**

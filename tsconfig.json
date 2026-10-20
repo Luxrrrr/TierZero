@@ -1,20 +1,56 @@
 {
   "files": [],
   "references": [
-    { "path": "packages/core" },
-    { "path": "packages/db" },
-    { "path": "packages/modules/utility" },
-    { "path": "packages/modules/welcome" },
-    { "path": "packages/modules/verification" },
-    { "path": "packages/modules/gaming" },
-    { "path": "packages/modules/roles" },
-    { "path": "packages/modules/automod" },
-    { "path": "packages/modules/leveling" },
-    { "path": "packages/modules/moderation" },
-    { "path": "packages/modules/tickets" },
-    { "path": "packages/modules/auditlog" },
-    { "path": "packages/modules/feeds" },
-    { "path": "packages/modules/system" },
-    { "path": "apps/bot" }
+    {
+      "path": "packages/core"
+    },
+    {
+      "path": "packages/db"
+    },
+    {
+      "path": "packages/shared/moderation"
+    },
+    {
+      "path": "packages/shared/tickets"
+    },
+    {
+      "path": "packages/modules/utility"
+    },
+    {
+      "path": "packages/modules/welcome"
+    },
+    {
+      "path": "packages/modules/verification"
+    },
+    {
+      "path": "packages/modules/gaming"
+    },
+    {
+      "path": "packages/modules/roles"
+    },
+    {
+      "path": "packages/modules/automod"
+    },
+    {
+      "path": "packages/modules/leveling"
+    },
+    {
+      "path": "packages/modules/moderation"
+    },
+    {
+      "path": "packages/modules/tickets"
+    },
+    {
+      "path": "packages/modules/auditlog"
+    },
+    {
+      "path": "packages/modules/feeds"
+    },
+    {
+      "path": "packages/modules/system"
+    },
+    {
+      "path": "apps/bot"
+    }
   ]
 }

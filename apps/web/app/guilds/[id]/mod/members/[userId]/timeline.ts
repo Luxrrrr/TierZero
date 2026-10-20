@@ -1,5 +1,5 @@
-import { isCounting, isInForce, isWarning } from "@tier0/core";
-import type { AuditDto, InfractionDto, MemberProfile, NoteDto, UserRef } from "@tier0/core";
+import { isCounting, isInForce, isWarning } from "@tier0/shared-moderation";
+import type { AuditDto, InfractionDto, MemberProfile, NoteDto, UserRef } from "@tier0/shared-moderation";
 
 /**
  * Pure helpers for the member profile: merging the three record types into one

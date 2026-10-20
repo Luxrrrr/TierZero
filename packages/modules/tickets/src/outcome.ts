@@ -1,4 +1,5 @@
-import type { ReplyValues, TicketError } from "@tier0/core";
+import type { ReplyValues } from "@tier0/core";
+import type { TicketError } from "@tier0/shared-tickets";
 import type { ReplyKey } from "./messages.js";
 
 /**

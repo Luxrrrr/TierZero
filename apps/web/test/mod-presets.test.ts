@@ -1,6 +1,6 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import type { ReasonPresetDto } from "@tier0/core";
+import type { ReasonPresetDto } from "@tier0/shared-moderation";
 import {
   ACTION_REASON_LIMIT,
   BAN_PRESETS,

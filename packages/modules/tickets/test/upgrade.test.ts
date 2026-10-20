@@ -1,6 +1,7 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { LEGACY_PANEL_ID, LEGACY_TYPE_ID, ModuleRegistry, embedReply, type MessageBody } from "@tier0/core";
+import { ModuleRegistry, embedReply, type MessageBody } from "@tier0/core";
+import { LEGACY_PANEL_ID, LEGACY_TYPE_ID } from "@tier0/shared-tickets";
 import tickets from "../dist/index.js";
 import { derivedId, upgradeSettings } from "../dist/upgrade.js";
 import { OPENED_MESSAGE, PANEL_MESSAGE, REPLIES, TRANSCRIPT_MESSAGE } from "../dist/messages.js";

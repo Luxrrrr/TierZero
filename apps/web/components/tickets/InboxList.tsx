@@ -1,6 +1,6 @@
 import type { CSSProperties } from "react";
 import Link from "next/link";
-import type { TicketListFilters, TicketPage, TicketSummaryDto, TicketTypeOption } from "@tier0/core";
+import type { TicketListFilters, TicketPage, TicketSummaryDto, TicketTypeOption } from "@tier0/shared-tickets";
 import { Avatar, EmptyState, Pager, RelativeTime, displayName } from "../mod/ModUi";
 import { InboxIcon, SearchIcon } from "../Icons";
 import { activeFilterCount, inboxHref, ticketNumber, ticketTitle } from "../../lib/ticket-format";

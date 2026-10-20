@@ -1,5 +1,5 @@
 import Link from "next/link";
-import type { TicketContextDto, TicketDetailDto, TicketListFilters, TicketMessagesPage, TicketPage } from "@tier0/core";
+import type { TicketContextDto, TicketDetailDto, TicketListFilters, TicketMessagesPage, TicketPage } from "@tier0/shared-tickets";
 import { EmptyState, LoadFailure } from "../mod/ModUi";
 import { AlertIcon, InboxIcon, InfoIcon } from "../Icons";
 import { inboxHref, isMyQueue } from "../../lib/ticket-format";

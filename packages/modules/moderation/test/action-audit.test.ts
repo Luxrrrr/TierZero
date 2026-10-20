@@ -1,6 +1,6 @@
 import { test, describe, before, after, beforeEach } from "node:test";
 import assert from "node:assert/strict";
-import type { EvidenceMessage } from "@tier0/core";
+import type { EvidenceMessage } from "@tier0/shared-moderation";
 import { createTestDatabase } from "./db-helper.ts";
 import { moderationSettingsWith } from "./settings-helper.ts";
 

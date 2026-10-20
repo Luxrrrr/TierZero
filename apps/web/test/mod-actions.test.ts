@@ -1,6 +1,6 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import type { ActionContextDto, InfractionDto, UserRef } from "@tier0/core";
+import type { ActionContextDto, InfractionDto, UserRef } from "@tier0/shared-moderation";
 import {
   BAN_PRESETS,
   DAY_MS,

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { can, type StaffRole } from "@tier0/core";
+import { can, type StaffRole } from "@tier0/shared-moderation";
 import type { MessageLogResult, ServerLogResult } from "../../../../../lib/mod-api";
 import { HistoryIcon } from "../../../../../components/Icons";
 import { EventFilters } from "./EventFilters";

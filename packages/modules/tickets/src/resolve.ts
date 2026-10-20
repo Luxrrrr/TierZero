@@ -1,4 +1,4 @@
-import { LEGACY_TYPE_ID, type TicketAccessSettings, type TicketAnswer } from "@tier0/core";
+import { LEGACY_TYPE_ID, type TicketAccessSettings, type TicketAnswer } from "@tier0/shared-tickets";
 import type { FormQuestion, TicketPanel, TicketType } from "./panels.js";
 import { atLeastAMinute } from "./records.js";
 import type { TicketSettings } from "./settings.js";

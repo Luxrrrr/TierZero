@@ -1,6 +1,7 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { CATEGORY_CHANNEL_LIMIT, emptyEmbed, plainReply } from "@tier0/core";
+import { emptyEmbed, plainReply } from "@tier0/core";
+import { CATEGORY_CHANNEL_LIMIT } from "@tier0/shared-tickets";
 import {
   attachmentsJson,
   attributedReply,

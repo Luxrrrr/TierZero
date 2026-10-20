@@ -3,13 +3,15 @@
 import { useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
+  type UserRef,
+} from "@tier0/shared-moderation";
+import {
   TICKET_CREATE_MEMBERS_MAX,
   TICKET_CREATE_MESSAGE_MAX,
   TICKET_CREATE_SUBJECT_MAX,
   type TicketPanelOption,
   type TicketTypeOption,
-  type UserRef,
-} from "@tier0/core";
+} from "@tier0/shared-tickets";
 import { DialogShell } from "../../app/guilds/[id]/mod/members/[userId]/Dialog";
 import { CharacterCount } from "../../app/guilds/[id]/mod/members/[userId]/CharacterCount";
 import { Avatar, displayName } from "../mod/ModUi";

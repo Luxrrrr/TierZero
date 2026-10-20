@@ -1,5 +1,5 @@
 import type { Client, Guild } from "discord.js";
-import type { TicketAccess, TicketError } from "@tier0/core";
+import type { TicketAccess, TicketError } from "@tier0/shared-tickets";
 import type { Reply } from "../mod/types.js";
 import type { ViewerFacts } from "./access.js";
 import type { TicketCtx, TicketServices } from "./runtime.js";

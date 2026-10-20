@@ -1,9 +1,11 @@
 import {
+  type MessageEmbed,
+  type ModuleContext,
+} from "@tier0/core";
+import {
   readTicketReply,
   ticketMessageFromRow,
   ticketReplySnippet,
-  type MessageEmbed,
-  type ModuleContext,
   type TicketAccess,
   type TicketActionResult,
   type TicketActor,
@@ -15,7 +17,7 @@ import {
   type TicketReplyResult,
   readTicketAttachments,
   readTicketEmbeds,
-} from "@tier0/core";
+} from "@tier0/shared-tickets";
 import { prisma, type Ticket } from "@tier0/db";
 import { closeTicket, reopenTicketIn } from "./close.js";
 import { messageDto, ticketDetail } from "./detail.js";

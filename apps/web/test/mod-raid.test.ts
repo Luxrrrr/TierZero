@@ -1,6 +1,6 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { MASS_ACTION_LIMIT, type LockableChannelDto } from "@tier0/core";
+import { MASS_ACTION_LIMIT, type LockableChannelDto } from "@tier0/shared-moderation";
 import {
   buildMassRequest,
   fromLocalInput,

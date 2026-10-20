@@ -1,4 +1,4 @@
-import { AUTOMOD_NAME, caseStateOf, describeAutomatic, isInForce, type AutomaticCase, type EvidenceMessage, type InfractionDto, type UserRef } from "@tier0/core";
+import { AUTOMOD_NAME, caseStateOf, describeAutomatic, isInForce, type AutomaticCase, type EvidenceMessage, type InfractionDto, type UserRef } from "@tier0/shared-moderation";
 
 /**
  * The plain logic behind the mod dashboard's shared pieces. No React here, so

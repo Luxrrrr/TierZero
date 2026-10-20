@@ -18,9 +18,10 @@ That starts the bot and the dashboard, which is at http://localhost:8080. Fill i
 ```
 apps/bot             gateway connection, module runtime, control API
 apps/web             dashboard and first-run sign-in
-packages/core        module contract and settings schema
+packages/core        module contract, settings schema and the message builder
 packages/db          Prisma schema and client
 packages/modules/*   feature modules
+packages/shared/*    rules and shapes the bot, a module and the dashboard agree on
 ```
 
 Start with `packages/core/src/schema.ts`. To add a feature, see [modules.md](modules.md). If a module seems to need its own dashboard page, the schema is probably missing a field type.
@@ -44,7 +45,7 @@ Things that break if you miss them. The reasons are in [architecture.md](archite
 - Make cases with `createInfraction` from `@tier0/db`, not `prisma.infraction.create`. It assigns the case number, and a row inserted another way collides with the next case.
 - The slash commands and the dashboard share one code path for taking an action, `performAction` in `packages/modules/moderation/src/perform.ts`. A new action goes there so the two can't drift apart.
 - Removed entries stay in the table with `voidedAt` set. Anything that lists or counts a member's record has to skip them, unless it's showing removals on purpose.
-- What each role can do is decided in `packages/core/src/mod.ts`. Add to the grant table there and don't check a role name in a page or handler.
+- What each role can do is decided in `packages/shared/moderation/src/mod.ts`. Add to the grant table there and don't check a role name in a page or handler.
 - Changes made in the dashboard write a `ModAudit` row with `writeAudit`, in the same transaction as the change. Purging is the exception and writes nothing.
 
 ## Sample moderation data

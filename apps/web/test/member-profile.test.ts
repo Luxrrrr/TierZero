@@ -1,7 +1,7 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import type { AuditDto, InfractionDto, NoteDto, UserRef } from "@tier0/core";
-import type { MemberProfile } from "@tier0/core";
+import type { AuditDto, InfractionDto, NoteDto, UserRef } from "@tier0/shared-moderation";
+import type { MemberProfile } from "@tier0/shared-moderation";
 import {
   activitySeries,
   applyPending,

@@ -6,7 +6,7 @@
  * them the same way. Pure, so server and client components and the tests can share it.
  */
 
-import { automodDetailText, automodRuleLabel, parseAutomodReason, readableReason, type AutomodReason } from "@tier0/core";
+import { automodDetailText, automodRuleLabel, parseAutomodReason, readableReason, type AutomodReason } from "@tier0/shared-moderation";
 
 export { automodDetailText, parseAutomodReason, readableReason, type AutomodReason };
 

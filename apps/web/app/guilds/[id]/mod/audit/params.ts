@@ -1,4 +1,4 @@
-import { AUDIT_KIND_LABEL, type AuditDto, type AuditKind } from "@tier0/core";
+import { AUDIT_KIND_LABEL, type AuditDto, type AuditKind } from "@tier0/shared-moderation";
 
 /**
  * Query handling and grouping rules for the audit trail. Kept free of React

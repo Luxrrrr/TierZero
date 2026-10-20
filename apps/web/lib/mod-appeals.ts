@@ -1,4 +1,4 @@
-import { APPEAL_LIMITS, isAppealStatus, type AppealDto, type AppealStatus } from "@tier0/core";
+import { APPEAL_LIMITS, isAppealStatus, type AppealDto, type AppealStatus } from "@tier0/shared-moderation";
 
 /**
  * Query handling and wording for the Appeals tab. No React or Next.js here,

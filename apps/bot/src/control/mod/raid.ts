@@ -1,6 +1,9 @@
 import { createHash, randomUUID } from "node:crypto";
 import type { Guild, GuildMember } from "discord.js";
 import {
+  type ModuleContext,
+} from "@tier0/core";
+import {
   MASS_ACTION_LIMIT,
   can,
   type Actor,
@@ -10,9 +13,8 @@ import {
   type MassJobDto,
   type MassPreviewDto,
   type MassTargetDto,
-  type ModuleContext,
   type RaidStatusDto,
-} from "@tier0/core";
+} from "@tier0/shared-moderation";
 import { createInfraction, instanceOwnerId, prisma } from "@tier0/db";
 import {
   botCanLock,

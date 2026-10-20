@@ -3,8 +3,8 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { confirmLeave } from "../../../../../lib/unsaved-guard";
-import type { EvidenceMessage, LoggedMessageDto } from "@tier0/core";
-import { EVIDENCE_LIMITS } from "@tier0/core";
+import type { EvidenceMessage, LoggedMessageDto } from "@tier0/shared-moderation";
+import { EVIDENCE_LIMITS } from "@tier0/shared-moderation";
 import { noTextLabel } from "../../../../../lib/deleted-by";
 import { saveAttach } from "../../../../../lib/attach-handoff";
 import { DeletedTag, Versions } from "../../../../../components/mod/Evidence";

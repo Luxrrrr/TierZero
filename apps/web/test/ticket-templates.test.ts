@@ -1,6 +1,7 @@
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
-import { emptyEmbed, type TicketMessageDto, type TicketTemplateDto } from "@tier0/core";
+import { emptyEmbed } from "@tier0/core";
+import { type TicketMessageDto, type TicketTemplateDto } from "@tier0/shared-tickets";
 import { embedProblems } from "../lib/ticket-embeds.ts";
 import { filledTemplate, groupTemplates, insertTemplate as insert, leftOutNote, matchTemplates, templateValues } from "../lib/ticket-templates.ts";
 import { canReplyTo, latestToReplyTo, replyTargetOf } from "../lib/ticket-reply-to.ts";

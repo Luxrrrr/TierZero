@@ -1,7 +1,7 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 import { renderToStaticMarkup } from "react-dom/server";
-import { ticketMessageFromRow, transcriptTree, type TicketMessageRow, type TranscriptElement } from "@tier0/core";
+import { ticketMessageFromRow, transcriptTree, type TicketMessageRow, type TranscriptElement } from "@tier0/shared-tickets";
 import { renderTranscriptNode } from "../lib/transcript-react.ts";
 import { archiveRowActions, transcriptPageHref, transcriptsHref } from "../lib/ticket-format.ts";
 // The download is rendered by the bot's module; the dashboard must draw the same thing.

@@ -1,5 +1,7 @@
 import {
   applyVariables,
+} from "@tier0/core";
+import {
   readTicketAttachments,
   readTicketEmbeds,
   readTicketMentions,
@@ -16,7 +18,7 @@ import {
   type TicketMessageRow,
   type TranscriptLabels,
   type TranscriptNode,
-} from "@tier0/core";
+} from "@tier0/shared-tickets";
 import { DEFAULT_TRANSCRIPT_TEXTS, type TranscriptTexts } from "./transcript.js";
 
 /**

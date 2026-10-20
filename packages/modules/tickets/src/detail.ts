@@ -1,4 +1,7 @@
 import {
+  type UserRef,
+} from "@tier0/shared-moderation";
+import {
   isTicketEventKind,
   isTicketPriority,
   readTicketAnswers,
@@ -9,8 +12,7 @@ import {
   type TicketDetailDto,
   type TicketMemberDto,
   type TicketMessageDto,
-  type UserRef,
-} from "@tier0/core";
+} from "@tier0/shared-tickets";
 import { prisma, type Ticket, type TicketMessage } from "@tier0/db";
 import { memberIdsIn, staffMemberIds } from "./channels.js";
 import { channelOf, isThread, targetOf, type TicketCtx } from "./context.js";

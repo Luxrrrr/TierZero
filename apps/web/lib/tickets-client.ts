@@ -1,7 +1,9 @@
 import {
-  ticketListQuery,
   type MemberSearchHit,
   type MemberSearchPage,
+} from "@tier0/shared-moderation";
+import {
+  ticketListQuery,
   type TicketActionResult,
   type TicketCloseRequest,
   type TicketContextDto,
@@ -24,7 +26,7 @@ import {
   type TicketTemplatesDto,
   type TicketTransferRequest,
   type TicketTranscriptDeleteResult,
-} from "@tier0/core";
+} from "@tier0/shared-tickets";
 
 /**
  * The browser's side of the ticket workspace. Every call goes to the

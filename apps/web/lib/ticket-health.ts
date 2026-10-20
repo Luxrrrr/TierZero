@@ -4,7 +4,7 @@ import {
   type TicketHealthIssue,
   type TicketHealthSummary,
   type TicketPanelOption,
-} from "@tier0/core";
+} from "@tier0/shared-tickets";
 
 /**
  * What the bot found wrong with a server's tickets, in words an owner can act

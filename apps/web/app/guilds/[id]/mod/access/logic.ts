@@ -6,7 +6,7 @@ import {
   type ModPermission,
   type StaffDto,
   type StaffRole,
-} from "@tier0/core";
+} from "@tier0/shared-moderation";
 
 /**
  * What the access page needs that has no React in it: the wording for each

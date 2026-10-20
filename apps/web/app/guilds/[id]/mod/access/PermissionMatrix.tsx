@@ -1,4 +1,4 @@
-import { ROLE_LABEL } from "@tier0/core";
+import { ROLE_LABEL } from "@tier0/shared-moderation";
 import { CheckIcon, InfoIcon, TrashIcon } from "../../../../../components/Icons";
 import { MATRIX_ROLES, matrixGroups } from "./logic";
 

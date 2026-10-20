@@ -1,12 +1,14 @@
 import {
+  type UserRef,
+} from "@tier0/shared-moderation";
+import {
   TICKET_CREATE_MEMBERS_MAX,
   TICKET_CREATE_MESSAGE_MAX,
   TICKET_CREATE_SUBJECT_MAX,
   type TicketAnswer,
   type TicketPanelOption,
   type TicketTypeOption,
-  type UserRef,
-} from "@tier0/core";
+} from "@tier0/shared-tickets";
 
 /**
  * The pure side of the New ticket dialog: which types the viewer may open,

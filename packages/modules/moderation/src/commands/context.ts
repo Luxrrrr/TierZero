@@ -15,15 +15,17 @@ import {
   type User,
 } from "discord.js";
 import {
-  canTakeAction,
   customId,
-  presetNamed,
-  type EvidenceMessage,
   type ComponentEvent,
   type ContextCommandDefinition,
-  type ModActionKind,
   type ModuleContext,
 } from "@tier0/core";
+import {
+  canTakeAction,
+  presetNamed,
+  type EvidenceMessage,
+  type ModActionKind,
+} from "@tier0/shared-moderation";
 import type { ModerationSettings } from "../settings.js";
 import { ActionRefused } from "../action-rules.js";
 import { deletionNotes } from "../delete-evidence.js";

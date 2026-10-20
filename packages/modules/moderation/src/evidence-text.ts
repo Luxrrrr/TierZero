@@ -1,4 +1,5 @@
-import { MESSAGE_LIMITS, type EvidenceMessage } from "@tier0/core";
+import { MESSAGE_LIMITS } from "@tier0/core";
+import { type EvidenceMessage } from "@tier0/shared-moderation";
 import { DEFAULT_WORDING, fillLabel, type Wording } from "./texts.js";
 
 /**

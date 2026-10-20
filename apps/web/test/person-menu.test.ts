@@ -1,6 +1,6 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import type { ActionTargetDto, StaffRole } from "@tier0/core";
+import type { ActionTargetDto, StaffRole } from "@tier0/shared-moderation";
 import { actionOptions, memberState } from "../app/guilds/[id]/mod/members/[userId]/actions.ts";
 import {
   APP_HINT,

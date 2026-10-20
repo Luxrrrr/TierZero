@@ -1,7 +1,7 @@
 "use client";
 
 import { useId, useRef, useState } from "react";
-import type { EvidenceRef, InfractionDto } from "@tier0/core";
+import type { EvidenceRef, InfractionDto } from "@tier0/shared-moderation";
 import { PencilIcon } from "../../../../../../components/Icons";
 import { Select } from "../../../../../../components/form/Select";
 import { ACTION_REASON_LIMIT, BAN_PRESETS, TIMEOUT_PRESETS } from "./actions";

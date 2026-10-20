@@ -10,7 +10,7 @@ const BOT = "100000000000000114";
 
 const db = createTestDatabase();
 const { prisma } = await import("@tier0/db");
-const { noteDeletion, clearDeletionNotes } = await import("@tier0/core");
+const { noteDeletion, clearDeletionNotes } = await import("@tier0/shared-moderation");
 const { serverLogEvents } = await import("../dist/events.js");
 const { logCreated } = await import("../dist/message-log.js");
 

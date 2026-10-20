@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import type { ActionTargetDto, EvidenceRef, ModActionKind } from "@tier0/core";
+import type { ActionTargetDto, EvidenceRef, ModActionKind } from "@tier0/shared-moderation";
 import { ActionFormDialog } from "../../app/guilds/[id]/mod/members/[userId]/ActionForm";
 import { memberState, successTitle } from "../../app/guilds/[id]/mod/members/[userId]/actions";
 import type { ContextState } from "../../app/guilds/[id]/mod/members/[userId]/useActionContext";

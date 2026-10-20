@@ -1,7 +1,7 @@
 "use client";
 
 import type { KeyboardEvent, MouseEvent, ReactNode } from "react";
-import type { UserRef } from "@tier0/core";
+import type { UserRef } from "@tier0/shared-moderation";
 import { MoreIcon } from "../Icons";
 import { isContextMenuKey } from "../../lib/menu-position";
 import { isMenuUser } from "../../lib/person-menu";

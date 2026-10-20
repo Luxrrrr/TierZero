@@ -6,7 +6,7 @@ const GUILD = "100000000000000210";
 
 const db = createTestDatabase();
 const { prisma } = await import("@tier0/db");
-const { serverLogCategoryOf, serverLogTypeLabel } = await import("@tier0/core");
+const { serverLogCategoryOf, serverLogTypeLabel } = await import("@tier0/shared-moderation");
 const { serverLogEvents } = await import("../dist/events.js");
 
 before(async () => {

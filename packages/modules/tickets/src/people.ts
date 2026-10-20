@@ -1,5 +1,5 @@
 import { MessageFlags, type ChatInputCommandInteraction, type MessageComponentInteraction, type ModalSubmitInteraction } from "discord.js";
-import { LEGACY_TYPE_ID } from "@tier0/core";
+import { LEGACY_TYPE_ID } from "@tier0/shared-tickets";
 import { prisma, type Ticket } from "@tier0/db";
 import { closeTicket, reopenTicketIn } from "./close.js";
 import { actorOf, isStaffOf, may, memberRoleIds, refuse, type Answerable, type DiscordPerson, type TicketCtx } from "./context.js";

@@ -1,5 +1,5 @@
 import { isUniqueConflict, prisma } from "@tier0/db";
-import { can, type Actor, type ListedRole, type StaffDto } from "@tier0/core";
+import { can, type Actor, type ListedRole, type StaffDto } from "@tier0/shared-moderation";
 import { writeAudit } from "./audit.js";
 import { refOf, resolveUsers } from "./names.js";
 import { forbidden, notFound, ok, refuse, type ModCtx, type Reply } from "./types.js";

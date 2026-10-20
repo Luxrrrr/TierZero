@@ -1,6 +1,6 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { MOD_ACTION_KINDS, can, permissionForAction, type StaffDto } from "@tier0/core";
+import { MOD_ACTION_KINDS, can, permissionForAction, type StaffDto } from "@tier0/shared-moderation";
 import {
   MATRIX_ROLES,
   PERMISSION_GROUPS,

@@ -1,5 +1,5 @@
-import { can, canDeleteNote, canEditInfraction, canEditNote, canVoidAction } from "@tier0/core";
-import type { InfractionDto, NoteDto, StaffRole } from "@tier0/core";
+import { can, canDeleteNote, canEditInfraction, canEditNote, canVoidAction } from "@tier0/shared-moderation";
+import type { InfractionDto, NoteDto, StaffRole } from "@tier0/shared-moderation";
 
 /**
  * Which buttons a row offers. The bot enforces the same rules again, so this

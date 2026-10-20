@@ -1,5 +1,5 @@
 import { prisma } from "@tier0/db";
-import { AUDIT_KIND_LABEL, AUTOMOD_NAME, auditActorRole, isAutomodActor, type AuditDto, type AuditKind, type Page, type UserRef } from "@tier0/core";
+import { AUDIT_KIND_LABEL, AUTOMOD_NAME, auditActorRole, isAutomodActor, type AuditDto, type AuditKind, type Page, type UserRef } from "@tier0/shared-moderation";
 import { auditWhere } from "./filters.js";
 import { refOf, resolveUsers } from "./names.js";
 import { ok, pageOf, type ModCtx, type Reply } from "./types.js";

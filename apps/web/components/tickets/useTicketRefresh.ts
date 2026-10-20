@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef } from "react";
-import type { TicketDetailDto } from "@tier0/core";
+import type { TicketDetailDto } from "@tier0/shared-tickets";
 import { ticketsClient } from "../../lib/tickets-client";
 
 /** How often the ticket is read again when the live feed cannot tell the page it changed. */

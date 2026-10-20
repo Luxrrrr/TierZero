@@ -1,4 +1,4 @@
-import type { MemberSearchHit, MemberSummary, UserRef } from "@tier0/core";
+import type { MemberSearchHit, MemberSummary, UserRef } from "@tier0/shared-moderation";
 
 /**
  * Keyboard and result rules for the member search palette, apart from React

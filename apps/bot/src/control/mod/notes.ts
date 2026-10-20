@@ -1,5 +1,5 @@
 import { prisma } from "@tier0/db";
-import { can, canDeleteNote, canEditNote, type Actor, type NoteDto } from "@tier0/core";
+import { can, canDeleteNote, canEditNote, type Actor, type NoteDto } from "@tier0/shared-moderation";
 import { writeAudit } from "./audit.js";
 import { checkNoteContent, clip, isSnowflake, labelOf, noteDto, noteSnapshot, type NoteRow } from "./dto.js";
 import { createLimiter } from "./limiter.js";

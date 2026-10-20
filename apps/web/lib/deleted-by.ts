@@ -1,4 +1,4 @@
-import type { DeletionSource } from "@tier0/core";
+import type { DeletionSource } from "@tier0/shared-moderation";
 
 /**
  * What the red tag on a deleted message says. The name is the one saved when it

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { ActionTargetDto } from "@tier0/core";
+import type { ActionTargetDto } from "@tier0/shared-moderation";
 import { readStanding } from "./actions";
 
 /**

@@ -1,6 +1,6 @@
 import { AuditLogEvent, type Guild } from "discord.js";
 import { prisma } from "@tier0/db";
-import { serverLogCategoryOf, type ServerLogDetails } from "@tier0/core";
+import { serverLogCategoryOf, type ServerLogDetails } from "@tier0/shared-moderation";
 import type { AuditCandidate } from "./deletion-source.js";
 import type { ServerLogSettings } from "./settings.js";
 

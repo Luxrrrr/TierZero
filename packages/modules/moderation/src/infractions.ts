@@ -1,5 +1,5 @@
 import { createInfraction, prisma } from "@tier0/db";
-import { isCounting, warnExpiresAt, type AutomaticCase, type EvidenceMessage } from "@tier0/core";
+import { isCounting, warnExpiresAt, type AutomaticCase, type EvidenceMessage } from "@tier0/shared-moderation";
 import type { ModerationAction } from "./modlog.js";
 
 export interface InfractionRecord {

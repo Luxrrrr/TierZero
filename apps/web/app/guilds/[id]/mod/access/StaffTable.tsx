@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { ROLE_LABEL, type ListedRole, type StaffDto } from "@tier0/core";
+import { ROLE_LABEL, type ListedRole, type StaffDto } from "@tier0/shared-moderation";
 import { useToast } from "../../../../../components/Toaster";
 import { useUnsavedGuard } from "../../../../../lib/unsaved-guard";
 import { AlertIcon, CheckIcon, PlusIcon, TrashIcon, UserIcon } from "../../../../../components/Icons";

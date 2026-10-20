@@ -5,8 +5,8 @@
  * touches a database.
  */
 
-import { isHttpUrl, parseMessage, type MessageEmbed } from "./message.js";
-import type { UserRef } from "./mod.js";
+import { isHttpUrl, parseMessage, type MessageEmbed } from "@tier0/core";
+import type { UserRef } from "@tier0/shared-moderation";
 
 export const TICKET_PRIORITIES = ["low", "normal", "high", "urgent"] as const;
 export type TicketPriority = (typeof TICKET_PRIORITIES)[number];

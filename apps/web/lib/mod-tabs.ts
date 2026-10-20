@@ -1,4 +1,4 @@
-import { can, type StaffRole } from "@tier0/core";
+import { can, type StaffRole } from "@tier0/shared-moderation";
 
 export interface ModTab {
   id: "overview" | "members" | "logs" | "serverlogs" | "appeals" | "raid" | "access" | "settings" | "danger";

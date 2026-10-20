@@ -1,4 +1,4 @@
-import { canTakeAction, type EvidenceRef, type ModActionKind, type StaffRole } from "@tier0/core";
+import { canTakeAction, type EvidenceRef, type ModActionKind, type StaffRole } from "@tier0/shared-moderation";
 import type { ActionOption } from "../app/guilds/[id]/mod/members/[userId]/actions";
 
 /**

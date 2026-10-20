@@ -74,6 +74,12 @@ importers:
       '@tier0/module-welcome':
         specifier: workspace:*
         version: link:../../packages/modules/welcome
+      '@tier0/shared-moderation':
+        specifier: workspace:*
+        version: link:../../packages/shared/moderation
+      '@tier0/shared-tickets':
+        specifier: workspace:*
+        version: link:../../packages/shared/tickets
       discord.js:
         specifier: ^14.16.0
         version: 14.27.0
@@ -99,6 +105,12 @@ importers:
       '@tier0/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@tier0/shared-moderation':
+        specifier: workspace:*
+        version: link:../../packages/shared/moderation
+      '@tier0/shared-tickets':
+        specifier: workspace:*
+        version: link:../../packages/shared/tickets
       next:
         specifier: 16.3.8
         version: 16.3.8(@types/node@22.20.4)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
@@ -158,6 +170,9 @@ importers:
       '@tier0/module-moderation':
         specifier: workspace:*
         version: link:../moderation
+      '@tier0/shared-moderation':
+        specifier: workspace:*
+        version: link:../../shared/moderation
       discord.js:
         specifier: ^14.16.0
         version: 14.27.0
@@ -212,6 +227,9 @@ importers:
       '@tier0/module-serverlog':
         specifier: workspace:*
         version: link:../serverlog
+      '@tier0/shared-moderation':
+        specifier: workspace:*
+        version: link:../../shared/moderation
       discord.js:
         specifier: ^14.16.0
         version: 14.27.0
@@ -236,6 +254,9 @@ importers:
       '@tier0/db':
         specifier: workspace:*
         version: link:../../db
+      '@tier0/shared-moderation':
+        specifier: workspace:*
+        version: link:../../shared/moderation
       discord.js:
         specifier: ^14.16.0
         version: 14.27.0
@@ -254,6 +275,12 @@ importers:
       '@tier0/db':
         specifier: workspace:*
         version: link:../../db
+      '@tier0/shared-moderation':
+        specifier: workspace:*
+        version: link:../../shared/moderation
+      '@tier0/shared-tickets':
+        specifier: workspace:*
+        version: link:../../shared/tickets
       discord.js:
         specifier: ^14.16.0
         version: 14.27.0
@@ -287,6 +314,21 @@ importers:
       discord.js:
         specifier: ^14.16.0
         version: 14.27.0
+
+  packages/shared/moderation:
+    dependencies:
+      '@tier0/core':
+        specifier: workspace:*
+        version: link:../../core
+
+  packages/shared/tickets:
+    dependencies:
+      '@tier0/core':
+        specifier: workspace:*
+        version: link:../../core
+      '@tier0/shared-moderation':
+        specifier: workspace:*
+        version: link:../moderation
 
 packages:
 

@@ -1,4 +1,4 @@
-import { SERVER_LOG_CATEGORIES, SERVER_LOG_CATEGORY_IDS, isServerLogType, type ServerLogCategoryId } from "@tier0/core";
+import { SERVER_LOG_CATEGORIES, SERVER_LOG_CATEGORY_IDS, isServerLogType, type ServerLogCategoryId } from "@tier0/shared-moderation";
 
 /**
  * Query handling for the events view of Server logs, kept free of React so the

@@ -1,5 +1,5 @@
 import { ChannelType } from "discord.js";
-import { TICKET_NOTE_MAX, type TicketActor, type TicketPriority } from "@tier0/core";
+import { TICKET_NOTE_MAX, type TicketActor, type TicketPriority } from "@tier0/shared-tickets";
 import { prisma, type Ticket } from "@tier0/db";
 import { rememberOpenTicket } from "./cache.js";
 import { addMember, applyClaimLock, categoryFor, refreshTopic, releaseClaimLock, removeMember, swapRoles, swapThreadHandlers } from "./channels.js";

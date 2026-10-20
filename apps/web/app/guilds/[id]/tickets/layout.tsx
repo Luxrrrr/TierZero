@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import type { Metadata } from "next";
 import { forbidden, redirect } from "next/navigation";
-import type { TicketAccessLevel, TicketContextDto } from "@tier0/core";
+import type { TicketAccessLevel, TicketContextDto } from "@tier0/shared-tickets";
 import { ControlApiError } from "../../../../lib/control-api";
 import { botGuilds } from "../../../../lib/guild-data";
 import { requireTicketViewer } from "../../../../lib/tickets-access";

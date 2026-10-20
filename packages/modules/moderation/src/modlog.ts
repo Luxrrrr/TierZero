@@ -1,4 +1,4 @@
-import { dashboardLinks } from "@tier0/core";
+import { dashboardLinks } from "@tier0/shared-moderation";
 import { DEFAULT_WORDING, fillLabel, type Wording } from "./texts.js";
 
 /**

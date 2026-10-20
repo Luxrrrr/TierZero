@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import type { TicketListFilters, TicketPanelOption, TicketPriority } from "@tier0/core";
+import type { TicketListFilters, TicketPanelOption, TicketPriority } from "@tier0/shared-tickets";
 import { ChevronDownIcon, FilterIcon, SearchIcon, XIcon } from "../Icons";
 import { Select } from "../form/Select";
 import {

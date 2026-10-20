@@ -1,5 +1,5 @@
 import Link from "next/link";
-import type { InfractionDto, StatsDto } from "@tier0/core";
+import type { InfractionDto, StatsDto } from "@tier0/shared-moderation";
 import { ActionBadge, CaseReason, UserChip, actionLabel, displayName, fmtDateTime, moderatorOf, timeAgo } from "../../../../components/mod/ModUi";
 import {
   actionBars,

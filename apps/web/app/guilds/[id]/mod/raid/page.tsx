@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { can, type RaidStatusDto } from "@tier0/core";
+import { can, type RaidStatusDto } from "@tier0/shared-moderation";
 import { denyStaffPage } from "../../../../../lib/mod-deny";
 import { requireStaff } from "../../../../../lib/mod-access";
 import { requireGuildAccess } from "../../../../../lib/authz";

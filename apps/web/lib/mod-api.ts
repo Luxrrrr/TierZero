@@ -12,7 +12,7 @@ import type {
   Page,
   StaffDto,
   StatsDto,
-} from "@tier0/core";
+} from "@tier0/shared-moderation";
 import { ControlApiError, modRequest } from "./control-api";
 
 /**

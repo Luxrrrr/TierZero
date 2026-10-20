@@ -1,5 +1,5 @@
 import { PermissionFlagsBits, type Guild, type GuildMember, type Message } from "discord.js";
-import { EVIDENCE_LIMITS, type EvidenceMessage, type EvidenceRef, type MessageVersion } from "@tier0/core";
+import { EVIDENCE_LIMITS, type EvidenceMessage, type EvidenceRef, type MessageVersion } from "@tier0/shared-moderation";
 import { ActionRefused } from "./action-rules.js";
 import { LOG_LIMITS, deletedByOf, evidenceFromLogged, loadLogged, versionsOf, type LoggedRow } from "@tier0/module-serverlog";
 import { recentMessages, type RecentMessage } from "./recent-messages.js";

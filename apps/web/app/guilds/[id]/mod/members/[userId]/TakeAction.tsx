@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import type { KeyboardEvent as ReactKeyboardEvent } from "react";
 import { useRouter } from "next/navigation";
-import type { ActionTargetDto, MemberProfile, ModActionKind, StaffRole } from "@tier0/core";
+import type { ActionTargetDto, MemberProfile, ModActionKind, StaffRole } from "@tier0/shared-moderation";
 import { ChevronDownIcon, ShieldIcon } from "../../../../../../components/Icons";
 import { StateIcon } from "../../../../../../components/mod/ModUi";
 import { useToast } from "../../../../../../components/Toaster";

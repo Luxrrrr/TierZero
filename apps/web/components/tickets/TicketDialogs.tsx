@@ -1,7 +1,7 @@
 "use client";
 
 import { useId, useRef, useState, type ReactNode } from "react";
-import { TICKET_CLOSE_REASON_MAX, TICKET_RENAME_MAX, type TicketPanelOption } from "@tier0/core";
+import { TICKET_CLOSE_REASON_MAX, TICKET_RENAME_MAX, type TicketPanelOption } from "@tier0/shared-tickets";
 import { DialogShell } from "../../app/guilds/[id]/mod/members/[userId]/Dialog";
 import { CharacterCount } from "../../app/guilds/[id]/mod/members/[userId]/CharacterCount";
 import { DoorIcon, LockIcon, PencilIcon, SwapIcon, TrashIcon } from "../Icons";

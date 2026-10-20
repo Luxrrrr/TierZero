@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { APPEAL_LIMITS, readableReason, type AppealDetailDto, type AppealDto } from "@tier0/core";
+import { APPEAL_LIMITS, readableReason, type AppealDetailDto, type AppealDto } from "@tier0/shared-moderation";
 import { AlertIcon, BanIcon, CheckIcon, UndoIcon, XIcon } from "../../../../../components/Icons";
 import { useToast } from "../../../../../components/Toaster";
 import { ActionBadge, Avatar, LocalTime, Pill, RelativeTime, displayName, moderatorOf } from "../../../../../components/mod/ModUi";

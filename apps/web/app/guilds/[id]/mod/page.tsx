@@ -1,5 +1,5 @@
 import { denyStaffPage } from "../../../../lib/mod-deny";
-import type { InfractionDto, StatsDto } from "@tier0/core";
+import type { InfractionDto, StatsDto } from "@tier0/shared-moderation";
 import { requireGuildAccess } from "../../../../lib/authz";
 import { ControlApiError } from "../../../../lib/control-api";
 import { requireStaff } from "../../../../lib/mod-access";

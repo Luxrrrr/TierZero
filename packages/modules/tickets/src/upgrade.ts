@@ -1,4 +1,5 @@
-import { GENERATED_ID, LEGACY_PANEL_ID, LEGACY_TYPE_ID } from "@tier0/core";
+import { GENERATED_ID } from "@tier0/core";
+import { LEGACY_PANEL_ID, LEGACY_TYPE_ID } from "@tier0/shared-tickets";
 import { DEFAULT_MODAL_QUESTION } from "./labels.js";
 import { upgradePanel } from "./messages.js";
 

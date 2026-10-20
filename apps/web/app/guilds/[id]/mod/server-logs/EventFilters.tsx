@@ -2,7 +2,7 @@
 
 import { useEffect, useId, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { SERVER_LOG_CATEGORIES, type ServerLogCategoryId } from "@tier0/core";
+import { SERVER_LOG_CATEGORIES, type ServerLogCategoryId } from "@tier0/shared-moderation";
 import { ChevronDownIcon, SearchIcon, XIcon } from "../../../../../components/Icons";
 import { Combobox } from "../../../../../components/form/Combobox";
 import { DateRangePicker } from "../../../../../components/form/DateRangePicker";

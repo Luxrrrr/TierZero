@@ -1,6 +1,6 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import type { TicketMessageDto } from "@tier0/core";
+import type { TicketMessageDto } from "@tier0/shared-tickets";
 import { listPath, messagesPath } from "../lib/tickets-client.ts";
 import {
   FALLBACK_AFTER_FAILURES,

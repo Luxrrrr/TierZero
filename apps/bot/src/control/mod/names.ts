@@ -1,5 +1,5 @@
 import { Events, type Client, type Guild } from "discord.js";
-import { automodRef, type UserRef } from "@tier0/core";
+import { automodRef, type UserRef } from "@tier0/shared-moderation";
 
 /**
  * Resolves Discord ids to something a person can read. Members come from the

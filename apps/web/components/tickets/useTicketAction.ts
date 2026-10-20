@@ -2,7 +2,7 @@
 
 import { useCallback, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import type { TicketActionResult } from "@tier0/core";
+import type { TicketActionResult } from "@tier0/shared-tickets";
 import { useToast } from "../Toaster";
 import { isActionResult, type TicketCallResult } from "../../lib/tickets-client";
 

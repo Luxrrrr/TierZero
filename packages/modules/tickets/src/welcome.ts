@@ -1,4 +1,5 @@
-import { applyVariables, readTicketAnswers, type MessageBody, type ReplyValues, type TicketAnswer } from "@tier0/core";
+import { applyVariables, type MessageBody, type ReplyValues } from "@tier0/core";
+import { readTicketAnswers, type TicketAnswer } from "@tier0/shared-tickets";
 import type { Ticket } from "@tier0/db";
 import { priorityLabel } from "./labels.js";
 import { OPENED_MESSAGE, welcomeValues } from "./messages.js";

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { readTextLimited } from "../../../../../../lib/body-limit";
 import { modRequest, ControlApiError } from "../../../../../../lib/control-api";
-import type { MemberProfile } from "@tier0/core";
+import type { MemberProfile } from "@tier0/shared-moderation";
 import { requireStaff } from "../../../../../../lib/mod-access";
 import { redactProfile } from "../../../../../../lib/profile-redact";
 import {

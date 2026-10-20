@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useId, useState, type ReactNode } from "react";
-import { TICKET_NOTE_MAX, type TicketDetailDto, type TicketMemberAccess, type TicketPermission } from "@tier0/core";
+import { TICKET_NOTE_MAX, type TicketDetailDto, type TicketMemberAccess, type TicketPermission } from "@tier0/shared-tickets";
 import { Avatar, LocalTime, RelativeTime, UserChip, displayName } from "../mod/ModUi";
 import { PersonMenuArea, PersonMenuButton } from "../mod/PersonMenuArea";
 import { CharacterCount } from "../../app/guilds/[id]/mod/members/[userId]/CharacterCount";

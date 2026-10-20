@@ -7,7 +7,8 @@ import {
   type ModalSubmitInteraction,
   type User,
 } from "discord.js";
-import { APPEAL_LIMITS, customId, type ComponentEvent, type ModuleContext, type ReplyValues } from "@tier0/core";
+import { customId, type ComponentEvent, type ModuleContext, type ReplyValues } from "@tier0/core";
+import { APPEAL_LIMITS } from "@tier0/shared-moderation";
 import { prisma } from "@tier0/db";
 import type { ModerationSettings } from "./settings.js";
 import { APPEAL_POST, APPEAL_REPLIES } from "./messages.js";

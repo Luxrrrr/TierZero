@@ -1,4 +1,4 @@
-import type { DeletionSource, EvidenceMessage, MessageVersion } from "@tier0/core";
+import type { DeletionSource, EvidenceMessage, MessageVersion } from "@tier0/shared-moderation";
 import { deletedByLabel, deletedByTitle, noTextLabel } from "../../lib/deleted-by";
 import { When } from "./ModUi";
 

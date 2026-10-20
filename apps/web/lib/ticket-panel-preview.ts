@@ -1,4 +1,5 @@
-import type { ButtonStyleName, MessageBody, MessageButton, MessageSelect, TicketPanelStatusDto } from "@tier0/core";
+import type { ButtonStyleName, MessageBody, MessageButton, MessageSelect } from "@tier0/core";
+import type { TicketPanelStatusDto } from "@tier0/shared-tickets";
 
 /**
  * A panel as members will see it, built from the settings draft: its message

@@ -2,7 +2,7 @@ import Link from "next/link";
 import { denyStaffPage } from "../../../../../../lib/mod-deny";
 import { cache } from "react";
 import type { Metadata } from "next";
-import type { MemberProfile } from "@tier0/core";
+import type { MemberProfile } from "@tier0/shared-moderation";
 import { ControlApiError } from "../../../../../../lib/control-api";
 import { requireGuildAccess } from "../../../../../../lib/authz";
 import { requireStaff } from "../../../../../../lib/mod-access";

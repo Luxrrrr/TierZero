@@ -8,7 +8,8 @@ import {
   type ThreadChannel,
   type User,
 } from "discord.js";
-import { takeDeletionNote, type DeletionNote, type EventHandlers, type ServerLogChange } from "@tier0/core";
+import { type EventHandlers } from "@tier0/core";
+import { takeDeletionNote, type DeletionNote, type ServerLogChange } from "@tier0/shared-moderation";
 import { AuditLogEvent, clip, executorOf, record, recentMessageDeletions, type Who } from "./record.js";
 import { decideDeletion, decisionFromNote, deletedByPhrase, recordClaim, type DeletionDecision } from "./deletion-source.js";
 import { logCreated, logDeleted, logEdited } from "./message-log.js";

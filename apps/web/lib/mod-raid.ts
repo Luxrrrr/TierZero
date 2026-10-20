@@ -1,4 +1,4 @@
-import { MASS_ACTION_LIMIT, type LockableChannelDto, type MassActionKind, type MassActionRequest, type MassJobDto, type MassPreviewDto, type RaidStatusDto } from "@tier0/core";
+import { MASS_ACTION_LIMIT, type LockableChannelDto, type MassActionKind, type MassActionRequest, type MassJobDto, type MassPreviewDto, type RaidStatusDto } from "@tier0/shared-moderation";
 
 /**
  * The rules behind the Raid tools tab: reading pasted ids, the lockdown and

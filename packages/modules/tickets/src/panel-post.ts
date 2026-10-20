@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { ChannelType, type Message, type TextChannel } from "discord.js";
-import { LEGACY_PANEL_ID, type TicketHealthFacts, type TicketPanelPostResult, type TicketPanelState, type TicketPanelStatusDto } from "@tier0/core";
+import { LEGACY_PANEL_ID, type TicketHealthFacts, type TicketPanelPostResult, type TicketPanelState, type TicketPanelStatusDto } from "@tier0/shared-tickets";
 import { prisma, type TicketPanelPost } from "@tier0/db";
 import type { TicketCtx } from "./context.js";
 import { panelRows } from "./controls.js";

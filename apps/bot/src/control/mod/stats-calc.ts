@@ -4,7 +4,7 @@
  * calls this, then resolves user ids to names.
  */
 
-import { isInForce } from "@tier0/core";
+import { isInForce } from "@tier0/shared-moderation";
 
 export interface StatsInfraction {
   userId: string;

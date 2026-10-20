@@ -1,5 +1,5 @@
 import type { Prisma } from "@tier0/db";
-import { isInForce, isWarning } from "@tier0/core";
+import { isInForce, isWarning } from "@tier0/shared-moderation";
 
 /**
  * Query-string parsing for the action log and the audit trail, kept apart from

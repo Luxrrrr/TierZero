@@ -1,4 +1,4 @@
-import type { DeletionNote, DeletionSource } from "@tier0/core";
+import type { DeletionNote, DeletionSource } from "@tier0/shared-moderation";
 
 /** Who deleted a message, as the log keeps it. The id and name are those of the deleter at the time. */
 export interface DeletionDecision {

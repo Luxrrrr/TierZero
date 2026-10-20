@@ -1,5 +1,6 @@
 import { MessageFlags, type MessageComponentInteraction, type ModalSubmitInteraction } from "discord.js";
-import { readTicketDetail, type ComponentHandler, type ModalHandler } from "@tier0/core";
+import { type ComponentHandler, type ModalHandler } from "@tier0/core";
+import { readTicketDetail } from "@tier0/shared-tickets";
 import { prisma, type Ticket } from "@tier0/db";
 import { deleteKept, showRated } from "./close.js";
 import { actorOf, isStaffOf, may, refuse, type TicketCtx } from "./context.js";

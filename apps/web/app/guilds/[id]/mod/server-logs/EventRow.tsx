@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useId, useState } from "react";
-import type { ServerLogEntryDto, UserRef } from "@tier0/core";
+import type { ServerLogEntryDto, UserRef } from "@tier0/shared-moderation";
 import {
   BanIcon,
   ChevronDownIcon,

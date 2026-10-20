@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { StaffDto } from "@tier0/core";
+import type { StaffDto } from "@tier0/shared-moderation";
 import { AlertIcon } from "../../../../../components/Icons";
 import { RoleBadge } from "../../../../../components/mod/ModUi";
 import { AddStaff } from "./AddStaff";

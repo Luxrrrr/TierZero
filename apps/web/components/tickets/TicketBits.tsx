@@ -1,4 +1,5 @@
-import type { TicketPriority, TicketSummaryDto, UserRef } from "@tier0/core";
+import type { UserRef } from "@tier0/shared-moderation";
+import type { TicketPriority, TicketSummaryDto } from "@tier0/shared-tickets";
 import { Pill } from "../mod/ModUi";
 import { FlagIcon, StarIcon } from "../Icons";
 import { PRIORITY_LABEL, statusLabel } from "../../lib/ticket-format";

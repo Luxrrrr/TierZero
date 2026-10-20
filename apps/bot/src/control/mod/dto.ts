@@ -9,7 +9,7 @@ import {
   type MemberSummary,
   type NoteDto,
   type UserRef,
-} from "@tier0/core";
+} from "@tier0/shared-moderation";
 
 /**
  * Mappers and rules for the mod dashboard that need neither Discord nor a

@@ -8,7 +8,8 @@ import {
   TextInputStyle,
   type MessageActionRowComponentBuilder,
 } from "discord.js";
-import { customId, readTicketDetail, type TicketEventKind } from "@tier0/core";
+import { customId } from "@tier0/core";
+import { readTicketDetail, type TicketEventKind } from "@tier0/shared-tickets";
 import { prisma, type Ticket } from "@tier0/db";
 import { guildOfTicket, notifyTicket, type TicketChangeKind } from "./live.js";
 import type { TicketPanel, TicketType } from "./panels.js";

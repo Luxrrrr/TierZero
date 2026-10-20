@@ -26,6 +26,23 @@ export default tseslint.config(
     },
   },
   {
+    // The shared packages hold the rules and shapes the bot, a module and the
+    // dashboard all agree on. The dashboard loads them, so they must not reach
+    // for Discord or the database.
+    files: ["packages/shared/*/src/**/*.ts"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            { group: ["discord.js", "discord.js/*"], message: "Shared packages are loaded by the dashboard and must not depend on discord.js." },
+            { group: ["@tier0/db", "@prisma/client"], message: "Shared packages are loaded by the dashboard and must not touch the database." },
+          ],
+        },
+      ],
+    },
+  },
+  {
     // Tests reach into built output and stub discord.js objects, so the
     // assertions that keep them readable are worth more here than the rule.
     files: ["**/test/**/*.ts"],

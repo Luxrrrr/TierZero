@@ -1,6 +1,6 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { DEFAULT_TICKET_FILTERS, type TicketCountDto, type TicketSavedReplyDto } from "@tier0/core";
+import { DEFAULT_TICKET_FILTERS, type TicketCountDto, type TicketSavedReplyDto } from "@tier0/shared-tickets";
 import {
   alertText,
   alertsKey,

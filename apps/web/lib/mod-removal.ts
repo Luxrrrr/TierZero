@@ -1,4 +1,4 @@
-import type { LiftResult } from "@tier0/core";
+import type { LiftResult } from "@tier0/shared-moderation";
 
 /**
  * The toast after removing a case from the record. A ban or timeout that was

@@ -1,6 +1,6 @@
 import type { Client, Guild } from "discord.js";
 import { prisma } from "@tier0/db";
-import { canTicket, parseTicketListFilters, readUpdatedSince, readVersion, readWaitSeconds } from "@tier0/core";
+import { canTicket, parseTicketListFilters, readUpdatedSince, readVersion, readWaitSeconds } from "@tier0/shared-tickets";
 import { accessFor, actorOf, SNOWFLAKE, viewerFacts } from "./access.js";
 import { ticketDetail } from "./detail.js";
 import { countAfterWait, messagesAfterWait } from "./hold.js";

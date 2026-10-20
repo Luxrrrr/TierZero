@@ -1,5 +1,5 @@
 import { prisma } from "@tier0/db";
-import type { StatsDto } from "@tier0/core";
+import type { StatsDto } from "@tier0/shared-moderation";
 import { buildStatsExport, statsExportFilename } from "./csv.js";
 import { refOf, resolveUsers } from "./names.js";
 import { computeStats, type StatsRange } from "./stats-calc.js";

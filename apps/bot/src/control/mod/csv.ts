@@ -1,4 +1,4 @@
-import { caseStateOf, readEvidence, readableReason, warnExpiresAt, type CaseState } from "@tier0/core";
+import { caseStateOf, readEvidence, readableReason, warnExpiresAt, type CaseState } from "@tier0/shared-moderation";
 import type { InfractionRow } from "./dto.js";
 import type { StatsResult } from "./stats-calc.js";
 

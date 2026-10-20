@@ -1,15 +1,17 @@
 import {
-  TICKET_REPLY_EMBEDS_MAX,
   applyVariablesToMessage,
   discordTimestamp,
-  savedReplyValues,
   type MessageEmbed,
   type MessageError,
+  type VariableValues,
+} from "@tier0/core";
+import {
+  TICKET_REPLY_EMBEDS_MAX,
+  savedReplyValues,
   type TicketDetailDto,
   type TicketTemplateDto,
   type TicketTemplatesDto,
-  type VariableValues,
-} from "@tier0/core";
+} from "@tier0/shared-tickets";
 
 /**
  * What the reply box decides about the Message creator templates it offers:

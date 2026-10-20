@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { parseTicketListFilters } from "@tier0/core";
+import { parseTicketListFilters } from "@tier0/shared-tickets";
 import { ControlApiError } from "../../../../../lib/control-api";
 import { ticketsContext, ticketsList } from "../../../../../lib/tickets-api";
 import { BotOffline } from "../../../../../components/BotOffline";

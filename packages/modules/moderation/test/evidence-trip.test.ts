@@ -1,6 +1,6 @@
 import { test, describe, after } from "node:test";
 import assert from "node:assert/strict";
-import { EVIDENCE_LIMITS } from "@tier0/core";
+import { EVIDENCE_LIMITS } from "@tier0/shared-moderation";
 import { createTestDatabase } from "./db-helper.ts";
 
 const db = createTestDatabase();

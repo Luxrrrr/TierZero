@@ -2,7 +2,8 @@
 
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { createPortal } from "react-dom";
-import { emptyEmbed, type MessageEmbed, type TicketDetailDto } from "@tier0/core";
+import { emptyEmbed, type MessageEmbed } from "@tier0/core";
+import { type TicketDetailDto } from "@tier0/shared-tickets";
 import { embedProblems, embedsUsed, EMBED_BUDGET } from "../../lib/ticket-embeds";
 import type { TemplateInsert } from "../../lib/ticket-templates";
 import { ChoiceButtons } from "../form/ChoiceButtons";

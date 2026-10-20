@@ -1,6 +1,7 @@
 import { headers } from "next/headers";
 import { forbidden, redirect } from "next/navigation";
-import type { StaffRole, TicketAccessLevel } from "@tier0/core";
+import type { StaffRole } from "@tier0/shared-moderation";
+import type { TicketAccessLevel } from "@tier0/shared-tickets";
 import { PATH_HEADER } from "./login-redirect";
 import { modGate, restOfPath, ticketsGate, type Gate } from "./page-gate";
 

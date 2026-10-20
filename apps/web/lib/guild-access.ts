@@ -1,4 +1,5 @@
-import type { StaffRole, TicketAccessLevel } from "@tier0/core";
+import type { StaffRole } from "@tier0/shared-moderation";
+import type { TicketAccessLevel } from "@tier0/shared-tickets";
 import { getAuthorizedGuildIds, requireGuildAccess } from "./authz";
 import { ControlApiError, listBotGuilds, ticketsRequest } from "./control-api";
 import { prisma } from "@tier0/db";

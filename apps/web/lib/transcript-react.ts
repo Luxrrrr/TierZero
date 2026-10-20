@@ -1,5 +1,5 @@
 import { createElement, Fragment, type CSSProperties, type ReactNode } from "react";
-import { TRANSCRIPT_URL_ATTRS, TRANSCRIPT_VOID_TAGS, webUrl, type TranscriptNode } from "@tier0/core";
+import { TRANSCRIPT_URL_ATTRS, TRANSCRIPT_VOID_TAGS, webUrl, type TranscriptNode } from "@tier0/shared-tickets";
 
 /**
  * The transcript tree from `transcriptTree` as React elements. The downloaded

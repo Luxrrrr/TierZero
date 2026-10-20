@@ -1,4 +1,7 @@
 import {
+  type ModuleContext,
+} from "@tier0/core";
+import {
   APPEAL_LIMITS,
   can,
   isAppealStatus,
@@ -8,8 +11,7 @@ import {
   type AppealDto,
   type AppealListDto,
   type AppealStatus,
-  type ModuleContext,
-} from "@tier0/core";
+} from "@tier0/shared-moderation";
 import { prisma } from "@tier0/db";
 import {
   ActionRefused,

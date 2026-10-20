@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useId, useState, type KeyboardEvent } from "react";
-import type { MemberSearchHit, UserRef } from "@tier0/core";
+import type { MemberSearchHit, UserRef } from "@tier0/shared-moderation";
 import { SearchIcon } from "../../../../../components/Icons";
 import { Avatar, displayName } from "../../../../../components/mod/ModUi";
 import { ADD_SEARCH_ID } from "./ids";

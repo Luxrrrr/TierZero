@@ -4,7 +4,7 @@ import Link from "next/link";
 import { forwardRef, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import type { ActionTargetDto, MemberProfile, StaffRole, UserRef } from "@tier0/core";
+import type { ActionTargetDto, MemberProfile, StaffRole, UserRef } from "@tier0/shared-moderation";
 import { Avatar, StateIcon, displayName, timeAgo } from "../../../../../../components/mod/ModUi";
 import { CheckIcon, ChevronRightIcon, NoteIcon, PlusIcon } from "../../../../../../components/Icons";
 import { AuditRow, InfractionRow, NOTE_LIMIT, NoteRow } from "./TimelineRows";

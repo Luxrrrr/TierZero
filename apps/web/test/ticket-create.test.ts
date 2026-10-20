@@ -1,6 +1,7 @@
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
-import type { TicketPanelOption, TicketTypeOption, UserRef } from "@tier0/core";
+import type { UserRef } from "@tier0/shared-moderation";
+import type { TicketPanelOption, TicketTypeOption } from "@tier0/shared-tickets";
 import { creatableTypes, createFailureText, createRequest, draftProblem, emptyDraft, openableTypes, withMember } from "../lib/ticket-create.ts";
 import { shortcutFor, TICKET_SHORTCUTS } from "../lib/ticket-shortcuts.ts";
 import { ticketProxyClass } from "../lib/tickets-proxy.ts";

@@ -1,5 +1,5 @@
 import type { Client } from "discord.js";
-import { evidenceRefFromLink, type EvidenceRef } from "@tier0/core";
+import { evidenceRefFromLink, type EvidenceRef } from "@tier0/shared-moderation";
 import { prisma } from "@tier0/db";
 import { copyOfFetched } from "./evidence.js";
 

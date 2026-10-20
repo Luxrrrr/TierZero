@@ -1,5 +1,5 @@
 import { forbidden, redirect } from "next/navigation";
-import { parseTicketListFilters, type TicketDetailDto, type TicketMessagesPage } from "@tier0/core";
+import { parseTicketListFilters, type TicketDetailDto, type TicketMessagesPage } from "@tier0/shared-tickets";
 import { ControlApiError } from "../../../../lib/control-api";
 import { requireTicketViewer } from "../../../../lib/tickets-access";
 import { ticketDetail, ticketMessages, ticketsContext, ticketsList } from "../../../../lib/tickets-api";

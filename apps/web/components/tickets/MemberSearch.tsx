@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
-import type { MemberSearchHit, UserRef } from "@tier0/core";
+import type { MemberSearchHit, UserRef } from "@tier0/shared-moderation";
 import { Avatar, displayName } from "../mod/ModUi";
 import { splitMatch } from "../../lib/name-match";
 import { ticketsClient } from "../../lib/tickets-client";

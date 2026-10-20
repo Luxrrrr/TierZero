@@ -2,7 +2,7 @@
 
 import { useEffect, useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ROLE_LABEL, type ListedRole, type UserRef } from "@tier0/core";
+import { ROLE_LABEL, type ListedRole, type UserRef } from "@tier0/shared-moderation";
 import { useToast } from "../../../../../components/Toaster";
 import { XIcon } from "../../../../../components/Icons";
 import { displayName } from "../../../../../components/mod/ModUi";

@@ -1,6 +1,25 @@
 {
   "extends": "../../../tsconfig.base.json",
-  "compilerOptions": { "composite": true, "rootDir": "src", "outDir": "dist" },
-  "include": ["src"],
-  "references": [{ "path": "../../core" }, { "path": "../../db" }, { "path": "../serverlog" }]
+  "compilerOptions": {
+    "composite": true,
+    "rootDir": "src",
+    "outDir": "dist"
+  },
+  "include": [
+    "src"
+  ],
+  "references": [
+    {
+      "path": "../../core"
+    },
+    {
+      "path": "../../db"
+    },
+    {
+      "path": "../serverlog"
+    },
+    {
+      "path": "../../shared/moderation"
+    }
+  ]
 }

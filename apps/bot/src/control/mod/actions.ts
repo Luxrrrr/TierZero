@@ -1,4 +1,7 @@
 import {
+  type ModuleContext,
+} from "@tier0/core";
+import {
   canEditInfraction,
   canTakeAction,
   isInForce,
@@ -11,8 +14,7 @@ import {
   type ActionResult,
   type Actor,
   type ModActionKind,
-  type ModuleContext,
-} from "@tier0/core";
+} from "@tier0/shared-moderation";
 import { prisma } from "@tier0/db";
 import {
   ActionRefused,

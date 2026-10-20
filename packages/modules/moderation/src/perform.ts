@@ -1,5 +1,6 @@
 import { PermissionFlagsBits, type GuildMember } from "discord.js";
-import type { EvidenceMessage, ModuleContext } from "@tier0/core";
+import type { ModuleContext } from "@tier0/core";
+import type { EvidenceMessage } from "@tier0/shared-moderation";
 import type { ModerationSettings } from "./settings.js";
 import {
   ActionRefused,

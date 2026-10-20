@@ -1,4 +1,4 @@
-import type { EvidenceMessage } from "@tier0/core";
+import type { EvidenceMessage } from "@tier0/shared-moderation";
 
 /**
  * Hands messages picked in the message log to the action form on a member's

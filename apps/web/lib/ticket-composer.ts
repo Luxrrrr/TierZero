@@ -1,4 +1,4 @@
-import { fillSavedReply, savedReplyValues, type TicketDetailDto, type TicketSavedReplyDto } from "@tier0/core";
+import { fillSavedReply, savedReplyValues, type TicketDetailDto, type TicketSavedReplyDto } from "@tier0/shared-tickets";
 
 /**
  * What the reply box decides on its own: which saved replies match a search,

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import type { RaidStatusDto } from "@tier0/core";
+import type { RaidStatusDto } from "@tier0/shared-moderation";
 import { AlertIcon, BellIcon, LockIcon, UndoIcon } from "../../../../../components/Icons";
 import { Select } from "../../../../../components/form/Select";
 import { useToast } from "../../../../../components/Toaster";

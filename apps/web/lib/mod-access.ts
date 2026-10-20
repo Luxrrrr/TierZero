@@ -1,5 +1,5 @@
 import { prisma } from "@tier0/db";
-import { can, type Actor, type ModPermission, type StaffRole } from "@tier0/core";
+import { can, type Actor, type ModPermission, type StaffRole } from "@tier0/shared-moderation";
 import { auth } from "./auth";
 import { listBotGuilds } from "./control-api";
 import { isInstanceOwner } from "./instance";

@@ -1,5 +1,5 @@
-import { can } from "@tier0/core";
-import type { MemberProfile, StaffRole } from "@tier0/core";
+import { can } from "@tier0/shared-moderation";
+import type { MemberProfile, StaffRole } from "@tier0/shared-moderation";
 
 /**
  * Trims a member profile to what the viewer's role may read before it leaves

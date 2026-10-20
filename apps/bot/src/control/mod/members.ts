@@ -1,5 +1,5 @@
 import { prisma } from "@tier0/db";
-import type { MemberProfile, MemberSearchPage, Page, UserRef } from "@tier0/core";
+import type { MemberProfile, MemberSearchPage, Page, UserRef } from "@tier0/shared-moderation";
 import { toAuditDtos } from "./audit-list.js";
 import { findMembers } from "./member-find.js";
 import {

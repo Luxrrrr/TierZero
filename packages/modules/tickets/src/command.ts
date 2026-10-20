@@ -1,5 +1,8 @@
 import { MessageFlags, SlashCommandBuilder, type AutocompleteInteraction, type ChatInputCommandInteraction } from "discord.js";
 import {
+  type CommandDefinition,
+} from "@tier0/core";
+import {
   TICKET_NOTE_MAX,
   TICKET_PRIORITIES,
   TICKET_REPLY_MAX,
@@ -8,8 +11,7 @@ import {
   isTicketPriority,
   savedReplyValues,
   ticketDashboardUrl,
-  type CommandDefinition,
-} from "@tier0/core";
+} from "@tier0/shared-tickets";
 import { prisma, type Ticket } from "@tier0/db";
 import { accessOf, actorOf, isAnyStaff, isStaffOf, may, refuse, targetOf, type TicketCtx } from "./context.js";
 import { PRIORITY_LABELS, priorityLabel } from "./labels.js";

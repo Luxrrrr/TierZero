@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
-import { TRANSCRIPT_CSS, transcriptTree, type TicketMessageDto, type TranscriptActivity, type TranscriptLabels } from "@tier0/core";
+import { TRANSCRIPT_CSS, transcriptTree, type TicketMessageDto, type TranscriptActivity, type TranscriptLabels } from "@tier0/shared-tickets";
 import { renderTranscriptNode } from "../../lib/transcript-react";
 import { isContextMenuKey } from "../../lib/menu-position";
 import { isMenuUser, type MenuUser } from "../../lib/person-menu";

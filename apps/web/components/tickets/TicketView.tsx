@@ -11,7 +11,7 @@ import type {
   TicketPermission,
   TicketPriority,
   TicketSavedReplyDto,
-} from "@tier0/core";
+} from "@tier0/shared-tickets";
 import { displayName, LocalTime, RelativeTime } from "../mod/ModUi";
 import { Select } from "../form/Select";
 import { useToast } from "../Toaster";

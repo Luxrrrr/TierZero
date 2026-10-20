@@ -1,6 +1,6 @@
 import { forbidden, redirect } from "next/navigation";
 import type { Metadata } from "next";
-import type { StaffDto } from "@tier0/core";
+import type { StaffDto } from "@tier0/shared-moderation";
 import { ControlApiError } from "../../../../../lib/control-api";
 import { requireStaff } from "../../../../../lib/mod-access";
 import { modStaff } from "../../../../../lib/mod-api";

@@ -1,5 +1,5 @@
 import { prisma } from "@tier0/db";
-import { can, canVoidAction, type Actor, type InfractionDto, type LiftResult, type Page, type VoidReply } from "@tier0/core";
+import { can, canVoidAction, type Actor, type InfractionDto, type LiftResult, type Page, type VoidReply } from "@tier0/shared-moderation";
 import { writeAudit } from "./audit.js";
 import { buildExport, EXPORT_MAX_ROWS, exportFilename } from "./csv.js";
 import {

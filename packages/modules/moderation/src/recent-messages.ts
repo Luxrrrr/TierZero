@@ -1,4 +1,4 @@
-import type { EvidenceAttachment } from "@tier0/core";
+import type { EvidenceAttachment } from "@tier0/shared-moderation";
 
 /**
  * What the bot remembers of each member's latest messages, so a moderator can

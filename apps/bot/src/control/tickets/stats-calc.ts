@@ -1,4 +1,4 @@
-import { LEGACY_TYPE_ID, medianOf, ticketListQuery, type TicketStatsGroup } from "@tier0/core";
+import { LEGACY_TYPE_ID, medianOf, ticketListQuery, type TicketStatsGroup } from "@tier0/shared-tickets";
 
 const SNOWFLAKE = /^\d{17,20}$/;
 

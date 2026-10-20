@@ -1,5 +1,6 @@
 import type { Message } from "discord.js";
-import type { MessageBody, ReplyValues, TicketActor } from "@tier0/core";
+import type { MessageBody, ReplyValues } from "@tier0/core";
+import type { TicketActor } from "@tier0/shared-tickets";
 import { prisma, type Ticket } from "@tier0/db";
 import { storeMessage } from "./capture.js";
 import { channelOf, type Answerable, type TicketCtx } from "./context.js";

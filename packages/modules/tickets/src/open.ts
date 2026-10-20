@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { ChannelType, ThreadAutoArchiveDuration, type MessageComponentInteraction, type ModalSubmitInteraction, type PrivateThreadChannel } from "discord.js";
-import { LEGACY_TYPE_ID, type TicketAnswer } from "@tier0/core";
+import { LEGACY_TYPE_ID, type TicketAnswer } from "@tier0/shared-tickets";
 import { prisma, type Ticket } from "@tier0/db";
 import { rememberOpenTicket } from "./cache.js";
 import { notifyTicket } from "./live.js";

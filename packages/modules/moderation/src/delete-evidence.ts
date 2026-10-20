@@ -1,5 +1,5 @@
 import { PermissionFlagsBits, type Guild } from "discord.js";
-import { DELETE_MESSAGES_LIMIT, noteDeletion, takeDeletionNote, type EvidenceMessage } from "@tier0/core";
+import { DELETE_MESSAGES_LIMIT, noteDeletion, takeDeletionNote, type EvidenceMessage } from "@tier0/shared-moderation";
 import { describeDiscordError } from "./action-rules.js";
 
 /** Discord's code for a message that no longer exists. */

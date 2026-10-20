@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useId, useRef, useState } from "react";
-import { EVIDENCE_LIMITS, evidenceRefFromLink, type EvidenceMessage, type EvidenceRef } from "@tier0/core";
+import { EVIDENCE_LIMITS, evidenceRefFromLink, type EvidenceMessage, type EvidenceRef } from "@tier0/shared-moderation";
 import { Select } from "../../../../../../components/form/Select";
 import { When } from "../../../../../../components/mod/ModUi";
 import { DeletedTag, Versions, versionLabel } from "../../../../../../components/mod/Evidence";

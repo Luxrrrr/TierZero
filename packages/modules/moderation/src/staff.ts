@@ -1,4 +1,4 @@
-import type { StaffRole } from "@tier0/core";
+import type { StaffRole } from "@tier0/shared-moderation";
 import { instanceOwnerId, prisma } from "@tier0/db";
 
 /**

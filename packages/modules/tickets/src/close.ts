@@ -1,5 +1,6 @@
 import { AttachmentBuilder, PermissionFlagsBits, type GuildMember, type Message, type User } from "discord.js";
-import { readTicketAnswers, readTicketDetail, ticketDashboardUrl, type ReplyValues, type TicketActor } from "@tier0/core";
+import { type ReplyValues } from "@tier0/core";
+import { readTicketAnswers, readTicketDetail, ticketDashboardUrl, type TicketActor } from "@tier0/shared-tickets";
 import { prisma, type Ticket } from "@tier0/db";
 import { forgetOpenTicket, rememberOpenTicket } from "./cache.js";
 import { backfill, storedMessages } from "./capture.js";

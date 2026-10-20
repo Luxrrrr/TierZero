@@ -1,4 +1,4 @@
-import { TICKET_STATS_PERIODS, type TicketStatsDto, type TicketStatsPeriod } from "@tier0/core";
+import { TICKET_STATS_PERIODS, type TicketStatsDto, type TicketStatsPeriod } from "@tier0/shared-tickets";
 
 /**
  * The arithmetic behind the ticket Stats tab, apart from React so the tests

@@ -1,5 +1,5 @@
 import { prisma } from "@tier0/db";
-import type { TicketAccessLevel, TicketActor, TicketPermission } from "@tier0/core";
+import type { TicketAccessLevel, TicketActor, TicketPermission } from "@tier0/shared-tickets";
 import { auth } from "./auth";
 import { requireGuildAccess, type AuthzFail } from "./authz";
 import { ControlApiError, listBotGuilds, ticketsRequest } from "./control-api";
