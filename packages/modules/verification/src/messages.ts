@@ -34,12 +34,10 @@ export type ReplyKey =
   | "roleTooHigh"
   | "roleFailed"
   | "tooYoung"
-  | "roundPictures"
-  | "roundCount"
-  | "roundOdd"
-  | "roundBelong"
-  | "roundOrder"
-  | "roundTyped"
+  | "roundText"
+  | "roundColour"
+  | "roundMotion"
+  | "roundTiles"
   | "roundBlock"
   | "questionPrompt"
   | "wrongAnswer"
@@ -101,41 +99,33 @@ export const REPLIES: Record<ReplyKey, ReplyDefinition> = {
     starting: embedReply("Your account is too new to verify yet. Come back {canVerify}.", "error"),
     variables: [{ name: "canVerify", description: "When the account is old enough, as a time that counts down", sample: "in 3 days" }],
   },
-  roundPictures: {
-    label: "Round: press the picture",
-    help: "Shown for a round where the member presses the button with the picture they are told. The buttons are added under it.",
-    starting: embedReply("Press the {symbol} button.", "info", { title: "Round {round} of {rounds}" }),
-    variables: [...ROUND_VARIABLES, { name: "symbol", description: "What to press, as its picture and name", sample: "🍎 apple" }],
-  },
-  roundCount: {
-    label: "Round: count them",
-    help: "Shown for a round where the member counts some pictures and presses the number.",
-    starting: embedReply("How many are there?\n\n{row}", "info", { title: "Round {round} of {rounds}" }),
-    variables: [...ROUND_VARIABLES, { name: "row", description: "The pictures to count", sample: "🍎 🍎 🍎 🍎" }],
-  },
-  roundOdd: {
-    label: "Round: odd one out",
-    help: "Shown for a round where one of the buttons is different from the rest.",
-    starting: embedReply("Press the one that is different.", "info", { title: "Round {round} of {rounds}" }),
+  roundText: {
+    label: "Round: type the characters",
+    help: "Shown for a round with a picture of bent characters. The picture and the button that opens the box to answer in are added under it.",
+    starting: embedReply("Type the characters in the picture.\n\nPress the button below to type them in.", "info", { title: "Round {round} of {rounds}" }),
     variables: ROUND_VARIABLES,
   },
-  roundBelong: {
-    label: "Round: which does not belong",
-    help: "Shown for a round where one of the buttons is not like the others.",
-    starting: embedReply("Press the one that does not belong with the others.", "info", { title: "Round {round} of {rounds}" }),
+  roundColour: {
+    label: "Round: type one colour",
+    help: "Shown for a round with a picture of characters in several colours, where only one colour is typed. The picture and the button that opens the box to answer in are added under it.",
+    starting: embedReply("Type only the **{colour}** characters in the picture, from left to right.\n\nPress the button below to type them in.", "info", {
+      title: "Round {round} of {rounds}",
+    }),
+    variables: [...ROUND_VARIABLES, { name: "colour", description: "The colour to type", sample: "red" }],
+  },
+  roundMotion: {
+    label: "Round: type the moving characters",
+    help: "Shown for a round where the characters only show while the picture moves. The picture and the button that opens the box to answer in are added under it.",
+    starting: embedReply("Type the characters that move in the picture.\n\nIf it looks still, press the picture so it plays. Then press the button below to type them in.", "info", {
+      title: "Round {round} of {rounds}",
+    }),
     variables: ROUND_VARIABLES,
   },
-  roundOrder: {
-    label: "Round: smallest to biggest",
-    help: "Shown for a round where the member presses three pictures from the smallest to the biggest.",
-    starting: embedReply("Press these from the smallest to the biggest.", "info", { title: "Round {round} of {rounds}" }),
-    variables: ROUND_VARIABLES,
-  },
-  roundTyped: {
-    label: "Round: answer a puzzle",
-    help: "Shown for a round with a small puzzle, such as a sum. The button that opens the box to answer in is added under it.",
-    starting: embedReply("{question}\n\nPress the button below and type your answer.", "info", { title: "Round {round} of {rounds}" }),
-    variables: [...ROUND_VARIABLES, { name: "question", description: "The puzzle, such as a sum", sample: "What is 7 + 5?" }],
+  roundTiles: {
+    label: "Round: press the squares",
+    help: "Shown for a round with a picture of nine squares, where the member presses the numbers of the squares that have one shape, then Done. The picture and the buttons are added under it.",
+    starting: embedReply("Press every square that has a **{shape}**, then press Done.", "info", { title: "Round {round} of {rounds}" }),
+    variables: [...ROUND_VARIABLES, { name: "shape", description: "The shape to look for", sample: "star" }],
   },
   roundBlock: {
     label: "Round: type the code",
@@ -234,21 +224,28 @@ export const replyField = (key: ReplyKey): Field<MessageBody> =>
 export const KICKED_DM: MessageBody = embedReply("You were removed from {server}. Reason: {reason}. You are welcome to join again and verify.", "info");
 export const RAID_STARTED: MessageBody = embedReply("Raid protection is on until {ends}. {joins} people joined in a short time.", "warning", { title: "Raid protection" });
 export const RAID_ENDED: MessageBody = embedReply("Raid protection is off. The server is back to how it was.", "success", { title: "Raid protection" });
-export const LOG_PASSED: MessageBody = embedReply("{user} passed verification ({method}).", "success");
-export const LOG_FAILED: MessageBody = embedReply("{user} used all their tries and failed verification.", "warning");
-export const LOG_KICKED: MessageBody = embedReply("{user} was removed. Reason: {reason}.", "warning");
+export const LOG_PASSED: MessageBody = embedReply("{user} passed verification ({method}).{risk}", "success");
+export const LOG_FAILED: MessageBody = embedReply("{user} used all their tries and failed verification.{risk}", "warning");
+export const LOG_KICKED: MessageBody = embedReply("{user} was removed. Reason: {reason}.{risk}", "warning");
 
 export const REASON_VARIABLE: MessageVariable = { name: "reason", description: "Why they were removed", sample: "Did not verify in time" };
+export const RISK_VARIABLE: MessageVariable = {
+  name: "risk",
+  description: "How risky the account looked when it joined, with the reasons. Empty for an ordinary account",
+  sample: "\nRisk: **high**: account is 1 day old, no profile picture.",
+};
 export const METHOD_VARIABLE: MessageVariable = { name: "method", description: "How they verified: button, captcha or question", sample: "captcha" };
 
 export const LABELS = {
   verifyButton: "Verify",
   answerButton: "Answer",
+  doneButton: "Done",
   modalTitle: "Verification",
   answerLabel: "Your answer",
   reasonTimeout: "Did not verify in time",
   reasonYoung: "Account is too new",
   reasonAttempts: "Too many wrong verification attempts",
+  reasonRisk: "Looked like part of a raid",
 } as const;
 
-export type ReasonKey = "reasonTimeout" | "reasonYoung" | "reasonAttempts";
+export type ReasonKey = "reasonTimeout" | "reasonYoung" | "reasonAttempts" | "reasonRisk";

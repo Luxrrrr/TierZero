@@ -558,19 +558,21 @@ New members get a role only after they pass a check. Pick a **Verified role** an
 **How members verify** is one of three:
 
 - **Press a button.** One click.
-- **Captcha.** A few quick rounds with no images, shown only to that member. **Rounds** says how many (one to five) and **Kinds of round** says which ones they are drawn from:
-  - **Press the picture**: six emoji buttons, and they press the one they are told.
-  - **Count them**: they count some pictures and press the number.
-  - **Odd one out**: one button is different from the rest.
-  - **Which does not belong**: three buttons are alike and one is not.
-  - **Smallest to biggest**: they press three pictures in order of size.
-  - **A small puzzle**: a sum, or a word to type backwards.
-  - **Code in squares**: a four character code drawn in coloured squares, which they type. Each member's code has its own colours and a little noise. Leave it out if members use screen readers.
+- **Captcha.** A few quick rounds, shown only to that member. Every round is a picture the member reads and types, or a code drawn in squares. The bot draws each picture fresh, so no two are the same. The kinds of round are:
+  - **Bent characters**: five characters, each bent and tilted its own way, with lines drawn across them.
+  - **One colour only**: seven characters in two or three colours, and they type only the ones in the colour they are told. Red and green never share a picture.
+  - **Moving characters**: four characters made of noise that scrolls up, on a background of noise that scrolls down. Any single frame is plain noise, so the characters only show while the picture plays. A member who has animated pictures turned off has to press the picture to play it.
+  - **Press the squares**: a picture of nine numbered squares with a shape in each. The member presses the numbers of the squares that have the shape they are told, such as every star, then Done. Pressing a number again takes it back. There is nothing to type.
+  - **Code in squares**: a four character code drawn in coloured squares.
 
-  Getting a round wrong ends the attempt and costs a try, and they start again from the first round with new ones. The buttons carry random ids, so nothing in them says which is right. The puzzles are in English and are not editable, but the text around each round is.
+  **How hard the captcha is** is **Automatic** unless you change it. The bot looks at the account when it joins and gives an ordinary account one round fewer than **Rounds**, and a suspicious one round more. **Choose the kinds myself** shows the list of kinds, and every member gets rounds from the ones you tick. Moving characters is not ticked to begin with, because of the animation setting above.
+
+  Automatic looks at how old the account is, whether it has a profile picture, whether the name is mostly numbers, whether other accounts made around the same time joined in the same minute, whether other new members have a similar name, and whether raid protection is on. An ordinary account gets bent characters or the code in squares. A newer or odder one gets bent characters, one colour only or the squares. One that looks like part of a raid gets one colour only, moving characters or the squares. **A member who looks like part of a raid** can instead be removed, which only happens when several accounts made within an hour of each other join together and the rest of the signs add up. A new account on its own is never removed this way. The log message shows the reasons.
+
+  Getting a round wrong ends the attempt and costs a try, and they start again from the first round with new ones. An answer that arrives faster than anyone could read and type it counts as wrong, even if it is right. None of the picture rounds can be read by a screen reader, so a member who cannot see them needs a moderator to give them the role by hand.
 - **Answer a question.** You write the question and a list of accepted answers. Any one of them passes, ignoring capitals, accents and extra spaces.
 
-For the captcha and the question, **Tries allowed** counts wrong answers. When they run out the member is either locked out for a length you set or removed from the server, and can join again and start over. A captcha or question that has gone unanswered for ten minutes, or that was shown before the bot restarted, is replaced when the member presses the button again, and the tries they have already used are kept.
+For the captcha and the question, **Tries allowed** counts wrong answers. When they run out the member is either locked out for a length you set or removed from the server, and can join again and start over. A lockout is twice as long each time it happens again within a day, up to eight times the length you set and never more than seven days. A member who leaves and comes back during a lockout is still locked out. A captcha that has gone unanswered for five minutes (a question gets ten), or that was shown before the bot restarted, is replaced when the member presses the button again, and the tries they have already used are kept. The Answer button on a round only works for the round on screen.
 
 **Where members verify** takes a channel, a direct message or both. With a direct message the bot sends each new member the message and its button as they join, and nothing is posted in a channel. A member with direct messages closed cannot verify that way, so pick both if that matters. For the channel, pick it under **Verification message**, save, then press **Post the verification message** on the settings page. `/verification post` in Discord does the same and needs Manage Server. The message is edited with the message builder, and the bot adds the button under it. Running the command again edits the message in place, and removes any extra copy in that channel, instead of posting a second one. The bot finds its own message by the button on it, so nothing is stored. If you change the channel, the old message stays where it was, so delete it yourself. The button keeps working after a restart. `/verification send user` makes a member verify again: it takes the verified role back, gives the unverified role, restarts the removal timer and sends them the verification message by direct message. It needs Manage Server.
 

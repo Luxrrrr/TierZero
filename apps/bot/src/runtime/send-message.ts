@@ -277,7 +277,7 @@ export async function replyMessage(
 
     const ephemeral = options.ephemeral ?? true;
     const { content, embeds, components, allowedMentions } = rendered.payload;
-    const reply = { ...(content !== undefined ? { content } : {}), embeds, components, allowedMentions };
+    const reply = { ...(content !== undefined ? { content } : {}), embeds, components, allowedMentions, ...(options.files ? { files: options.files } : {}) };
     const flags = ephemeral ? { flags: MessageFlags.Ephemeral as const } : {};
     if (interaction.replied) await interaction.followUp({ ...reply, ...flags });
     else if (interaction.deferred) await interaction.editReply(reply);

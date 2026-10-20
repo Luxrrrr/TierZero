@@ -201,6 +201,19 @@ describe("replyMessage", () => {
     assert.equal(calls[0]?.payload.flags, undefined);
   });
 
+  test("sends files with the reply, and a list with nothing in it, which takes off what the message had", async () => {
+    const file = { name: "captcha.png" };
+    const withFile = fakeInteraction({ deferred: true });
+    await replyMessage(withFile.interaction as never, plainReply("Look"), {}, { files: [file as never] });
+    assert.deepEqual(withFile.calls[0]?.payload.files, [file]);
+    const empty = fakeInteraction({ deferred: true });
+    await replyMessage(empty.interaction as never, plainReply("Gone"), {}, { files: [] });
+    assert.deepEqual(empty.calls[0]?.payload.files, []);
+    const without = fakeInteraction({ deferred: true });
+    await replyMessage(without.interaction as never, plainReply("Same"));
+    assert.equal("files" in (without.calls[0]?.payload ?? {}), false);
+  });
+
   test("leaves out buttons nothing would answer but keeps link buttons", async () => {
     const { interaction, calls } = fakeInteraction();
     await replyMessage(interaction as never, body({ content: "Hi", buttons: [primaryButton, linkButton] }));

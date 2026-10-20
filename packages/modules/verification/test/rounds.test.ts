@@ -1,97 +1,92 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { GLYPHS, ROUND_TYPES, drawCode, judge, makePlan, makeRound, type Round } from "../dist/rounds.js";
-
-const anyText = () => true;
+import { COLOURS } from "../dist/image.js";
+import { COLOUR_LENGTH, GLYPHS, MOTION_LENGTH, ROUND_TYPES, TEXT_LENGTH, drawCode, judge, makePlan, makeRound, type Round } from "../dist/rounds.js";
+import { ALPHABET } from "../dist/strokes.js";
+import { SHAPES } from "../dist/tiles.js";
 
 describe("every kind of round", () => {
   for (const type of ROUND_TYPES) {
-    test(`${type} is made, can be answered, and its buttons do not give it away`, () => {
+    test(`${type} is made and can be answered`, () => {
       for (let i = 0; i < 100; i++) {
         const round = makeRound(type);
         assert.equal(round.type, type);
-        if ("choices" in round) {
-          const tokens = round.choices.map((choice) => choice.token);
-          assert.equal(new Set(tokens).size, tokens.length);
-          for (const choice of round.choices) assert.match(choice.token, /^[0-9a-f]{8}$/);
-          const answers = Array.isArray(round.answer) ? round.answer : [round.answer];
-          for (const answer of answers) assert.ok(tokens.includes(answer));
-        } else if (round.type !== "question") {
-          assert.ok(round.answer.length > 0);
-        }
+        if (round.type !== "question") assert.ok(round.answer.length > 0);
       }
     });
   }
 });
 
-describe("the button rounds", () => {
-  test("pictures: six buttons, and a picture and name to press", () => {
-    const round = makeRound("pictures");
-    if (round.type !== "pictures") throw new Error("wrong type");
-    assert.equal(round.choices.length, 6);
-    assert.match(round.values.symbol!, /\S+ \w+/);
-  });
-
-  test("count: the right button is the number of pictures shown", () => {
+describe("the picture rounds", () => {
+  test("text: a code of distinct characters from the alphabet, which is its answer", () => {
     for (let i = 0; i < 200; i++) {
-      const round = makeRound("count");
-      if (round.type !== "count") throw new Error("wrong type");
-      const shown = round.values.row!.split(" ").length;
-      const right = round.choices.find((choice) => choice.token === round.answer);
-      assert.equal(right?.label, String(shown));
-      assert.equal(new Set(round.choices.map((choice) => choice.label)).size, round.choices.length);
+      const round = makeRound("text");
+      if (round.type !== "text") throw new Error("wrong type");
+      const characters = [...round.image.code];
+      assert.equal(characters.length, TEXT_LENGTH);
+      assert.equal(new Set(characters).size, TEXT_LENGTH);
+      for (const character of characters) assert.ok(ALPHABET.includes(character));
+      assert.equal(round.answer, round.image.code.toLowerCase());
+      assert.equal(round.image.colours, undefined);
     }
   });
 
-  test("odd: five buttons alike and one different, and the different one is right", () => {
-    for (let i = 0; i < 200; i++) {
-      const round = makeRound("odd");
-      if (round.type !== "odd") throw new Error("wrong type");
-      const counts = new Map<string, number>();
-      for (const choice of round.choices) counts.set(choice.emoji!, (counts.get(choice.emoji!) ?? 0) + 1);
-      assert.deepEqual([...counts.values()].sort(), [1, 5]);
-      const right = round.choices.find((choice) => choice.token === round.answer)!;
-      assert.equal(counts.get(right.emoji!), 1);
-    }
-  });
-
-  test("belong: four different pictures", () => {
-    for (let i = 0; i < 200; i++) {
-      const round = makeRound("belong");
-      if (round.type !== "belong") throw new Error("wrong type");
-      assert.equal(round.choices.length, 4);
-      assert.equal(new Set(round.choices.map((choice) => choice.emoji)).size, 4);
-    }
-  });
-
-  test("order: three pictures to press from the smallest", () => {
+  test("motion: a code of distinct characters from the alphabet, which is its answer", () => {
     for (let i = 0; i < 100; i++) {
-      const round = makeRound("order");
-      if (round.type !== "order") throw new Error("wrong type");
-      assert.equal(round.choices.length, 3);
-      assert.equal(round.answer.length, 3);
+      const round = makeRound("motion");
+      if (round.type !== "motion") throw new Error("wrong type");
+      assert.equal(new Set(round.image.code).size, MOTION_LENGTH);
+      assert.equal(round.answer, round.image.code.toLowerCase());
+    }
+  });
+
+  test("colour: the answer is the characters drawn in the colour asked for, in order", () => {
+    for (let i = 0; i < 300; i++) {
+      const round = makeRound("colour");
+      if (round.type !== "colour") throw new Error("wrong type");
+      const colours = round.image.colours!;
+      assert.equal(colours.length, COLOUR_LENGTH);
+      const asked = COLOURS[round.values.colour!]!;
+      assert.ok(asked);
+      const expected = [...round.image.code].filter((_, index) => colours[index] === asked).join("").toLowerCase();
+      assert.equal(round.answer, expected);
+      const asks = colours.filter((colour) => colour === asked).length;
+      assert.ok(asks >= 2 && asks <= 3, `${asks} characters in the asked colour`);
+    }
+  });
+
+  test("colour: shows two or three colours, and never red with green", () => {
+    for (let i = 0; i < 300; i++) {
+      const round = makeRound("colour");
+      if (round.type !== "colour") throw new Error("wrong type");
+      const shown = new Set(round.image.colours);
+      assert.ok(shown.size >= 2 && shown.size <= 3, `${shown.size} colours`);
+      assert.ok(!(shown.has(COLOURS.red!) && shown.has(COLOURS.green!)));
     }
   });
 });
 
-describe("the typed rounds", () => {
-  test("a puzzle has the answer its question implies", () => {
+describe("the tile round", () => {
+  test("has nine squares, and its answer is the numbers of the ones with the shape asked for", () => {
     for (let i = 0; i < 300; i++) {
-      const round = makeRound("typed");
-      if (round.type !== "typed") throw new Error("wrong type");
-      const question = round.values.question!;
-      const sum = /What is (\d+) \+ (\d+)\?/.exec(question);
-      const difference = /What is (\d+) − (\d+)\?/.exec(question);
-      const product = /What is (\d+) × (\d+)\?/.exec(question);
-      const word = /\*\*(\w+)\*\* backwards/.exec(question);
-      if (sum) assert.equal(round.answer, String(Number(sum[1]) + Number(sum[2])));
-      else if (difference) {
-        assert.equal(round.answer, String(Number(difference[1]) - Number(difference[2])));
-        assert.ok(Number(round.answer) >= 0);
-      } else if (product) assert.equal(round.answer, String(Number(product[1]) * Number(product[2])));
-      else if (word) assert.equal(round.answer, [...word[1]!].reverse().join(""));
-      else assert.fail(`unrecognised question ${question}`);
+      const round = makeRound("tiles");
+      if (round.type !== "tiles") throw new Error("wrong type");
+      assert.equal(round.tiles.shapes.length, 9);
+      const wanted = round.values.shape!;
+      assert.ok((SHAPES as readonly string[]).includes(wanted));
+      const numbers = round.tiles.shapes.flatMap((shape, index) => (shape === wanted ? [index + 1] : []));
+      assert.equal(round.answer, numbers.join(""));
+      assert.ok(numbers.length >= 2 && numbers.length <= 4, `${numbers.length} squares`);
     }
+  });
+
+  test("asks for each shape in turn", () => {
+    const asked = new Set<string>();
+    for (let i = 0; i < 300; i++) {
+      const round = makeRound("tiles");
+      if (round.type === "tiles") asked.add(round.values.shape!);
+    }
+    assert.equal(asked.size, SHAPES.length);
   });
 });
 
@@ -124,17 +119,18 @@ describe("the code in squares", () => {
 });
 
 describe("a plan", () => {
-  test("has the number of rounds asked for, from the kinds allowed", () => {
+  test("takes its rounds from the kinds allowed", () => {
     for (let i = 0; i < 100; i++) {
-      const plan = makePlan(["count", "odd", "block"], 3);
-      assert.equal(plan.length, 3);
-      assert.deepEqual(plan.map((round) => round.type).sort(), ["block", "count", "odd"]);
+      assert.deepEqual(makePlan(["text", "colour"], 2).map((round) => round.type).sort(), ["colour", "text"]);
     }
   });
 
+  test("has the number of rounds asked for", () => {
+    for (let i = 0; i < 100; i++) assert.equal(makePlan(["block"], 3).length, 3);
+  });
+
   test("repeats a kind when the pool is smaller than the number of rounds", () => {
-    const plan = makePlan(["count"], 3);
-    assert.deepEqual(plan.map((round) => round.type), ["count", "count", "count"]);
+    assert.deepEqual(makePlan(["block"], 3).map((round) => round.type), ["block", "block", "block"]);
   });
 
   test("falls back to every kind when none is allowed", () => {
@@ -143,19 +139,10 @@ describe("a plan", () => {
 });
 
 describe("judging", () => {
-  const button = (): Round => ({ type: "odd", choices: [{ token: "a" }, { token: "b" }], answer: "a", values: {} });
+  const round: Round = { type: "block", answer: "k7m2", values: {} };
 
-  test("a button round is right only for its answer", () => {
-    assert.equal(judge(button(), [], { kind: "token", token: "a" }, anyText), "correct");
-    assert.equal(judge(button(), [], { kind: "token", token: "b" }, anyText), "wrong");
-    assert.equal(judge(button(), [], { kind: "text", text: "a" }, anyText), "wrong");
-  });
-
-  test("an order round is judged once every button is in", () => {
-    const round: Round = { type: "order", choices: [{ token: "a" }, { token: "b" }], answer: ["a", "b"], values: {} };
-    assert.equal(judge(round, [], { kind: "token", token: "z" }, anyText), "wrong");
-    assert.equal(judge(round, [], { kind: "token", token: "a" }, anyText), "more");
-    assert.equal(judge(round, ["a"], { kind: "token", token: "b" }, anyText), "correct");
-    assert.equal(judge(round, ["b"], { kind: "token", token: "a" }, anyText), "wrong");
+  test("a typed round is right when the text matches", () => {
+    assert.equal(judge(round, "k7m2", (_round, text) => text === "k7m2"), "correct");
+    assert.equal(judge(round, "nope", (_round, text) => text === "k7m2"), "wrong");
   });
 });

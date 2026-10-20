@@ -108,6 +108,12 @@ export interface ReplyMessageOptions {
   fallback?: MessageBody;
   /** Defaults to true. A public reply can mention people and roles. */
   ephemeral?: boolean;
+  /**
+   * Files sent with the reply. Giving a list, even an empty one, also takes away
+   * any the message already had, so a reply that follows one with a picture does
+   * not keep it.
+   */
+  files?: AttachmentBuilder[];
 }
 
 export interface SendMessageOptions {

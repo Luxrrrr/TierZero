@@ -1,5 +1,6 @@
 import {
   ActionRowBuilder,
+  AttachmentBuilder,
   ButtonBuilder,
   ButtonStyle,
   GuildFeature,
@@ -19,7 +20,9 @@ import {
 } from "discord.js";
 import { customId, defineModule, isRoleAssignable, s, type Infer, type ModuleContext, type ReplyValues } from "@tier0/core";
 import { JoinWindow } from "./raid.js";
-import { makePlan, type Choice, type Round, type RoundType } from "./rounds.js";
+import { renderRound } from "./render.js";
+import { ROUND_TYPES, hasPicture, makePlan, type Round, type RoundType } from "./rounds.js";
+import { RecentJoins, assess, challengeFor, clearlyRaid, riskNote, withRaid, type Assessment } from "./risk.js";
 import {
   ChallengeBook,
   accountAge,
@@ -40,6 +43,7 @@ import {
   DM_MESSAGE,
   POST_MESSAGE,
   REASON_VARIABLE,
+  RISK_VARIABLE,
   REPLIES,
   SHARED_VARIABLES,
   replyField,
@@ -52,6 +56,18 @@ type Row = ActionRowBuilder<MessageActionRowComponentBuilder>;
 type Method = string;
 
 const START = customId("verification", "start");
+
+/** The captcha used to be a code to type, and later offered kinds of round that have since gone. */
+function upgradeCheck(stored: Record<string, unknown>): Record<string, unknown> {
+  const upgraded: Record<string, unknown> = { ...stored, ...(stored.method === "code" ? { method: "captcha" } : {}) };
+  if (Array.isArray(upgraded.roundTypes)) {
+    const kept = upgraded.roundTypes.filter((type): type is RoundType => ROUND_TYPES.includes(type as RoundType));
+    // Every kind they had picked is gone, so the default applies rather than an empty list that would not parse.
+    if (kept.length > 0 || upgraded.roundTypes.length === 0) upgraded.roundTypes = kept;
+    else delete upgraded.roundTypes;
+  }
+  return upgraded;
+}
 
 const settingsSchema = s.object({
   ignoreBots: s.boolean({
@@ -84,16 +100,26 @@ const settingsSchema = s.object({
         label: "How members verify",
         options: [
           { value: "button", label: "Press a button", description: "One click. Keeps out anything that cannot press buttons." },
-          { value: "captcha", label: "Captcha", description: "A few quick rounds with no images: press the right picture, count, order things, or type a code drawn in squares." },
+          { value: "captcha", label: "Captcha", description: "A few quick rounds where they type the characters in a picture." },
           { value: "question", label: "Answer a question", description: "They answer a question you write, such as one about the rules." },
         ],
         default: "button",
         guided: true,
       }),
+      difficulty: s.choice({
+        label: "How hard the captcha is",
+        options: [
+          { value: "auto", label: "Automatic", description: "Easy for ordinary accounts, harder for brand new ones and for ones that join together in a group." },
+          { value: "manual", label: "Choose the kinds myself", description: "Every member gets rounds picked from the kinds you tick." },
+        ],
+        default: "auto",
+        guided: true,
+        when: { field: "method", equals: "captcha" },
+      }),
       rounds: s.integer({
         label: "Rounds",
-        help: "How many quick rounds a member does. Getting one wrong ends the attempt, and they start again from the first with new ones.",
-        default: 3,
+        help: "How many quick rounds a usual member does. Getting one wrong ends the attempt, and they start again from the first with new ones. With Automatic, an ordinary account does one fewer and one that looks suspicious does one more.",
+        default: 2,
         min: 1,
         max: 5,
         guided: true,
@@ -102,13 +128,11 @@ const settingsSchema = s.object({
       roundTypes: s.array(
         s.choice({
           options: [
-            { value: "pictures", label: "Press the picture", description: "They press the button with the picture they are told." },
-            { value: "count", label: "Count them", description: "They count some pictures and press the number." },
-            { value: "odd", label: "Odd one out", description: "One button is different from the rest." },
-            { value: "belong", label: "Which does not belong", description: "Three buttons are alike and one is not." },
-            { value: "order", label: "Smallest to biggest", description: "They press three pictures in order of size." },
-            { value: "typed", label: "A small puzzle", description: "A sum, or a word to type backwards." },
-            { value: "block", label: "Code in squares", description: "A code drawn in coloured squares. Leave it out if members use screen readers." },
+            { value: "text", label: "Bent characters", description: "A picture of five bent characters to type." },
+            { value: "colour", label: "One colour only", description: "A picture of characters in several colours, where they type only the ones in a colour they are told." },
+            { value: "motion", label: "Moving characters", description: "Characters that only show while the picture moves. A member with animated pictures turned off has to press it to play." },
+            { value: "tiles", label: "Press the squares", description: "A picture of nine squares with a shape in each. They press the numbers of the squares with the shape they are told, then Done." },
+            { value: "block", label: "Code in squares", description: "A code drawn in coloured squares." },
           ],
         }),
         {
@@ -116,11 +140,20 @@ const settingsSchema = s.object({
           help: "Each member's rounds are picked from these at random.",
           min: 1,
           unique: true,
-          default: ["pictures", "count", "odd", "belong", "order", "typed", "block"],
+          default: ["text", "colour", "tiles", "block"],
           layout: "rows",
-          when: { field: "method", equals: "captcha" },
+          when: { field: "difficulty", equals: "manual" },
         },
       ),
+      suspicious: s.choice({
+        label: "A member who looks like part of a raid",
+        options: [
+          { value: "challenge", label: "Gets the hardest captcha" },
+          { value: "remove", label: "Is removed", description: "Only the clearest cases: new accounts made around the same time that join together." },
+        ],
+        default: "challenge",
+        when: { field: "difficulty", equals: "auto" },
+      }),
       question: s.string({
         label: "Question",
         help: "Shown to the member before they answer.",
@@ -148,7 +181,7 @@ const settingsSchema = s.object({
       afterTries: s.choice({
         label: "When the tries run out",
         options: [
-          { value: "lockout", label: "Lock them out for a while", description: "They cannot try again until the lockout ends." },
+          { value: "lockout", label: "Lock them out for a while", description: "They cannot try again until the lockout ends. Each time it happens again within a day it is twice as long, up to eight times." },
           { value: "kick", label: "Remove them from the server", description: "They can join again and start over." },
         ],
         default: "lockout",
@@ -164,7 +197,7 @@ const settingsSchema = s.object({
     {
       label: "The check",
       // The captcha used to be a code to type.
-      upgrade: (stored) => (stored.method === "code" ? { ...stored, method: "captcha" } : stored),
+      upgrade: upgradeCheck,
     },
   ),
   post: s.object(
@@ -344,7 +377,7 @@ const settingsSchema = s.object({
         label: "A member verified",
         help: "Posted in the log channel when someone passes.",
         starting: LOG_PASSED,
-        variables: [...SHARED_VARIABLES, METHOD_VARIABLE],
+        variables: [...SHARED_VARIABLES, METHOD_VARIABLE, RISK_VARIABLE],
         components: false,
         compact: true,
         audience: "public",
@@ -354,7 +387,7 @@ const settingsSchema = s.object({
         label: "A member ran out of tries",
         help: "Posted in the log channel when someone uses every try and is locked out.",
         starting: LOG_FAILED,
-        variables: SHARED_VARIABLES,
+        variables: [...SHARED_VARIABLES, RISK_VARIABLE],
         components: false,
         compact: true,
         audience: "public",
@@ -364,7 +397,7 @@ const settingsSchema = s.object({
         label: "A member was removed",
         help: "Posted in the log channel when the bot removes someone for not verifying, being too new or running out of tries.",
         starting: LOG_KICKED,
-        variables: [...SHARED_VARIABLES, REASON_VARIABLE],
+        variables: [...SHARED_VARIABLES, REASON_VARIABLE, RISK_VARIABLE],
         components: false,
         compact: true,
         audience: "public",
@@ -381,12 +414,10 @@ const settingsSchema = s.object({
       roleTooHigh: replyField("roleTooHigh"),
       roleFailed: replyField("roleFailed"),
       tooYoung: replyField("tooYoung"),
-      roundPictures: replyField("roundPictures"),
-      roundCount: replyField("roundCount"),
-      roundOdd: replyField("roundOdd"),
-      roundBelong: replyField("roundBelong"),
-      roundOrder: replyField("roundOrder"),
-      roundTyped: replyField("roundTyped"),
+      roundText: replyField("roundText"),
+      roundColour: replyField("roundColour"),
+      roundMotion: replyField("roundMotion"),
+      roundTiles: replyField("roundTiles"),
       roundBlock: replyField("roundBlock"),
       questionPrompt: replyField("questionPrompt"),
       wrongAnswer: replyField("wrongAnswer"),
@@ -412,6 +443,7 @@ const settingsSchema = s.object({
     {
       verifyButton: s.string({ label: "Verify button", default: LABELS.verifyButton, max: 80 }),
       answerButton: s.string({ label: "Button to type an answer", default: LABELS.answerButton, max: 80 }),
+      doneButton: s.string({ label: "Button to finish a round of squares", default: LABELS.doneButton, max: 80 }),
       modalTitle: s.string({ label: "Title of the box members type in", default: LABELS.modalTitle, max: 45 }),
       answerLabel: s.string({ label: "Label of the answer box", default: LABELS.answerLabel, max: 45 }),
       reasonTimeout: s.string({
@@ -424,6 +456,12 @@ const settingsSchema = s.object({
         label: "Reason for removing a new account",
         help: "Written to the audit log, and used as {reason} in messages.",
         default: LABELS.reasonYoung,
+        max: 512,
+      }),
+      reasonRisk: s.string({
+        label: "Reason for removing a member who looked like part of a raid",
+        help: "Written to the audit log, and used as {reason} in messages.",
+        default: LABELS.reasonRisk,
         max: 512,
       }),
       reasonAttempts: s.string({
@@ -441,9 +479,27 @@ type Settings = Infer<typeof settingsSchema>;
 type Ctx = ModuleContext<Settings>;
 
 const book = new ChallengeBook();
+/** A question may need the rules read first, so it waits longer than a captcha does. */
+const QUESTION_TTL = 10 * 60_000;
 const keyOf = (guildId: string, userId: string): string => `${guildId}:${userId}`;
 
+/** How each member who joined lately looked when they did, kept for the day they have to verify in. */
+const risks = new Map<string, { assessment: Assessment; at: number }>();
+const recent = new RecentJoins();
+const RISK_MEMORY = 24 * 60 * 60_000;
+
 const stamp = (ms: number): string => `<t:${Math.ceil(ms / 1000)}:R>`;
+
+function lookOf(member: Member, others: Parameters<typeof assess>[2] = []): Assessment {
+  const { user } = member;
+  return assess({ created: user.createdTimestamp, name: user.username, defaultAvatar: user.avatar === null }, Date.now(), others);
+}
+
+/** What is known of a member as of now: the assessment from when they joined, or one from their account alone. */
+function riskOf(ctx: Ctx, member: Member): Assessment {
+  const known = risks.get(keyOf(ctx.guild.id, member.id))?.assessment ?? lookOf(member);
+  return withRaid(known, raids.has(ctx.guild.id));
+}
 
 function valuesFor(ctx: Ctx, user: User): ReplyValues {
   return { user: `<@${user.id}>`, username: user.username, server: ctx.guild.name, role: roleName(ctx) };
@@ -455,7 +511,8 @@ function roleName(ctx: Ctx): string {
 }
 
 async function tell(ctx: Ctx, interaction: RepliableInteraction, key: ReplyKey, extra: ReplyValues = {}): Promise<void> {
-  await ctx.reply(interaction, ctx.settings.replies[key], { ...valuesFor(ctx, interaction.user), ...extra }, { fallback: REPLIES[key].starting });
+  // An empty list takes off the picture of a round that was on the message this replaces.
+  await ctx.reply(interaction, ctx.settings.replies[key], { ...valuesFor(ctx, interaction.user), ...extra }, { fallback: REPLIES[key].starting, files: [] });
 }
 
 function isConfigured(settings: Settings): boolean {
@@ -502,6 +559,7 @@ async function resetMember(ctx: Ctx, member: GuildMember): Promise<boolean> {
   }
   if (unverified) await grantRole(ctx, member, unverified);
   book.clear(keyOf(ctx.guild.id, member.id));
+  risks.delete(keyOf(ctx.guild.id, member.id));
   const { newMembers } = ctx.settings;
   const delay = timeoutDelay(newMembers.timeoutAction, newMembers.timeout);
   if (delay !== null) await ctx.tasks.reschedule("kickUnverified", new Date(Date.now() + delay), { userId: member.id });
@@ -519,7 +577,9 @@ async function logTo(
   if (!channelId) return;
   const channel = ctx.guild.channels.cache.get(channelId);
   if (!channel?.isTextBased()) return;
-  await ctx.send(channel, ctx.settings.log[key], { ...valuesFor(ctx, user), ...extra }, { fallback: starting, mentions: { users: [], roles: [] } });
+  const known = risks.get(keyOf(ctx.guild.id, user.id))?.assessment;
+  const risk = known ? riskNote(withRaid(known, raids.has(ctx.guild.id))) : "";
+  await ctx.send(channel, ctx.settings.log[key], { ...valuesFor(ctx, user), risk, ...extra }, { fallback: starting, mentions: { users: [], roles: [] } });
 }
 
 /** Resolves to whether the member is gone. */
@@ -553,6 +613,7 @@ async function pass(ctx: Ctx, member: GuildMember, method: Method): Promise<Gran
   await dropUnverified(ctx, member);
   await ctx.tasks.cancel("kickUnverified", { userId: member.id });
   await logTo(ctx, "passed", LOG_PASSED, member.user, { method });
+  risks.delete(keyOf(ctx.guild.id, member.id));
   return "ok";
 }
 
@@ -574,43 +635,40 @@ function startRow(ctx: Ctx, inDirectMessage = false): Row {
   );
 }
 
-function enterRow(ctx: Ctx): Row {
+function enterRow(ctx: Ctx, nonce: string): Row {
   return new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(
-    new ButtonBuilder().setCustomId(customId("verification", "enter", ctx.guild.id)).setLabel(ctx.settings.labels.answerButton).setStyle(ButtonStyle.Primary),
+    new ButtonBuilder().setCustomId(customId("verification", "enter", `${ctx.guild.id}:${nonce}`)).setLabel(ctx.settings.labels.answerButton).setStyle(ButtonStyle.Primary),
   );
 }
 
-const CHOICES_PER_ROW = 3;
-
-/** The buttons of a round. The id carries a random token, never what the button shows or whether it is right. */
-function choiceRows(ctx: Ctx, choices: Choice[], pressed: readonly string[] = []): Row[] {
+/** Nine numbered buttons, one for each square of the picture, and Done. The ids name the round, so an old message answers nothing. */
+function tileRows(ctx: Ctx, nonce: string, selected: readonly number[]): Row[] {
   const rows: Row[] = [];
-  for (let i = 0; i < choices.length; i += CHOICES_PER_ROW) {
+  for (let first = 1; first <= 9; first += 3) {
     rows.push(
       new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(
-        choices.slice(i, i + CHOICES_PER_ROW).map((choice) => {
-          const done = pressed.includes(choice.token);
-          const button = new ButtonBuilder()
-            .setCustomId(customId("verification", "pick", `${ctx.guild.id}:${choice.token}`))
-            .setStyle(done ? ButtonStyle.Success : ButtonStyle.Secondary)
-            .setDisabled(done);
-          if (choice.emoji) button.setEmoji(choice.emoji);
-          if (choice.label) button.setLabel(choice.label);
-          return button;
-        }),
+        [first, first + 1, first + 2].map((square) =>
+          new ButtonBuilder()
+            .setCustomId(customId("verification", "pick", `${ctx.guild.id}:${nonce}:${square}`))
+            .setLabel(String(square))
+            .setStyle(selected.includes(square) ? ButtonStyle.Primary : ButtonStyle.Secondary),
+        ),
       ),
     );
   }
+  rows.push(
+    new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(
+      new ButtonBuilder().setCustomId(customId("verification", "done", `${ctx.guild.id}:${nonce}`)).setLabel(ctx.settings.labels.doneButton).setStyle(ButtonStyle.Success),
+    ),
+  );
   return rows;
 }
 
 const ROUND_REPLY: Record<Round["type"], ReplyKey> = {
-  pictures: "roundPictures",
-  count: "roundCount",
-  odd: "roundOdd",
-  belong: "roundBelong",
-  order: "roundOrder",
-  typed: "roundTyped",
+  text: "roundText",
+  colour: "roundColour",
+  motion: "roundMotion",
+  tiles: "roundTiles",
   block: "roundBlock",
   question: "questionPrompt",
 };
@@ -628,9 +686,11 @@ async function present(ctx: Ctx, interaction: RepliableInteraction, user: User):
     ...("values" in round ? round.values : {}),
     ...(round.type === "question" ? { question: ctx.settings.check.question } : {}),
   };
-  const shown = await ctx.reply(interaction, ctx.settings.replies[key], values, { fallback: REPLIES[key].starting });
+  // Always a list, even an empty one, so a picture from the round before is taken off.
+  const files = hasPicture(round) ? [new AttachmentBuilder(...renderRound(round))] : [];
+  const shown = await ctx.reply(interaction, ctx.settings.replies[key], values, { fallback: REPLIES[key].starting, files });
   // Replies carry no buttons of the module's own, so the ones that answer are added to the reply just sent.
-  const components = "choices" in round ? choiceRows(ctx, round.choices, running.pressed) : [enterRow(ctx)];
+  const components = round.type === "tiles" ? tileRows(ctx, running.nonce, running.selected) : [enterRow(ctx, running.nonce)];
   if (shown) await interaction.editReply({ components }).catch(() => {});
 }
 
@@ -666,10 +726,10 @@ async function publish(ctx: Ctx, channel: GuildTextBasedChannel): Promise<PostRe
   return (await ctx.send(channel, ctx.settings.post.message, values, options)) ? "posted" : "failed";
 }
 
-function answerModal(ctx: Ctx): ModalBuilder {
+function answerModal(ctx: Ctx, nonce: string): ModalBuilder {
   const { labels } = ctx.settings;
   return new ModalBuilder()
-    .setCustomId(customId("verification", "submit", ctx.guild.id))
+    .setCustomId(customId("verification", "submit", `${ctx.guild.id}:${nonce}`))
     .setTitle(labels.modalTitle)
     .addComponents(
       new ActionRowBuilder<TextInputBuilder>().addComponents(
@@ -698,11 +758,6 @@ async function settle(
     case "next":
       await present(ctx, interaction, member.user);
       return;
-    case "more": {
-      const running = book.running(key);
-      if (running && "choices" in running.round) await interaction.editReply({ components: choiceRows(ctx, running.round.choices, result.pressed) }).catch(() => {});
-      return;
-    }
     case "correct":
       await finish(ctx, interaction, member, method);
       break;
@@ -727,6 +782,14 @@ async function settle(
     }
   }
   await clearButtons(interaction);
+}
+
+/** The rounds for a member: ones picked for how risky they look, or from the kinds the owner ticked. */
+function planFor(ctx: Ctx, member: GuildMember): Round[] {
+  const { check } = ctx.settings;
+  if (check.difficulty === "manual") return makePlan(check.roundTypes as RoundType[], check.rounds);
+  const { types, rounds } = challengeFor(riskOf(ctx, member).tier, check.rounds);
+  return makePlan(types, rounds);
 }
 
 const matchersFor = (ctx: Ctx) => ({ question: (text: string) => matchesAnswer(text, ctx.settings.check.answers) });
@@ -918,9 +981,20 @@ export default defineModule({
       const { roles, newMembers } = ctx.settings;
       if (!roles.verified || member.roles.cache.has(roles.verified)) return;
 
-      const age = accountAge(member.user.createdTimestamp, Date.now(), newMembers.minAccountAge, newMembers.youngAction);
+      const now = Date.now();
+      const others = recent.record(ctx.guild.id, { at: now, created: member.user.createdTimestamp, name: member.user.username });
+      const look = lookOf(member, others);
+      risks.set(keyOf(ctx.guild.id, member.id), { assessment: look, at: now });
+      for (const [key, known] of risks) if (now - known.at > RISK_MEMORY) risks.delete(key);
+
+      const age = accountAge(member.user.createdTimestamp, now, newMembers.minAccountAge, newMembers.youngAction);
       if (age.kind === "kick") {
         await removeMember(ctx, member, "reasonYoung");
+        return;
+      }
+      const { check } = ctx.settings;
+      if (check.method === "captcha" && check.difficulty === "auto" && check.suspicious === "remove" && clearlyRaid(withRaid(look, raids.has(ctx.guild.id)))) {
+        await removeMember(ctx, member, "reasonRisk");
         return;
       }
 
@@ -939,7 +1013,8 @@ export default defineModule({
     },
 
     async memberLeave(member, ctx) {
-      book.clear(keyOf(ctx.guild.id, member.id));
+      book.leave(keyOf(ctx.guild.id, member.id));
+      risks.delete(keyOf(ctx.guild.id, member.id));
       await ctx.tasks.cancel("kickUnverified", { userId: member.id });
     },
 
@@ -971,7 +1046,7 @@ export default defineModule({
     },
   },
 
-  directMessage: ["start", "enter", "pick", "submit"],
+  directMessage: ["start", "enter", "pick", "done", "submit"],
 
   components: {
     async start(interaction, { ctx }) {
@@ -1010,15 +1085,15 @@ export default defineModule({
           await finish(ctx, interaction, member, "button");
           return;
         case "challenge": {
-          const rounds: Round[] = check.method === "captcha" ? makePlan(check.roundTypes as RoundType[], check.rounds) : [{ type: "question" }];
-          book.issue(key, rounds);
+          const rounds: Round[] = check.method === "captcha" ? planFor(ctx, member) : [{ type: "question" }];
+          book.issue(key, rounds, check.method === "captcha" ? undefined : QUESTION_TTL);
           await present(ctx, interaction, member.user);
           return;
         }
       }
     },
 
-    async enter(interaction, { ctx }) {
+    async enter(interaction, { rest, ctx }) {
       if (!interaction.isButton()) return;
       const key = keyOf(ctx.guild.id, interaction.user.id);
       const lockedUntil = book.lockedUntil(key);
@@ -1026,29 +1101,51 @@ export default defineModule({
         await tell(ctx, interaction, "lockedOut", { until: stamp(lockedUntil) });
         return;
       }
-      if (ctx.settings.check.method === "button" || !book.active(key)) {
+      // A button from an earlier round, or from an earlier attempt, answers nothing that is on screen now.
+      const running = book.running(key);
+      if (ctx.settings.check.method === "button" || !running || running.nonce !== rest.split(":")[1]) {
         await tell(ctx, interaction, "codeExpired");
         return;
       }
-      await interaction.showModal(answerModal(ctx));
+      await interaction.showModal(answerModal(ctx, running.nonce));
     },
 
+    /** A square of the picture is pressed, or pressed again to take it back. */
     async pick(interaction, { rest, ctx }) {
+      if (!interaction.isButton()) return;
+      await interaction.deferUpdate();
+      const key = keyOf(ctx.guild.id, interaction.user.id);
+      const [, nonce = "", square = ""] = rest.split(":");
+      const lockedUntil = book.lockedUntil(key);
+      if (lockedUntil !== null) {
+        await tell(ctx, interaction, "lockedOut", { until: stamp(lockedUntil) });
+        return;
+      }
+      const selected = book.toggle(key, nonce, Number(square));
+      const running = book.running(key);
+      if (selected === null || !running) {
+        await tell(ctx, interaction, "codeExpired");
+        return;
+      }
+      await interaction.editReply({ components: tileRows(ctx, running.nonce, selected) }).catch(() => {});
+    },
+
+    /** The squares pressed so far are the member's answer. */
+    async done(interaction, { rest, ctx }) {
       if (!interaction.isButton()) return;
       await interaction.deferUpdate();
       const member = await ctx.guild.members.fetch(interaction.user.id).catch(() => null);
       if (!member) return;
       const { roles, check } = ctx.settings;
       if (roles.verified && member.roles.cache.has(roles.verified)) return;
-
-      const token = rest.split(":")[1] ?? "";
-      const result = book.answer(keyOf(ctx.guild.id, member.id), { kind: "token", token }, check.maxAttempts, matchersFor(ctx));
+      const key = keyOf(ctx.guild.id, member.id);
+      const result = book.answer(key, book.selection(key), check.maxAttempts, matchersFor(ctx), rest.split(":")[1]);
       await settle(ctx, interaction, member, result, "captcha");
     },
   },
 
   modals: {
-    async submit(interaction, { ctx }) {
+    async submit(interaction, { rest, ctx }) {
       // From a button on the reply, the next round replaces it in place; from anywhere else it is a new reply.
       if (interaction.isFromMessage()) await interaction.deferUpdate();
       else await interaction.deferReply({ flags: MessageFlags.Ephemeral });
@@ -1061,7 +1158,7 @@ export default defineModule({
       }
 
       const text = interaction.fields.getTextInputValue("answer");
-      const result = book.answer(keyOf(ctx.guild.id, member.id), { kind: "text", text }, check.maxAttempts, matchersFor(ctx));
+      const result = book.answer(keyOf(ctx.guild.id, member.id), text, check.maxAttempts, matchersFor(ctx), rest.split(":")[1]);
       await settle(ctx, interaction, member, result, check.method);
     },
   },
