@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { PermissionFlagsBits } from "discord.js";
 import { emptyEmbed, plainReply, type MessageBody } from "@tier0/core";
 import { ticketHealth, ticketHealthSummary } from "@tier0/shared-tickets";
-import { ADMIN, CAT, HANDLER, LOG, OBSERVER, PANEL_CHANNEL, ada, grace, mallory, mod, open, prisma, refusalText, settingsOf, setup, tickets } from "./ticket-world.ts";
+import { ADMIN, CAT, HANDLER, LOG, OBSERVER, PANEL_CHANNEL, ada, grace, mallory, mod, open, prisma, refusalText, settingsOf, setup, staffArrive, tickets } from "./ticket-world.ts";
 import { channel, interaction, member, user, type World } from "./fake-discord.ts";
 
 /**
@@ -152,6 +152,7 @@ describe("a private thread", () => {
     const watcher = w.addMember(member(user("130000000000000021", "watcher"), [OBSERVER]));
     const boss = w.addMember(member(user("130000000000000022", "boss"), [ADMIN]));
     const { channel: thread } = await open(w);
+    await staffArrive(w, thread);
     for (const id of [grace.id, watcher.id, boss.id, ada.id]) assert.ok(thread.members.cache.has(id), id);
   });
 

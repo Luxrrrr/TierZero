@@ -263,9 +263,36 @@ function threadRolesOf(ctx: TicketCtx, type: TicketType | undefined): string[] {
  */
 export async function addThreadStaff(ctx: TicketCtx, thread: Thread, type: TicketType): Promise<void> {
   await withMembers(ctx);
-  const ordered = [...new Set([...membersWith(ctx, type.handlers), ...membersWith(ctx, threadRolesOf(ctx, type))])];
-  for (const id of ordered.slice(0, THREAD_MEMBER_CAP)) {
+  for (const id of staffOfThread(ctx, type)) {
     if (!thread.members.cache.has(id)) await thread.members.add(id).catch(() => undefined);
+  }
+}
+
+/** Who a type's thread should hold besides the opener, handlers first, up to the cap. */
+function staffOfThread(ctx: TicketCtx, type: TicketType): string[] {
+  const ordered = [...new Set([...membersWith(ctx, type.handlers), ...membersWith(ctx, threadRolesOf(ctx, type))])];
+  return ordered.slice(0, THREAD_MEMBER_CAP);
+}
+
+/** How long Discord is given to let in the members of the roles a first message mentions, before anyone left out is added by hand. */
+export const THREAD_MENTION_WAIT_MS = 3_000;
+
+/**
+ * For a thread whose first message already mentions the handlers' roles. Discord
+ * lets the members of a mentioned role into a private thread on its own, and
+ * adding them by hand first would notify each of them a second time. So this
+ * waits a moment, looks at who is in, and adds only whoever is still missing:
+ * the roles that were not mentioned, and anyone Discord did not bring in. Run
+ * after the opener has been answered, since nothing waits on it.
+ */
+export async function addMissingThreadStaff(ctx: TicketCtx, thread: Thread, type: TicketType, waitMs: number = THREAD_MENTION_WAIT_MS): Promise<void> {
+  await Promise.all([withMembers(ctx), new Promise<void>((resolve) => setTimeout(resolve, waitMs).unref())]);
+  const inside = await thread.members.fetch().then(
+    (all) => new Set<string>(all.keys()),
+    () => new Set<string>(thread.members.cache.keys()),
+  );
+  for (const id of staffOfThread(ctx, type)) {
+    if (!inside.has(id)) await thread.members.add(id).catch(warn(`add ${id} to ${thread.id}`));
   }
 }
 

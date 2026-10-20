@@ -88,7 +88,7 @@ export interface FakeChannel {
   locked?: boolean;
   archived?: boolean;
   sent: FakeMessage[];
-  members: { cache: Map<string, unknown>; add(id: string): Promise<void>; remove(id: string): Promise<void> };
+  members: { cache: Map<string, unknown>; add(id: string): Promise<void>; remove(id: string): Promise<void>; fetch(): Promise<Map<string, unknown>> };
   permissionOverwrites: {
     cache: Map<string, Overwrite>;
     edit(id: string, options: Record<string, boolean | null>, extra?: { type?: number }): Promise<void>;
@@ -134,6 +134,7 @@ export function channel(id: string, options: { type?: number; name?: string; par
       cache: threadMembers,
       add: async (userId) => void threadMembers.set(userId, {}),
       remove: async (userId) => void threadMembers.delete(userId),
+      fetch: async () => new Map(threadMembers),
     },
     permissionOverwrites: {
       cache: overwrites,

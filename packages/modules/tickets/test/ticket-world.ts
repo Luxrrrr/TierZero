@@ -33,6 +33,7 @@ export const { prisma } = await import("@tier0/db");
 export const mod = await import("../dist/index.js");
 export const tickets = mod.default;
 const { forgetWebhook } = await import("../dist/webhooks.js");
+const { addMissingThreadStaff } = await import("../dist/channels.js");
 
 const registry = new ModuleRegistry();
 registry.register(tickets);
@@ -87,6 +88,13 @@ export async function open(w: World, answer = "Cannot log in") {
   const row = await prisma.ticket.findFirstOrThrow({ where: { openerId: ada.id }, orderBy: { id: "desc" } });
   return { row, channel: w.channels.get(row.channelId) ?? known.get(row.channelId)! };
 }
+
+/**
+ * In a thread a member opened, the handlers are let in by the first message's mention and then whoever
+ * that missed is added after a pause. This runs that second step at once, for a test that looks at who is in.
+ */
+export const staffArrive = (w: World, thread: { members: unknown }) =>
+  addMissingThreadStaff(w.ctx, thread as never, (w.ctx.settings as unknown as { panels: { types: unknown[] }[] }).panels[0]!.types[0] as never, 0);
 
 export const handlerPress = (who = grace, channelId?: string) => interaction(who, { roles: [HANDLER], ...(channelId ? { channelId } : {}) });
 export const refusalText = (w: World) => w.replies.at(-1)?.body.embeds[0]?.description ?? w.replies.at(-1)?.body.content;

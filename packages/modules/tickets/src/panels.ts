@@ -111,7 +111,12 @@ export const typeField = s.object({
         label: "Open tickets as",
         options: [
           { value: "channel", label: "Private channel", description: "Created in the category below.", recommended: true },
-          { value: "thread", label: "Private thread", description: "Under the panel's channel. Needs no category and has no channel limit." },
+          {
+            value: "thread",
+            label: "Private thread",
+            description:
+              "Under the panel's channel. Needs no category and has no channel limit. Discord only lets people into a private thread when they are added, so the bot adds the handlers one by one and each of them is notified. To let a support role see every thread without that, give it Manage Threads on the panel's channel in Discord. That also lets it archive, lock and delete threads.",
+          },
         ],
         control: "segmented",
         default: "channel",

@@ -1,6 +1,6 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { BILLING, CAT, HANDLER, PANEL_CHANNEL, ada, grace, linus, mod, open, prisma, refusalText, setup, tickets } from "./ticket-world.ts";
+import { BILLING, CAT, HANDLER, PANEL_CHANNEL, ada, grace, linus, mod, open, prisma, refusalText, setup, staffArrive, tickets } from "./ticket-world.ts";
 import { GUILD, interaction, member, message, user, type World } from "./fake-discord.ts";
 
 const { TicketActionError } = mod;
@@ -36,11 +36,46 @@ describe("opening twice at once", () => {
   });
 });
 
+describe("who the first message pings when a member opens a ticket", () => {
+  const welcomeMentions = (w: World) => (w.sent[0]?.options.mentions ?? {}) as { users?: string[]; roles?: string[] };
+
+  test("in a channel the opener is pinged, since nothing else told them", async () => {
+    const w = setup();
+    await submit(w);
+    assert.deepEqual(welcomeMentions(w).users, [ada.id]);
+  });
+
+  test("in a thread the opener is not pinged again, since being added to it already told them", async () => {
+    const w = setup({}, { opening: { mode: "thread" } });
+    await submit(w);
+    assert.deepEqual(welcomeMentions(w).users, []);
+  });
+
+  test("in a thread the line above the message no longer names the opener, only the roles to ping", async () => {
+    const w = setup({}, { opening: { mode: "thread" } });
+    await submit(w);
+    assert.equal(w.sent[0]?.body.content, "{pingRoles}");
+  });
+
+  test("in a thread the embed still says who opened it", async () => {
+    const w = setup({}, { opening: { mode: "thread" } });
+    await submit(w);
+    assert.match(w.sent[0]?.body.embeds[0]?.description ?? "", /Opened by \{user\}/);
+  });
+
+  test("in a channel the line above the embed still names the opener", async () => {
+    const w = setup();
+    await submit(w);
+    assert.equal(w.sent[0]?.body.content, "{user} {pingRoles}");
+  });
+});
+
 describe("access after a change of hands", () => {
   test("a thread moved to another type swaps the old handlers for the new ones", async () => {
     const w = setup({}, { opening: { mode: "thread" } });
     const billing = w.addMember(member(user("130000000000000009", "bill"), [BILLING]));
     const { row, channel: thread } = await open(w);
+    await staffArrive(w, thread);
     assert.ok(thread.members.cache.has(grace.id));
     await mod.transferTicket(w.ctx, row.id, { typeId: "billing" }, actor);
     assert.ok(!thread.members.cache.has(grace.id), "the old handler is gone");

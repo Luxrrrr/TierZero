@@ -1,12 +1,13 @@
 import { randomUUID } from "node:crypto";
 import { ChannelType, ThreadAutoArchiveDuration, type MessageComponentInteraction, type ModalSubmitInteraction, type PrivateThreadChannel } from "discord.js";
+import type { MessageBody } from "@tier0/core";
 import { LEGACY_TYPE_ID, type TicketAnswer } from "@tier0/shared-tickets";
 import { prisma, type Ticket } from "@tier0/db";
 import { rememberOpenTicket } from "./cache.js";
 import { notifyTicket } from "./live.js";
 import { storeMessage } from "./capture.js";
-import { addThreadStaff, categoryFor, overwriteSteps, topicFor } from "./channels.js";
-import { actorOf, memberRoleIds, refuse, type DiscordPerson, type TicketChannel, type TicketCtx } from "./context.js";
+import { addMissingThreadStaff, addThreadStaff, categoryFor, overwriteSteps, topicFor } from "./channels.js";
+import { actorOf, isThread, memberRoleIds, refuse, type DiscordPerson, type TicketChannel, type TicketCtx } from "./context.js";
 import { recordEvent, ticketRows } from "./controls.js";
 import { nextOpening, withinHours } from "./hours.js";
 import { CREATED_MESSAGE, OUTSIDE_HOURS_MESSAGE } from "./messages.js";
@@ -103,7 +104,18 @@ async function claimSlot(
 
 type Opener = (MessageComponentInteraction | ModalSubmitInteraction) & DiscordPerson;
 
-export async function createChannel(ctx: TicketCtx, { panel, type }: PanelType, opener: { user: { id: string } }, name: string, topic: string): Promise<TicketChannel | null> {
+/**
+ * `staffLater` leaves the handlers out of a new thread for the caller to bring in
+ * once the first message, which mentions their roles, is posted. See addMissingThreadStaff.
+ */
+export async function createChannel(
+  ctx: TicketCtx,
+  { panel, type }: PanelType,
+  opener: { user: { id: string } },
+  name: string,
+  topic: string,
+  options: { staffLater?: boolean } = {},
+): Promise<TicketChannel | null> {
   if (type.opening.mode === "thread") {
     const parent = panel.channel ? ctx.guild.channels.cache.get(panel.channel) : undefined;
     if (parent?.type !== ChannelType.GuildText) return null;
@@ -114,7 +126,7 @@ export async function createChannel(ctx: TicketCtx, { panel, type }: PanelType, 
       autoArchiveDuration: ThreadAutoArchiveDuration.OneWeek,
     })) as PrivateThreadChannel;
     await thread.members.add(opener.user.id);
-    await addThreadStaff(ctx, thread, type);
+    if (!options.staffLater) await addThreadStaff(ctx, thread, type);
     return thread;
   }
   const category = categoryFor(ctx, type);
@@ -173,7 +185,7 @@ async function openNow(ctx: TicketCtx, interaction: Opener, target: PanelType, a
   const channelName = ticketChannelName(username, effectiveChannelName(ctx.settings, type), { type: type.name, number: ticketNumber(claimed) });
   let channel: TicketChannel | null;
   try {
-    channel = await createChannel(ctx, target, interaction, channelName, topicFor(ctx, claimed, interaction.user.tag));
+    channel = await createChannel(ctx, target, interaction, channelName, topicFor(ctx, claimed, interaction.user.tag), { staffLater: true });
   } catch (error) {
     console.error("[tickets] failed to create ticket channel:", error);
     channel = null;
@@ -199,16 +211,23 @@ async function openNow(ctx: TicketCtx, interaction: Opener, target: PanelType, a
   // A private thread only lets in the roles its first message mentions, so the handlers are always pinged there.
   const pings = type.opening.mode === "thread" ? [...new Set([...pingRolesOf(type), ...type.handlers])] : pingRolesOf(type);
   const values = welcomeValuesOf(ctx.settings, type, ticket);
-  const welcome = await ctx.send(channel, welcomeBody(type, ticket, values), values, {
-    fallback: welcomeFallback(type, ticket, values),
+  const thread = type.opening.mode === "thread";
+  const welcome = await ctx.send(channel, withoutOpenerLine(welcomeBody(type, ticket, values), thread), values, {
+    fallback: withoutOpenerLine(welcomeFallback(type, ticket, values), thread),
     rows: ticketRows(ctx.settings, ticket, type),
-    mentions: { users: [interaction.user.id], roles: pings },
+    // Adding the opener to a thread already notified them, so mentioning them as well would be a second ping.
+    mentions: { users: type.opening.mode === "thread" ? [] : [interaction.user.id], roles: pings },
   });
   if (welcome) {
     await prisma.ticket.update({ where: { id: ticket.id }, data: { controlsMessageId: welcome.id } });
     await storeMessage(ctx, ticket, welcome);
   }
   await outsideHoursNotice(ctx, channel, ticket);
+
+  // The first message mentions the handlers, which lets their roles into a thread. Whoever it did not reach is added after a moment.
+  if (isThread(channel)) {
+    void addMissingThreadStaff(ctx, channel, type).catch((error: unknown) => console.warn(`[tickets] could not add the staff to ${channel.id}:`, error));
+  }
 
   await recordEvent(ticket.id, "opened", actorOf(interaction.user, interaction.member), { typeName: type.name });
   await resetAutoClose(ctx, ticket);
@@ -221,6 +240,14 @@ async function openNow(ctx: TicketCtx, interaction: Opener, target: PanelType, a
     { ticket: `<#${channel.id}>`, number: ticketNumber(ticket), subject: subject ?? "" },
     { fallback: CREATED_MESSAGE },
   );
+}
+
+/**
+ * The opener is added to a thread, which tells them, so the line above the first message that names them only
+ * reads like a second ping. Taken out of the text of the message, and left in the embed, which never notifies.
+ */
+function withoutOpenerLine(body: MessageBody, thread: boolean): MessageBody {
+  return thread ? { ...body, content: body.content.replace(/\{user\}\s*/g, "").trim() } : body;
 }
 
 /** Tells the opener when the team is back, for a ticket opened outside working hours. */

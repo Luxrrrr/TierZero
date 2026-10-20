@@ -21,6 +21,7 @@ import {
   prisma,
   refusalText,
   setup,
+  staffArrive,
   tickets,
 } from "./ticket-world.ts";
 import { BOT, GUILD, channel, interaction, message, snowflake } from "./fake-discord.ts";
@@ -127,6 +128,7 @@ describe("opening a ticket", () => {
   test("a thread type opens a private thread under the panel channel and adds the opener and handlers", async () => {
     const w = setup({}, { opening: { mode: "thread" } });
     const { row, channel: thread } = await open(w);
+    await staffArrive(w, thread);
     assert.equal(row.mode, "thread");
     assert.equal(thread.parentId, PANEL_CHANNEL);
     assert.ok(thread.members.cache.has(ada.id));
