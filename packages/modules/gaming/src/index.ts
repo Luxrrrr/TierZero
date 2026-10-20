@@ -77,7 +77,7 @@ export default defineModule({
   name: "Gaming tools",
   summary: "Join-to-create voice channels, looking-for-group posts and scrim sign-ups.",
   category: "engagement",
-  requires: ["ManageChannels", "MoveMembers"],
+  requires: ["ManageChannels", "Connect", "MoveMembers"],
 
   settings: settingsSchema,
   actions: gamingActions,

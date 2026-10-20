@@ -25,6 +25,9 @@ export const INVITE_PERMISSION_BITS = {
   MentionEveryone: 1n << 17n,
   /** Reactions and buttons with another server's emoji. */
   UseExternalEmojis: 1n << 18n,
+  /** Voice rooms: the bot joins the room it makes for someone and moves them into it. */
+  Connect: 1n << 20n,
+  MoveMembers: 1n << 24n,
   /** Role menus, welcome roles, level rewards and ticket channel access. */
   ManageRoles: 1n << 28n,
   /** Sending under another name, and ticket replies with the staff member's name. */
