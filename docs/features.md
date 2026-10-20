@@ -11,7 +11,7 @@
 | Welcome messages | Greetings, farewells and roles on join. |
 | Verification | A button, captcha or question new members pass to get a role. |
 | Role menus | Members pick their roles from buttons or a dropdown. |
-| Gaming tools | Join-to-create voice channels, looking-for-group posts and scrim or tournament sign-ups. |
+| Gaming tools | Join-to-create voice channels, looking-for-group posts, scrim or tournament sign-ups and group hubs with a voice channel and thread per group. |
 | Log channel | Posts edits, deletions, joins, role changes and more into a Discord channel. |
 | Leveling | XP, role rewards and a leaderboard, with an optional public web page for it. No image cards. |
 | News and patch notes | RSS feeds, YouTube channels and Steam patch notes, posted as embeds. |
@@ -600,7 +600,7 @@ Mark a menu exclusive and picking one role clears the others, which suits a rank
 
 **What picking a role does** decides whether a pick works both ways. A menu that only gives suits a rules or verify button: picking a role the member already has changes nothing and tells them so. A menu that only takes away suits dropping a notification role: nothing is given, and someone without the role is told there was nothing to remove. Every menu starts out giving and taking back, as menus always have.
 
-The message above a menu is edited with the message builder, with `{menu}` for the menu's name, and the preview shows the buttons or dropdown under it. They come from the menu's roles and are added under whatever you write, so the builder doesn't offer buttons for it. A menu saved with a title and description keeps them as an embed. Under **Replies and errors** you can reword the private confirmations: one when a button gives a role and one when it takes one away, two for a button on a menu that only gives or only takes (the member already has the role, or doesn't have it), all with `{role}` and `{menu}`, one after a pick from a dropdown with `{roles}` (the menu's roles the member has now) and `{menu}`, and the one `/rolemenu` shows after publishing a menu, with `{menu}` and `{menuChannel}`. The refusals are there too, and also private: a menu name `/rolemenu` can't find (`{name}`), a menu whose channel was deleted, a menu the bot couldn't post or update, a button on a menu that was removed, a button whose role was taken off the menu, a role above the bot's own, a role Discord refused to change (both with `{role}` and `{menu}`), a member without the role the menu needs (`{required}` and `{menu}`), and a member already holding as many of its roles as it allows (`{max}` and `{menu}`). These replies start out as embeds. **Labels and text** holds the word used for `{roles}` when the member has none of the menu's roles left.
+The message above a menu is edited with the message builder, with `{menu}` for the menu's name, and the preview shows the buttons or dropdown under it. They come from the menu's roles and are added under whatever you write, so the builder doesn't offer buttons for it. A menu saved with a title and description keeps them as an embed. Each menu has its own **Replies and errors** group in its row, folded until you open it, so a menu for game roles can answer differently from one for community roles. It holds the private confirmations: one when a button gives a role and one when it takes one away, two for a button on a menu that only gives or only takes (the member already has the role, or doesn't have it), all with `{role}` and `{menu}`, and one after a pick from a dropdown with `{roles}` (the menu's roles the member has now) and `{menu}`. The refusals for that menu are there too: a button whose role was taken off the menu, a role above the bot's own, a role Discord refused to change (both with `{role}` and `{menu}`), a member without the role the menu needs (`{required}` and `{menu}`), and a member already holding as many of its roles as it allows (`{max}` and `{menu}`). The word used for `{roles}` when the member has none of the menu's roles left is in the same group. A menu starts with the standard wording, or with whatever the server had written before menus had their own. A menu that has been removed answers with the standard wording. The replies that belong to no menu are under the page's own **Replies and errors**: what `/rolemenu` says after publishing a menu, a menu name it can't find (`{name}`), a menu whose channel was deleted, a menu the bot couldn't post or update, and a button on a menu that was removed. All of these start out as embeds.
 
 The feature shows **Needs setup** until it has a menu, and its quick setup asks for one. A menu added there still has to be posted with **Post in Discord** on its row.
 
@@ -845,9 +845,9 @@ The dashboard does not apply updates itself, because that would give it the powe
 
 ## Gaming tools
 
-Three features for gaming servers. Each has its own switch on the module's page, so a server can run one and leave the others off, and they all start off. The bot needs Manage Channels and Move Members for the voice rooms, and Manage Roles if a sign-up gives a role.
+Four features for gaming servers. Each has its own switch on the module's page, so a server can run one and leave the others off, and they all start off. The bot needs Manage Channels and Move Members for the voice rooms, and Manage Roles if a sign-up gives a role.
 
-The wording of everything the bot says is under **Replies and errors**, and button text and the short strings Discord limits are under **Labels and text**. Times that people type, like `20:00`, are read in the **Time zone** you pick on the page. Everyone sees the posted time in their own zone.
+The wording of everything the bot says is under **Replies and errors**, and button text and the short strings Discord limits are under **Labels and text**, inside the feature they belong to. Times that people type, like `20:00`, are read in the **Time zone** you pick on the page. Everyone sees the posted time in their own zone.
 
 ### Join-to-create voice channels
 
@@ -868,9 +868,13 @@ Who owns a room is kept by the bot, not read from channel permissions. The owner
 
 ### Looking for group
 
-`/lfg` posts a request for players. The game comes from a list you fill in, with an optional emoji, role to ping and channel for each, and the member picks it as they type. They say how many more players they need, and may add a note and a start time.
+`/lfg` posts a request for players. Members type the game themselves, so you do not have to list anything. They say how many more players they need, and may add a note and a start time.
 
-The post shows the party, the open places, the start time and when it lapses, with **Join**, **Leave** and **Close** buttons. It is rewritten each time someone joins or leaves. The author counts as the first player. When the last place is taken the post becomes a "party full" message and loses its buttons, and the party can be pinged under it. **Make a voice channel for a full party** also gives them a room named from **Name of the party's voice channel**, owned by the author and removed once it is empty. It is given ten minutes for people to arrive.
+The **Games** list is optional. A game on it is suggested as members type and can have an emoji, a role to ping and a channel of its own, and a member who types its name in any capitalisation gets those. Turn on **Only allow the games on the list** to limit requests to it.
+
+A **panel** does the same without the command. Add one under **Panels**, give it a channel, and use **Post in Discord**. It is a message with one button. The button opens a form that asks for the game, how many players, a note and a start time, and the post is made in the same way and under the same limits as `/lfg`. The panel posts requests in the game's own channel, else the default channel, else where the panel is.
+
+The post shows the party, the open places, the start time and when it lapses, with **Join**, **Leave**, **Start group** and **Close** buttons. The author, or anyone with Manage Messages, can press **Start group** at any time to start with whoever has joined. The post becomes a "started" message, the party is pinged if that is on, and the voice channel is made if that is on. It is rewritten each time someone joins or leaves. The author counts as the first player. When the last place is taken the post becomes a "party full" message and loses its buttons, and the party can be pinged under it. **Make a voice channel for a full party** also gives them a room named from **Name of the party's voice channel**, owned by the author and removed once it is empty. It is given ten minutes for people to arrive.
 
 A post closes after the time under **Close a post after**, counted from the start time when it has one. The author or anyone with Manage Messages can close it earlier with the button. Under the same settings you can set the wait between one member's posts and how many posts one member can have open. Posts are kept, so a restart loses nothing.
 
@@ -886,6 +890,26 @@ Staff run these with `/signup`. Anyone with Manage Events or Manage Server can, 
 Players press **Sign up**. For a team sign-up, a form asks for the team name and the teammates, as mentions or user ids, and the member who filled it in is the captain. Everyone on the team needs a required role if one is set, can only be on a sign-up once, and has to be on the server. Switch off **Teams must be full** to let a team sign up short. Only the captain can withdraw the whole team, and staff can remove it. A teammate who presses Withdraw takes only themselves off, and the team carries on without them.
 
 When the limit is reached, new entries join the waitlist in order, and a place that opens goes to the first one waiting. They are told in the sign-up's channel, by direct message, or both, as you choose, and a direct message that can't be delivered falls back to the channel. With no waitlist, a full sign-up refuses new entries. **Remind registered players before the start** pings everyone registered in the channel that long before a start time. 0 turns it off.
+
+### Group hubs
+
+A hub is a text channel with a message from the bot and a button for each kind of group you want, such as Looking for group or Ranked. Add the panels under **Group hubs** on the Gaming tools page, give each one a channel and its options, then use **Post in Discord**. Posting it again edits the message in place.
+
+A member presses a button and the bot makes a voice channel for them, named from the option's **Group name** (`{user}`, `{username}`, `{game}` and `{number}` are available). An option can ask what they are playing first, in a short form that starts with the option's **Game**. Whatever they type is added to the end of the name unless the name already uses `{game}`. Only the member sees the reply, which counts down the time they have to join. Discord only lets a bot move people who are already in a voice channel, so a member who isn't in one has to join the new channel themselves. **Time to join the new voice channel** sets how long they get, from 15 seconds to 10 minutes, and a group nobody joined in time is removed.
+
+Once the owner is in the voice channel, the bot opens a private thread in the hub channel with a control message in it. Everyone in the group can type there. The buttons and menus are for the owner and for the people who can manage groups:
+
+- **Make private** locks the voice channel to the people inside and anyone invited, and **Make open** undoes it.
+- **Change game** swaps the game in the name and in the thread, and keeps any wording the owner changed.
+- **Rename** and **Size limit** change the voice channel and, for a rename, the thread.
+- The menus invite people into the voice channel and the thread, remove them from both, or hand the group to someone else.
+- **Close group** ends it.
+
+A panel can **announce open groups**, and each option can follow the panel, always announce or never announce. While a group is open, a post under the panel shows who runs it, how many are in the voice channel and how many places are left, with **Join** and **Leave** buttons. Join adds the member to the thread and moves them into the voice channel if they are already in one. If they are not, the reply links the channel. The owner cannot leave their own group. The post is edited as people come and go, and removed when the group is made private or ends. If a private group is opened later, the post goes up then. An optional role is pinged once, when the post first goes up. The panel sets the role and an option can use a different one. Both messages and their buttons are editable.
+
+Managers are the group's owner, members with a role under **Roles that can manage any group**, and anyone with Manage Channels, Manage Server or Administrator. A member can run one group at a time. When the voice channel has been empty for a minute, the channel is deleted and the thread is archived. Groups are kept in the database, so a restart loses nothing.
+
+Every message in this feature is editable under **Replies and errors**, and the buttons on the control message under **Labels and text**. The bot needs Manage Channels, Move Members, Connect, and permission to create private threads in the hub channel.
 
 ## Utility
 

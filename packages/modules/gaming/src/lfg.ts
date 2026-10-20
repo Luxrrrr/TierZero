@@ -16,6 +16,8 @@ import {
   LFG_CLOSED,
   LFG_EXPIRED,
   LFG_FULL,
+  LFG_GO,
+  LFG_STARTED,
   LFG_POST,
   LFG_READY,
   LFG_REFUSALS,
@@ -46,11 +48,12 @@ const gameKey = (game: GameSetting) => game.id ?? game.name;
 export { gameKey };
 
 export const postRows = (ctx: GamingCtx, post: PostWithMembers): ActionRowBuilder<MessageActionRowComponentBuilder>[] => {
-  const { lfgJoin, lfgLeave, lfgClose } = ctx.settings.labels;
+  const { lfgJoin, lfgLeave, lfgStart, lfgClose } = ctx.settings.lfg.labels;
   return [
     new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(
       new ButtonBuilder().setCustomId(customId("gaming", "lfgJoin", String(post.id))).setLabel(lfgJoin).setStyle(ButtonStyle.Success),
       new ButtonBuilder().setCustomId(customId("gaming", "lfgLeave", String(post.id))).setLabel(lfgLeave).setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder().setCustomId(customId("gaming", "lfgStart", String(post.id))).setLabel(lfgStart).setStyle(ButtonStyle.Primary),
       new ButtonBuilder().setCustomId(customId("gaming", "lfgClose", String(post.id))).setLabel(lfgClose).setStyle(ButtonStyle.Danger),
     ),
   ];
@@ -66,6 +69,8 @@ function bodyFor(ctx: GamingCtx, status: string): { body: MessageBody; fallback:
   switch (status) {
     case "full":
       return { body: messages.lfgFull, fallback: LFG_FULL, buttons: false };
+    case "started":
+      return { body: messages.lfgStarted, fallback: LFG_STARTED, buttons: false };
     case "closed":
       return { body: messages.lfgClosed, fallback: LFG_CLOSED, buttons: false };
     case "expired":
@@ -109,7 +114,7 @@ async function makePartyVoice(ctx: GamingCtx, post: PostWithMembers): Promise<st
   const { voiceCategory } = ctx.settings.lfg;
   const category = voiceCategory ? ctx.guild.channels.cache.get(voiceCategory) : undefined;
   const parent = category?.type === ChannelType.GuildCategory ? category : null;
-  const name = sanitiseRoomName(applyVariables(ctx.settings.labels.partyRoomName, { game: post.gameName, author: post.authorName }).slice(0, ROOM_NAME_MAX));
+  const name = sanitiseRoomName(applyVariables(ctx.settings.lfg.labels.partyRoomName, { game: post.gameName, author: post.authorName }).slice(0, ROOM_NAME_MAX));
   try {
     const channel = await createRoomChannel(ctx, { name, parent, ownerId: post.authorId, userLimit: post.needed + 1, reason: name });
     await recordRoom({ guildId: ctx.guild.id, channelId: channel.id, hubId: PARTY_HUB, ownerId: post.authorId, number: 0 });
@@ -121,7 +126,11 @@ async function makePartyVoice(ctx: GamingCtx, post: PostWithMembers): Promise<st
   }
 }
 
-/** What follows the last place being taken: the voice channel, the post's new state, and the announcement. */
+/**
+ * What follows the party being ready: the voice channel, the post's new state,
+ * and the announcement. That is the last place being taken, or the author
+ * starting the group early, which the post's status says.
+ */
 export async function partyFilled(ctx: GamingCtx, post: PostWithMembers, known?: Message | null): Promise<void> {
   await ctx.tasks.cancel("lfgExpire", { postId: post.id });
   let full = post;
@@ -134,7 +143,8 @@ export async function partyFilled(ctx: GamingCtx, post: PostWithMembers, known?:
   const channel = ctx.guild.channels.cache.get(post.channelId);
   if (!channel?.isTextBased()) return;
   const users = [post.authorId, ...post.members.map((member) => member.userId)];
-  await ctx.send(channel, ctx.settings.messages.lfgReady, valuesOf(ctx, full), { fallback: LFG_READY, mentions: { users, roles: [] } });
+  const started = post.status === "started";
+  await ctx.send(channel, started ? ctx.settings.messages.lfgGo : ctx.settings.messages.lfgReady, valuesOf(ctx, full), { fallback: started ? LFG_GO : LFG_READY, mentions: { users, roles: [] } });
 }
 
 /** Ends a post nobody joined in time, or that is past its time. */
@@ -193,6 +203,19 @@ export const lfgComponents: Record<string, ComponentHandler<GamingSettings>> = {
     if (!left.ok) return refuse(ctx, interaction, left.code === "author" ? "authorCannotLeave" : left.code === "notIn" ? "notIn" : "ended");
     await refreshPost(ctx, left.post, interaction.message);
     await say(ctx, interaction, "left", { game: left.post.gameName });
+  },
+
+  /** Starts the group now, with whoever has joined, as if the party had filled. */
+  async lfgStart(interaction, { rest, ctx }) {
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+    const id = postIdOf(rest);
+    const post = id === null ? null : await postById(ctx.guild.id, id);
+    if (!post) return refuse(ctx, interaction, "ended");
+    const moderator = interaction.memberPermissions?.has(PermissionFlagsBits.ManageMessages) ?? false;
+    if (interaction.user.id !== post.authorId && !moderator) return refuse(ctx, interaction, "notAuthor");
+    if (!(await endPost(post.id, "started"))) return refuse(ctx, interaction, "ended");
+    await partyFilled(ctx, { ...post, status: "started" }, interaction.message);
+    await say(ctx, interaction, "startedByYou");
   },
 
   async lfgClose(interaction, { rest, ctx }) {

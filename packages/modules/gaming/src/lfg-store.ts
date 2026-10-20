@@ -105,7 +105,7 @@ export async function leavePost(guildId: string, id: number, userId: string): Pr
  * Ends a post that is still open. Conditional, so the author closing it at the
  * moment it expires ends it once and only one of them goes on to edit the message.
  */
-export async function endPost(id: number, status: "closed" | "expired", voiceChannelId?: string): Promise<boolean> {
+export async function endPost(id: number, status: "closed" | "expired" | "started", voiceChannelId?: string): Promise<boolean> {
   const ended = await prisma.lfgPost.updateMany({
     where: { id, status: "open" },
     data: { status, closedAt: new Date(), ...(voiceChannelId ? { voiceChannelId } : {}) },

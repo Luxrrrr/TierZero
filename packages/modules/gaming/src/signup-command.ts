@@ -146,7 +146,7 @@ async function exportList(ctx: GamingCtx, interaction: ChatInputCommandInteracti
     registered.map(listed),
     waiting.map(listed),
     (id) => ctx.guild.members.cache.get(id)?.displayName ?? id,
-    ctx.settings.labels.waitlistHeading,
+    ctx.settings.signups.labels.waitlistHeading,
   );
   const options = text.length <= FILE_THRESHOLD ? { content: "```\n" + text + "\n```" } : { files: [new AttachmentBuilder(Buffer.from(text, "utf8"), { name: `signup-${event.id}.txt` })] };
   await interaction.editReply({ ...options, allowedMentions: { parse: [] } });

@@ -15,6 +15,7 @@ import type { VoiceRoom } from "@tier0/db";
 import { warn, type GamingCtx } from "./context.js";
 import { bitrateFor, roomName } from "./naming.js";
 import { grant, limitedTo, type Overwrite } from "./overwrites.js";
+import { GROUP_HUB, groupByVoice } from "./group-store.js";
 import { PARTY_HUB, forgetRoom, nextNumber, recordRoom, roomByChannel, roomOwnedBy, roomsOf, setOwner } from "./room-store.js";
 import type { HubSetting } from "./settings.js";
 
@@ -138,7 +139,7 @@ export async function openRoom(ctx: GamingCtx, hub: HubSetting, member: GuildMem
     const number = await nextNumber(ctx.guild.id, hubKey);
     const name = roomName(hub.name, { user: member.displayName, username: member.user.username, number });
     const bitrate = bitrateFor(hub.bitrate, ctx.guild.maximumBitrate);
-    const reason = applyVariables(ctx.settings.labels.roomReason, { user: member.displayName }).slice(0, 512);
+    const reason = applyVariables(ctx.settings.voice.labels.roomReason, { user: member.displayName }).slice(0, 512);
 
     let channel: VoiceBasedChannel;
     try {
@@ -154,17 +155,33 @@ export async function openRoom(ctx: GamingCtx, hub: HubSetting, member: GuildMem
     } catch (error) {
       // The member left before they could be moved, or the bot cannot move them. Either way the room would sit empty.
       warn(`move ${member.id} into their room`)(error);
-      await removeRoom(ctx, channel, ctx.settings.labels.emptyReason);
+      await removeRoom(ctx, channel, ctx.settings.voice.labels.emptyReason);
     }
   } finally {
     making.delete(key);
   }
 }
 
-/** Deletes a room's channel and forgets it. */
-export async function removeRoom(ctx: GamingCtx, channel: VoiceBasedChannel, reason: string): Promise<void> {
-  await channel.delete(reason).catch(warn(`delete room ${channel.id}`));
+const UNKNOWN_CHANNEL = 10003;
+
+/**
+ * Deletes a room's channel and forgets it. A channel Discord refused to delete
+ * stays on record, so the next sweep tries again instead of leaving it behind
+ * with nothing to say it was ever the bot's. False when it is still there.
+ */
+export async function removeRoom(ctx: GamingCtx, channel: VoiceBasedChannel, reason: string): Promise<boolean> {
+  try {
+    await channel.delete(reason);
+  } catch (error) {
+    if ((error as { code?: number }).code !== UNKNOWN_CHANNEL) {
+      const held = ctx.guild.members.me ? channel.permissionsFor(ctx.guild.members.me) : null;
+      const missing = held ? ["ViewChannel", "ManageChannels"].filter((name) => !held.has(name as never)) : [];
+      warn(`delete room ${channel.id}${missing.length > 0 ? ` (the bot lacks ${missing.join(" and ")} there)` : ""}`)(error);
+      return false;
+    }
+  }
   await forgetRoom(channel.id);
+  return true;
 }
 
 const flagNames = (bits: bigint) => Object.fromEntries(new PermissionsBitField(bits).toArray().map((name) => [name, true]));
@@ -204,7 +221,7 @@ export async function tidyRoom(ctx: GamingCtx, room: VoiceRoom, graceMs: number)
   const people = [...channel.members.values()];
   if (people.length === 0) {
     if (Date.now() - room.createdAt.getTime() < graceMs) return;
-    await removeRoom(ctx, channel, ctx.settings.labels.emptyReason);
+    await removeRoom(ctx, channel, ctx.settings.voice.labels.emptyReason);
     return;
   }
   if (channel.members.has(room.ownerId)) return;
@@ -217,6 +234,8 @@ export async function tidyRoom(ctx: GamingCtx, room: VoiceRoom, graceMs: number)
 /** The sweep over every room of the server, for rooms that emptied while the bot was away. */
 export async function sweepRooms(ctx: GamingCtx): Promise<void> {
   for (const room of await roomsOf(ctx.guild.id)) {
+    // A group's channel ends with its group, which has its own sweep. One whose group is gone, because the channel could not be deleted, is tidied like any other.
+    if (room.hubId === GROUP_HUB && (await groupByVoice(ctx.guild.id, room.channelId))) continue;
     await tidyRoom(ctx, room, room.hubId === PARTY_HUB ? PARTY_GRACE_MS : GRACE_MS).catch(warn(`tidy room ${room.channelId}`));
   }
 }

@@ -53,12 +53,12 @@ describe("the settings", () => {
   });
 
   test("refuse a button label past Discord's limit", () => {
-    const result = registry.resolveSettings("gaming", { labels: { lfgJoin: "x".repeat(81) } });
+    const result = registry.resolveSettings("gaming", { lfg: { labels: { lfgJoin: "x".repeat(81) } } });
     assert.ok(!result.ok);
   });
 
   test("refuse a form title past Discord's limit of 45", () => {
-    const result = registry.resolveSettings("gaming", { labels: { formTitle: "x".repeat(46) } });
+    const result = registry.resolveSettings("gaming", { signups: { labels: { formTitle: "x".repeat(46) } } });
     assert.ok(!result.ok);
   });
 

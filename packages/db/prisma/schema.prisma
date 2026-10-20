@@ -37,6 +37,8 @@ model Guild {
   voiceRooms          VoiceRoom[]
   lfgPosts            LfgPost[]
   signupEvents        SignupEvent[]
+  groupPanelPosts     GroupPanelPost[]
+  playGroups          PlayGroup[]
 
   /// The last case number handed out here. It only ever goes up, so a number
   /// that was purged is never given to a different case.
@@ -714,6 +716,51 @@ model VoiceRoom {
   guild Guild @relation(fields: [guildId], references: [id], onDelete: Cascade)
 
   @@index([guildId, hubId])
+  @@index([guildId, ownerId])
+}
+
+/// Where a group panel was posted, so it can be edited in place when its settings change.
+model GroupPanelPost {
+  id        Int      @id @default(autoincrement())
+  guildId   String
+  /// The generated id of the panel row in the settings.
+  panelId   String
+  channelId String
+  messageId String   @unique
+  createdAt DateTime @default(now())
+
+  guild Guild @relation(fields: [guildId], references: [id], onDelete: Cascade)
+
+  @@unique([guildId, panelId])
+}
+
+/// A group a member started from a panel: a voice channel, and once its owner is in it, a private thread with the
+/// controls. The row is deleted when the group ends, and the thread is kept archived.
+model PlayGroup {
+  id                Int       @id @default(autoincrement())
+  guildId           String
+  panelId           String
+  optionId          String
+  ownerId           String
+  voiceChannelId    String    @unique
+  threadId          String?
+  controlsMessageId String?
+  /// The post in the panel channel that tells others the group has room, when its option announces.
+  announcementMessageId String?
+  /// What the group is playing, as the owner typed it or the option set it. Empty when neither.
+  game              String    @default("")
+  /// "waiting" until the owner is in the voice channel, then "active".
+  status            String    @default("waiting")
+  isPrivate         Boolean   @default(false)
+  /// The number the voice channel's name was made with.
+  number            Int       @default(0)
+  /// How long the owner has to join before the voice channel is removed.
+  joinBy            DateTime
+  createdAt         DateTime  @default(now())
+
+  guild Guild @relation(fields: [guildId], references: [id], onDelete: Cascade)
+
+  @@index([guildId, status])
   @@index([guildId, ownerId])
 }
 

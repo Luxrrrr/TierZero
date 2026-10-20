@@ -156,6 +156,13 @@ export const LFG_VARIABLES: MessageVariable[] = [
 
 const partyField = (title: string) => field(title, "{party}", false);
 
+export const LFG_PANEL_VARIABLES: MessageVariable[] = [variable("panel", "The panel's name", "Find players")];
+
+export const LFG_PANEL: MessageBody = card("#5865f2", {
+  title: "Looking for group",
+  description: "Press the button, say what you are playing and how many players you need, and the bot posts it for everyone to join.",
+});
+
 export const LFG_POST: MessageBody = card(
   "#5865f2",
   {
@@ -173,6 +180,14 @@ export const LFG_FULL: MessageBody = card(REPLY_COLOR.success, {
 });
 
 export const LFG_READY: MessageBody = embedReply("The {game} party is full.", "success", { ping: "{party}" });
+
+export const LFG_STARTED: MessageBody = card(REPLY_COLOR.success, {
+  title: "{game}: started",
+  description: "{note}",
+  fields: [partyField("Party"), field("Starts", "{starts}"), field("Voice", "{voice}")],
+});
+
+export const LFG_GO: MessageBody = embedReply("{author} started the {game} group.", "success", { ping: "{party}" });
 
 export const LFG_CLOSED: MessageBody = card(REPLY_COLOR.warning, {
   title: "{game}: closed",
@@ -205,6 +220,12 @@ export const LFG_REPLIES = {
     starting: embedReply("You left the {game} party.", "success"),
     variables: [variable("game", "The game", "Valorant")],
   },
+  startedByYou: {
+    label: "Group started",
+    help: "After the author, or a moderator, presses Start group.",
+    starting: embedReply("The group has started.", "success"),
+    variables: [],
+  },
   closedByYou: {
     label: "Post closed",
     help: "After the author, or a moderator, presses Close.",
@@ -214,16 +235,22 @@ export const LFG_REPLIES = {
 } satisfies Record<string, ReplyDefinition>;
 
 export const LFG_REFUSALS = {
+  disabled: {
+    label: "Looking for group is off",
+    help: "When someone presses a panel's button while the feature is switched off.",
+    starting: embedReply("Looking for group is not available right now.", "error"),
+    variables: [],
+  },
   noGames: {
     label: "No games set up",
-    help: "When /lfg is used before any game is added in the dashboard.",
+    help: "When games are limited to the list and the list is empty.",
     starting: embedReply("No games have been set up for looking for group yet. Ask a server admin to add some.", "error"),
     variables: [],
   },
   unknownGame: {
     label: "Game not found",
-    help: "When the game given to /lfg is not on the list.",
-    starting: embedReply("That game is not on the list. Pick one of the suggestions as you type.", "error"),
+    help: "When games are limited to the list and the game given is not on it.",
+    starting: embedReply("That game is not on this server's list. Pick one of the suggestions as you type, or check the spelling.", "error"),
     variables: [],
   },
   cooldown: {
@@ -293,9 +320,9 @@ export const LFG_REFUSALS = {
     variables: [],
   },
   notAuthor: {
-    label: "Closing someone else's post",
-    help: "When someone who is neither the author nor a moderator presses Close.",
-    starting: embedReply("Only the author, or a moderator, can close this post.", "error"),
+    label: "Using someone else's post",
+    help: "When someone who is neither the author nor a moderator presses Close or Start group.",
+    starting: embedReply("Only the author, or a moderator, can do that to this post.", "error"),
     variables: [],
   },
 } satisfies Record<string, ReplyDefinition>;
@@ -498,3 +525,173 @@ export type LfgReplyKey = keyof typeof LFG_REPLIES;
 export type LfgRefusalKey = keyof typeof LFG_REFUSALS;
 export type SignupReplyKey = keyof typeof SIGNUP_REPLIES;
 export type SignupRefusalKey = keyof typeof SIGNUP_REFUSALS;
+
+// -- group hubs -------------------------------------------------------------------------------------
+
+const G_GROUP = variable("group", "The group's name", "Ada's group");
+const G_ROOM = variable("room", "The group's voice channel, as a link", "#Ada's group");
+const G_THREAD = variable("thread", "The group's thread, as a link", "#Ada's group");
+const G_OPTION = variable("option", "The panel option the group was started from", "Looking for group");
+const G_GAME = variable("game", "What the group is playing, empty when no game was given", "Valorant");
+
+export const GROUP_PANEL_VARIABLES: MessageVariable[] = [variable("panel", "The panel's name", "Find a group")];
+
+export const GROUP_PANEL: MessageBody = card("#5865f2", {
+  title: "Start a group",
+  description: "Pick an option below. The bot makes you a voice channel and a thread to run your group from.",
+});
+
+export const GROUP_VARIABLES: MessageVariable[] = [
+  G_GROUP,
+  variable("owner", "Who runs the group, as a name", "Ada"),
+  G_ROOM,
+  variable("mode", "Open or Private", "Open"),
+  variable("limit", "How many people the voice channel holds, or No limit", "4"),
+  G_OPTION,
+  G_GAME,
+];
+
+export const GROUP_ANNOUNCEMENT_VARIABLES: MessageVariable[] = [
+  ...GROUP_VARIABLES,
+  variable("players", "How many people are in the voice channel now", "2"),
+  variable("spots", "How many places are left, or the no-limit text", "2"),
+  variable("ping", "The role chosen to be pinged, as a mention, when the group is announced. Empty after that.", "@Valorant"),
+];
+
+export const GROUP_ANNOUNCEMENT: MessageBody = card(
+  "#248046",
+  {
+    title: "{group}",
+    description: "{owner} has room for more. Press Join to get in.",
+    fields: [field("Players", "{players}"), field("Places left", "{spots}"), field("Voice channel", "{room}")],
+  },
+  "{ping}",
+);
+
+export const GROUP_CONTROLS: MessageBody = card("#5865f2", {
+  title: "{group}",
+  description: "Run by {owner}. Manage the group with the buttons and menus below, or just talk here.",
+  fields: [field("Voice channel", "{room}"), field("Who can join", "{mode}"), field("Limit", "{limit}")],
+});
+
+export const GROUP_CLOSED: MessageBody = card(REPLY_COLOR.warning, {
+  title: "{group}: ended",
+  description: "This group has ended. The voice channel is gone and this thread is kept so it can be read.",
+});
+
+export const GROUP_REPLIES = {
+  joinPrompt: {
+    label: "Join your voice channel",
+    help: "Shown after a member presses an option while they are not in a voice channel. The countdown updates by itself.",
+    starting: embedReply("Your voice channel {room} is ready. Join it {deadline}, or join any voice channel and the bot moves you in.", "info"),
+    variables: [G_ROOM, variable("deadline", "When the time to join runs out, as a countdown that updates itself", "in 1 minute"), G_GROUP, G_OPTION, G_GAME],
+  },
+  ready: {
+    label: "Group is ready",
+    help: "Shown once the member is in the voice channel and the group's thread exists.",
+    starting: embedReply("You are in {room}. Your group's thread is {thread}.", "success"),
+    variables: [G_ROOM, G_THREAD, G_GROUP, G_OPTION, G_GAME],
+  },
+  ended: {
+    label: "Group ended",
+    help: "Shown to the person who pressed End group.",
+    starting: embedReply("Your group has ended. The voice channel is gone and the thread is kept archived.", "success"),
+    variables: [G_GROUP],
+  },
+  expired: {
+    label: "Time to join ran out",
+    help: "Shown when the member did not join their voice channel in time and it was removed.",
+    starting: embedReply("You did not join **{group}** in time, so it was removed. Press the option again to start over.", "warning"),
+    variables: [G_GROUP, G_OPTION, G_GAME],
+  },
+  joinedGroup: {
+    label: "Joined a group",
+    help: "Shown to a member who presses Join on a group's post. They are moved into the voice channel if they are already in one.",
+    starting: embedReply("You are in. Voice channel: {room}. Thread: {thread}.", "success"),
+    variables: [G_ROOM, G_THREAD, G_GROUP, G_OPTION, G_GAME],
+  },
+  gameChanged: {
+    label: "Game changed",
+    help: "Shown to the person who changed the group's game from its thread.",
+    starting: embedReply("The group is now playing **{game}**. It is called **{group}**.", "success"),
+    variables: [G_GROUP, G_GAME],
+  },
+  leftGroup: {
+    label: "Left a group",
+    help: "Shown to a member who presses Leave on a group's post.",
+    starting: embedReply("You left **{group}**.", "success"),
+    variables: [G_GROUP],
+  },
+} satisfies Record<string, ReplyDefinition>;
+
+export const GROUP_REFUSALS = {
+  disabled: {
+    label: "Groups are off",
+    help: "When someone presses an option while the feature is switched off.",
+    starting: embedReply("Groups are not being started right now.", "error"),
+    variables: [],
+  },
+  optionGone: {
+    label: "Option no longer exists",
+    help: "When someone presses an option that has been removed since the panel was posted.",
+    starting: embedReply("That option is not available any more. Ask a moderator to post the panel again.", "error"),
+    variables: [],
+  },
+  alreadyHave: {
+    label: "Already has a group",
+    help: "When someone who already has a group presses an option.",
+    starting: embedReply("You already have a group: {room}. End it before you start another.", "error"),
+    variables: [G_ROOM],
+  },
+  createFailed: {
+    label: "Voice channel could not be made",
+    help: "When Discord refuses the new voice channel.",
+    starting: embedReply("I could not make your voice channel. A moderator needs to check that I can manage channels there.", "error"),
+    variables: [],
+  },
+  threadFailed: {
+    label: "Thread could not be made",
+    help: "When the group's thread cannot be created, so the voice channel is removed again.",
+    starting: embedReply("I could not make your group's thread, so the voice channel was removed. A moderator needs to check that I can create private threads in the panel's channel.", "error"),
+    variables: [],
+  },
+  moveFailed: {
+    label: "Could not move the member",
+    help: "When the bot cannot move the member into their voice channel.",
+    starting: embedReply("I could not move you into {room}. Join it yourself {deadline} and the group will start.", "warning"),
+    variables: [G_ROOM, variable("deadline", "When the time to join runs out, as a countdown that updates itself", "in 1 minute")],
+  },
+  notManager: {
+    label: "Not allowed to manage the group",
+    help: "When someone who is not the group's owner or a manager presses a control.",
+    starting: embedReply("Only the person who started this group, and the people the server chose to manage groups, can do that.", "error"),
+    variables: [],
+  },
+  groupGone: {
+    label: "Group has ended",
+    help: "When a control is used after the group has ended.",
+    starting: embedReply("This group has ended.", "error"),
+    variables: [],
+  },
+  groupPrivate: {
+    label: "Group is private",
+    help: "When someone presses Join on a post whose group was made private since.",
+    starting: embedReply("This group is private now. Ask {owner} to invite you.", "error"),
+    variables: [variable("owner", "Who runs the group, as a name", "Ada")],
+  },
+  groupFull: {
+    label: "Group is full",
+    help: "When someone presses Join and the voice channel has no places left.",
+    starting: embedReply("**{group}** is full.", "error"),
+    variables: [G_GROUP],
+  },
+  ownerCannotLeave: {
+    label: "The owner pressed Leave",
+    help: "When the person who runs the group presses Leave. They can hand the group over or end it from the thread.",
+    starting: embedReply("You run this group. Hand it to someone else or end it from the thread.", "error"),
+    variables: [],
+  },
+} satisfies Record<string, ReplyDefinition>;
+
+export type GroupReplyKey = keyof typeof GROUP_REPLIES;
+export type GroupRefusalKey = keyof typeof GROUP_REFUSALS;

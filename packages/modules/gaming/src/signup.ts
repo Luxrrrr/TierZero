@@ -67,7 +67,7 @@ export function valuesOf(event: EventWithEntries): ReplyValues {
 
 export const eventRows = (ctx: GamingCtx, event: EventWithEntries): ActionRowBuilder<MessageActionRowComponentBuilder>[] => {
   if (event.status !== "open") return [];
-  const { signupJoin, signupLeave } = ctx.settings.labels;
+  const { signupJoin, signupLeave } = ctx.settings.signups.labels;
   return [
     new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(
       new ButtonBuilder().setCustomId(customId("gaming", "signupJoin", String(event.id))).setLabel(signupJoin).setStyle(ButtonStyle.Success),
@@ -293,7 +293,7 @@ async function replyEphemeral(ctx: GamingCtx, interaction: Answerable, key: Sign
 }
 
 function teamForm(ctx: GamingCtx, event: EventWithEntries): ModalBuilder {
-  const { formTitle, teamNameLabel, teamNamePlaceholder, teammatesLabel, teammatesPlaceholder } = ctx.settings.labels;
+  const { formTitle, teamNameLabel, teamNamePlaceholder, teammatesLabel, teammatesPlaceholder } = ctx.settings.signups.labels;
   return new ModalBuilder()
     .setCustomId(customId("gaming", "signupTeam", String(event.id)))
     .setTitle(formTitle)
