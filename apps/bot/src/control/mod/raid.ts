@@ -13,7 +13,7 @@ import {
   type ModuleContext,
   type RaidStatusDto,
 } from "@tier0/core";
-import { createInfraction, prisma } from "@tier0/db";
+import { createInfraction, instanceOwnerId, prisma } from "@tier0/db";
 import {
   botCanLock,
   fetchMemberOrNull,
@@ -219,7 +219,7 @@ async function membersByIds(guild: Guild, ids: string[]): Promise<Map<string, Gu
 
 async function staffIds(guildId: string): Promise<Set<string>> {
   const rows = await prisma.staffMember.findMany({ where: { guildId }, select: { userId: true } });
-  const owner = process.env.INSTANCE_OWNER_ID || (await prisma.instance.findUnique({ where: { id: 1 } }))?.ownerId;
+  const owner = await instanceOwnerId();
   return new Set([...rows.map((row) => row.userId), ...(owner ? [owner] : [])]);
 }
 

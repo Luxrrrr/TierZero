@@ -1,5 +1,5 @@
 import type { Client } from "discord.js";
-import { prisma } from "@tier0/db";
+import { instanceOwnerId, prisma } from "@tier0/db";
 
 interface UserLike {
   id: string;
@@ -41,12 +41,6 @@ export async function syncInstanceOwner(client: Client): Promise<string | null> 
     update: { ownerId },
   });
   return ownerId;
-}
-
-/** Who owns the install: INSTANCE_OWNER_ID when set, else what the bot recorded from the application. */
-export async function instanceOwnerId(): Promise<string | null> {
-  if (process.env.INSTANCE_OWNER_ID) return process.env.INSTANCE_OWNER_ID;
-  return (await prisma.instance.findUnique({ where: { id: 1 }, select: { ownerId: true } }))?.ownerId ?? null;
 }
 
 export async function isInstanceOwner(userId: string): Promise<boolean> {

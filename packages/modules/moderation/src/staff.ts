@@ -1,5 +1,5 @@
 import type { StaffRole } from "@tier0/core";
-import { prisma } from "@tier0/db";
+import { instanceOwnerId, prisma } from "@tier0/db";
 
 /**
  * Where a Discord user stands on the moderation staff list of one server. The
@@ -9,8 +9,7 @@ import { prisma } from "@tier0/db";
  * only ever name admin or mod.
  */
 export async function staffRoleOf(guildId: string, userId: string): Promise<StaffRole | null> {
-  const ownerId = process.env.INSTANCE_OWNER_ID || (await prisma.instance.findUnique({ where: { id: 1 } }))?.ownerId;
-  if (ownerId && ownerId === userId) return "owner";
+  if ((await instanceOwnerId()) === userId) return "owner";
 
   const row = await prisma.staffMember.findUnique({ where: { guildId_userId: { guildId, userId } } });
   return row && (row.role === "admin" || row.role === "mod") ? row.role : null;

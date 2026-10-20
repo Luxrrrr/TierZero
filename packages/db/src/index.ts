@@ -14,3 +14,4 @@ export * from "@prisma/client";
 
 export { isUniqueConflict } from "./case-number.js";
 export { createInfraction } from "./infractions.js";
+export { instanceOwnerId } from "./instance-owner.js";

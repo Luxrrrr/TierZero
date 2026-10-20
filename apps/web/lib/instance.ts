@@ -1,6 +1,4 @@
-import { prisma } from "@tier0/db";
-
-const INSTANCE_ID = 1;
+import { instanceOwnerId, prisma } from "@tier0/db";
 
 async function discordIdFor(userId: string): Promise<string | null> {
   const account = await prisma.account.findFirst({
@@ -14,12 +12,8 @@ async function discordIdFor(userId: string): Promise<string | null> {
  * Discord application, which the bot records each time it connects
  * (apps/bot/src/instance-owner.ts). Nothing on the web side can set it.
  */
-export async function getInstanceOwnerId(): Promise<string | null> {
-  const override = process.env.INSTANCE_OWNER_ID;
-  if (override) return override;
-
-  const instance = await prisma.instance.findUnique({ where: { id: INSTANCE_ID } });
-  return instance?.ownerId ?? null;
+export function getInstanceOwnerId(): Promise<string | null> {
+  return instanceOwnerId();
 }
 
 export async function isInstanceClaimed(): Promise<boolean> {

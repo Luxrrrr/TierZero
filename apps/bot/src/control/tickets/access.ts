@@ -1,5 +1,5 @@
 import { PermissionFlagsBits, type Guild } from "discord.js";
-import { prisma } from "@tier0/db";
+import { instanceOwnerId } from "@tier0/db";
 import { ticketAccess, type TicketAccess, type TicketActor } from "@tier0/core";
 import { rememberBounded, withinBudget } from "../mod/names.js";
 import { accessSettingsOf, type TicketSettings } from "./runtime.js";
@@ -34,13 +34,11 @@ const FACTS_MAX = 2000;
 const remembered = new Map<string, { facts: ViewerFacts; until: number }>();
 let owner: { id: string | null; until: number } | null = null;
 
-/** The person running the install, from the same two places moderation reads it. */
-async function instanceOwnerId(): Promise<string | null> {
-  const fromEnv = process.env.INSTANCE_OWNER_ID;
-  if (fromEnv) return fromEnv;
+/** The person running the install, remembered for a minute since every ticket request asks. */
+async function cachedOwnerId(): Promise<string | null> {
+  if (process.env.INSTANCE_OWNER_ID) return process.env.INSTANCE_OWNER_ID;
   if (owner && owner.until > Date.now()) return owner.id;
-  const row = await prisma.instance.findUnique({ where: { id: 1 }, select: { ownerId: true } });
-  owner = { id: row?.ownerId ?? null, until: Date.now() + OWNER_TTL_MS };
+  owner = { id: await instanceOwnerId(), until: Date.now() + OWNER_TTL_MS };
   return owner.id;
 }
 
@@ -57,7 +55,7 @@ export async function viewerFacts(guild: Guild, userId: string): Promise<ViewerF
 
   const [member, ownerId] = await Promise.all([
     withinBudget(guild.members.fetch(userId).catch(() => null), null),
-    instanceOwnerId(),
+    cachedOwnerId(),
   ]);
   const facts: ViewerFacts = member
     ? {
