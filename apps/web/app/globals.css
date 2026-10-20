@@ -1956,6 +1956,31 @@ html:not([data-theme="light"]):not([data-theme="dark"]) .theme-toggle [data-them
   margin-bottom: var(--space-3);
 }
 
+.subgroup-fold > summary {
+  cursor: pointer;
+  list-style: none;
+}
+
+.subgroup-fold > summary::-webkit-details-marker {
+  display: none;
+}
+
+.subgroup-fold > summary::before {
+  content: "\25B8";
+  display: inline-block;
+  width: 1.1em;
+  color: var(--text-tertiary);
+  transition: transform 120ms ease;
+}
+
+.subgroup-fold[open] > summary::before {
+  transform: rotate(90deg);
+}
+
+.subgroup-fold[open] > summary {
+  margin-bottom: var(--space-3);
+}
+
 .form-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));

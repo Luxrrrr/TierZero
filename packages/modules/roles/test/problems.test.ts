@@ -29,12 +29,16 @@ const TODAY = {
   tooMany: "You can have at most {max} roles from {menu}. Remove one first.",
 } as const;
 
-type Replies = Record<keyof typeof TODAY, MessageBody>;
+const SHARED = ["noMenu", "channelGone", "editFailed", "postFailed", "inactive"] as const;
+const PER_MENU = ["optionGone", "cannotAssign", "roleChangeFailed", "needsRole", "tooMany"] as const;
+
+type Replies = Record<(typeof SHARED)[number], MessageBody>;
+type MenuReplies = Record<(typeof PER_MENU)[number], MessageBody>;
 
 function resolve(stored: unknown = {}) {
   const result = registry.resolveSettings("roles", stored);
   assert.ok(result.ok, result.ok ? "" : result.errors[0]?.message);
-  return result.value as { menus: unknown[]; replies: Replies };
+  return result.value as { menus: { replies: MenuReplies }[]; replies: Replies };
 }
 
 interface Told {
@@ -92,29 +96,44 @@ const button = () => ({ isButton: () => true, message: { id: MESSAGE }, user: { 
 
 describe("the replies", () => {
   test("say what they always have until the owner writes another", () => {
-    const { replies } = resolve();
-    for (const [key, text] of Object.entries(TODAY)) {
-      assert.equal(replies[key as keyof Replies].embeds[0]?.description, text, key);
-      assert.equal(replies[key as keyof Replies].embeds[0]?.color, REPLY_COLOR.error, key);
-      assert.equal(replies[key as keyof Replies].content, "", key);
-      assert.deepEqual(replies[key as keyof Replies], PROBLEMS[key as keyof typeof PROBLEMS].starting, key);
+    const { replies, menus } = resolve({ menus: [menu] });
+    const own = menus[0]!.replies;
+    for (const key of SHARED) {
+      assert.equal(replies[key].embeds[0]?.description, TODAY[key], key);
+      assert.equal(replies[key].embeds[0]?.color, REPLY_COLOR.error, key);
+      assert.equal(replies[key].content, "", key);
+      assert.deepEqual(replies[key], PROBLEMS[key].starting, key);
+    }
+    for (const key of PER_MENU) {
+      assert.equal(own[key].embeds[0]?.description, TODAY[key], key);
+      assert.deepEqual(own[key], PROBLEMS[key].starting, key);
     }
   });
 
   test("use the owner's wording, and keep the ones they did not touch", () => {
-    const { replies } = resolve({ replies: { noMenu: "Nothing called {name}.", gave: "Added {role}!" } });
+    const { replies } = resolve({ replies: { noMenu: "Nothing called {name}." } });
     assert.equal(replies.noMenu.content, "Nothing called {name}.");
     assert.equal(replies.channelGone.embeds[0]?.description, TODAY.channelGone);
   });
 
-  test("are one collapsible group of compact messages", () => {
+  test("the shared replies are one collapsible group of compact messages", () => {
     const summary = registry.describe().find((entry) => entry.id === "roles");
     const group = (summary?.schema.fields as Record<string, FieldDescriptor>).replies;
     assert.equal(group?.collapsible, true);
     assert.equal(group?.label, "Replies and errors");
     const fields = Object.values(group?.fields as Record<string, FieldDescriptor>);
-    assert.equal(fields.length, 16);
+    assert.equal(fields.length, 6);
     assert.ok(fields.every((field) => field.kind === "message" && field.compact === true));
+  });
+
+  test("each menu has its own collapsible group of replies", () => {
+    const summary = registry.describe().find((entry) => entry.id === "roles");
+    const row = ((summary?.schema.fields as Record<string, FieldDescriptor>).menus?.of ?? {}) as FieldDescriptor;
+    const group = (row.fields as Record<string, FieldDescriptor>).replies;
+    assert.equal(group?.collapsible, true);
+    const fields = Object.entries(group?.fields as Record<string, FieldDescriptor>);
+    assert.equal(fields.filter(([, field]) => field.kind === "message").length, 10);
+    assert.ok(fields.some(([key]) => key === "noRoles"));
   });
 });
 

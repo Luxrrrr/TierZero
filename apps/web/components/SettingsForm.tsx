@@ -722,9 +722,8 @@ function renderChild(
   if (field.kind === "object") {
     const childFields = (field.fields ?? {}) as Fields;
     const childValues = asRecord(values[key]);
-    return (
-      <div className="subgroup" key={key}>
-        <h3 className="subgroup-title">{field.label ?? humanize(key)}</h3>
+    const body = (
+      <>
         {field.help ? <p className="field-help">{field.help}</p> : null}
         {dependency ? <p className="field-dependency">{dependency}</p> : null}
         <div className="form-grid">
@@ -737,6 +736,22 @@ function renderChild(
             (next) => setValue(next),
           )}
         </div>
+      </>
+    );
+    // A group inside a row can fold up, so a long run of messages does not bury the row's other settings. One with a mistake in it stays open.
+    if (field.collapsible === true) {
+      const failing = Object.keys(ctx.errors).some((errorPath) => errorPath.startsWith(`${path}.`));
+      return (
+        <details className="subgroup subgroup-fold" key={key} open={failing || undefined}>
+          <summary className="subgroup-title">{field.label ?? humanize(key)}</summary>
+          {body}
+        </details>
+      );
+    }
+    return (
+      <div className="subgroup" key={key}>
+        <h3 className="subgroup-title">{field.label ?? humanize(key)}</h3>
+        {body}
       </div>
     );
   }

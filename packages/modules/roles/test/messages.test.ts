@@ -14,10 +14,11 @@ interface Menu {
   name: string;
   message: MessageBody;
   options: unknown[];
+  replies: { gave: MessageBody; removed: MessageBody; tooMany: MessageBody; noRoles: string };
 }
 interface Resolved {
   menus: Menu[];
-  replies: { gave: MessageBody; removed: MessageBody; published: MessageBody };
+  replies: { published: MessageBody };
 }
 
 function resolve(stored: unknown): Resolved {
@@ -87,15 +88,16 @@ describe("the menu message", () => {
 
 describe("the replies", () => {
   test("say what they always have", () => {
-    const { replies } = resolve({});
-    assert.equal(applyVariables(replies.gave.embeds[0]?.description ?? "", { role: "Gamers" }), "Gave you **Gamers**.");
-    assert.equal(applyVariables(replies.removed.embeds[0]?.description ?? "", { role: "Gamers" }), "Removed **Gamers**.");
+    const { menus, replies } = resolve({ menus: [{ name: "Pings", channel: CHANNEL, options: [option] }] });
+    const own = menus[0]!.replies;
+    assert.equal(applyVariables(own.gave.embeds[0]?.description ?? "", { role: "Gamers" }), "Gave you **Gamers**.");
+    assert.equal(applyVariables(own.removed.embeds[0]?.description ?? "", { role: "Gamers" }), "Removed **Gamers**.");
     assert.equal(
       applyVariables(replies.published.embeds[0]?.description ?? "", { menu: "Pings", menuChannel: `<#${CHANNEL}>` }),
       `Published "Pings" in <#${CHANNEL}>.`,
     );
-    assert.deepEqual(replies.gave, GAVE_MESSAGE);
-    assert.deepEqual(replies.removed, REMOVED_MESSAGE);
+    assert.deepEqual(own.gave, GAVE_MESSAGE);
+    assert.deepEqual(own.removed, REMOVED_MESSAGE);
     assert.deepEqual(replies.published, PUBLISHED_MESSAGE);
   });
 
@@ -107,15 +109,37 @@ describe("the replies", () => {
     }
   });
 
-  test("use the owner's wording once it is written", () => {
-    const { replies } = resolve({ replies: { gave: "You now have {role}!" } });
-    assert.equal(replies.gave.content, "You now have {role}!");
-    assert.deepEqual(replies.removed, REMOVED_MESSAGE);
+  test("use the owner's wording once it is written, for that menu only", () => {
+    const { menus } = resolve({
+      menus: [
+        { name: "Games", channel: CHANNEL, options: [option], replies: { gave: "You now have {role}!" } },
+        { name: "Community", channel: CHANNEL, options: [option] },
+      ],
+    });
+    assert.equal(menus[0]!.replies.gave.content, "You now have {role}!");
+    assert.deepEqual(menus[0]!.replies.removed, REMOVED_MESSAGE);
+    assert.deepEqual(menus[1]!.replies.gave, GAVE_MESSAGE);
   });
 
   test("an embed reply is kept", () => {
-    const { replies } = resolve({ replies: { removed: { content: "", embeds: [{ description: "Bye {role}" }] } } });
-    assert.equal(replies.removed.embeds[0]?.description, "Bye {role}");
+    const { menus } = resolve({ menus: [{ name: "Pings", channel: CHANNEL, options: [option], replies: { removed: { content: "", embeds: [{ description: "Bye {role}" }] } } }] });
+    assert.equal(menus[0]!.replies.removed.embeds[0]?.description, "Bye {role}");
     assert.deepEqual(plainReply("").embeds, []);
+  });
+
+  test("a menu with none of its own starts from what the whole server had", () => {
+    const { menus } = resolve({
+      replies: { gave: "Shared {role}!", tooMany: "Shared limit." },
+      labels: { noRoles: "nothing" },
+      menus: [
+        { name: "Old", channel: CHANNEL, options: [option] },
+        { name: "New", channel: CHANNEL, options: [option], replies: { gave: "Mine {role}!" } },
+      ],
+    });
+    assert.equal(menus[0]!.replies.gave.content, "Shared {role}!");
+    assert.equal(menus[0]!.replies.tooMany.content, "Shared limit.");
+    assert.equal(menus[0]!.replies.noRoles, "nothing");
+    assert.equal(menus[1]!.replies.gave.content, "Mine {role}!");
+    assert.deepEqual(menus[1]!.replies.removed, REMOVED_MESSAGE);
   });
 });

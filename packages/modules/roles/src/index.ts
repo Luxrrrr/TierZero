@@ -16,6 +16,7 @@ import {
   isRoleAssignable,
   s,
   type Infer,
+  type MessageBody,
   type ModuleContext,
   type ReplyValues,
   type RowHooks,
@@ -74,6 +75,87 @@ const optionField = s.object({
     max: 100,
   }),
 });
+
+/**
+ * What a menu says to the member who uses it. Each menu has its own, so a menu
+ * for game roles can talk differently from one for community roles. A menu the
+ * owner has not reworded says what the defaults do.
+ */
+const menuReplies = s.object(
+  {
+      gave: s.message({
+        label: "When a role is given",
+        help: "Shown after a button gives a role.",
+        starting: GAVE_MESSAGE,
+        variables: TOGGLE_VARIABLES,
+        delivery: "dm",
+        components: false,
+        compact: true,
+        audience: "private",
+        note: "Only the member who pressed the button sees this.",
+      }),
+      removed: s.message({
+        label: "When a role is taken away",
+        help: "Shown after a button takes a role away.",
+        starting: REMOVED_MESSAGE,
+        variables: TOGGLE_VARIABLES,
+        delivery: "dm",
+        components: false,
+        compact: true,
+        audience: "private",
+        note: "Only the member who pressed the button sees this.",
+      }),
+      alreadyHad: s.message({
+        label: "When a member already has the role",
+        help: "Shown after a button on a menu that only gives roles is pressed by someone who has the role.",
+        starting: ALREADY_HAD_MESSAGE,
+        variables: TOGGLE_VARIABLES,
+        delivery: "dm",
+        components: false,
+        compact: true,
+        audience: "private",
+        note: "Only the member who pressed the button sees this.",
+      }),
+      didNotHave: s.message({
+        label: "When a member does not have the role",
+        help: "Shown after a button on a menu that only takes roles away is pressed by someone without the role.",
+        starting: DID_NOT_HAVE_MESSAGE,
+        variables: TOGGLE_VARIABLES,
+        delivery: "dm",
+        components: false,
+        compact: true,
+        audience: "private",
+        note: "Only the member who pressed the button sees this.",
+      }),
+      updated: s.message({
+        label: "After a pick from a dropdown",
+        help: "Shown after a member picks from a dropdown menu.",
+        starting: UPDATED_MESSAGE,
+        variables: UPDATED_VARIABLES,
+        delivery: "dm",
+        components: false,
+        compact: true,
+        audience: "private",
+        note: "Only the member who picked sees this.",
+      }),
+    optionGone: problemField("optionGone"),
+    cannotAssign: problemField("cannotAssign"),
+    roleChangeFailed: problemField("roleChangeFailed"),
+    needsRole: problemField("needsRole"),
+    tooMany: problemField("tooMany"),
+    noRoles: s.string({
+      label: "No roles left from this menu",
+      help: "Fills {roles} in the reply to a dropdown pick when the member has none of the menu's roles left.",
+      default: DEFAULT_LABELS.noRoles,
+      max: 100,
+    }),
+  },
+  {
+    label: "Replies and errors",
+    help: "What the bot says to a member who uses this menu, including when it has to refuse. Open one to reword it.",
+    collapsible: true,
+  },
+);
 
 const menuField = s.object(
   {
@@ -140,6 +222,7 @@ const menuField = s.object(
       optional: true,
     }),
     options: s.array(optionField, { min: 1, max: 25, label: "Roles" }),
+    replies: menuReplies,
     id: s.string({ generated: true }),
   },
   { upgrade: upgradeMenu },
@@ -156,61 +239,6 @@ const settingsSchema = s.object(
     }),
     replies: s.object(
       {
-        gave: s.message({
-          label: "When a role is given",
-          help: "Shown after a button gives a role.",
-          starting: GAVE_MESSAGE,
-          variables: TOGGLE_VARIABLES,
-          delivery: "dm",
-          components: false,
-          compact: true,
-          audience: "private",
-          note: "Only the member who pressed the button sees this.",
-        }),
-        removed: s.message({
-          label: "When a role is taken away",
-          help: "Shown after a button takes a role away.",
-          starting: REMOVED_MESSAGE,
-          variables: TOGGLE_VARIABLES,
-          delivery: "dm",
-          components: false,
-          compact: true,
-          audience: "private",
-          note: "Only the member who pressed the button sees this.",
-        }),
-        alreadyHad: s.message({
-          label: "When a member already has the role",
-          help: "Shown after a button on a menu that only gives roles is pressed by someone who has the role.",
-          starting: ALREADY_HAD_MESSAGE,
-          variables: TOGGLE_VARIABLES,
-          delivery: "dm",
-          components: false,
-          compact: true,
-          audience: "private",
-          note: "Only the member who pressed the button sees this.",
-        }),
-        didNotHave: s.message({
-          label: "When a member does not have the role",
-          help: "Shown after a button on a menu that only takes roles away is pressed by someone without the role.",
-          starting: DID_NOT_HAVE_MESSAGE,
-          variables: TOGGLE_VARIABLES,
-          delivery: "dm",
-          components: false,
-          compact: true,
-          audience: "private",
-          note: "Only the member who pressed the button sees this.",
-        }),
-        updated: s.message({
-          label: "After a pick from a dropdown",
-          help: "Shown after a member picks from a dropdown menu.",
-          starting: UPDATED_MESSAGE,
-          variables: UPDATED_VARIABLES,
-          delivery: "dm",
-          components: false,
-          compact: true,
-          audience: "private",
-          note: "Only the member who picked sees this.",
-        }),
         published: s.message({
           label: "After /rolemenu publishes a menu",
           starting: PUBLISHED_MESSAGE,
@@ -226,28 +254,12 @@ const settingsSchema = s.object(
         editFailed: problemField("editFailed"),
         postFailed: problemField("postFailed"),
         inactive: problemField("inactive"),
-        optionGone: problemField("optionGone"),
-        cannotAssign: problemField("cannotAssign"),
-        roleChangeFailed: problemField("roleChangeFailed"),
-        needsRole: problemField("needsRole"),
-        tooMany: problemField("tooMany"),
       },
       {
         label: "Replies and errors",
         help: "What the bot says to members and moderators, including when it has to refuse. Open one to reword it.",
         collapsible: true,
       },
-    ),
-    labels: s.object(
-      {
-        noRoles: s.string({
-          label: "No roles from a menu",
-          help: "Fills {roles} in the reply to a dropdown pick when the member has none of the menu's roles left.",
-          default: DEFAULT_LABELS.noRoles,
-          max: 100,
-        }),
-      },
-      { label: "Labels and text", help: "Words the bot puts into its replies.", collapsible: true },
     ),
   },
   { upgrade: upgradeMenus },
@@ -310,7 +322,7 @@ async function deletePost(ctx: Ctx, post: ReactionRoleMenu): Promise<void> {
   await prisma.reactionRoleMenu.delete({ where: { id: post.id } }).catch(() => {});
 }
 
-type PublishResult = { ok: true; updated: boolean; channelId: string } | { ok: false; problem: ProblemKey };
+type PublishResult = { ok: true; updated: boolean; channelId: string } | { ok: false; problem: Exclude<ProblemKey, MenuProblemKey> };
 
 /**
  * Posts a menu, or edits its posted message in place when it is still in the
@@ -406,14 +418,54 @@ const menuRows: RowHooks<RolesSettings> = {
   },
 };
 
+/** The wording of the menu a post was made from, if that menu is still in the settings. A removed menu falls back to the defaults. */
+function repliesOf(ctx: Ctx, mapping: MenuMapping): MenuSettings["replies"] | undefined {
+  const id = menuIdOf(mapping);
+  return ctx.settings.menus.find((menu) => menuIdOf(menu) === id)?.replies;
+}
+
+type MenuReplyKey = "gave" | "removed" | "alreadyHad" | "didNotHave" | "updated";
+type MenuProblemKey = "optionGone" | "cannotAssign" | "roleChangeFailed" | "needsRole" | "tooMany";
+
+const MENU_REPLY_DEFAULTS: Record<MenuReplyKey, MessageBody> = {
+  gave: GAVE_MESSAGE,
+  removed: REMOVED_MESSAGE,
+  alreadyHad: ALREADY_HAD_MESSAGE,
+  didNotHave: DID_NOT_HAVE_MESSAGE,
+  updated: UPDATED_MESSAGE,
+};
+
+async function say(ctx: Ctx, interaction: RepliableInteraction | MessageComponentInteraction, mapping: MenuMapping, key: MenuReplyKey, values: ReplyValues): Promise<void> {
+  await ctx.reply(interaction, repliesOf(ctx, mapping)?.[key] ?? MENU_REPLY_DEFAULTS[key], values, { fallback: MENU_REPLY_DEFAULTS[key] });
+}
+
+/** A refusal about a menu is worded by that menu, and one with no menu to name by the settings as a whole. */
+async function tell(
+  ctx: Ctx,
+  interaction: RepliableInteraction | MessageComponentInteraction,
+  key: Exclude<ProblemKey, MenuProblemKey>,
+  values?: ReplyValues,
+): Promise<void>;
+async function tell(
+  ctx: Ctx,
+  interaction: RepliableInteraction | MessageComponentInteraction,
+  key: MenuProblemKey,
+  values: ReplyValues,
+  mapping: MenuMapping,
+): Promise<void>;
 async function tell(
   ctx: Ctx,
   interaction: RepliableInteraction | MessageComponentInteraction,
   key: ProblemKey,
   values: ReplyValues = {},
+  mapping?: MenuMapping,
 ): Promise<void> {
-  await ctx.reply(interaction, ctx.settings.replies[key], values, { fallback: PROBLEMS[key].starting });
+  const own = mapping && key in MENU_PROBLEM_KEYS ? repliesOf(ctx, mapping)?.[key as MenuProblemKey] : undefined;
+  const body = own ?? (key in MENU_PROBLEM_KEYS ? PROBLEMS[key].starting : ctx.settings.replies[key as Exclude<ProblemKey, MenuProblemKey>]);
+  await ctx.reply(interaction, body, values, { fallback: PROBLEMS[key].starting });
 }
+
+const MENU_PROBLEM_KEYS: Record<MenuProblemKey, true> = { optionGone: true, cannotAssign: true, roleChangeFailed: true, needsRole: true, tooMany: true };
 
 /** Removes, then adds. Resolves to the first role Discord refused, or null. */
 async function changeRoles(member: GuildMember, toRemove: string[], toAdd: string[]): Promise<string | null> {
@@ -443,14 +495,14 @@ async function applyPick(
   const menuRoles = mapping.options.map((option) => option.role);
   const valid = picked.filter((id) => menuRoles.includes(id) && ctx.guild.roles.cache.get(id) !== undefined);
   if (valid.length === 0 || (via === "button" && valid.length !== picked.length)) {
-    await tell(ctx, interaction, "optionGone");
+    await tell(ctx, interaction, "optionGone", { menu: mapping.name }, mapping);
     return;
   }
 
   const member = await ctx.guild.members.fetch(interaction.user.id);
   if (mapping.requiredRole && !member.roles.cache.has(mapping.requiredRole)) {
     const required = ctx.guild.roles.cache.get(mapping.requiredRole)?.name ?? mapping.requiredRole;
-    await tell(ctx, interaction, "needsRole", { required, menu: mapping.name });
+    await tell(ctx, interaction, "needsRole", { required, menu: mapping.name }, mapping);
     return;
   }
 
@@ -463,20 +515,20 @@ async function applyPick(
     ...(mapping.maxPicks !== undefined ? { maxPicks: mapping.maxPicks } : {}),
   });
   if (!change.ok) {
-    await tell(ctx, interaction, "tooMany", { max: change.max, menu: mapping.name });
+    await tell(ctx, interaction, "tooMany", { max: change.max, menu: mapping.name }, mapping);
     return;
   }
 
   const botHighest = ctx.guild.members.me?.roles.highest.position ?? 0;
   const tooHigh = change.toAdd.map((id) => ctx.guild.roles.cache.get(id)).find((role) => role && !isRoleAssignable(role.position, botHighest));
   if (tooHigh) {
-    await tell(ctx, interaction, "cannotAssign", { role: tooHigh.name, menu: mapping.name });
+    await tell(ctx, interaction, "cannotAssign", { role: tooHigh.name, menu: mapping.name }, mapping);
     return;
   }
 
   const failed = await changeRoles(member, change.toRemove, change.toAdd);
   if (failed) {
-    await tell(ctx, interaction, "roleChangeFailed", { role: ctx.guild.roles.cache.get(failed)?.name ?? failed, menu: mapping.name });
+    await tell(ctx, interaction, "roleChangeFailed", { role: ctx.guild.roles.cache.get(failed)?.name ?? failed, menu: mapping.name }, mapping);
     return;
   }
 
@@ -485,31 +537,19 @@ async function applyPick(
     const gave = change.toAdd.includes(pressed);
     if (!gave && !change.toRemove.includes(pressed)) {
       const had = mapping.mode !== "take";
-      await ctx.reply(
-        interaction,
-        had ? ctx.settings.replies.alreadyHad : ctx.settings.replies.didNotHave,
-        { role: ctx.guild.roles.cache.get(pressed)?.name ?? pressed, menu: mapping.name },
-        { fallback: had ? ALREADY_HAD_MESSAGE : DID_NOT_HAVE_MESSAGE },
-      );
+      await say(ctx, interaction, mapping, had ? "alreadyHad" : "didNotHave", { role: ctx.guild.roles.cache.get(pressed)?.name ?? pressed, menu: mapping.name });
       return;
     }
-    await ctx.reply(
-      interaction,
-      gave ? ctx.settings.replies.gave : ctx.settings.replies.removed,
-      { role: ctx.guild.roles.cache.get(pressed)?.name ?? pressed, menu: mapping.name },
-      { fallback: gave ? GAVE_MESSAGE : REMOVED_MESSAGE },
-    );
+    await say(ctx, interaction, mapping, gave ? "gave" : "removed", { role: ctx.guild.roles.cache.get(pressed)?.name ?? pressed, menu: mapping.name });
     return;
   }
 
   const held = new Set([...current.filter((id) => !change.toRemove.includes(id)), ...change.toAdd]);
   const names = mapping.options.filter((option) => held.has(option.role)).map((option) => ctx.guild.roles.cache.get(option.role)?.name ?? option.label);
-  await ctx.reply(
-    interaction,
-    ctx.settings.replies.updated,
-    { roles: names.length > 0 ? names.join(", ") : ctx.settings.labels.noRoles, menu: mapping.name },
-    { fallback: UPDATED_MESSAGE },
-  );
+  await say(ctx, interaction, mapping, "updated", {
+    roles: names.length > 0 ? names.join(", ") : (repliesOf(ctx, mapping)?.noRoles ?? DEFAULT_LABELS.noRoles),
+    menu: mapping.name,
+  });
 }
 
 export default defineModule({

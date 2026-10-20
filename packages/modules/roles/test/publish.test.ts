@@ -274,9 +274,9 @@ describe("pressing and picking", () => {
   test("a role Discord refuses to give is reported, not announced as given", async () => {
     const { settings, messageId } = await posted({});
     await roles.components!.toggle!(press(messageId), { rest: PC, ctx: context(settings, { refuse: true }).ctx });
-    assert.deepEqual(told[0]?.body, settings.replies.roleChangeFailed);
+    assert.deepEqual(told[0]?.body, settings.menus[0]!.replies.roleChangeFailed);
     assert.deepEqual(told[0]?.values, { role: "PC", menu: "Platforms" });
-    assert.deepEqual(settings.replies.roleChangeFailed, PROBLEMS.roleChangeFailed.starting);
+    assert.deepEqual(settings.menus[0]!.replies.roleChangeFailed, PROBLEMS.roleChangeFailed.starting);
   });
 
   test("a menu that needs a role turns away a member without it", async () => {

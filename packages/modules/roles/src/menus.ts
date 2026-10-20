@@ -28,23 +28,45 @@ export function legacyMenuId(name: string): string {
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
+/** What was shared by every menu before each menu worded its own replies. */
+const SHARED_REPLY_KEYS = ["gave", "removed", "alreadyHad", "didNotHave", "updated", "optionGone", "cannotAssign", "roleChangeFailed", "needsRole", "tooMany"];
+
 /**
- * Fills in the id of every menu that has none. The first menu with a name gets
+ * A menu with no replies of its own starts from the wording the whole server had
+ * for them, so a server that reworded a reply keeps it on every menu.
+ */
+function inheritedReplies(stored: Record<string, unknown>): Record<string, unknown> {
+  const shared = isRecord(stored.replies) ? stored.replies : {};
+  const labels = isRecord(stored.labels) ? stored.labels : {};
+  const own: Record<string, unknown> = {};
+  for (const key of SHARED_REPLY_KEYS) if (shared[key] !== undefined) own[key] = shared[key];
+  if (typeof labels.noRoles === "string") own.noRoles = labels.noRoles;
+  return own;
+}
+
+/**
+ * Fills in the id of every menu that has none, and gives a menu that has no
+ * replies of its own the ones the server had. The first menu with a name gets
  * the name's id, which is the one an old post is matched to, as `/rolemenu`
  * always picked the first menu with the name typed. Leaves current values alone.
  */
 export function upgradeMenus(stored: Record<string, unknown>): Record<string, unknown> {
   const menus = stored.menus;
-  if (!Array.isArray(menus) || menus.every((menu) => !isRecord(menu) || typeof menu.id === "string")) return stored;
+  if (!Array.isArray(menus)) return stored;
+  const inherited = inheritedReplies(stored);
+  const needsReplies = (menu: unknown) => isRecord(menu) && menu.replies === undefined && Object.keys(inherited).length > 0;
+  if (menus.every((menu) => (!isRecord(menu) || typeof menu.id === "string") && !needsReplies(menu))) return stored;
 
   const taken = new Set(menus.flatMap((menu) => (isRecord(menu) && typeof menu.id === "string" ? [menu.id] : [])));
   const next = menus.map((menu) => {
-    if (!isRecord(menu) || typeof menu.id === "string") return menu;
+    if (!isRecord(menu)) return menu;
+    const seeded = needsReplies(menu) ? { ...menu, replies: inherited } : menu;
+    if (typeof menu.id === "string") return seeded;
     const base = legacyMenuId(typeof menu.name === "string" ? menu.name : "");
     let id = base;
     for (let n = 2; taken.has(id); n++) id = `${base}-${n}`;
     taken.add(id);
-    return { ...menu, id };
+    return { ...seeded, id };
   });
   return { ...stored, menus: next };
 }

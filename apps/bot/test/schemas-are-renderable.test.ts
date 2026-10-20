@@ -160,13 +160,11 @@ describe("every registered module", () => {
       walk(module.schema, "", (field, path) => {
         const where = `${module.id}.${path}`;
         if (field.collapsible !== undefined) {
-          assert.ok(
-            field.kind === "object" && top[path] === field,
-            `${where} is collapsible but is not a top-level group, so the dashboard ignores it`,
-          );
+          assert.ok(field.kind === "object", `${where} is collapsible but is not a group, so the dashboard ignores it`);
         }
         if (field.summary !== undefined) {
           assert.equal(field.collapsible, true, `${where} has a summary but is not collapsible`);
+          assert.ok(top[path] === field, `${where} has a summary but is not a top-level group, so the dashboard ignores it`);
           const children = (field.fields ?? {}) as Record<string, FieldDescriptor>;
           for (const key of field.summary as string[]) {
             assert.ok(key in children, `${where} summarises ${key}, which is not one of its fields`);
