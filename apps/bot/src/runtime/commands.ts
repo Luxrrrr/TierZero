@@ -139,8 +139,11 @@ export class CommandSync {
     const overrides = await prisma.commandOverride.findMany({ where: { guildId } });
     const byCommand = new Map(overrides.map((o) => [o.command, o]));
 
-    return modules
-      .flatMap((module) => [...(module.commands ?? []), ...(module.contextCommands ?? [])])
+    const own = (await this.state.guildCommands(guildId)).map((entry) => entry.command);
+    return [
+      ...modules.flatMap((module) => [...(module.commands ?? []), ...(module.contextCommands ?? [])]),
+      ...own,
+    ]
       .filter((command) => byCommand.get(command.name)?.enabled !== false)
       .map((command) => {
         const json: { default_member_permissions?: string | null } = command.build().toJSON();

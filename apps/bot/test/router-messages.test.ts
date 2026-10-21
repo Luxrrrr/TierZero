@@ -58,6 +58,7 @@ function fakeState(options: { enabled?: boolean; policy?: ReturnType<typeof poli
     commandPolicy: async () => options.policy ?? policy(),
     context: async () => ({ settings: {} }) as never,
     systemSettings: async () => options.settings ?? settingsWith({}),
+    guildCommands: async () => [],
   };
 }
 
@@ -234,6 +235,35 @@ describe("a command that is not ours or has no server", () => {
     const { interaction, sent } = fakeInteraction();
     (interaction as { commandName: string }).commandName = "unknown";
     await run(fakeState(), interaction);
+    assert.equal(sent.length, 0);
+  });
+});
+
+describe("a command a server made up for itself", () => {
+  const own = {
+    name: "rules",
+    description: "Show the rules.",
+    build: () => ({ toJSON: () => ({ name: "rules" }) }) as never,
+    async run() {
+      ran += 1;
+    },
+  };
+  const owner = registry.get("leveling")!;
+
+  test("is found in that server's own list and run by the module that made it", async () => {
+    const { interaction } = fakeInteraction();
+    (interaction as { commandName: string }).commandName = "rules";
+    const before = ran;
+    await run({ ...fakeState(), guildCommands: async () => [{ module: owner, command: own as never }] }, interaction);
+    assert.equal(ran, before + 1);
+  });
+
+  test("is ignored in a server whose list does not have it", async () => {
+    const { interaction, sent } = fakeInteraction();
+    (interaction as { commandName: string }).commandName = "rules";
+    const before = ran;
+    await run(fakeState(), interaction);
+    assert.equal(ran, before);
     assert.equal(sent.length, 0);
   });
 });

@@ -250,6 +250,11 @@ interface StringOptions extends FieldMeta {
    * from an `upgrade`.
    */
   generated?: boolean;
+  /**
+   * What the text has to look like, for a value Discord is strict about, such
+   * as a command name. `message` is shown beside the field when it does not.
+   */
+  pattern?: { test: RegExp; message: string };
 }
 
 /** What a generated id may look like: short, and safe in a custom id or a URL. */
@@ -261,7 +266,7 @@ export function generatedId(): string {
 }
 
 function string(options: StringOptions = {}): Field<string> {
-  const { min, max, multiline, origin, url, generated, default: def, ...rest } = options;
+  const { min, max, multiline, origin, url, generated, pattern, default: def, ...rest } = options;
   const meta: FieldMeta = generated ? { ...rest, optional: true } : rest;
   return {
     kind: "string",
@@ -279,6 +284,7 @@ function string(options: StringOptions = {}): Field<string> {
       if (max !== undefined && input.length > max) {
         return fail(path, `must be at most ${max} characters`);
       }
+      if (pattern && !pattern.test.test(input)) return fail(path, pattern.message);
       if (origin) {
         const normalized = normalizeOrigin(input);
         return normalized === null ? fail(path, "must be a web address starting with http:// or https://") : { ok: true, value: normalized };

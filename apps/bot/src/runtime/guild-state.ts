@@ -1,5 +1,6 @@
 import type { Client, Guild } from "discord.js";
 import type {
+  CommandDefinition,
   CommandSummary,
   FieldError,
   MessageBody,
@@ -136,6 +137,34 @@ export class GuildState {
     }
     guildPolicies.set(command, policy);
     return policy;
+  }
+
+  /**
+   * The commands a server's own settings add, from every enabled module that
+   * makes some. A name a built-in command already holds, or one made earlier in
+   * the list, is dropped, so a made-up command can never take over a real one.
+   */
+  async guildCommands(guildId: string): Promise<{ module: ModuleDefinition; command: CommandDefinition }[]> {
+    const found: { module: ModuleDefinition; command: CommandDefinition }[] = [];
+    const taken = new Set<string>();
+    for (const module of await this.enabledModules(guildId)) {
+      if (!module.guildCommands) continue;
+      const settings = await this.settings(guildId, module.id);
+      if (!settings) continue;
+      let made: CommandDefinition[];
+      try {
+        made = module.guildCommands(settings as never) as CommandDefinition[];
+      } catch (error) {
+        console.error(`[${module.id}] could not make its commands for guild ${guildId}:`, error);
+        continue;
+      }
+      for (const command of made) {
+        if (this.registry.ownerOf(command.name) !== undefined || taken.has(command.name)) continue;
+        taken.add(command.name);
+        found.push({ module, command });
+      }
+    }
+    return found;
   }
 
   /** Looks a module up without going through the registry directly. */

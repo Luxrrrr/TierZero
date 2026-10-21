@@ -10,7 +10,7 @@ import type { GuildState } from "./guild-state.js";
 import { replySystem } from "./system-messages.js";
 
 /** What the router needs from the guild state, so a test can stand in for it. */
-export type RouterState = Pick<GuildState, "isEnabled" | "commandPolicy" | "context" | "systemSettings">;
+export type RouterState = Pick<GuildState, "isEnabled" | "commandPolicy" | "context" | "systemSettings" | "guildCommands">;
 
 export type CommandInteraction = ChatInputCommandInteraction | ContextMenuCommandInteraction;
 
@@ -76,7 +76,11 @@ export async function handleCommand(
   const guild = interaction.guild;
   if (!guild) return;
 
-  const moduleId = registry.ownerOf(interaction.commandName);
+  // A command a server made up for itself has no owner in the registry, so it is found in that server's own list.
+  const own = registry.ownerOf(interaction.commandName) === undefined
+    ? (await state.guildCommands(guild.id)).find((entry) => entry.command.name === interaction.commandName)
+    : undefined;
+  const moduleId = registry.ownerOf(interaction.commandName) ?? own?.module.id;
   if (!moduleId) return;
 
   const command = commandLabel(interaction);
@@ -141,7 +145,7 @@ export async function handleCommand(
       if (!entry) return;
       await entry.run(interaction, ctx);
     } else if (interaction.isChatInputCommand()) {
-      const entry = module.commands?.find((c) => c.name === interaction.commandName);
+      const entry = own?.command ?? module.commands?.find((c) => c.name === interaction.commandName);
       if (!entry) return;
       await entry.run(interaction, ctx);
     }

@@ -86,6 +86,22 @@ export function registerEventDispatch({ client, state }: Deps): void {
     );
   });
 
+  client.on(Events.MessageReactionAdd, async (reaction, user) => {
+    if (user.bot || !reaction.message.guild) return;
+    const guild = reaction.message.guild;
+    await deliver(state, guild, "reactionAdd", (handler, ctx) =>
+      (handler as EventHandlers["reactionAdd"])(reaction, user, ctx),
+    );
+  });
+
+  client.on(Events.MessageReactionRemove, async (reaction, user) => {
+    if (user.bot || !reaction.message.guild) return;
+    const guild = reaction.message.guild;
+    await deliver(state, guild, "reactionRemove", (handler, ctx) =>
+      (handler as EventHandlers["reactionRemove"])(reaction, user, ctx),
+    );
+  });
+
   client.on(Events.GuildMemberAdd, async (member) => {
     await deliver(state, member.guild, "memberJoin", (handler, ctx) =>
       (handler as EventHandlers["memberJoin"])(member, ctx),

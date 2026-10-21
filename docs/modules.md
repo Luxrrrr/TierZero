@@ -60,6 +60,8 @@ Every builder takes `label`, `help` and `optional`. A field with a `default` fal
 
 `s.template` takes `samples`, the values its preview shows for each placeholder, as in `samples: { position: "1", xp: "1,250" }`. Common names (`user`, `username`, `level`, `memberCount`) have stand-ins already, and `{server}` shows the real server's name. `preview: "channel"` previews the text as the channel name Discord would make of it (`# ticket-fragmuffin`) instead of as a message.
 
+`s.string({ pattern: { test, message } })` refuses text that does not match, with `message` as the reason, for a value Discord is strict about such as a command name. It runs on read as well as on save.
+
 `s.string({ url: true })` holds a whole http(s) address, such as a feed's, and refuses anything else. The dashboard gives it a whole row. Like every validator it also runs on read, so adding it to a setting that may already hold a bad address needs an `upgrade` that clears or fixes those values, or the module stops loading its settings.
 
 ### Extra keys
@@ -395,6 +397,8 @@ Command names are unique across all modules, and the registry throws on a duplic
 
 Commands are registered per server and re-synced, debounced by five seconds, when a module is toggled or an override changes.
 
+A module whose commands come from a server's own settings, such as ones an owner makes up, declares `guildCommands(settings)` in place of listing them in `commands`. It returns command definitions for that server, and they are registered there only and re-synced whenever the module's settings are saved. A name a built-in command holds is dropped, and so is a repeat, so one of these can never take over a real command. The router finds them through the guild state, not the registry, so they are not in the registry's list of commands or on the Commands page.
+
 Subcommands come from what `build()` registers: the registry lists them as `subcommands` on the command summary, keyed `command sub` or `command group sub` (`ticket close`). Each key gets its own `CommandOverride` row with `enabled`, `allowRoles` and the channel rules; the router checks the whole command first, then the part, and answers a part that is off with the `commandOff` system message. A part has no permission, visibility or reply of its own, and changing one doesn't re-register anything, since Discord can't hide a subcommand. A module needs nothing extra for this.
 
 An option built with `setAutocomplete(true)` gets its suggestions from the command's `autocomplete(interaction, ctx)`, which answers with `interaction.respond`. It's only called while the module is on in that server, and the role and channel rules aren't checked since nothing runs. A command without it answers with an empty list.
@@ -446,6 +450,7 @@ All optional, and only called for servers where the module is on.
 | `inviteCreate(invite, ctx)` / `inviteDelete` | an invite is made or deleted |
 | `emojiCreate(emoji, ctx)` / `emojiUpdate(before, after, ctx)` / `emojiDelete` | an emoji is added, renamed or removed |
 | `stickerCreate(sticker, ctx)` / `stickerUpdate(before, after, ctx)` / `stickerDelete` | a sticker is added, changed or removed |
+| `reactionAdd(reaction, user, ctx)` / `reactionRemove` | a reaction is added or removed, bots excluded. Both arguments can be partials, so fetch them first |
 | `auditLogEntry(entry, ctx)` | a new line in the server's audit log. The only way to see a kick. Needs View Audit Log |
 
 Partials are on, so an object the bot never cached arrives with most fields null. Handle that. Each handler runs in its own try/catch, so a throw is logged with the module id and the other modules still get the event.

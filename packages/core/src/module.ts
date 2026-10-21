@@ -19,8 +19,11 @@ import type {
   MessageComponentInteraction,
   ModalSubmitInteraction,
   Message,
+  MessageReaction,
   PartialGuildMember,
   PartialMessage,
+  PartialMessageReaction,
+  PartialUser,
   RepliableInteraction,
   Role,
   TextBasedChannel,
@@ -276,6 +279,9 @@ export interface EventHandlers<T = unknown> {
   auditLogEntry(entry: GuildAuditLogsEntry, ctx: ModuleContext<T>): Promise<void>;
   banAdd(ban: GuildBan, ctx: ModuleContext<T>): Promise<void>;
   banRemove(ban: GuildBan, ctx: ModuleContext<T>): Promise<void>;
+  /** Either argument may be a partial, so fetch it before reading what it does not carry. Reactions by bots are not delivered. */
+  reactionAdd(reaction: MessageReaction | PartialMessageReaction, user: User | PartialUser, ctx: ModuleContext<T>): Promise<void>;
+  reactionRemove(reaction: MessageReaction | PartialMessageReaction, user: User | PartialUser, ctx: ModuleContext<T>): Promise<void>;
 }
 
 /**
@@ -431,6 +437,13 @@ export interface ModuleDefinition<S extends Shape = Shape> {
   alwaysOn?: boolean;
   settings: ObjectField<S>;
   commands?: CommandDefinition<ShapeValues<S>>[];
+  /**
+   * Commands that come from a server's own settings, such as ones its owner
+   * made up, so they are registered in that server only and follow its settings
+   * as they change. A name a built-in command already uses is left out, and so
+   * is a repeat.
+   */
+  guildCommands?(settings: ShapeValues<S>): CommandDefinition<ShapeValues<S>>[];
   /** Entries for Discord's right-click menu on members and messages. */
   contextCommands?: ContextCommandDefinition<ShapeValues<S>>[];
   events?: Partial<EventHandlers<ShapeValues<S>>>;
