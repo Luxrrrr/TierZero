@@ -1,11 +1,12 @@
-import { emptyEmbed, type MessageEmbed } from "@tier0/core";
+import { emptyEmbed, readButtons, readSelects, type MessageEmbed } from "@tier0/core";
 import type { MessageDraft } from "../components/messages/MessageForm";
 
 /**
- * The text and embeds of a message as the JSON Discord's API and most embed
- * tools use, so a message can be copied out of here or built somewhere else and
- * pasted in. Buttons, menus and reactions are not part of it and stay as they
- * are when code is applied.
+ * A message as JSON, so it can be copied out of here or built somewhere else and
+ * pasted in. The text and embeds are written the way Discord's API writes them.
+ * Buttons, menus and reactions follow in the form this dashboard keeps them,
+ * since Discord's own form has nowhere to put what a button does. When pasted
+ * code leaves one of those out, what the message already has is kept.
  */
 
 type Json = Record<string, unknown>;
@@ -45,11 +46,14 @@ function embedToCode(embed: MessageEmbed): Json {
   return out;
 }
 
-/** The message's text and embeds as formatted JSON. */
-export function toCode(draft: Pick<MessageDraft, "content" | "embeds">): string {
+/** The whole message as formatted JSON. Buttons, menus and reactions are left out while there are none. */
+export function toCode(draft: MessageDraft): string {
   const out: Json = {};
   if (draft.content) out.content = draft.content;
   out.embeds = draft.embeds.map(embedToCode);
+  if (draft.buttons.length > 0) out.buttons = draft.buttons;
+  if (draft.selects.length > 0) out.selects = draft.selects;
+  if (draft.reactions.length > 0) out.reactions = draft.reactions;
   return JSON.stringify(out, null, 2);
 }
 
@@ -80,15 +84,15 @@ function embedFromCode(raw: Json, name: string): MessageEmbed {
 
 const EMBED_KEYS = ["title", "description", "fields", "author", "footer", "image", "thumbnail", "color", "url"];
 
-export type CodeResult = { ok: true; value: Pick<MessageDraft, "content" | "embeds"> } | { ok: false; error: string };
+export type CodeResult = { ok: true; value: MessageDraft } | { ok: false; error: string };
 
 /**
- * Reads pasted JSON back into text and embeds. It takes a whole message
- * (`content` and `embeds`), a message with one `embed`, a list of embeds, or a
- * single embed on its own. A pasted message without `content` keeps the text
- * already there, so pasting just an embed doesn't wipe it.
+ * Reads pasted JSON back into a message. It takes a whole message, a message
+ * with one `embed`, a list of embeds, or a single embed on its own. Anything the
+ * code leaves out, the text, the buttons, the menus or the reactions, is kept as
+ * it is, so pasting just an embed doesn't wipe the rest.
  */
-export function fromCode(text: string, current: Pick<MessageDraft, "content" | "embeds">): CodeResult {
+export function fromCode(text: string, current: MessageDraft): CodeResult {
   let parsed: unknown;
   try {
     parsed = JSON.parse(text);
@@ -97,16 +101,27 @@ export function fromCode(text: string, current: Pick<MessageDraft, "content" | "
   }
 
   let content = current.content;
+  let buttons = current.buttons;
+  let selects = current.selects;
+  let reactions = current.reactions;
+  let keepEmbeds = false;
   let rawEmbeds: unknown[];
   if (Array.isArray(parsed)) {
     rawEmbeds = parsed;
   } else if (isRecord(parsed)) {
     if (typeof parsed.content === "string") content = parsed.content;
+    if ("buttons" in parsed) buttons = readButtons(parsed.buttons);
+    if ("selects" in parsed) selects = readSelects(parsed.selects);
+    if ("reactions" in parsed) reactions = (Array.isArray(parsed.reactions) ? parsed.reactions : []).filter((entry): entry is string => typeof entry === "string");
+    const hasComponents = "buttons" in parsed || "selects" in parsed || "reactions" in parsed;
     if (Array.isArray(parsed.embeds)) rawEmbeds = parsed.embeds;
     else if (isRecord(parsed.embed)) rawEmbeds = [parsed.embed];
     else if (EMBED_KEYS.some((key) => key in parsed)) rawEmbeds = [parsed];
-    else if ("content" in parsed) rawEmbeds = [];
-    else return { ok: false, error: "This has no content or embeds in it. Expected a message with content and embeds, or an embed." };
+    else if ("content" in parsed || hasComponents) {
+      rawEmbeds = [];
+      keepEmbeds = true;
+    }
+    else return { ok: false, error: "This has no content, embeds, buttons or menus in it. Expected a message, or an embed." };
   } else {
     return { ok: false, error: "Expected a message or an embed written as a JSON object." };
   }
@@ -116,5 +131,5 @@ export function fromCode(text: string, current: Pick<MessageDraft, "content" | "
     if (!isRecord(entry)) return { ok: false, error: `Embed ${index + 1} should be an object.` };
     embeds.push(embedFromCode(entry, current.embeds[index]?.name ?? ""));
   }
-  return { ok: true, value: { content, embeds } };
+  return { ok: true, value: { content, embeds: keepEmbeds ? current.embeds : embeds, buttons, selects, reactions } };
 }

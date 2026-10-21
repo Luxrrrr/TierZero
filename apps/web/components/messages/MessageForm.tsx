@@ -160,7 +160,7 @@ function MessageFormBody({ guildId, value, onChange, errors, variables, showReac
         <ReactionsEditor guildId={guildId} reactions={value.reactions} errors={errors} onChange={(reactions) => onChange({ ...value, reactions })} />
       ) : null}
 
-      <CodeView value={value} onChange={onChange} />
+      <CodeView value={value} onChange={onChange} components={components !== "none"} reactions={showReactions} />
 
       {shown.length > 0 ? (
         <div className="msg-problems" role="alert">
@@ -179,24 +179,35 @@ function MessageFormBody({ guildId, value, onChange, errors, variables, showReac
 }
 
 /**
- * The message's text and embeds as JSON, for copying out or pasting in. While
- * the box has not been typed in it follows the form, and once it has, it keeps
- * what was typed until it is applied or the form is shown again.
+ * The message as JSON, for copying out or pasting in. While the box has not been
+ * typed in it follows the form, and once it has, it keeps what was typed until it
+ * is applied or discarded. Only what this message can carry is shown: a reply
+ * with no room for menus has none in its code, and code that brings some is not
+ * applied to it.
  */
-function CodeView({ value, onChange }: { value: MessageDraft; onChange(next: MessageDraft): void }) {
+function CodeView({ value, onChange, components, reactions }: { value: MessageDraft; onChange(next: MessageDraft): void; components: boolean; reactions: boolean }) {
   const [typed, setTyped] = useState<string | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
-  const generated = useMemo(() => toCode(value), [value]);
+  const visible = useMemo<MessageDraft>(
+    () => ({ ...value, buttons: components ? value.buttons : [], selects: components ? value.selects : [], reactions: reactions ? value.reactions : [] }),
+    [value, components, reactions],
+  );
+  const generated = useMemo(() => toCode(visible), [visible]);
   const shown = typed ?? generated;
 
   function apply() {
-    const result = fromCode(typed ?? generated, value);
+    const result = fromCode(typed ?? generated, visible);
     if (!result.ok) {
       setProblem(result.error);
       return;
     }
-    onChange({ ...value, ...result.value });
+    onChange({
+      ...result.value,
+      buttons: components ? result.value.buttons : value.buttons,
+      selects: components ? result.value.selects : value.selects,
+      reactions: reactions ? result.value.reactions : value.reactions,
+    });
     setTyped(null);
     setProblem(null);
   }
@@ -215,7 +226,7 @@ function CodeView({ value, onChange }: { value: MessageDraft; onChange(next: Mes
     <details className="card msg-card msg-code">
       <summary className="field-label">Code</summary>
       <p className="field-hint">
-        The text and embeds as JSON, the form Discord uses, so you can copy it out or paste one made elsewhere. Buttons, menus and reactions aren't part of it and stay as they are.
+        The message as JSON, so you can copy it out or paste one made elsewhere. Text and embeds are written the way Discord writes them. Buttons, menus and reactions follow in the form this dashboard keeps them, with what each one does. Anything the code leaves out stays as it is.
       </p>
       <textarea
         className="textarea msg-code-box"
