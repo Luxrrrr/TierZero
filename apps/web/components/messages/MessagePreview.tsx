@@ -168,7 +168,7 @@ function EmbedPreview({ embed, raw, names }: { embed: MessageEmbed; raw: Message
           ) : null}
           {embed.title ? (
             <p className="msg-embed-title">
-              {titleLink ? <a href={titleLink}>{renderInline(embed.title, names)}</a> : renderInline(embed.title, names)}
+              {titleLink ? <a href={titleLink}>{renderInline(embed.title, names, false)}</a> : renderInline(embed.title, names, false)}
             </p>
           ) : null}
           {embed.description ? <div className="msg-embed-desc">{renderMarkdown(embed.description, names)}</div> : null}
@@ -178,7 +178,7 @@ function EmbedPreview({ embed, raw, names }: { embed: MessageEmbed; raw: Message
                 <div className="msg-embed-row" key={i} style={{ gridTemplateColumns: `repeat(${row.length}, minmax(0, 1fr))` }}>
                   {row.map((field, j) => (
                     <div key={j}>
-                      <p className="msg-embed-field-name">{renderInline(field.name, names)}</p>
+                      <p className="msg-embed-field-name">{renderInline(field.name, names, false)}</p>
                       <div className="msg-embed-field-value">{renderMarkdown(field.value, names)}</div>
                     </div>
                   ))}
@@ -261,15 +261,19 @@ export function renderEmoji(token: string): ReactNode {
 }
 
 const INLINE =
-  /(\|\|[^|]+\|\||\*\*[^*]+\*\*|__[^_]+__|~~[^~]+~~|\*[^*]+\*|_[^_]+_|`[^`]+`|<t:\d+(?::[tTdDfFR])?>|<@&\d+>|<#\d+>|<@!?\d+>|<a?:\w+:\d+>|@everyone|@here|https?:\/\/[^\s<>]+)/g;
+  /(\|\|[^|]+\|\||\*\*[^*]+\*\*|__[^_]+__|~~[^~]+~~|\*[^*]+\*|_[^_]+_|`[^`]+`|<t:\d+(?::[tTdDfFR])?>|<@&\d+>|<#\d+>|<@!?\d+>|<a?:\w+:\d+>|@everyone|@here|\[[^\]\n]+\]\(https?:\/\/[^\s)]+\)|https?:\/\/[^\s<>]+)/g;
 
-/** One line of Discord formatting. Nothing here can carry markup of its own. */
-export function renderInline(text: string, names: Names): ReactNode[] {
+/**
+ * One line of Discord formatting. Nothing here can carry markup of its own.
+ * `[text](address)` is a link only where Discord makes it one, which is message
+ * text, an embed's description and its field values, and not titles or field names.
+ */
+export function renderInline(text: string, names: Names, links = true): ReactNode[] {
   return text.split(INLINE).map((part, i) => {
     if (part === "") return null;
     const wrapped = (open: string, node: (children: ReactNode[]) => ReactNode) =>
       part.startsWith(open) && part.endsWith(open) && part.length > open.length * 2
-        ? node(renderInline(part.slice(open.length, -open.length), names))
+        ? node(renderInline(part.slice(open.length, -open.length), names, links))
         : undefined;
     const strong = wrapped("**", (c) => <strong key={i}>{c}</strong>);
     if (strong) return strong;
@@ -296,6 +300,14 @@ export function renderInline(text: string, names: Names): ReactNode[] {
     if (user?.[1]) return <span key={i} className="msg-mention">@{names.users?.get(user[1]) ?? "user"}</span>;
     if (/^<a?:\w+:\d+>$/.test(part)) return <Fragment key={i}>{renderEmoji(part)}</Fragment>;
     if (part === "@everyone" || part === "@here") return <span key={i} className="msg-mention">{part}</span>;
+    const masked = links ? /^\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)$/.exec(part) : null;
+    if (masked?.[1] && masked[2]) {
+      return (
+        <a key={i} href={isHttpUrl(masked[2]) ? masked[2] : undefined} target="_blank" rel="noopener noreferrer">
+          {renderInline(masked[1], names, false)}
+        </a>
+      );
+    }
     if (/^https?:\/\//.test(part)) {
       return (
         <a key={i} href={isHttpUrl(part) ? part : undefined} target="_blank" rel="noopener noreferrer">
