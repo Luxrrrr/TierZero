@@ -25,6 +25,8 @@ export const INVITE_PERMISSION_BITS = {
   MentionEveryone: 1n << 17n,
   /** Reactions and buttons with another server's emoji. */
   UseExternalEmojis: 1n << 18n,
+  /** The Automations feature's nickname step. */
+  ManageNicknames: 1n << 27n,
   /** Voice rooms: the bot joins the room it makes for someone and moves them into it. */
   Connect: 1n << 20n,
   MoveMembers: 1n << 24n,

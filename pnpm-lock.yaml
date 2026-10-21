@@ -42,9 +42,15 @@ importers:
       '@tier0/module-auditlog':
         specifier: workspace:*
         version: link:../../packages/modules/auditlog
+      '@tier0/module-automations':
+        specifier: workspace:*
+        version: link:../../packages/modules/automations
       '@tier0/module-automod':
         specifier: workspace:*
         version: link:../../packages/modules/automod
+      '@tier0/module-customcommands':
+        specifier: workspace:*
+        version: link:../../packages/modules/customcommands
       '@tier0/module-feeds':
         specifier: workspace:*
         version: link:../../packages/modules/feeds
@@ -163,6 +169,18 @@ importers:
         specifier: ^14.16.0
         version: 14.27.0
 
+  packages/modules/automations:
+    dependencies:
+      '@tier0/core':
+        specifier: workspace:*
+        version: link:../../core
+      '@tier0/workflow':
+        specifier: workspace:*
+        version: link:../../workflow
+      discord.js:
+        specifier: ^14.16.0
+        version: 14.27.0
+
   packages/modules/automod:
     dependencies:
       '@tier0/core':
@@ -177,6 +195,18 @@ importers:
       '@tier0/shared-moderation':
         specifier: workspace:*
         version: link:../../shared/moderation
+      discord.js:
+        specifier: ^14.16.0
+        version: 14.27.0
+
+  packages/modules/customcommands:
+    dependencies:
+      '@tier0/core':
+        specifier: workspace:*
+        version: link:../../core
+      '@tier0/workflow':
+        specifier: workspace:*
+        version: link:../../workflow
       discord.js:
         specifier: ^14.16.0
         version: 14.27.0
@@ -333,6 +363,18 @@ importers:
       '@tier0/shared-moderation':
         specifier: workspace:*
         version: link:../moderation
+
+  packages/workflow:
+    dependencies:
+      '@tier0/core':
+        specifier: workspace:*
+        version: link:../core
+      '@tier0/db':
+        specifier: workspace:*
+        version: link:../db
+      discord.js:
+        specifier: ^14.16.0
+        version: 14.27.0
 
 packages:
 

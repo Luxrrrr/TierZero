@@ -30,6 +30,8 @@ A dashboard crash doesn't drop the gateway connection, and the dashboard can run
 
 `packages/shared/moderation` and `packages/shared/tickets` hold the rules and shapes that the bot, the feature module and the dashboard have to agree on: who may do what, the form of each reply, parsing, and the server log catalog. The dashboard loads them, so they import neither discord.js nor the database. A lint rule enforces that. They sit between core and the modules: `shared/tickets` uses `shared/moderation`, and both use core.
 
+`packages/workflow` is the engine Automations and Custom commands both run on: the steps a workflow can carry out and the schema that describes them, the runner with its If, Else and End if blocks, the counters it keeps in the database, the checks and limits, the schedule maths, and how a command's options are read. It uses discord.js and the database, so the dashboard does not load it. A module picks which kinds of step it offers.
+
 The dashboard imports core, the shared packages and the database package, and never the bot or a module.
 
 ### Control API

@@ -165,7 +165,7 @@ The first time, it downloads and builds everything it needs. That takes a few mi
 Paste this into your browser's address bar. Replace `YOUR_APPLICATION_ID` with the Application ID from your notepad before you press Enter:
 
 ```
-https://discord.com/oauth2/authorize?client_id=YOUR_APPLICATION_ID&permissions=1495472270550&scope=bot%20applications.commands
+https://discord.com/oauth2/authorize?client_id=YOUR_APPLICATION_ID&permissions=1495606488278&scope=bot%20applications.commands
 ```
 
 Choose your server and click **Authorize**. The bot appears in your member list. It asks for every permission its features might need, and it doesn't use one until you switch on the feature that needs it. Leave them all ticked: if one is missing later, the feature it belongs to says so on your server's overview. The Invite button on the dashboard's **Your servers** page uses the same link.

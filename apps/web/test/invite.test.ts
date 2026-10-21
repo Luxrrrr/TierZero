@@ -19,6 +19,7 @@ const DOCUMENTED: Record<string, number> = {
   UseExternalEmojis: 18,
   Connect: 20,
   MoveMembers: 24,
+  ManageNicknames: 27,
   ManageRoles: 28,
   ManageWebhooks: 29,
   ManageThreads: 34,
@@ -36,7 +37,7 @@ describe("the invite link's permissions", () => {
   });
 
   test("the number is exactly those bits", () => {
-    assert.equal(INVITE_PERMISSIONS, "1495472270550");
+    assert.equal(INVITE_PERMISSIONS, "1495606488278");
   });
 
   test("asks for what the features use beyond the basics", () => {
