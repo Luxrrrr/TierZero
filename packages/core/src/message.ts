@@ -300,6 +300,8 @@ export interface SendOptions {
   asName: string;
   /** The picture to go with that name. */
   asAvatarUrl: string;
+  /** Keeps it at the bottom of the channel afterwards, as a sticky message. */
+  sticky: boolean;
 }
 
 export const SEND_NAME_MAX = 80;
@@ -348,6 +350,7 @@ export function parseSendOptions(
       allowEveryone: source.allowEveryone === true,
       asName,
       asAvatarUrl,
+      sticky: source.sticky === true,
     },
   };
 }

@@ -162,7 +162,9 @@ export default defineModule({
       if (!row.channel) continue;
       const before = live(previous).find((entry) => entry.channel === row.channel);
       const same = before && JSON.stringify(before.message) === JSON.stringify(row.message);
-      if (same && (await isPosted(ctx.guild.id, row.channel))) continue;
+      const posted = await isPosted(ctx.guild.id, row.channel);
+      // A row with no earlier version but a copy already out was made from a message that was just sent, so that message is the copy.
+      if ((same || !before) && posted) continue;
       await repost(ctx, row);
     }
   },

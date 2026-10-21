@@ -25,6 +25,7 @@ import { TRUSTED_SEND, roleActionsOf, senderIdOf, senderProblem } from "./messag
 import { firstEmptyLimitedMenu, namesOf, toDiscordPayload } from "./message-payload.js";
 import { ok, refuse, type Reply } from "./mod/types.js";
 import { createSchedule, deleteSchedule, listSchedules } from "./message-schedules.js";
+import type { StickyKeeper } from "./sticky.js";
 
 export interface MessagesRequest {
   guild: Guild;
@@ -34,6 +35,8 @@ export interface MessagesRequest {
   body: unknown;
   /** The owner's short pieces of text; the defaults apply without them. */
   labels?: SystemLabels;
+  /** Makes a message just sent the channel's sticky message, when the person asked for that. */
+  keepSticky?: StickyKeeper;
 }
 
 /** Enough for any real server, and a ceiling on what one install can be made to store. */
@@ -100,7 +103,7 @@ const templateDto = (row: TemplateRow) => ({
 
 /** Routes one request under `/guilds/:id/messages/`. Returns null for a path that matches nothing. */
 export async function handleMessages(request: MessagesRequest): Promise<Reply | null> {
-  const { guild, method, segments, body, labels = LABEL_DEFAULTS } = request;
+  const { guild, method, segments, body, labels = LABEL_DEFAULTS, keepSticky } = request;
   const [area, rawId] = segments;
   const payload = isRecord(body) ? body : {};
 
@@ -124,7 +127,7 @@ export async function handleMessages(request: MessagesRequest): Promise<Reply | 
 
   if (method === "GET" && area === "emojis" && rawId === undefined) return listEmojis(guild);
 
-  if (method === "POST" && area === "send" && rawId === undefined) return sendMessage(guild, payload, labels);
+  if (method === "POST" && area === "send" && rawId === undefined) return sendMessage(guild, payload, labels, recordSend, keepSticky);
   if (method === "POST" && area === "edit" && rawId === undefined) return editSentMessage(guild, payload, labels);
 
   if (method === "GET" && area === "templates" && rawId !== undefined && segments[2] === "sends" && segments.length === 3) {
@@ -461,6 +464,7 @@ export async function sendMessage(
   payload: Record<string, unknown>,
   labels: SystemLabels,
   record: RecordSend = recordSend,
+  keepSticky?: StickyKeeper,
 ): Promise<Reply> {
   const parsed = parseMessage(payload);
   if (!parsed.ok) return messageErrors(parsed.errors);
@@ -575,6 +579,14 @@ export async function sendMessage(
   }
   if (choice.threadName !== "") {
     await sent.startThread({ name: choice.threadName }).catch(() => warnings.push("The thread could not be started. The bot needs Create Public Threads."));
+  }
+
+  if (choice.sticky && keepSticky) {
+    const note = await keepSticky(channel.id, parsed.value, sent.id).catch((error) => {
+      console.error("messages: could not make it sticky:", error);
+      return "The message was sent, but it could not be kept at the bottom of the channel.";
+    });
+    if (note) warnings.push(note);
   }
 
   const asked = typeof payload.templateId === "number" && Number.isInteger(payload.templateId) ? payload.templateId : null;

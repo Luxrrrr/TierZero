@@ -121,3 +121,13 @@ test("an unchanged row that is already posted is left alone", async () => {
   assert.equal(second.sent.length, 0);
   await sticky.onDisable?.(second.ctx);
 });
+
+test("a new row whose message is already out, such as one just sent from the dashboard, is not posted again", async () => {
+  await prisma.stickyPost.create({ data: { guildId: GUILD, channelId: CHANNEL, messageId: "700000000000000050" } });
+  const first = world([]);
+  const second = world([{ channel: CHANNEL, message: text("Just sent") }]);
+  await sticky.onSettingsChange?.(second.ctx, first.ctx.settings);
+  assert.equal(second.sent.length, 0);
+  assert.equal(second.deleted.length, 0);
+  await sticky.onDisable?.(second.ctx);
+});

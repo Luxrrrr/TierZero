@@ -74,6 +74,7 @@ export function SendDialog({ guildId, message, templateId, label, context, onClo
   const [mode, setMode] = useState<Mode>(replacing ? "replace" : "now");
   const [channelId, setChannelId] = useState<string | undefined>(undefined);
   const [options, setOptions] = useState({ silent: false, suppressEmbeds: false, tts: false, pin: false, publish: false, allowEveryone: false });
+  const [sticky, setSticky] = useState(false);
   const [threadName, setThreadName] = useState("");
   const [replyTo, setReplyTo] = useState("");
   const [asName, setAsName] = useState("");
@@ -177,7 +178,7 @@ export function SendDialog({ guildId, message, templateId, label, context, onClo
       setResult({ kind: "scheduled", at: at.toISOString() });
       return;
     }
-    const reply = await post("send", { ...message, ...sendOptions, templateId });
+    const reply = await post("send", { ...message, ...sendOptions, templateId, sticky });
     if (!reply.ok) return setResult({ kind: "error", message: reply.message });
     setResult({ kind: "sent", url: String(reply.data.url ?? ""), warnings: (reply.data.warnings as string[] | undefined) ?? [], edited: false });
     onSent();
@@ -334,6 +335,17 @@ export function SendDialog({ guildId, message, templateId, label, context, onClo
                   </span>
                 </div>
               ))}
+              {mode === "now" ? (
+                <div className="send-option">
+                  <Switch checked={sticky} onChange={setSticky} aria-label="Keep it at the bottom of the channel" />
+                  <span>
+                    Keep it at the bottom of the channel
+                    <small>
+                      Posts it again below new messages after the chat goes quiet, using Sticky messages. Buttons, menus and reactions are left out of the repeats, and this replaces any sticky message the channel has.
+                    </small>
+                  </span>
+                </div>
+              ) : null}
               <div className="embed-grid">
                 <div className="field">
                   <label className="field-label" htmlFor={`${pickerId}-thread`}>

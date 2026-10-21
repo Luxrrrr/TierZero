@@ -10,6 +10,7 @@ import { config } from "../config.js";
 import { systemLabels } from "../runtime/system-messages.js";
 import { rowStatuses, runModuleAction, runRowAction } from "./rows.js";
 import { customEmojis, handleMessages } from "./messages.js";
+import { stickyKeeper } from "./sticky.js";
 import { handleMod } from "./mod/index.js";
 import { handleTickets } from "./tickets/index.js";
 import { rawHeaders, type Reply } from "./mod/types.js";
@@ -136,6 +137,7 @@ export function startControlApi({ client, registry, state, commands }: Deps): vo
         segments,
         body: parsed,
         labels: await systemLabels(state, guild.id),
+        keepSticky: stickyKeeper(guild, registry, state, commands),
       });
       return reply ? sendReply(reply) : send(404, { error: "not found" });
     }
