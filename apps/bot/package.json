@@ -14,6 +14,7 @@
     "@tier0/module-auditlog": "workspace:*",
     "@tier0/module-automations": "workspace:*",
     "@tier0/module-customcommands": "workspace:*",
+    "@tier0/module-sticky": "workspace:*",
     "@tier0/module-feeds": "workspace:*",
     "@tier0/module-automod": "workspace:*",
     "@tier0/module-leveling": "workspace:*",

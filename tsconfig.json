@@ -38,6 +38,9 @@
       "path": "packages/modules/customcommands"
     },
     {
+      "path": "packages/modules/sticky"
+    },
+    {
       "path": "packages/modules/automod"
     },
     {

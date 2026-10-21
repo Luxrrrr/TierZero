@@ -12,6 +12,7 @@
 | Verification | A button, captcha or question new members pass to get a role. |
 | Role menus | Members pick their roles from buttons or a dropdown. |
 | Gaming tools | Join-to-create voice channels, looking-for-group posts, scrim or tournament sign-ups and group hubs with a voice channel and thread per group. |
+| Sticky messages | Keeps a message at the bottom of a channel, set from the dashboard or by right-clicking a message. |
 | Log channel | Posts edits, deletions, joins, role changes and more into a Discord channel. |
 | Leveling | XP, role rewards and a leaderboard, with an optional public web page for it. No image cards. |
 | News and patch notes | RSS feeds, YouTube channels and Steam patch notes, posted as embeds. |
@@ -48,6 +49,7 @@ Changes on a settings page are kept until you press **Save changes** (or Ctrl+S)
 - [News and patch notes](#news-and-patch-notes)
 - [Leveling](#leveling)
 - [Gaming tools](#gaming-tools)
+- [Sticky messages](#sticky-messages)
 - [Custom commands](#custom-commands)
 - [Automations](#automations)
 - [Utility](#utility)
@@ -920,6 +922,15 @@ Managers are the group's owner, members with a role under **Roles that can manag
 
 Every message in this feature is editable under **Replies and errors**, and the buttons on the control message under **Labels and text**. The bot needs Manage Channels, Move Members, Connect, and permission to create private threads in the hub channel.
 
+## Sticky messages
+
+Keep a message at the bottom of a channel, such as the rules or how to ask for help. Add one under **Sticky messages** on the feature's page: pick the channel, write the message with the message builder, and save. It is posted when you save.
+
+When someone talks in the channel, the bot waits until the chat has been quiet for **Wait for the chat to go quiet** (five seconds unless you change it), posts the message again below, and deletes the old copy. In a channel that never goes quiet it still moves every 30 seconds. The old copy is deleted after the new one is out, so the channel is never without it. **Post it again now** on a row does it on the spot. A channel has one sticky, and the bot's own messages and other bots' messages in it count as chat like anyone else's.
+
+You can also make one from Discord. Right-click a message, choose Apps, then **Stick to channel**. The bot copies the message's text and embeds into this channel's sticky, replacing the one that was there, and the original stays where it is. Attachments aren't copied, because their links stop working after a while. **Unstick from channel** in the same menu removes it. Both are for members with Manage Messages in the channel, and what the bot says back is under **Replies**. Either way the sticky shows up in the dashboard row for that channel, so there is one place to edit it.
+
+The sticky message pings nobody, whatever it says. Turning the feature off, switching a row off or removing it deletes the bot's copy. The bot needs to view the channel, send messages and manage messages there. A sticky can't go in a thread.
 ## Custom commands
 
 Make up your own slash commands without writing code. Add them under **Commands** on the Custom commands page. Each one opens on three tabs.

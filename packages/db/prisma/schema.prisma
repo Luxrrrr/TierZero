@@ -40,6 +40,7 @@ model Guild {
   groupPanelPosts     GroupPanelPost[]
   playGroups          PlayGroup[]
   workflowValues      WorkflowValue[]
+  stickyPosts         StickyPost[]
 
   /// The last case number handed out here. It only ever goes up, so a number
   /// that was purged is never given to a different case.
@@ -893,4 +894,17 @@ model WorkflowValue {
   guild Guild @relation(fields: [guildId], references: [id], onDelete: Cascade)
 
   @@unique([guildId, scope, subjectId, name])
+}
+
+/// The message the bot is currently keeping at the bottom of a channel, so the next
+/// repost can take it away even after a restart.
+model StickyPost {
+  guildId   String
+  channelId String
+  messageId String
+  updatedAt DateTime @default(now()) @updatedAt
+
+  guild Guild @relation(fields: [guildId], references: [id], onDelete: Cascade)
+
+  @@id([guildId, channelId])
 }

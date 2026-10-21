@@ -10,6 +10,7 @@ import moderation from "@tier0/module-moderation";
 import roles from "@tier0/module-roles";
 import automations from "@tier0/module-automations";
 import customcommands from "@tier0/module-customcommands";
+import sticky from "@tier0/module-sticky";
 import serverlog from "@tier0/module-serverlog";
 import system from "@tier0/module-system";
 import tickets from "@tier0/module-tickets";
@@ -23,7 +24,7 @@ import welcome from "@tier0/module-welcome";
  * the permission by hand. Each module says what it needs in `requires`, and this
  * holds the link to it.
  */
-const modules = [auditlog, automations, customcommands, automod, feeds, gaming, leveling, moderation, roles, serverlog, system, tickets, utility, verification, welcome];
+const modules = [auditlog, automations, customcommands, sticky, sticky, automod, feeds, gaming, leveling, moderation, roles, serverlog, system, tickets, utility, verification, welcome];
 
 describe("the invite link", () => {
   test("asks for every permission a module says it needs", () => {

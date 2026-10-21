@@ -9,6 +9,7 @@ import gaming from "@tier0/module-gaming";
 import roles from "@tier0/module-roles";
 import automations from "@tier0/module-automations";
 import customcommands from "@tier0/module-customcommands";
+import sticky from "@tier0/module-sticky";
 import automod from "@tier0/module-automod";
 import leveling from "@tier0/module-leveling";
 import moderation from "@tier0/module-moderation";
@@ -40,7 +41,7 @@ const RENDERABLE = new Set([
 ]);
 
 const registry = new ModuleRegistry();
-for (const module of [utility, welcome, verification, gaming, roles, automations, customcommands, automod, leveling, moderation, tickets, auditlog, feeds, system]) {
+for (const module of [utility, welcome, verification, gaming, roles, automations, customcommands, sticky, automod, leveling, moderation, tickets, auditlog, feeds, system]) {
   registry.register(module);
 }
 
@@ -110,7 +111,7 @@ describe("every registered module", () => {
   const modules = registry.describe();
 
   test("registers at least the modules under test", () => {
-    assert.equal(modules.length, 14);
+    assert.equal(modules.length, 15);
   });
 
   for (const module of modules) {
