@@ -63,7 +63,7 @@ const contextCommands: ContextCommandDefinition<StickySettings>[] = [
       await ctx.reply(interaction, messages.failed, here);
       return;
     }
-    const row = { name: existing?.name || `#${"name" in channel ? channel.name : "channel"}`, channel: channel.id, enabled: true, message: body, pause: existing?.pause ?? 5000 };
+    const row = { name: existing?.name || `#${"name" in channel ? channel.name : "channel"}`, channel: channel.id, enabled: true, message: body, pause: existing?.pause ?? 1000 };
     await interaction.deferReply({ flags: 64 });
     await ctx.update({ stickies: existing ? rows.map((entry) => (entry === existing ? row : entry)) : [...rows, row] });
     await ctx.reply(interaction, messages.stuck, here);

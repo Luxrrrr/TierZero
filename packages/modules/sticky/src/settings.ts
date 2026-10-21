@@ -20,9 +20,8 @@ const stickyField = s.object({
   }),
   pause: s.duration({
     label: "Wait for the chat to go quiet",
-    help: "The sticky moves back to the bottom this long after the last message. In a channel that never goes quiet it still moves every 30 seconds.",
-    default: "5s",
-    min: "2s",
+    help: "The sticky moves back to the bottom this long after the last message. Set it to 0 to move it straight away. In a channel that never goes quiet it still moves every 30 seconds.",
+    default: "1s",
     max: "1h",
   }),
 });

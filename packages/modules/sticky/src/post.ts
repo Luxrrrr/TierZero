@@ -38,15 +38,21 @@ export function repost(ctx: Ctx, row: Sticky): Promise<boolean> {
   return serial(keyOf(ctx.guild.id, channelId), async () => {
     const channel = textChannel(ctx, channelId);
     if (!channel) return false;
-    const before = await prisma.stickyPost.findUnique({ where: { guildId_channelId: { guildId: ctx.guild.id, channelId } } });
-    const sent: Message | null = await ctx.send(channel, row.message, { channel: `<#${channelId}>` }, { mentions: { users: [], roles: [] } });
+    // The lookup runs beside the send, so the only wait is Discord's own.
+    const [before, sent]: [{ messageId: string } | null, Message | null] = await Promise.all([
+      prisma.stickyPost.findUnique({ where: { guildId_channelId: { guildId: ctx.guild.id, channelId } } }),
+      ctx.send(channel, row.message, { channel: `<#${channelId}>` }, { mentions: { users: [], roles: [] } }),
+    ]);
     if (!sent) return false;
-    await prisma.stickyPost.upsert({
-      where: { guildId_channelId: { guildId: ctx.guild.id, channelId } },
-      create: { guildId: ctx.guild.id, channelId, messageId: sent.id },
-      update: { messageId: sent.id },
-    });
-    if (before && before.messageId !== sent.id) await takeAway(channel, before.messageId);
+    // The old copy goes at once and the record is updated beside it, so the channel shows one copy as soon as it can.
+    await Promise.all([
+      before && before.messageId !== sent.id ? takeAway(channel, before.messageId) : undefined,
+      prisma.stickyPost.upsert({
+        where: { guildId_channelId: { guildId: ctx.guild.id, channelId } },
+        create: { guildId: ctx.guild.id, channelId, messageId: sent.id },
+        update: { messageId: sent.id },
+      }),
+    ]);
     return true;
   });
 }

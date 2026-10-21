@@ -44,7 +44,7 @@ export function stickyKeeper(guild: Guild, registry: ModuleRegistry, state: Guil
       channel: channelId,
       enabled: true,
       message: { ...message, buttons: [], selects: [], reactions: [] },
-      pause: existing?.pause ?? 5000,
+      pause: existing?.pause ?? 1000,
     };
     const stickies = existing ? settings.stickies.map((other) => (other === existing ? entry : other)) : [...settings.stickies, entry];
 
