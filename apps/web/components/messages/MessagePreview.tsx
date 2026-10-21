@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useMemo, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { applyVariablesToMessage, isHexColor, isHttpUrl, type MessageBody, type MessageEmbed, type VariableValues } from "@tier0/core";
 import { comesFromVariable } from "../../lib/message-variables";
 import { useChannels, useRoles } from "../form";
@@ -80,12 +80,7 @@ export function MessagePreview({ message, context, ephemeral = false }: { messag
               </div>
             ))}
             {filled.selects.map((select, index) => (
-              <div key={index} className={select.disabled ? "msg-select is-disabled" : "msg-select"}>
-                <span className="msg-select-text">{selectText(select)}</span>
-                <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="m6 9 6 6 6-6" />
-                </svg>
-              </div>
+              <PreviewSelect key={index} select={select} names={names} variables={variables} botName={botName} />
             ))}
           </div>
         ) : null}
@@ -348,6 +343,192 @@ function chunk<T>(items: T[], size: number): T[][] {
   const rows: T[][] = [];
   for (let i = 0; i < items.length; i += size) rows.push(items.slice(i, i + size));
   return rows;
+}
+
+type PreviewSelectData = MessageBody["selects"][number];
+
+/** The most messages one pick of a menu can answer with: a reply and five follow-ups. */
+const MAX_REPLIES = 6;
+
+/**
+ * A menu in the preview that can be opened and picked from, to see how it will
+ * look and what choosing from it will do. Nothing is sent. A menu that allows
+ * one pick answers as soon as it is chosen, and one that allows several answers
+ * when it is closed, as Discord's does. Only menus of your own choices open,
+ * since the others list the server's members, roles or channels.
+ */
+function PreviewSelect({ select, names, variables, botName }: { select: PreviewSelectData; names: Names; variables: VariableValues; botName: string }) {
+  const interactive = select.kind === "string" && !select.disabled && select.options.length > 0;
+  const [open, setOpen] = useState(false);
+  const [chosen, setChosen] = useState<string[]>(() => select.options.filter((option) => option.default).map((option) => option.value));
+  const [answered, setAnswered] = useState<string[] | null>(null);
+  const [full, setFull] = useState(false);
+  const root = useRef<HTMLDivElement>(null);
+
+  const values = new Set(select.options.map((option) => option.value));
+  const picked = chosen.filter((value) => values.has(value));
+  const most = Math.max(1, Math.min(select.maxValues, select.options.length));
+  const fewest = Math.min(select.minValues, select.options.length);
+  const single = most === 1;
+
+  function answer(list: string[]) {
+    if (list.length > 0 && list.length >= fewest) setAnswered(list);
+  }
+
+  function close(list: string[]) {
+    setOpen(false);
+    setFull(false);
+    if (!single) answer(list);
+  }
+
+  useEffect(() => {
+    if (!open) return;
+    function onDown(event: MouseEvent) {
+      if (root.current && !root.current.contains(event.target as Node)) close(picked);
+    }
+    function onKey(event: globalThis.KeyboardEvent) {
+      if (event.key === "Escape") close(picked);
+    }
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  });
+
+  if (!interactive) {
+    return (
+      <div className={select.disabled ? "msg-select is-disabled" : "msg-select"}>
+        <span className="msg-select-text">{selectText(select)}</span>
+        <ChevronDown />
+      </div>
+    );
+  }
+
+  function toggle(value: string) {
+    if (single) {
+      setChosen([value]);
+      setOpen(false);
+      answer([value]);
+      return;
+    }
+    if (picked.includes(value)) {
+      setChosen(picked.filter((entry) => entry !== value));
+      setFull(false);
+    } else if (picked.length < most) {
+      setChosen([...picked, value]);
+    } else {
+      setFull(true);
+    }
+  }
+
+  const label = picked.length > 0 ? select.options.filter((option) => picked.includes(option.value)).map((option) => option.label).join(", ") : selectText(select);
+  const results = answered ? select.options.filter((option) => answered.includes(option.value)) : [];
+
+  return (
+    <div className="msg-select-wrap" ref={root}>
+      <button type="button" className="msg-select is-live" aria-haspopup="listbox" aria-expanded={open} onClick={() => (open ? close(picked) : setOpen(true))}>
+        <span className="msg-select-text">{label}</span>
+        <ChevronDown />
+      </button>
+      {open ? (
+        <div className="msg-select-menu" role="listbox" aria-multiselectable={!single || undefined}>
+          {select.options.map((option) => {
+            const on = picked.includes(option.value);
+            return (
+              <button key={option.value} type="button" role="option" aria-selected={on} className={on ? "msg-select-option is-on" : "msg-select-option"} onClick={() => toggle(option.value)}>
+                {option.emoji ? <span className="msg-select-emoji">{renderEmoji(option.emoji)}</span> : null}
+                <span className="msg-select-copy">
+                  <span className="msg-select-label">{option.label || "Unnamed choice"}</span>
+                  {option.description ? <span className="msg-select-desc">{option.description}</span> : null}
+                </span>
+                {single ? null : <span className="msg-select-box" aria-hidden="true">{on ? "✓" : ""}</span>}
+              </button>
+            );
+          })}
+          {single ? null : (
+            <p className="msg-select-foot">
+              {full ? `You can pick at most ${most}.` : picked.length < fewest ? `Pick at least ${fewest}.` : `Pick up to ${most}, then click away to send.`}
+            </p>
+          )}
+        </div>
+      ) : null}
+      {results.length > 0 ? <MenuAnswers options={results} names={names} variables={variables} botName={botName} onClear={() => setAnswered(null)} /> : null}
+    </div>
+  );
+}
+
+function ChevronDown() {
+  return (
+    <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+      <path d="m6 9 6 6 6-6" />
+    </svg>
+  );
+}
+
+/** What choosing would do, drawn as the messages the person would get. Nothing here is sent. */
+function MenuAnswers({ options, names, variables, botName, onClear }: { options: PreviewSelectData["options"]; names: Names; variables: VariableValues; botName: string; onClear(): void }) {
+  let replies = 0;
+  let skipped = false;
+  let direct = 0;
+  const cards: ReactNode[] = [];
+  const notes: string[] = [];
+
+  options.forEach((option) => {
+    const { action } = option;
+    if (action.type === "reply") {
+      if (replies >= MAX_REPLIES) {
+        skipped = true;
+        return;
+      }
+      replies += 1;
+      if (action.reply.dm) direct += 1;
+      const body: MessageBody = { content: action.reply.content, embeds: action.reply.embeds, buttons: [], selects: [], reactions: [] };
+      const filled = applyVariablesToMessage(body, { ...variables, user: "You", "user.mention": "@You", selected: option.label });
+      const heading = action.reply.dm ? `Direct message from ${botName}` : action.reply.ephemeral ? "Only you can see this" : "Reply in the channel";
+      cards.push(
+        <div className="msg-sim-card" key={option.value}>
+          <p className="msg-sim-heading">{heading}</p>
+          {filled.content.trim() !== "" ? <div className="msg-preview-text">{renderMarkdown(filled.content, names)}</div> : null}
+          {filled.embeds.map((embed, index) => (
+            <EmbedPreview key={index} embed={embed} raw={undefined} names={names} />
+          ))}
+          {filled.content.trim() === "" && filled.embeds.length === 0 ? <p className="msg-preview-empty">This reply is empty.</p> : null}
+        </div>,
+      );
+    } else if (action.type === "role") {
+      const name = names.roles.get(action.roleId)?.name ?? "a role";
+      const verb = action.mode === "add" ? "give" : action.mode === "remove" ? "take" : "give or take";
+      notes.push(`${option.label || "This choice"} would ${verb} the role ${name}.`);
+    } else {
+      notes.push(`${option.label || "This choice"} does nothing.`);
+    }
+  });
+
+  return (
+    <div className="msg-sim" aria-live="polite">
+      <p className="msg-sim-intro">
+        What choosing would do. Nothing is sent.{" "}
+        <button type="button" className="link-button" onClick={onClear}>
+          Clear
+        </button>
+      </p>
+      {cards}
+      {direct > 0 ? (
+        <div className="msg-sim-card">
+          <p className="msg-sim-heading">Only you can see this</p>
+          <div className="msg-preview-text">I sent that to your direct messages.</div>
+        </div>
+      ) : null}
+      {notes.map((note, index) => (
+        <p className="msg-sim-note" key={index}>
+          {note}
+        </p>
+      ))}
+      {skipped ? <p className="msg-sim-note">Discord answers with at most {MAX_REPLIES} messages, so the rest would be skipped.</p> : null}
+    </div>
+  );
 }
 
 const SELECT_DEFAULT: Record<string, string> = {

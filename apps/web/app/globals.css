@@ -11268,3 +11268,129 @@ html[data-theme-motion] *::after {
   gap: var(--space-2);
   flex-wrap: wrap;
 }
+
+/* A menu in the message preview that opens and can be picked from. */
+
+.msg-select-wrap {
+  position: relative;
+  max-width: 24rem;
+}
+
+.msg-select.is-live {
+  width: 100%;
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  font-size: var(--text-sm);
+}
+
+.msg-select.is-live:hover {
+  background: #232428;
+}
+
+.msg-select-menu {
+  position: absolute;
+  z-index: 5;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  max-height: 20rem;
+  overflow-y: auto;
+  padding: 6px;
+  border: 1px solid #111214;
+  border-radius: 6px;
+  background: #2b2d31;
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.4);
+}
+
+.msg-select-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: #dbdee1;
+  font: inherit;
+  font-size: var(--text-sm);
+  text-align: left;
+  cursor: pointer;
+}
+
+.msg-select-option:hover,
+.msg-select-option.is-on {
+  background: #35373c;
+}
+
+.msg-select-copy {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  flex-direction: column;
+}
+
+.msg-select-label {
+  font-weight: 500;
+}
+
+.msg-select-desc {
+  font-size: var(--text-xs);
+  color: #949ba4;
+}
+
+.msg-select-emoji {
+  flex: none;
+}
+
+.msg-select-box {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border: 1px solid #80848e;
+  border-radius: 3px;
+  font-size: 12px;
+  color: #fff;
+}
+
+.msg-select-option.is-on .msg-select-box {
+  border-color: #5865f2;
+  background: #5865f2;
+}
+
+.msg-select-foot {
+  padding: 6px 8px 2px;
+  font-size: var(--text-xs);
+  color: #949ba4;
+}
+
+.msg-sim {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
+  max-width: 32rem;
+}
+
+.msg-sim-intro,
+.msg-sim-note {
+  font-size: var(--text-xs);
+  color: #949ba4;
+}
+
+.msg-sim-card {
+  padding: 10px 12px;
+  border-left: 3px solid #5865f2;
+  border-radius: 4px;
+  background: #2b2d31;
+}
+
+.msg-sim-heading {
+  margin-bottom: 4px;
+  font-size: var(--text-xs);
+  color: #949ba4;
+}
