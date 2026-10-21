@@ -11246,3 +11246,25 @@ html[data-theme-motion] *::after {
   display: flex;
   justify-content: flex-end;
 }
+
+.msg-code summary {
+  cursor: pointer;
+}
+
+.msg-code[open] summary {
+  margin-bottom: var(--space-1);
+}
+
+.msg-code-box {
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  white-space: pre;
+  overflow: auto;
+}
+
+.msg-code-actions {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}

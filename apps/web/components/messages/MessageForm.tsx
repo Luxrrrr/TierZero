@@ -2,6 +2,7 @@
 
 import { useMemo, useState, type RefObject } from "react";
 import { MESSAGE_LIMITS, MESSAGE_VARIABLES, emptyEmbed, type MessageButton, type MessageEmbed, type MessageError, type MessageSelect } from "@tier0/core";
+import { fromCode, toCode } from "../../lib/message-code";
 import { mentionTokens, unknownVariables } from "../../lib/message-variables";
 import { useChannels, useRoles } from "../form";
 import { PlusIcon } from "../Icons";
@@ -159,6 +160,8 @@ function MessageFormBody({ guildId, value, onChange, errors, variables, showReac
         <ReactionsEditor guildId={guildId} reactions={value.reactions} errors={errors} onChange={(reactions) => onChange({ ...value, reactions })} />
       ) : null}
 
+      <CodeView value={value} onChange={onChange} />
+
       {shown.length > 0 ? (
         <div className="msg-problems" role="alert">
           <p className="msg-problems-title">
@@ -172,6 +175,81 @@ function MessageFormBody({ guildId, value, onChange, errors, variables, showReac
         </div>
       ) : null}
     </div>
+  );
+}
+
+/**
+ * The message's text and embeds as JSON, for copying out or pasting in. While
+ * the box has not been typed in it follows the form, and once it has, it keeps
+ * what was typed until it is applied or the form is shown again.
+ */
+function CodeView({ value, onChange }: { value: MessageDraft; onChange(next: MessageDraft): void }) {
+  const [typed, setTyped] = useState<string | null>(null);
+  const [problem, setProblem] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+  const generated = useMemo(() => toCode(value), [value]);
+  const shown = typed ?? generated;
+
+  function apply() {
+    const result = fromCode(typed ?? generated, value);
+    if (!result.ok) {
+      setProblem(result.error);
+      return;
+    }
+    onChange({ ...value, ...result.value });
+    setTyped(null);
+    setProblem(null);
+  }
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(shown);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      setProblem("The browser wouldn't copy it. Select the text and copy it by hand.");
+    }
+  }
+
+  return (
+    <details className="card msg-card msg-code">
+      <summary className="field-label">Code</summary>
+      <p className="field-hint">
+        The text and embeds as JSON, the form Discord uses, so you can copy it out or paste one made elsewhere. Buttons, menus and reactions aren't part of it and stay as they are.
+      </p>
+      <textarea
+        className="textarea msg-code-box"
+        rows={14}
+        spellCheck={false}
+        aria-label="Message as JSON"
+        value={shown}
+        onChange={(event) => {
+          setTyped(event.target.value);
+          setProblem(null);
+        }}
+      />
+      {problem ? <p className="field-error">{problem}</p> : null}
+      <div className="msg-code-actions">
+        <button type="button" className="btn btn-secondary btn-sm" onClick={() => void copy()}>
+          {copied ? "Copied" : "Copy"}
+        </button>
+        <button type="button" className="btn btn-primary btn-sm" disabled={typed === null} onClick={apply}>
+          Apply
+        </button>
+        {typed !== null ? (
+          <button
+            type="button"
+            className="btn btn-quiet btn-sm"
+            onClick={() => {
+              setTyped(null);
+              setProblem(null);
+            }}
+          >
+            Discard changes
+          </button>
+        ) : null}
+      </div>
+    </details>
   );
 }
 
