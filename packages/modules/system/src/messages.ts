@@ -19,6 +19,8 @@ export const SYSTEM_MESSAGE_KEYS = [
   "roleTaken",
   "notActive",
   "componentFailed",
+  "dmSent",
+  "dmClosed",
 ] as const;
 
 export type SystemMessageKey = (typeof SYSTEM_MESSAGE_KEYS)[number];
@@ -40,6 +42,11 @@ export const SYSTEM_MESSAGES: Record<SystemMessageKey, MessageBody> = {
   roleTaken: embedReply("**{role}** was taken off you.", "success"),
   notActive: embedReply("This message's buttons and menus are no longer active.", "error"),
   componentFailed: embedReply("That didn't work. The server log has the details.", "error"),
+  dmSent: embedReply("I sent that to your direct messages.", "success"),
+  dmClosed: embedReply(
+    "I couldn't send you a direct message. In this server's privacy settings, allow direct messages from server members, then try again.",
+    "error",
+  ),
 };
 
 const COMMAND: MessageVariable = { name: "command", description: "The command, as members type it", sample: "/rank" };
@@ -63,6 +70,8 @@ export const SYSTEM_VARIABLES: Record<SystemMessageKey, MessageVariable[]> = {
   roleTaken: [ROLE],
   notActive: [],
   componentFailed: [],
+  dmSent: [{ name: "count", description: "How many messages were sent", sample: "3" }],
+  dmClosed: [],
 };
 
 export interface SystemMessageInfo {
@@ -123,6 +132,14 @@ export const SYSTEM_INFO: Record<SystemMessageKey, SystemMessageInfo> = {
   componentFailed: {
     label: "A button, menu or form failed",
     help: "Sent when pressing a button, choosing from a menu or sending a form stops partway because of an error.",
+  },
+  dmSent: {
+    label: "Messages were sent as a direct message",
+    help: "Sent after a button or menu sends its reply to the person as a direct message, so they know where to look.",
+  },
+  dmClosed: {
+    label: "A direct message could not be sent",
+    help: "Sent when a button or menu tries to send a direct message and the person has direct messages from server members turned off.",
   },
 };
 

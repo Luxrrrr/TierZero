@@ -1,4 +1,4 @@
-import { Events, MessageFlags, type AnySelectMenuInteraction, type ButtonInteraction, type Client, type Guild, type GuildMember, type MessageCreateOptions } from "discord.js";
+import { Events, MessageFlags, type AnySelectMenuInteraction, type ButtonInteraction, type Client, type Guild, type GuildMember, type InteractionReplyOptions, type MessageCreateOptions } from "discord.js";
 import {
   applyVariablesToMessage,
   isRoleAssignable,
@@ -94,11 +94,20 @@ export function mergePieces(pieces: readonly Piece[]): Piece {
   };
 }
 
+interface Reply {
+  message: MessageBody;
+  ephemeral: boolean;
+  dm: boolean;
+}
+
 interface Outcome {
-  /** A reply the action asked for, which wins over any confirmation. */
-  reply: { message: MessageBody; ephemeral: boolean } | null;
+  /** The replies the actions asked for, which win over any confirmation. A menu that allows several choices can ask for one each. */
+  replies: Reply[];
   confirmations: Piece[];
 }
+
+/** Discord allows one reply to an interaction and five follow-ups, so a menu answers with at most this many messages. */
+export const MAX_REPLIES = 6;
 
 /** Gives, takes or toggles a role for whoever clicked, and says what happened. */
 export async function applyRole(
@@ -147,22 +156,54 @@ async function run(
   extra: Record<string, string>,
 ): Promise<void> {
   const variables = clickVariables(interaction, guild, extra);
-  const outcome: Outcome = { reply: null, confirmations: [] };
+  const outcome: Outcome = { replies: [], confirmations: [] };
 
   for (const action of actions) {
     if (action.type === "role") outcome.confirmations.push(await applyRole(source, interaction, guild, action, variables));
-    else if (action.type === "reply" && outcome.reply === null) {
-      outcome.reply = {
+    else if (action.type === "reply" && outcome.replies.length < MAX_REPLIES) {
+      outcome.replies.push({
         message: { content: action.reply.content, embeds: action.reply.embeds, buttons: [], selects: [], reactions: [] },
         ephemeral: action.reply.ephemeral,
-      };
+        dm: action.reply.dm,
+      });
     }
   }
 
-  if (outcome.reply) {
-    const options = buildReply(outcome.reply.message, variables, guild);
-    if (options) {
-      await interaction.reply({ ...options, ...ephemeralFlag(interaction, outcome.reply.ephemeral) });
+  if (outcome.replies.length > 0) {
+    const say = async (key: SystemMessageKey, extra: Record<string, string> = {}): Promise<InteractionReplyOptions | null> => {
+      const rendered = await renderSystem(source, guild, key, { ...variables, ...extra });
+      if (!rendered) return null;
+      return { ...(rendered.payload.content !== undefined ? { content: rendered.payload.content } : {}), embeds: rendered.payload.embeds ?? [] };
+    };
+
+    // Direct messages go out first, so the answer in the channel can say whether they arrived.
+    const privately = outcome.replies.filter((reply) => reply.dm);
+    let delivered = 0;
+    for (const reply of privately) {
+      const options = buildReply(reply.message, variables, guild);
+      if (!options) continue;
+      const { flags: _flags, ...message } = options;
+      if (await interaction.user.send(message as MessageCreateOptions).then(() => true, () => false)) delivered += 1;
+    }
+
+    const answers: (InteractionReplyOptions & { ephemeral: boolean })[] = [];
+    for (const reply of outcome.replies.filter((entry) => !entry.dm)) {
+      const options = buildReply(reply.message, variables, guild);
+      if (options) answers.push({ ...options, ephemeral: reply.ephemeral });
+    }
+    if (privately.length > 0) {
+      const note = delivered === 0 ? await say("dmClosed") : delivered < privately.length ? await say("dmClosed") : await say("dmSent", { count: String(delivered) });
+      if (note) answers.push({ ...note, ephemeral: true });
+    }
+
+    const [first, ...rest] = answers;
+    if (first) {
+      const { ephemeral, ...options } = first;
+      await interaction.reply({ ...options, ...ephemeralFlag(interaction, ephemeral) });
+      for (const answer of rest) {
+        const { ephemeral: hidden, ...more } = answer;
+        await interaction.followUp({ ...more, ...ephemeralFlag(interaction, hidden) });
+      }
       return;
     }
   }

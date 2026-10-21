@@ -35,6 +35,9 @@ const TODAY: Record<(typeof SYSTEM_MESSAGE_KEYS)[number], string> = {
   roleTaken: "**{role}** was taken off you.",
   notActive: "This message's buttons and menus are no longer active.",
   componentFailed: "That didn't work. The server log has the details.",
+  dmSent: "I sent that to your direct messages.",
+  dmClosed:
+    "I couldn't send you a direct message. In this server's privacy settings, allow direct messages from server members, then try again.",
 };
 
 /** Everything the bot says on its own account is a failure to report, except the two role confirmations. */
@@ -52,6 +55,8 @@ const KIND: Record<(typeof SYSTEM_MESSAGE_KEYS)[number], keyof typeof REPLY_COLO
   roleTaken: "success",
   notActive: "error",
   componentFailed: "error",
+  dmSent: "success",
+  dmClosed: "error",
 };
 
 describe("the system module", () => {

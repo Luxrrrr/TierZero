@@ -34,6 +34,8 @@ export interface ReplyAction {
   content: string;
   embeds: MessageEmbed[];
   ephemeral: boolean;
+  /** Sent to the person as a direct message instead of being shown where they used it. */
+  dm: boolean;
 }
 
 export type RoleMode = "toggle" | "add" | "remove";
@@ -115,7 +117,7 @@ export const ACTION_VARIABLES = [
   { name: "role", description: "The role being given or taken, for a role action" },
 ] as const;
 
-export const emptyReply = (): ReplyAction => ({ content: "", embeds: [], ephemeral: true });
+export const emptyReply = (): ReplyAction => ({ content: "", embeds: [], ephemeral: true, dm: false });
 
 export const emptyButton = (): MessageButton => ({
   label: "",
@@ -162,6 +164,7 @@ export function readAction(raw: unknown): ComponentAction {
         embeds: (Array.isArray(reply.embeds) ? reply.embeds : []).map(readEmbed),
         // Private unless somebody says otherwise: a reply to a click is usually for that person alone.
         ephemeral: reply.ephemeral !== false,
+        dm: reply.dm === true,
       },
     };
   }

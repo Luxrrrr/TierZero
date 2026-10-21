@@ -46,6 +46,8 @@ const settings = s.object({
           roleTaken: entry("roleTaken"),
           notActive: entry("notActive"),
           componentFailed: entry("componentFailed"),
+          dmSent: entry("dmSent"),
+          dmClosed: entry("dmClosed"),
         },
         { label: "Buttons and menus", help: "What members are told when a role button, a menu or a form does not work as expected." },
       ),

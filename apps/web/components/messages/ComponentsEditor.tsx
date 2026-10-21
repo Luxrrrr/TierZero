@@ -39,7 +39,7 @@ const errorAt = (errors: MessageError[], path: string) => errors.find((e) => e.p
 const errorsUnder = (errors: MessageError[], path: string) => errors.filter((e) => e.path === path || e.path.startsWith(`${path}.`) || e.path.startsWith(`${path}[`));
 
 function summarize(action: ComponentAction): string {
-  if (action.type === "reply") return action.reply.ephemeral ? "Replies privately" : "Replies in the channel";
+  if (action.type === "reply") return action.reply.dm ? "Sends a direct message" : action.reply.ephemeral ? "Replies privately" : "Replies in the channel";
   if (action.type === "role") return action.mode === "add" ? "Gives a role" : action.mode === "remove" ? "Takes a role" : "Toggles a role";
   return "Does nothing";
 }
@@ -195,9 +195,17 @@ function ReplyFields({
       {errorAt(errors, path) ? <p className="field-error">{errorAt(errors, path)}</p> : null}
 
       <label className="embed-inline">
-        <Switch checked={reply.ephemeral} onChange={(next) => onChange({ ...reply, ephemeral: next })} aria-label="Only the person who used it sees the reply" />
-        <span>Only the person who used it sees the reply</span>
+        <Switch checked={reply.dm} onChange={(next) => onChange({ ...reply, dm: next })} aria-label="Send it as a direct message" />
+        <span>Send it as a direct message</span>
       </label>
+      {reply.dm ? (
+        <p className="field-hint">The person is told it was sent. If they have direct messages from server members turned off, they are told that instead.</p>
+      ) : (
+        <label className="embed-inline">
+          <Switch checked={reply.ephemeral} onChange={(next) => onChange({ ...reply, ephemeral: next })} aria-label="Only the person who used it sees the reply" />
+          <span>Only the person who used it sees the reply</span>
+        </label>
+      )}
     </div>
   );
 }
