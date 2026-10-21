@@ -48,7 +48,10 @@ Changes on a settings page are kept until you press **Save changes** (or Ctrl+S)
 - [News and patch notes](#news-and-patch-notes)
 - [Leveling](#leveling)
 - [Gaming tools](#gaming-tools)
+- [Custom commands](#custom-commands)
+- [Automations](#automations)
 - [Utility](#utility)
+- [Bot profile](#bot-profile)
 - [Updates, changelog and what's coming](#updates-changelog-and-whats-coming)
 
 ## Quick setup
@@ -835,6 +838,12 @@ The replies to `/rank` and `/leaderboard` are edited from the Commands page, and
 
 ![Leveling settings](images/leveling-settings.png)
 
+## Bot profile
+
+**Bot profile** in the sidebar sets how the bot shows itself on Discord: its name, its picture, its status (online, idle, do not disturb or invisible) and its activity, which is the line under its name such as Playing a game, Watching the server or a custom status of your own. A preview shows how it will look in a member list. It is about the whole install, not one server, so a change reaches every server the bot is in. Anyone signed in can read the page, and only the owner of the install can save.
+
+The status and activity are kept, so they come back after a restart. The name and picture are the bot's own on Discord, so they are not stored here, and Discord limits how often they can be changed: a rename more than a couple of times in an hour is refused, and the page says so while still saving the rest. A picture can be a PNG, JPEG, GIF or WebP up to 8 MB. Invisible shows the bot as offline, but it keeps working.
+
 ## Updates, changelog and what's coming
 
 The **Updates** link in the sidebar opens a page with the version you are running, whether a newer release is out, the steps to update, and the changelog of every release with its notes. When a new version is out, the sidebar link gets a dot.
@@ -910,6 +919,55 @@ A panel can **announce open groups**, and each option can follow the panel, alwa
 Managers are the group's owner, members with a role under **Roles that can manage any group**, and anyone with Manage Channels, Manage Server or Administrator. A member can run one group at a time. When the voice channel has been empty for a minute, the channel is deleted and the thread is archived. Groups are kept in the database, so a restart loses nothing.
 
 Every message in this feature is editable under **Replies and errors**, and the buttons on the control message under **Labels and text**. The bot needs Manage Channels, Move Members, Connect, and permission to create private threads in the hub channel.
+
+## Custom commands
+
+Make up your own slash commands without writing code. Add them under **Commands** on the Custom commands page. Each one opens on three tabs.
+
+- **Command** holds the name members type after the slash, using lowercase letters, numbers, - and _, and a line for the command list. It can ask the member for up to five things: text, a number, a member, a channel, a role or yes or no. Each one is a `{name}` you can use in the reply. A name the bot already uses, such as ping, is left out, and when two commands use the same name the first one keeps it.
+- **Reply** holds who sees the reply (only the member, or everyone in the channel), the reply itself, which you write with the message builder, and up to five steps that run after it: send a message somewhere else, give or take a role, change a nickname, or wait. The steps act on the member who used the command. A step can't pick another member, so a command can't be used to change someone else's roles.
+- **Limits** let you keep it to some channels (a channel also covers its threads, and a category covers the channels in it), to members with one of some roles, or away from members with some roles. **Wait before the same member can use it again** is kept in memory, so a restart lets everyone go again.
+
+A command is added to this server's commands a few seconds after you save, and goes again when you turn it off or remove it. Someone who uses it in the wrong place or too soon gets a private reply saying so, and **Replies and errors** holds that wording. If a step can't run, because the bot lacks a permission or a role sits too high, the member is told part of it did not work and the reason goes in the bot's log.
+
+A reply can use `{user}`, `{userName}`, `{username}`, `{userId}`, `{channel}` and `{channelName}`, plus the command's own options. Text a member typed can't ping @everyone, @here or a role, and a message can only ping the member and the roles you wrote into it. The role step follows the same rules as a role menu: the bot needs Manage Roles, the role has to sit below its own highest role, and you can only choose a role you could give yourself. A nickname step needs Manage Nicknames, which an invite link made before this was added doesn't ask for, so open the link again or give the bot's role the permission.
+
+Anything that needs a choice or a count belongs in Automations.
+
+## Automations
+
+Run steps when something happens in the server, without writing code. Each one is a **workflow**. Add them under **Workflows** on the Automations page. A workflow opens on three tabs: **When** it runs, **Conditions** it has to pass, and the **Steps** it carries out.
+
+**When** is one of:
+
+- **A member joins** or **a member leaves**.
+- **A message says something.** You list words or phrases, and choose whether they count anywhere in the message, as a whole word, at the start or as the whole message. Capitals don't matter. The phrases are plain text, so a symbol in one is just that symbol.
+- **Someone adds a reaction**, to any message. Pick an emoji or leave it empty for any.
+- **A member gets or loses a role.** Pick the role and which of the two.
+- **A member joins or leaves a voice channel.** Moving from one channel to another counts as joining.
+- **A thread is started** by a member.
+- **A member boosts the server.** It runs when they start boosting, not when they add another boost.
+- **A member is banned.**
+- **On a schedule.** Every hour (at the minutes of the time), every day or every week, at a time in the server's **Time zone** on the same page. A schedule has no member and no message, so steps that need one have nobody to act on. Send a message to a channel you pick, or change a counter kept for the server.
+
+Messages and reactions from bots never set a workflow off.
+
+**Conditions** narrow it down. You can limit it to some channels (a channel also covers its threads, and a category covers the channels in it), to members with one of some roles, or exclude members with some roles. **Chance it runs** makes it happen only some of the time, as a percentage. **Wait before the same member can set it off again** is kept in memory, so a restart lets everyone go again. A workflow that runs more than 30 times a minute, or a server that runs more than 120, is held back until the minute passes.
+
+**Steps** run in order, up to forty:
+
+- **Send a message** with the message builder. It goes here (the channel it happened in), to a channel you pick, or to a member in a direct message. A message can use `{user}`, `{userName}`, `{username}`, `{userId}`, `{channel}`, `{channelName}`, `{message}`, `{messageLink}`, `{author}`, `{authorName}`, `{emoji}`, `{role}` and `{roleMention}`, and each counter by its name. A value that doesn't apply to a trigger is empty.
+- **Give or take a role**, **change a nickname**, **time a member out** (up to 28 days, with a reason for the audit log) and **move a member to a voice channel** (only a member who is already in one). Each one asks whose it is: the member who set the workflow off, or the author of the message. They are the same member unless a reaction set it off.
+- **Add a reaction to the message**, **delete the message**, **pin the message** and **start a thread on the message**. These need a message, so they suit a message or reaction workflow.
+- **Change a counter.** A counter is a whole number the workflow keeps under a name you choose, either for each member separately or for the whole server. You can add to it, take from it or set it. A counter nobody set reads as zero. Put its name in a message in braces, as in `{wins}`, to show it. A counter's name can't be one a message already uses, such as user or channel.
+- **Wait, then carry on**, for up to an hour. What is left is stored and goes on after a restart.
+- **Run another workflow** by its name. It runs for the same member and place, and can go three levels deep, so a workflow that runs itself stops.
+
+**If, Else and End if** make a step run only some of the time. An **If** checks one thing: the member has a role (or doesn't), it happened in a channel, the message says something, a counter compares a way to a number, or a roll comes up. When it is true the steps below it run, down to an **Else** or an **End if**. When it isn't, they are skipped and the Else steps run instead. Ifs can sit inside other ifs. The steps are one flat list, so close each If with an End if. An If that is never closed runs to the end of the list, and an Else or End if with no If above it does nothing.
+
+Text a member typed can't ping @everyone, @here or a role, and a message can only ping the member and the roles you wrote into it. A role step follows the same rules as a role menu: the bot needs Manage Roles, the role has to sit below its own highest role, and you can only choose a role you could give yourself.
+
+If a step can't run, because the bot lacks a permission or a role sits too high, the steps after it still run and the reason goes in the bot's log. Moving a member needs Move Members and starting a thread needs Create Public Threads, which the invite link already asks for. A nickname step needs Manage Nicknames, which an invite link made before this was added doesn't ask for.
 
 ## Utility
 

@@ -8,6 +8,9 @@
       "path": "packages/db"
     },
     {
+      "path": "packages/workflow"
+    },
+    {
       "path": "packages/shared/moderation"
     },
     {
@@ -27,6 +30,12 @@
     },
     {
       "path": "packages/modules/roles"
+    },
+    {
+      "path": "packages/modules/automations"
+    },
+    {
+      "path": "packages/modules/customcommands"
     },
     {
       "path": "packages/modules/automod"

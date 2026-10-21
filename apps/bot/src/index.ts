@@ -5,6 +5,8 @@ import utility from "@tier0/module-utility";
 import welcome from "@tier0/module-welcome";
 import verification from "@tier0/module-verification";
 import gaming from "@tier0/module-gaming";
+import automations from "@tier0/module-automations";
+import customcommands from "@tier0/module-customcommands";
 import roles from "@tier0/module-roles";
 import automod from "@tier0/module-automod";
 import leveling from "@tier0/module-leveling";
@@ -24,6 +26,7 @@ import { startControlApi } from "./control/server.js";
 import { SCHEDULED_SEND, scheduledSendRunner } from "./control/message-schedules.js";
 import { sendMessage } from "./control/messages.js";
 import { systemLabels } from "./runtime/system-messages.js";
+import { applyPresence, readPresence } from "./runtime/bot-profile.js";
 import { syncInstanceOwner } from "./instance-owner.js";
 import { config } from "./config.js";
 
@@ -33,6 +36,8 @@ registry.register(welcome);
 registry.register(verification);
 registry.register(gaming);
 registry.register(roles);
+registry.register(automations);
+registry.register(customcommands);
 registry.register(automod);
 registry.register(leveling);
 registry.register(moderation);
@@ -47,6 +52,7 @@ const client = new Client({
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMembers,
     GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.GuildMessageReactions,
     GatewayIntentBits.GuildModeration,
     GatewayIntentBits.GuildVoiceStates,
     GatewayIntentBits.GuildInvites,
@@ -56,7 +62,7 @@ const client = new Client({
   // Without these, an event about something the bot never cached just gets
   // dropped, even though Discord still sends a little data for it. Audit
   // logging cares most about older messages, and those are never cached.
-  partials: [Partials.Message, Partials.Channel, Partials.GuildMember, Partials.User],
+  partials: [Partials.Message, Partials.Channel, Partials.GuildMember, Partials.User, Partials.Reaction],
 });
 
 const state = new GuildState(client, registry);
@@ -73,10 +79,19 @@ registerMessageComponents(client, state);
 client.once(Events.ClientReady, async (ready) => {
   console.log(`Connected as ${ready.user.tag}`);
 
-  await syncInstanceOwner(client).then(
-    (ownerId) => !ownerId && console.warn("Could not read who owns the Discord application. Set INSTANCE_OWNER_ID in .env to name the owner."),
-    (error) => console.error("Could not record the instance owner", error),
-  );
+  const recordOwner = () =>
+    syncInstanceOwner(client).then(
+      (ownerId) => !ownerId && console.warn("Could not read who owns the Discord application. Set INSTANCE_OWNER_ID in .env to name the owner."),
+      async (error) => {
+        console.error("Could not record the instance owner", error);
+        // On the first start after an update the dashboard may not have changed the database yet, so one more try follows.
+        setTimeout(() => void syncInstanceOwner(client).catch((again) => console.error("Could not record the instance owner", again)), 60_000);
+      },
+    );
+  await recordOwner();
+
+  // What the owner chose for the bot's status is kept in the database, so it comes back after a restart.
+  applyPresence(client, await readPresence());
 
   for (const guild of ready.guilds.cache.values()) {
     await prisma.guild.upsert({

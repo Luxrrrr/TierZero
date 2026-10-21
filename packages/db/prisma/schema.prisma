@@ -39,6 +39,7 @@ model Guild {
   signupEvents        SignupEvent[]
   groupPanelPosts     GroupPanelPost[]
   playGroups          PlayGroup[]
+  workflowValues      WorkflowValue[]
 
   /// The last case number handed out here. It only ever goes up, so a number
   /// that was purged is never given to a different case.
@@ -94,6 +95,11 @@ model Instance {
   updateChecks  Boolean   @default(true)
   /// The address the dashboard is opened at, learned from the owner's own requests. The bot puts it in links to cases.
   dashboardUrl  String?
+  /// How the bot shows in the member list: online, idle, dnd or invisible. Its name and picture are held by Discord, not here.
+  botStatus       String   @default("online")
+  /// What the bot says it is doing: none, playing, watching, listening, competing or custom.
+  botActivityType String   @default("none")
+  botActivityText String   @default("")
 }
 
 /// Auth.js's own tables, laid out the way @auth/prisma-adapter expects them.
@@ -870,4 +876,21 @@ model SignupMember {
 
   @@unique([eventId, userId])
   @@index([entryId])
+}
+
+/// A number a workflow keeps, such as a count or a flag, for one member or for the whole server.
+model WorkflowValue {
+  id        Int      @id @default(autoincrement())
+  guildId   String
+  /// "member" or "server".
+  scope     String
+  /// The member's id for the member scope, empty for the server.
+  subjectId String   @default("")
+  name      String
+  value     Int      @default(0)
+  updatedAt DateTime @default(now()) @updatedAt
+
+  guild Guild @relation(fields: [guildId], references: [id], onDelete: Cascade)
+
+  @@unique([guildId, scope, subjectId, name])
 }

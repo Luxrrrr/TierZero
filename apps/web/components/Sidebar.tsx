@@ -16,7 +16,7 @@ import { RoadmapList } from "./RoadmapList";
 import { peekUpdateStatus } from "../lib/updates";
 import { SidebarToggle } from "./SidebarToggle";
 import { ThemeToggle } from "./ThemeToggle";
-import { BotMessagesIcon, CommandsIcon, DownloadIcon, HelpIcon, MessagesIcon, OverviewIcon, SetupIcon, ShieldIcon, SignOutIcon, TicketIcon } from "./Icons";
+import { BotMessagesIcon, CommandsIcon, DownloadIcon, HelpIcon, MessagesIcon, OverviewIcon, SetupIcon, ShieldIcon, SignOutIcon, TicketIcon, UserIcon } from "./Icons";
 
 interface Props {
   user: { name: string | null | undefined; image: string | null | undefined };
@@ -178,6 +178,10 @@ export async function Sidebar({
         )}
 
         <div className="nav-group nav-group-end">
+          <NavLink href={currentGuild ? `/guilds/${currentGuild.id}/bot` : "/bot"} tip="Bot profile">
+            <UserIcon />
+            <span className="nav-link-text">Bot profile</span>
+          </NavLink>
           <NavLink href={currentGuild ? `/guilds/${currentGuild.id}/updates` : "/updates"} tip={updates.updateAvailable ? "Updates: a new version is out" : "Updates"}>
             <DownloadIcon />
             <span className="nav-link-text">Updates</span>

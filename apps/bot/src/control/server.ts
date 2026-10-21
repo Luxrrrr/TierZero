@@ -14,6 +14,7 @@ import { handleMod } from "./mod/index.js";
 import { handleTickets } from "./tickets/index.js";
 import { rawHeaders, type Reply } from "./mod/types.js";
 import { leaderboardPage, moduleNotices } from "./public-pages.js";
+import { applyProfile, parseAvatar, parseName, parsePresence, profileOf, type ProfileChange } from "../runtime/bot-profile.js";
 
 /** Which of these channels belong to a ticket. A database failure marks none, which only shows them as usual. */
 async function ticketChannelIds(guildId: string, channelIds: string[]): Promise<Set<string>> {
@@ -88,6 +89,31 @@ export function startControlApi({ client, registry, state, commands }: Deps): vo
 
     if (url.pathname === "/modules") {
       return send(200, registry.describe());
+    }
+
+    if (url.pathname === "/instance/profile") {
+      if (req.method === "GET") return send(200, await profileOf(client));
+      if (req.method !== "PUT") return send(404, { error: "not found" });
+
+      const body = await readJsonBody(req);
+      if (!body.ok) return send(400, { error: body.error });
+      if (!isPlainObject(body.value)) return send(400, { error: "body must be a JSON object" });
+
+      const presence = parsePresence(body.value.presence);
+      if (!presence.ok) return send(400, { error: presence.error });
+      const change: ProfileChange = { presence: presence.value };
+      if (body.value.name !== undefined) {
+        const name = parseName(body.value.name);
+        if (!name.ok) return send(400, { error: name.error });
+        change.name = name.value;
+      }
+      if (body.value.avatar !== undefined) {
+        const avatar = parseAvatar(body.value.avatar);
+        if (!avatar.ok) return send(400, { error: avatar.error });
+        change.avatar = avatar.value;
+      }
+      const result = await applyProfile(client, change);
+      return send(200, { result, profile: await profileOf(client) });
     }
 
     const messagesMatch = /^\/guilds\/(\d+)\/messages(?:\/(.*))?$/.exec(url.pathname);

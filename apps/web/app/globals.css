@@ -11152,3 +11152,97 @@ html[data-theme-motion] *::after {
 .module-action { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
 .module-action-text { min-width: 0; }
 .module-action-text .field-help { margin: 0.125rem 0 0; }
+
+/* Bot profile: the preview of the bot as it shows in a member list, and the form under it. */
+.bot-profile {
+  display: grid;
+  gap: var(--space-5);
+  max-width: 46rem;
+}
+
+.bot-profile-body {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.bot-preview {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.bot-preview-avatar {
+  position: relative;
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 64px;
+  height: 64px;
+  border-radius: var(--radius-full);
+  background: var(--surface-2);
+  color: var(--text-secondary);
+  font-size: var(--text-lg);
+  font-weight: 600;
+}
+
+.bot-preview-avatar img {
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  object-fit: cover;
+}
+
+.bot-preview-dot {
+  position: absolute;
+  right: -1px;
+  bottom: -1px;
+  width: 16px;
+  height: 16px;
+  border-radius: var(--radius-full);
+  background: var(--on);
+  box-shadow: 0 0 0 3px var(--surface);
+}
+
+.bot-preview-dot[data-status="idle"] {
+  background: var(--attention);
+}
+
+.bot-preview-dot[data-status="dnd"] {
+  background: var(--danger);
+}
+
+.bot-preview-dot[data-status="invisible"] {
+  background: var(--surface);
+  box-shadow: inset 0 0 0 3px var(--text-tertiary), 0 0 0 3px var(--surface);
+}
+
+.bot-preview-text {
+  display: grid;
+  min-width: 0;
+}
+
+.bot-preview-name {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.bot-preview-line {
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  overflow-wrap: anywhere;
+}
+
+.bot-avatar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.bot-profile-foot {
+  display: flex;
+  justify-content: flex-end;
+}

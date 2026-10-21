@@ -456,3 +456,35 @@ export async function runModuleAction(
   const outcome = await readJson<RowActionOutcome>(res, "the action");
   return { ...outcome, message: plainSystemText(String(outcome.message ?? "")) };
 }
+
+export interface BotPresence {
+  status: "online" | "idle" | "dnd" | "invisible";
+  activityType: "none" | "playing" | "watching" | "listening" | "competing" | "custom";
+  activityText: string;
+}
+
+export interface BotProfile {
+  id: string | null;
+  name: string | null;
+  /** The bot's own picture, at a size the dashboard can show. */
+  avatarUrl: string | null;
+  hasAvatar: boolean;
+  presence: BotPresence;
+}
+
+export interface BotProfileResult {
+  presence: "saved";
+  name: "unchanged" | "changed" | { failed: string };
+  avatar: "unchanged" | "changed" | "removed" | { failed: string };
+}
+
+export async function getBotProfile(): Promise<BotProfile> {
+  const res = await controlFetch("/instance/profile");
+  return readJson<BotProfile>(res, "the bot's profile");
+}
+
+/** `avatar` is a data address, null to take the picture off, or left out to keep it. */
+export async function saveBotProfile(change: { presence: BotPresence; name?: string; avatar?: string | null }): Promise<{ result: BotProfileResult; profile: BotProfile }> {
+  const res = await controlFetch("/instance/profile", { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify(change) });
+  return readJson(res, "the bot's profile");
+}
