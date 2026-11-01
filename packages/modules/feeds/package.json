@@ -6,6 +6,6 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "scripts": { "build": "tsc -b", "dev": "tsc -b --watch" },
-  "dependencies": { "@tier0/core": "workspace:*", "@tier0/db": "workspace:*", "fast-xml-parser": "5.11.1" },
+  "dependencies": { "@tier0/core": "workspace:*", "@tier0/db": "workspace:*", "fast-xml-parser": "5.11.2" },
   "peerDependencies": { "discord.js": "^14.16.0" }
 }
